@@ -1,0 +1,95 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<run-experiments date='Sat Aug 19 17:24:15 CDT 2006'>
+<experiments>
+<experiment-group id='SmallTrace'>
+<trace>small.trace</trace>
+<description>Small</description>
+<experiment label='LFU global'>
+<configuration>
+<config name='cache' value='LFU'/>
+<config name='global' value='true'/>
+<config name='debug' value='false'/>
+<config name='checksum' value='false'/>
+<config name='size' value='2'/>
+</configuration>
+</experiment>
+<experiment label='LRU'>
+<configuration>
+<config name='cache' value='LRU'/>
+<config name='global' value='false'/>
+<config name='debug' value='false'/>
+<config name='checksum' value='false'/>
+<config name='size' value='2'/>
+</configuration>
+</experiment>
+<experiment label='LFU'>
+<configuration>
+<config name='cache' value='LFU'/>
+<config name='global' value='false'/>
+<config name='debug' value='false'/>
+<config name='checksum' value='false'/>
+<config name='size' value='2'/>
+</configuration>
+</experiment>
+<experiment label='LRU global'>
+<configuration>
+<config name='cache' value='LRU'/>
+<config name='global' value='true'/>
+<config name='debug' value='false'/>
+<config name='checksum' value='false'/>
+<config name='size' value='2'/>
+</configuration>
+</experiment>
+<graphs>
+<graph title='Cache hit/miss' graphDir=' 0'/>
+</graphs>
+</experiment-group>
+<experiment-group id='BigTrace'>
+<trace>big.trace</trace>
+<description>Big</description>
+<experiment label='LFU global'>
+<configuration>
+<config name='cache' value='LFU'/>
+<config name='global' value='true'/>
+<config name='debug' value='false'/>
+<config name='checksum' value='false'/>
+<config name='size' value='2048'/>
+</configuration>
+</experiment>
+<experiment label='LRU'>
+<configuration>
+<config name='cache' value='LRU'/>
+<config name='global' value='false'/>
+<config name='debug' value='false'/>
+<config name='checksum' value='false'/>
+<config name='size' value='2048'/>
+</configuration>
+</experiment>
+<experiment label='LFU'>
+<configuration>
+<config name='cache' value='LFU'/>
+<config name='global' value='false'/>
+<config name='debug' value='false'/>
+<config name='checksum' value='false'/>
+<config name='size' value='2048'/>
+</configuration>
+</experiment>
+<experiment label='LRU global'>
+<configuration>
+<config name='cache' value='LRU'/>
+<config name='global' value='true'/>
+<config name='debug' value='false'/>
+<config name='checksum' value='false'/>
+<config name='size' value='2048'/>
+</configuration>
+</experiment>
+<graphs>
+<graph title='Cache hit/miss' graphDir=' 1'/>
+</graphs>
+</experiment-group>
+</experiments>
+<graphs>
+<graph title='Cache hit/miss' graphDir=' 1'/>
+<graph title='Cache hit/miss' graphDir=' 1'/>
+</graphs>
+</run-experiments>
