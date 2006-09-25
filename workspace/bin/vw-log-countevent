@@ -1,0 +1,97 @@
+#!/bin/bash
+
+function usage()
+{
+    echo "Usage: `basename $0` -l log_id -e event_name [-o output]"
+    echo "       `basename $0` -?"
+    echo
+    echo "      -l log_id       Log identifier (only count events from log files"
+    echo "                      with this identifier)"
+    echo "      -e event_name   Event to count"
+    echo "      -o output       Print results to file <output>"
+    echo "      -?              Prints this usage message"
+    echo
+}
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~ BASIC SANITY CHECKS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+if [ "$WORKSPACE_DIR" == "" ];
+then
+    echo "WORKSPACE_DIR not set."
+    exit 1
+fi
+
+if [ "$WORKSPACE_VAR" == "" ];
+then
+    echo "WORKSPACE_VAR not set."
+    exit 1
+fi
+
+if [ $# -eq 0 ];
+then
+    echo "ERROR: No arguments specified!"
+    usage
+    exit 1
+fi
+
+# Error on unset variables
+set -u
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ GET OPTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+# Defaults
+LOG_ID=""
+EVENT_NAME=""
+OUTPUT=""
+
+# Get options
+while getopts ":l:e:o:?" OPTION; do
+    case $OPTION in
+        l )
+            LOG_ID=$OPTARG
+        ;;
+        e )
+            EVENT_NAME=$OPTARG
+        ;;
+        o )
+            OUTPUT=$OPTARG
+        ;;
+        \? )
+            usage
+            exit 1
+        ;;
+        * )
+            echo "ERROR: Unrecognized option"
+            exit 1
+        ;;
+    esac
+done
+
+if [ "$LOG_ID" == "" ];
+then
+    echo "ERROR: No log identifier specified."
+    usage
+    exit 1
+fi
+if [ "$EVENT_NAME" == "" ];
+then
+    echo "ERROR: No event name specified."
+    usage
+    exit 1
+fi
+
+if [ "$OUTPUT" == "" ];
+then
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/bin/countstat.awk logEvent="$EVENT_NAME"
+else
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/bin/countstat.awk logEvent="$EVENT_NAME" > $OUTPUT
+fi

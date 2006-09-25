@@ -1,0 +1,10 @@
+#!/bin/bash
+
+START_DATE=$(head -n1 $1 | cut -f1,2 -d" ")
+END_DATE=$(tail -n1 $1 | cut -f1,2 -d" ")
+
+START=$(date --date="$START_DATE" +%s)
+END=$(date --date="$END_DATE" +%s)
+
+TIME=$(($END - $START))
+echo $TIME

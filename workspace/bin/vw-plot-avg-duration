@@ -1,0 +1,150 @@
+#!/bin/bash
+
+function usage()
+{
+    echo "Usage: `basename $0` [-d graph_dir] [-o output_type] -b begin_event"
+    echo "                                -e end_event log_id1 [[[log_id2] log_id3] ... ]"
+    echo "       `basename $0` -?"
+    echo
+    echo "      -d graph_dir    Directory in which to produce plotting data."
+    echo "                      Default is \$WORKSPACE_VAR/graphs/avg_duration/\$GRAPH_NAME"
+    echo "                      where \$GRAPH_NAME is generated based on the log ids"
+    echo "      -o output_type  Besides generating the GNUPlot file, use GNUPlot to generate"
+    echo "                      a file of type <output_type> (called 'graph.<output_type>')"
+    echo "                      Valid types are png, jpg, pdf, and eps."
+    echo "      -b begin_event  Start event"
+    echo "      -e end_event    End event"
+    echo "      log_idN         Log identifiers to analyze"
+    echo "      -?              Prints this usage message"
+    echo
+}
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~ BASIC SANITY CHECKS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+if [ "$WORKSPACE_DIR" == "" ];
+then
+    echo "WORKSPACE_DIR not set."
+    exit 1
+fi
+
+if [ "$WORKSPACE_VAR" == "" ];
+then
+    echo "WORKSPACE_VAR not set."
+    exit 1
+fi
+
+if [ $# -eq 0 ];
+then
+    echo "ERROR: No arguments specified!"
+    usage
+    exit 1
+fi
+
+# Error on unset variables
+set -u
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ GET OPTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+# Defaults
+GRAPH_DIR=""
+OUTPUT_TYPE=""
+BEGIN_EVENT=""
+END_EVENT=""
+
+# Get options
+while getopts ":d:b:e:o:?" OPTION; do
+    case $OPTION in
+        d )
+            GRAPH_DIR=$OPTARG
+	;;
+        o )
+            OUTPUT_TYPE=$OPTARG
+        ;;
+        b )
+            BEGIN_EVENT=$OPTARG
+        ;;
+        e )
+            END_EVENT=$OPTARG
+        ;;
+        \? )
+            usage
+            exit 1
+        ;;
+        * )
+            echo "ERROR: Unrecognized option"
+            exit 1
+        ;;
+    esac
+done
+
+shift `expr $OPTIND - 1`
+
+if [ $# -eq 0 ];
+then
+    echo "ERROR: Must specify at least one log id"
+    usage
+    exit 1
+fi
+if [ "$BEGIN_EVENT" == "" ] || [ "$END_EVENT" == "" ];
+then
+    echo "ERROR: No begin or end event name specified."
+    usage
+    exit 1
+fi
+
+if [ "$GRAPH_DIR" == "" ];
+then
+    GRAPH_DIR=$WORKSPACE_VAR/graphs/avg_duration
+
+    for LOG_ID in $@;
+    do
+        GRAPH_DIR=${GRAPH_DIR}_$LOG_ID
+    done
+fi
+
+
+# Generate average counts
+
+mkdir -p $GRAPH_DIR
+
+for LOG_ID in $@;
+do
+    vw-log-duration-stats -l $LOG_ID -b "$BEGIN_EVENT" -e "$END_EVENT" -o $GRAPH_DIR/durationstats_$LOG_ID.dat
+done
+
+
+# Generate GNUPlot file
+
+I=1
+
+echo "set xlabel \"Time (s)\"" > $GRAPH_DIR/avg.plot
+echo "set ylabel \"Avg.Duration (s)\"" >> $GRAPH_DIR/avg.plot
+echo "plot \\" >> $GRAPH_DIR/avg.plot
+for LOG_ID in $@;
+do
+    echo -n "\"durationstats_$LOG_ID.dat\" using 1:2 t \"$BEGIN_EVENT -> $END_EVENT ($LOG_ID)\" lt $I pt 2 with linespoints" >> $GRAPH_DIR/avg.plot
+    if [ $I -lt $# ];
+    then
+	echo ",\\" >> $GRAPH_DIR/avg.plot
+    fi 
+    I=$((I+1))
+done
+
+if [ "$OUTPUT_TYPE" != "" ];
+then
+    echo "set output \"$GRAPH_DIR/graph.$OUTPUT_TYPE\"" > $GRAPH_DIR/avg_$OUTPUT_TYPE.plot.tmp
+    echo "set terminal $OUTPUT_TYPE" >> $GRAPH_DIR/avg_$OUTPUT_TYPE.plot.tmp
+    cat $GRAPH_DIR/avg_$OUTPUT_TYPE.plot.tmp $GRAPH_DIR/avg.plot > $GRAPH_DIR/avg_$OUTPUT_TYPE.plot
+    rm $GRAPH_DIR/avg_$OUTPUT_TYPE.plot.tmp
+    cd $GRAPH_DIR
+    gnuplot avg_$OUTPUT_TYPE.plot
+fi

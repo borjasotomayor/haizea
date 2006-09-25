@@ -1,0 +1,122 @@
+#!/bin/bash
+
+function usage()
+{
+    echo "Usage: `basename $0` -l log_id -b begin_event1 -e end_event1"
+    echo "                           -c begin_event2 -d end_event2 [-o output]"
+    echo "                           [-x event1 -y event2]"
+    echo "       `basename $0` -?"
+    echo
+    echo "      -l log_id       Log identifier (only count events from log files"
+    echo "                      with this identifier)"
+    echo "      -b begin_event1 Start event (1)"
+    echo "      -e end_event1   End event (1)"
+    echo "      -c begin_event2 Start event (2)"
+    echo "      -d end_event2   End event (2)"
+    echo "      -o output       Print results to file <output>"
+    echo "      -?              Prints this usage message"
+    echo
+}
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~ BASIC SANITY CHECKS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+if [ "$WORKSPACE_DIR" == "" ];
+then
+    echo "WORKSPACE_DIR not set."
+    exit 1
+fi
+
+if [ "$WORKSPACE_VAR" == "" ];
+then
+    echo "WORKSPACE_VAR not set."
+    exit 1
+fi
+
+if [ $# -eq 0 ];
+then
+    echo "ERROR: No arguments specified!"
+    usage
+    exit 1
+fi
+
+# Error on unset variables
+set -u
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ GET OPTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+# Defaults
+LOG_ID=""
+BEGIN_EVENT1=""
+END_EVENT1=""
+BEGIN_EVENT2=""
+END_EVENT2=""
+EVENT1=""
+EVENT2=""
+OUTPUT=""
+
+# Get options
+while getopts ":l:b:e:c:d:x:y:o:?" OPTION; do
+    case $OPTION in
+        l )
+            LOG_ID=$OPTARG
+        ;;
+        b )
+            BEGIN_EVENT1=$OPTARG
+        ;;
+        e )
+            END_EVENT1=$OPTARG
+        ;;
+        c )
+            BEGIN_EVENT2=$OPTARG
+        ;;
+        d )
+            END_EVENT2=$OPTARG
+        ;;
+        o )
+            OUTPUT=$OPTARG
+        ;;
+        x )
+            EVENT1=$OPTARG
+        ;;
+        y )
+            EVENT2=$OPTARG
+        ;;
+        \? )
+            usage
+            exit 1
+        ;;
+        * )
+            echo "ERROR: Unrecognized option"
+            exit 1
+        ;;
+    esac
+done
+
+if [ "$LOG_ID" == "" ];
+then
+    echo "ERROR: No log identifier specified."
+    usage
+    exit 1
+fi
+#if [ "$BEGIN_EVENT1" == "" ] || [ "$END_EVENT1" == "" ] || [ "$BEGIN_EVENT2" == "" ] || [ "$END_EVENT2" == "" ];
+#then
+#    echo "ERROR: No begin or end event name specified."
+#    usage
+#    exit 1
+#fi
+
+if [ "$OUTPUT" == "" ];
+then
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/lib/ratio-stats.awk beginEvent1="$BEGIN_EVENT1" endEvent1="$END_EVENT1" beginEvent2="$BEGIN_EVENT2" endEvent2="$END_EVENT2"  event1="$EVENT1" event2="$EVENT2"
+else
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/lib/ratio-stats.awk beginEvent1="$BEGIN_EVENT1" endEvent1="$END_EVENT1" beginEvent2="$BEGIN_EVENT2" endEvent2="$END_EVENT2" event1="$EVENT1" event2="$EVENT2" > $OUTPUT
+fi

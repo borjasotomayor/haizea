@@ -1,0 +1,110 @@
+#!/bin/bash
+
+
+function usage()
+{
+    echo "Usage: `basename $0` -f trace_file -l log_id  [-c config_file] [-o]"
+    echo "       `basename $0` -?"
+    echo
+    echo "      -f trace_file   Trace file to use"
+    echo "      -l log_id       Log identifier to use in job submissions"
+    echo "      -o              Don't run, write script to standard output"
+    echo "      -c config_file  Config file to use in job submissions"
+    echo "      -?              Prints this usage message"
+    echo
+}
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~ BASIC SANITY CHECKS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+if [ "$WORKSPACE_DIR" == "" ];
+then
+    echo "WORKSPACE_DIR not set."
+    exit 1
+fi
+
+if [ "$WORKSPACE_VAR" == "" ];
+then
+    echo "WORKSPACE_VAR not set."
+    exit 1
+fi
+
+if [ $# -eq 0 ];
+then
+    echo "ERROR: No arguments specified!"
+    usage
+    exit 1
+fi
+
+source $WORKSPACE_DIR/bin/common.sh
+
+# Error on unset variables
+set -u
+
+
+
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ GET OPTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
+
+# Defaults
+TRACE_FILE=""
+LOG_ID=""
+CONFIG_FILE=""
+RUN=true
+
+# Get options
+while getopts ":of:l:c:d:?" OPTION; do
+    case $OPTION in
+        f )
+            TRACE_FILE=$OPTARG
+        ;;
+        l )
+            LOG_ID=$OPTARG
+        ;;
+        o )
+            RUN=false
+        ;;
+        c )
+            CONFIG_FILE=$(readlink -f $OPTARG)
+        ;;
+        \? )
+            usage
+            exit 1
+        ;;
+        * )
+            echo "ERROR: Unrecognized option"
+            exit 1
+        ;;
+    esac
+done
+
+if [ "$TRACE_FILE" == "" ];
+then
+    echo "ERROR: No trace file specified."
+    usage
+    exit 1
+fi
+if [ "$LOG_ID" == "" ];
+then
+    echo "ERROR: No log identifier specified."
+    usage
+    exit 1
+fi
+
+readConfig
+
+
+if $RUN;
+then
+    awk -f $WORKSPACE_DIR/lib/trace2sge.awk configfile="$CONFIG_FILE" tracename="$LOG_ID" transfersched=$TRANSFERSCHED netbw=$NETBW $TRACE_FILE > trace_run_$LOG_ID.sh
+    chmod u+x trace_run_$LOG_ID.sh
+    ./trace_run_$LOG_ID.sh
+    rm trace_run_$LOG_ID.sh
+else
+    awk -f $WORKSPACE_DIR/lib/trace2sge.awk configfile="$CONFIG_FILE" tracename="$LOG_ID" transfersched=$TRANSFERSCHED netbw=$NETBW $TRACE_FILE 
+fi
