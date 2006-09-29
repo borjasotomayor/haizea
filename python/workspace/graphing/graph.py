@@ -4,11 +4,13 @@ import pylab
 from pylab import array, arange
 
 class Graph(object):
-    def __init__(self):
-        pass
+    def __init__(self, xlabel="", ylabel=""):
+        self.xlabel=xlabel
+        self.ylabel=ylabel
     
     def plot(self):
-        pass
+        pylab.xlabel(self.xlabel)
+        pylab.ylabel(self.ylabel)
     
     def show(self):
         pass
@@ -58,10 +60,10 @@ class ScheduleGraph(object):
                 row = div
             print self.data[row]
             print colors[row]
-            rectangles = pylab.barh(self.data[row], ind, width, left=xoff, color=colors[row])
+            rectangles = pylab.barh(ind, self.data[row], width, left=xoff, color=colors[row])
             patches.append(rectangles[0])
             if len(self.subdata)>0 and len(self.subdata[row]) > 0:
-                rectangles = pylab.barh(self.subdata[row], ind, width-0.3, left=xoff, color=subcolors[row])
+                rectangles = pylab.barh(ind, self.subdata[row], width-0.3, left=xoff, color=subcolors[row])
                 subrectangles.append(rectangles[0])
             xoff = xoff + self.data[row]
     
@@ -104,6 +106,46 @@ class PointGraph(Graph):
     def show(self):
         pylab.show()
         
+class DiscreteHistogram(Graph):
+    def __init__(self, data, xlabel="", ylabel="", normalized=False):
+        if normalized:
+            ylabel+=" (%)"
+        Graph.__init__(self,xlabel,ylabel)
+        self.histogram = {}
+        for x in data:
+            if not self.histogram.has_key(x):
+                self.histogram[x]=1
+            else:
+                self.histogram[x] += 1
+        if normalized:
+            for k in self.histogram:
+                self.histogram[k] = float(self.histogram[k])/len(data)*100
+        
+    def plot(self):
+        Graph.plot(self)
+        ind = arange(len(self.histogram))
+        width = 0.7       # the width of the bars
+        p1 = pylab.bar(ind, self.histogram.values(), width, color='yellow')
+        pylab.xticks(ind+width, self.histogram.keys())
+        pylab.xlim(-(width/2),len(ind))
+    
+    def show(self):
+        pylab.show()
+
+class ContinuousHistogram(Graph):
+    def __init__(self, data, xlabel="", ylabel="", normalized=False):
+        Graph.__init__(self,xlabel,ylabel)
+        self.data=data
+        self.normalized=normalized
+    
+    def plot(self):
+        Graph.plot(self)
+        #TODO: Determine bin size the right way
+        pylab.hist(self.data, len(self.data))
+        
+    def show(self):
+        pylab.show()
+        
 class Legend(object):
     def __init__(self, name=None, color=None):
         self.name = name
@@ -111,23 +153,42 @@ class Legend(object):
 
 
 class Figure(object):
-    def __init__(self, graphs=[]):
+    def __init__(self, graphs=[], subplotPos=[]):
         self.graphs=graphs
+        self.subplotPos=subplotPos
+        self.sharex={}
+        self.sharey={}
         
-    def addGraph(self, graph):
+    def addGraph(self, graph, numRows, numCols, plotNum, sharex=None, sharey=None):
         self.graphs.append(graph)
+        self.subplotPos.append((numRows, numCols, plotNum))
+        if sharex!=None:
+            if self.sharex.has_key(sharex):
+                self.sharex[graph] = sharex
+            else:
+                raise Exception, "sharex refers to a graph not yet added to figure"
+        else:
+            self.sharex[graph]=None
+        if sharey!=None:
+            if self.sharey.has_key(sharey):
+                self.sharey[graph] = sharey
+            else:
+                raise Exception, "sharey refers to a graph not yet added to figure"
+        else:
+            self.sharey[graph]=None
         
     def plot(self):
-
         numGraphs=len(self.graphs)
-        axes = None
+        axes = {}
         for i,graph in enumerate(self.graphs):
-            #TODO: This requires the funky 3-digit format. 
-            #Using rows,col,num doesn't work. Maybe this has
-            #been fixed in latest version?
-            #TODO: Currently, default is to share x axis. This
-            #should be configurable
-            axes = pylab.subplot((numGraphs*100)+10+i+1, sharex=axes)
+            numRows, numCols, plotNum = self.subplotPos[i]
+            if self.sharex[graph]:
+                shx = axes[self.sharex[graph]]
+            else:
+                shx = None
+            shy = None
+            a = pylab.subplot(numRows,numCols,plotNum, sharex=shx, sharey=shy)
+            axes[graph] = a
             graph.plot()
             
     def show(self):
@@ -149,7 +210,7 @@ if __name__ == "__main__":
     
     fig = Figure()
     sched = ScheduleGraph(data,legends, firstempty=True)
-    fig.addGraph(sched)
+    fig.addGraph(sched, 2,1,1)
     sched.show()
     #fig.show()
     
