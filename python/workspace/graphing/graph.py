@@ -41,7 +41,7 @@ class ScheduleGraph(object):
         #TODO: Use constants
         width = 0.6     # the width of the bars
         ind = arange(numTracks) * (width *1.5)  # the y locations for the tracks
-        print ind
+        #print ind
         if self.firstempty:
             xoff= array(self.data[0])
             divs = xrange(numDivisions-1)
@@ -58,8 +58,8 @@ class ScheduleGraph(object):
                 row = div + 1
             else:
                 row = div
-            print self.data[row]
-            print colors[row]
+            #print self.data[row]
+            #print colors[row]
             rectangles = pylab.barh(ind, self.data[row], width, left=xoff, color=colors[row])
             patches.append(rectangles[0])
             if len(self.subdata)>0 and len(self.subdata[row]) > 0:
@@ -141,7 +141,7 @@ class ContinuousHistogram(Graph):
     def plot(self):
         Graph.plot(self)
         #TODO: Determine bin size the right way
-        pylab.hist(self.data, len(self.data))
+        pylab.hist(self.data, len(self.data)/100)
         
     def show(self):
         pylab.show()
