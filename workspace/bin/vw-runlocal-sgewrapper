@@ -1,0 +1,13 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+
+export WORKSPACE_DIR=/usr/workspace
+export WORKSPACE_VAR=/var/workspace
+export SGE_ROOT=/usr/sge
+
+source $SGE_ROOT/default/common/settings.sh
+
+export PATH=$PATH:$WORKSPACE_DIR/bin
+
+vw-runlocal $@

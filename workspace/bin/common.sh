@@ -10,7 +10,12 @@ LOCK_DIR="$WORKSPACE_VAR/lock"
 
 CACHED_IMG="$CACHE_DIR/$IMG_ID"
 DOWNLOAD_IMG="$CACHED_IMG.downloading"
-LOCAL_IMG="$LOCALIMG_DIR/$IMG_ID.$JOB_ID.$SGE_TASK_ID"
+if [ "$LOCALIMGTAG" == "" ];
+then
+    LOCAL_IMG="$LOCALIMG_DIR/$IMG_ID.$JOB_ID.$SGE_TASK_ID"
+else
+    LOCAL_IMG="$LOCALIMG_DIR/$IMG_ID.$LOCALIMGTAG"
+fi
 
 getConfigValue()
 {
@@ -109,4 +114,30 @@ downloadUnlock()
 {
     unlock "$1.download"
     return $?
+}
+
+waitForJob()
+{
+    local JOB_ID=$1
+    local SEC=$2
+    local SLEEP=$3
+
+    WAIT=0
+    DONE_WAIT=false
+    log "Waiting for job $JOB_ID"
+    while ! $DONE_WAIT;
+    do
+        sleep $SLEEP
+        WAIT=$(($WAIT + $SLEEP))
+        QSTAT=$(qstat -j $JOB_ID | wc -c)
+        if [ $QSTAT -eq 0 ];
+        then
+                DONE_WAIT=true
+        elif [ $WAIT -gt $SEC ];
+        then
+                log 'Waited $SEC seconds for job $JOB_ID. Aborting!'
+                qdel $JOB_ID
+                DONE_WAIT=true
+        fi
+    done
 }

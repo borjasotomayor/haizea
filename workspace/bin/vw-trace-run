@@ -106,5 +106,6 @@ then
     ./trace_run_$LOG_ID.sh
     rm trace_run_$LOG_ID.sh
 else
+echo foo
     awk -f $WORKSPACE_DIR/lib/trace2sge.awk configfile="$CONFIG_FILE" tracename="$LOG_ID" transfersched=$TRANSFERSCHED netbw=$NETBW $TRACE_FILE 
 fi

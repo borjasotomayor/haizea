@@ -78,6 +78,14 @@ BEGIN	{
     {
 	sgedlopt=""
     }
-    print "qsub " sgedlopt " -soft -l vm_image=\"*(" img_id ")*\" -t 1-" num_nodes " -N VW" i " " ENVIRON["WORKSPACE_DIR"] "/bin/vw-transfer-image-sgewrapper -i " img_uri " -s " img_size " -l " tracename " " configopt " " duropt " " traceopt " " dlopt
+
+    if (deadline == "" || deadline="NULL")
+    {
+	print "vw-run -N VW" i " -n " num_nodes " -i " img_uri " -l " tracename " " duropt " " configopt " &"
+    }
+    else
+    {
+	print "qsub " sgedlopt " -q transfer.q -soft -l vm_image=\"*(" img_id ")*\" -t 1-" num_nodes " -N VW" i " " ENVIRON["WORKSPACE_DIR"] "/bin/vw-transfer-image-sgewrapper -i " img_uri " -s " img_size " -l " tracename " " configopt " " duropt " " traceopt " " dlopt
+    }
     i++;
 }

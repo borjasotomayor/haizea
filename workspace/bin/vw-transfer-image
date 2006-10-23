@@ -20,8 +20,10 @@ function usage()
     echo "	                (simulates a VM running after transfer)."
     echo "	                Default is to not sleep."
     echo "	-t tag          Include tag <tag> in log messages."
-    echo "	                Default is to not sleep."    
     echo "	-z deadline     Transfer deadline (informative only)"
+    echo "	-r              Do not remove local image"
+    echo "	-f imgtag       Append <img_tag> to local image name. Default is"
+    echo "                      based on Job id."
     echo "	-?              Prints this usage message"
     echo
 }
@@ -84,9 +86,11 @@ IMG=""
 IMG_SIZE=""
 DURATION=0
 DEADLINE=0
+REMOVE=true
+LOCALIMGTAG=""
 
 # Get options
-while getopts ":i:s:l:t:c:d:z:?" OPTION; do
+while getopts "rf:i:s:l:t:c:d:z:?" OPTION; do
     case $OPTION in
 	i ) 
 	    IMG=$OPTARG
@@ -107,6 +111,12 @@ while getopts ":i:s:l:t:c:d:z:?" OPTION; do
 	;;
 	t ) 
 	    TAG=$OPTARG
+	;;
+	f ) 
+	    LOCALIMGTAG=$OPTARG
+	;;
+	r ) 
+	    REMOVE=false
 	;;
 	c ) 
 	    CONFIG_FILE=$OPTARG
@@ -172,6 +182,8 @@ else
     getImageThroughCache
 fi
 
+touch $LOCAL_IMG.done
+
 log "--TRANSFER_END--"
 
 if [ $ERROR -eq 1 ];
@@ -214,8 +226,14 @@ else
 	    updateDurationCacheFile $GLOBAL_CACHE_DB $IMG_ID $DURATION
 	fi
     fi
-    log "Removing local image"
-    rm $LOCAL_IMG
+    if $REMOVE;
+    then
+	log "Removing local image"
+	rm $LOCAL_IMG
+	rm $LOCAL_IMG.done
+    else
+	debug "Not removing local image"
+    fi
 fi
 
 log "--SUBMIT_END-- $BANNER"

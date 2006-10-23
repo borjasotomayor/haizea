@@ -1,0 +1,10 @@
+#!/bin/bash
+
+#$ -S /bin/bash
+
+export WORKSPACE_DIR=/usr/workspace
+export WORKSPACE_VAR=/var/workspace
+
+export PATH=$PATH:$WORKSPACE_DIR/bin
+
+vw-pe-start $@

@@ -14,7 +14,7 @@ while [ 1 ]; do
         exit 0
     fi
 
-    IMG_LIST=""
+    IMG_LIST="()"
 
     if [ -e $CACHE_DB ];
     then
