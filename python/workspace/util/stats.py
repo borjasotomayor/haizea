@@ -57,8 +57,8 @@ class DiscreteUniformDistribution(DiscreteDistributionBase):
         
 class ContinuousDistributionBase(object):
     def __init__(self,min,max):
-        self.min = min
-        self.max = max
+        self.min = float(min)
+        self.max = float(max)
         
     def getList(self, n):
         l = []
@@ -132,3 +132,5 @@ if __name__ == "__main__":
     g = graph.ContinuousHistogram(l)
     g.plot()
     g.show()
+    
+    

@@ -11,7 +11,8 @@ class TraceEntry(object):
                      3:"numNodes",
                      4:"mode",
                      5:"deadline",
-                     6:"duration"
+                     6:"duration",
+                     7:"tag"
                      }
     numFields = len(pos)
     
@@ -34,6 +35,9 @@ class TraceEntry(object):
             dictFields[TraceEntry.pos[i]] = field
         return cls(dictFields)    
     
+    @staticmethod
+    def compare(a, b):
+        return int(a.fields["time"]) - int(b.fields["time"])
         
 
 class TraceFile(object):
