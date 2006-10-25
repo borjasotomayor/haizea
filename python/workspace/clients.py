@@ -1,5 +1,5 @@
 import sys
-from workspace.traces import files
+from workspace.traces import files, cooker
 from workspace.graphing import graph
 from workspace.util import stats
 from workspace.util.miscutil import *
@@ -97,6 +97,34 @@ class SWF2Trace(object):
         g = trace.toScheduleGraph()
         g.plot()
         g.show()
+
+class Cooker(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        
+        opt, args = p.parse_args(argv)
+        
+        c = cooker.Cooker(opt.conf)
+        c.generateTrace()
+        
+class Thermometer(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-t", "--trace", action="store", type="string", dest="trace", required=True))
+        
+        opt, args = p.parse_args(argv)
+        
+        trace = files.TraceFile.fromFile(opt.trace)
+        c = cooker.Thermometer(trace)
+        c.printStats()
+        
 
 if __name__ == "__main__":
     #tg = TraceGraph()

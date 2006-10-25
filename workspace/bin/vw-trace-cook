@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+import workspace.clients
+import sys
+
+c = clients.Cooker()
+c.run(sys.argv)
