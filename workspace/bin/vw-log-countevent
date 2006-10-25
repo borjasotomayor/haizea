@@ -52,9 +52,10 @@ set -u
 LOG_ID=""
 EVENT_NAME=""
 OUTPUT=""
+GREPTAG=""
 
 # Get options
-while getopts ":l:e:o:?" OPTION; do
+while getopts ":l:g:e:o:?" OPTION; do
     case $OPTION in
         l )
             LOG_ID=$OPTARG
@@ -64,6 +65,9 @@ while getopts ":l:e:o:?" OPTION; do
         ;;
         o )
             OUTPUT=$OPTARG
+        ;;
+        g )
+	    GREPTAG="/$OPTARG]"
         ;;
         \? )
             usage
@@ -91,7 +95,7 @@ fi
 
 if [ "$OUTPUT" == "" ];
 then
-    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/bin/countstat.awk logEvent="$EVENT_NAME"
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | grep "$GREPTAG" | awk  -f $WORKSPACE_DIR/bin/countstat.awk logEvent="$EVENT_NAME"
 else
-    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/bin/countstat.awk logEvent="$EVENT_NAME" > $OUTPUT
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | grep "$GREPTAG" | awk  -f $WORKSPACE_DIR/bin/countstat.awk logEvent="$EVENT_NAME" > $OUTPUT
 fi

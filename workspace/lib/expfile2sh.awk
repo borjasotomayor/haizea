@@ -16,6 +16,7 @@ BEGIN	{
     }
     else
 	regenerate = "true"
+    tag = "NONE"
 }
 
 $1 == "default"	{
@@ -83,7 +84,13 @@ $1 == "multirun" && regenerate=="false" {
     }
 }
 
-
+$1 == "tag" {
+    tag = $2
+    if(tag=="NONE")
+	tagopt = ""
+    else
+	tagopt = "-g " tag
+}
 
 $1 == "graph" {
     parseQuotedFields()
@@ -92,7 +99,7 @@ $1 == "graph" {
     {
 	graphDir=getGraphDir(3)
 	log_ids=getLogIDs(3)
-	runCmd = "vw-log-plot-cachehitmiss -d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png " log_ids
+	runCmd = "vw-log-plot-cachehitmiss -d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png " tagopt " " log_ids
     }
     else if ($2=="avg")
     {
@@ -100,7 +107,14 @@ $1 == "graph" {
 	end=$4
 	graphDir=getGraphDir(5)
 	log_ids=getLogIDs(5)
-	runCmd = "vw-plot-avg-duration -d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png -b " begin " -e " end " " log_ids
+	runCmd = "vw-plot-avg-duration -d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png -b " begin " -e " end " "  tagopt " " log_ids
+    }
+    else if ($2=="count")
+    {
+	event=$3
+	graphDir=getGraphDir(4)
+	log_ids=getLogIDs(4)
+	runCmd = "vw-plot-count -d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png -e " event " "  tagopt " "log_ids
     }
     else if ($2=="durationstats")
     {
@@ -125,7 +139,7 @@ $1 == "graph" {
 	end=$7
 	graphDir=getGraphDir(8) "-" graphdirpost
 	log_ids=getLogIDs(8)
-	runCmd = "vw-plot-duration-stats " avgflag cumulflag durflag "-d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png -b " begin " -e " end " " log_ids
+	runCmd = "vw-plot-duration-stats " avgflag cumulflag durflag "-d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png -b " begin " -e " end " "  tagopt " " log_ids
     }    
     else if ($2=="ratiostats")
     {
@@ -145,7 +159,7 @@ $1 == "graph" {
 	event2=$6
 	graphDir=getGraphDir(7) "-" graphdirpost
 	log_ids=getLogIDs(7)
-	runCmd = "vw-plot-ratio-stats " avgflag ratioflag "-d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png -x " event1 " -y " event2 " " log_ids
+	runCmd = "vw-plot-ratio-stats " avgflag ratioflag "-d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png -x " event1 " -y " event2 " " tagopt " " log_ids
     }   else if ($2=="t2d")
     {
 	# Will only work in experiment section

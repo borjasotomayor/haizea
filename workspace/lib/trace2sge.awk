@@ -79,9 +79,9 @@ BEGIN	{
 	sgedlopt=""
     }
 
-    if (deadline == "" || deadline="NULL")
+    if (deadline == "" || deadline=="NULL")
     {
-	print "vw-run -N VW" i " -n " num_nodes " -i " img_uri " -l " tracename " " duropt " " configopt " &"
+	print "vw-run -N VW" i " -n " num_nodes " -i " img_uri " -l " tracename " " duropt " " configopt " " traceopt " &"
     }
     else
     {

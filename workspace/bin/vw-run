@@ -65,13 +65,13 @@ set -u
 
 # Defaults
 LOG_ID="TEST"
-TAG="NULL"
+TAG="NONE"
 RUN=true
 WAIT=false
 NAME="JOBNAME"
 
 # Get options
-while getopts "N:c:twi:l:d:n:h:?" OPTION; do
+while getopts "N:c:uwi:l:t:d:n:h:?" OPTION; do
     case $OPTION in
 	l ) 
 	    LOG_ID=$OPTARG
@@ -96,6 +96,9 @@ while getopts "N:c:twi:l:d:n:h:?" OPTION; do
 	    NAME=$OPTARG
 	;;
 	t ) 
+	    TAG=$OPTARG
+	;;
+	u ) 
 	    RUN=false
 	;;
 	w ) 
@@ -154,9 +157,9 @@ do
     echo "Submitting transfer of $IMAGE to $HOST"
     if $RUN;
     then
-	qsub -N TRANSFER_$JOBID -q transfer.q@$HOST  $WORKSPACE_DIR/bin/vw-transfer-image-sgewrapper -i $IMAGE -s SIZE -l $LOG_ID -c $CONFIG -r -f $JOBID.$IMGNUMBER
+	qsub -N TRANSFER_$JOBID -q transfer.q@$HOST  $WORKSPACE_DIR/bin/vw-transfer-image-sgewrapper -i $IMAGE -s SIZE -l $LOG_ID -c $CONFIG -r -f $JOBID.$IMGNUMBER -t $TAG
     else
-	echo qsub -N TRANSFER_$JOBID -q transfer.q@$HOST  $WORKSPACE_DIR/bin/vw-transfer-image-sgewrapper -i $IMAGE -s SIZE -l $LOG_ID -c $CONFIG -r -f $JOBID.$IMGNUMBER
+	echo qsub -N TRANSFER_$JOBID -q transfer.q@$HOST  $WORKSPACE_DIR/bin/vw-transfer-image-sgewrapper -i $IMAGE -s SIZE -l $LOG_ID -c $CONFIG -r -f $JOBID.$IMGNUMBER -t $TAG
     fi
     IMGNUMBER=$(($IMGNUMBER +1))
 done

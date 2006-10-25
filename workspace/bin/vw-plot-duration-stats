@@ -62,9 +62,10 @@ END_EVENT=""
 AVERAGE=false
 CUMULATIVE=false
 DURATION=false
+TAG=""
 
 # Get options
-while getopts ":actd:b:e:o:?" OPTION; do
+while getopts ":actd:g:b:e:o:?" OPTION; do
     case $OPTION in
         d )
             GRAPH_DIR=$OPTARG
@@ -77,6 +78,9 @@ while getopts ":actd:b:e:o:?" OPTION; do
         ;;
         e )
             END_EVENT=$OPTARG
+        ;;
+        g )
+            TAG=$OPTARG
         ;;
         a )
             AVERAGE=true
@@ -130,7 +134,12 @@ mkdir -p $GRAPH_DIR
 
 for LOG_ID in $@;
 do
-    vw-log-duration-stats -l $LOG_ID -b "$BEGIN_EVENT" -e "$END_EVENT" -o $GRAPH_DIR/durationstats_$LOG_ID.dat
+    TAGPARAM=""
+    if [ "$TAG" != "" ];
+    then
+	TAGPARAM="-g $TAG"
+    fi
+    vw-log-duration-stats -l $LOG_ID -b "$BEGIN_EVENT" -e "$END_EVENT" -o $GRAPH_DIR/durationstats_$LOG_ID.dat $TAGPARAM
 done
 
 

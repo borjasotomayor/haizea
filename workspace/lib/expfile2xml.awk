@@ -96,6 +96,11 @@ $1 == "graph" {
 	graphTitle="Average duration between " $3 " and " $4
 	graphDir=getGraphDir(5)
     }
+    else if ($2=="count")
+    {
+	graphTitle="Accumulation of " $3
+	graphDir=getGraphDir(4)
+    }
     else if ($2=="durationstats")
     {
 	graphTitle="Duration stats for [" $6 " ->  " $7"]:"

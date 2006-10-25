@@ -54,15 +54,19 @@ set -u
 # Defaults
 GRAPH_DIR=""
 OUTPUT_TYPE=""
+GREPTAG=""
 
 # Get options
-while getopts ":d:o:?" OPTION; do
+while getopts ":d:g:o:?" OPTION; do
     case $OPTION in
         d )
             GRAPH_DIR=$OPTARG
 	;;
         o )
             OUTPUT_TYPE=$OPTARG
+        ;;
+        g )
+            GREPTAG="/$OPTARG]"
         ;;
         \? )
             usage

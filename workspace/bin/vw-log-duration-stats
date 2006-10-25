@@ -54,9 +54,10 @@ LOG_ID=""
 BEGIN_EVENT=""
 END_EVENT=""
 OUTPUT=""
+GREPTAG=""
 
 # Get options
-while getopts ":l:b:e:o:?" OPTION; do
+while getopts ":l:g:b:e:o:?" OPTION; do
     case $OPTION in
         l )
             LOG_ID=$OPTARG
@@ -69,6 +70,9 @@ while getopts ":l:b:e:o:?" OPTION; do
         ;;
         o )
             OUTPUT=$OPTARG
+        ;;
+        g )
+            GREPTAG="/$OPTARG]"
         ;;
         \? )
             usage
@@ -96,7 +100,7 @@ fi
 
 if [ "$OUTPUT" == "" ];
 then
-    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/lib/duration-stats.awk beginEvent="$BEGIN_EVENT" endEvent="$END_EVENT"
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | grep "$GREPTAG" | awk  -f $WORKSPACE_DIR/lib/duration-stats.awk beginEvent="$BEGIN_EVENT" endEvent="$END_EVENT"
 else
-    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/lib/duration-stats.awk beginEvent="$BEGIN_EVENT" endEvent="$END_EVENT" > $OUTPUT
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | grep "$GREPTAG" | awk  -f $WORKSPACE_DIR/lib/duration-stats.awk beginEvent="$BEGIN_EVENT" endEvent="$END_EVENT" > $OUTPUT
 fi

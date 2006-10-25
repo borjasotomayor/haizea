@@ -62,9 +62,10 @@ END_EVENT2=""
 EVENT1=""
 EVENT2=""
 OUTPUT=""
+GREPTAG=""
 
 # Get options
-while getopts ":l:b:e:c:d:x:y:o:?" OPTION; do
+while getopts ":l:g:b:e:c:d:x:y:o:?" OPTION; do
     case $OPTION in
         l )
             LOG_ID=$OPTARG
@@ -89,6 +90,9 @@ while getopts ":l:b:e:c:d:x:y:o:?" OPTION; do
         ;;
         y )
             EVENT2=$OPTARG
+        ;;
+        g )
+            GREPTAG="/$OPTARG]"
         ;;
         \? )
             usage
@@ -116,7 +120,7 @@ fi
 
 if [ "$OUTPUT" == "" ];
 then
-    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/lib/ratio-stats.awk beginEvent1="$BEGIN_EVENT1" endEvent1="$END_EVENT1" beginEvent2="$BEGIN_EVENT2" endEvent2="$END_EVENT2"  event1="$EVENT1" event2="$EVENT2"
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | grep "$GREPTAG" | awk  -f $WORKSPACE_DIR/lib/ratio-stats.awk beginEvent1="$BEGIN_EVENT1" endEvent1="$END_EVENT1" beginEvent2="$BEGIN_EVENT2" endEvent2="$END_EVENT2"  event1="$EVENT1" event2="$EVENT2"
 else
-    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | awk  -f $WORKSPACE_DIR/lib/ratio-stats.awk beginEvent1="$BEGIN_EVENT1" endEvent1="$END_EVENT1" beginEvent2="$BEGIN_EVENT2" endEvent2="$END_EVENT2" event1="$EVENT1" event2="$EVENT2" > $OUTPUT
+    sort $WORKSPACE_VAR/logs/*_${LOG_ID}_*.log | grep "$GREPTAG" | awk  -f $WORKSPACE_DIR/lib/ratio-stats.awk beginEvent1="$BEGIN_EVENT1" endEvent1="$END_EVENT1" beginEvent2="$BEGIN_EVENT2" endEvent2="$END_EVENT2" event1="$EVENT1" event2="$EVENT2" > $OUTPUT
 fi

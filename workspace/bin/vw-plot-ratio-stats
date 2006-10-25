@@ -67,10 +67,10 @@ EVENT2=""
 AVERAGE=false
 RATIO=false
 EVENT_OPTS=""
-
+TAG=""
 
 # Get options
-while getopts ":ard:b:e:x:y:c:f:o:?" OPTION; do
+while getopts ":ard:g:b:e:x:y:c:f:o:?" OPTION; do
     case $OPTION in
         d )
             GRAPH_DIR=$OPTARG
@@ -108,6 +108,9 @@ while getopts ":ard:b:e:x:y:c:f:o:?" OPTION; do
         r )
             RATIO=true
 	;;
+        g )
+            TAG=$OPTARG
+        ;;
         \? )
             usage
             exit 1
@@ -151,7 +154,13 @@ mkdir -p $GRAPH_DIR
 
 for LOG_ID in $@;
 do
-    vw-log-ratio -l $LOG_ID $EVENT_OPTS -o $GRAPH_DIR/ratio_$LOG_ID.dat
+    TAGPARAM=""
+    if [ "$TAG" != "" ];
+    then
+        TAGPARAM="-g $TAG"
+    fi
+
+    vw-log-ratio -l $LOG_ID $EVENT_OPTS -o $GRAPH_DIR/ratio_$LOG_ID.dat $TAGPARAM
 done
 
 

@@ -100,12 +100,12 @@ done
 
 ERROR=0
 
-log "--VMSTART_START--"
+log "--VMEND_START--"
 if [ -f $LOCALIMG_DIR/$IMAGE ];
 then
-    log "Removing $IMAGE"
-    rm $IMAGE
+    log "Removing $LOCALIMG_DIR/$IMAGE"
+    rm $LOCALIMG_DIR/$IMAGE
 else
-    log "ERROR: $IMAGE does not exist"
+    log "ERROR: $LOCALIMG_DIR/$IMAGE does not exist"
 fi
-log "--VMSTART_END--"
+log "--VMEND_END--"
