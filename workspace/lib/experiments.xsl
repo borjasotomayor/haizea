@@ -20,6 +20,9 @@
 <p>
 <strong>Report generation date:</strong> <xsl:value-of select="@genDate"/>
 </p>
+<p>
+<a href="traces/">Trace files and stats</a>
+</p>
 <hr/>
 
 <xsl:apply-templates select="defaultconfig"/>
@@ -70,6 +73,7 @@
 <xsl:template match="experiment-group">
 <h3><a name="{@id}">Experiment #<xsl:number value="position()" format="1"/></a></h3>
 <p><xsl:value-of select="description"/></p>
+<p>Trace file: <tt><xsl:value-of select="trace"/></tt></p>
 <table border="1" cellpadding="5">
 <tr>
 <th colspan="{count(experiment)}">Configurations</th>
@@ -115,46 +119,5 @@
 
 </xsl:template>
 
-<!--
-<tr>
-<td><xsl:value-of select="@description"/></td>
-<td class="center">
-<xsl:if test="@view='yes'">
-  <xsl:if test="@indexfile='default'">
-    <a href="{@id}/progtutorial_{$version}.{@extension}" class="bold">X</a>
-  </xsl:if>
-  <xsl:if test="@indexfile!='default'">
-    <a href="{@id}/{@indexfile}" class="bold">X</a>
-  </xsl:if>
-</xsl:if>
-</td>
-<td class="center">
-<xsl:if test="@download='yes'">
-<a href="download/progtutorial-{@id}_{$version}.tar.gz" class="bold">X</a>
-</xsl:if>
-</td>
-</tr>
-</xsl:template>
 
-<xsl:template match="format">
-<tr>
-<td><xsl:value-of select="@description"/></td>
-<td class="center">
-<xsl:if test="@view='yes'">
-  <xsl:if test="@indexfile='default'">
-    <a href="{@id}/progtutorial_{$version}.{@extension}" class="bold">X</a>
-  </xsl:if>
-  <xsl:if test="@indexfile!='default'">
-    <a href="{@id}/{@indexfile}" class="bold">X</a>
-  </xsl:if>
-</xsl:if>
-</td>
-<td class="center">
-<xsl:if test="@download='yes'">
-<a href="download/progtutorial-{@id}_{$version}.tar.gz" class="bold">X</a>
-</xsl:if>
-</td>
-</tr>
-</xsl:template>
--->
 </xsl:stylesheet>

@@ -119,11 +119,20 @@ then
             TIMESTAMP=`cat timestamp`
         fi
         mkdir $HTML_DIR
+        mkdir $HTML_DIR/traces
         awk -f $WORKSPACE_DIR/lib/expfile_functions.awk -f $WORKSPACE_DIR/lib/expfile2xml.awk -v timestamp="$TIMESTAMP" $EXP_FILE > $HTML_DIR/results.xml
         xsltproc $WORKSPACE_DIR/lib/experiments.xsl $HTML_DIR/results.xml > $HTML_DIR/index.html.tmp
 	grep -v "<?xml" $HTML_DIR/index.html.tmp > $HTML_DIR/index.html
         cp $WORKSPACE_DIR/lib/experiments.css $HTML_DIR
         cp -r $WORKSPACE_VAR/graphs/$TIMESTAMP $HTML_DIR
+        TRACES=$(grep "using trace" $EXP_FILE | cut -f3 -d" ")
+        for TRACE in $TRACES;
+        do
+            vw-trace-stats -t $WORKSPACE_DIR/traces/$TRACE > $WORKSPACE_DIR/traces/$TRACE.stats
+            cp $WORKSPACE_DIR/traces/$TRACE $HTML_DIR/traces
+            cp $WORKSPACE_DIR/traces/$TRACE.stats $HTML_DIR/traces
+        done
+        
         scp -r $HTML_DIR $UPLOAD
         echo "HTML report uploaded"
     fi

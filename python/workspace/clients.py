@@ -109,7 +109,8 @@ class Cooker(object):
         opt, args = p.parse_args(argv)
         
         c = cooker.Cooker(opt.conf)
-        c.generateTrace()
+        trace = c.generateTrace()
+	trace.toFile(sys.stdout)
         
 class Thermometer(object):
     def __init__(self):

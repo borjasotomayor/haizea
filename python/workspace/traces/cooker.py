@@ -22,6 +22,7 @@ DISTRIBUTION_OPT = "distribution"
 MIN_OPT = "min"
 MAX_OPT = "max"
 ITEMS_OPT = "items"
+ITEMSPROBS_OPT = "itemswithprobs"
 MEAN_OPT = "mean"
 STDEV_OPT = "stdev"
         
@@ -83,8 +84,17 @@ class ConfFile(object):
                 value = line.strip().split(";")[0]
                 values.append(value)
         elif config.has_option(section, ITEMSPROBS_OPT):
+	    itemsprobsOpt = config.get(section, ITEMSPROBS_OPT).split(",")
+            itemsFile = open(itemsprobsOpt[0], "r")
+            probsField = int(itemsprobsOpt[1])
             values = []
             probs = []
+            for line in itemsFile:
+                fields = line.split(";")
+                itemname = fields[0]
+                itemprob = float(fields[probsField])/100
+                values.append(itemname)
+                probs.append(itemprob)
         dist = None
         if distType == "uniform":
             dist = stats.DiscreteUniformDistribution(values)
@@ -137,7 +147,10 @@ class TraceConf(ConfFile):
         config = ConfigParser.ConfigParser()
         config.readfp(file)
         
-        bandwidth = config.getint(GENERAL_SEC, BANDWIDTH_OPT)
+        if config.has_option(GENERAL_SEC, BANDWIDTH_OPT):
+            bandwidth = config.getint(GENERAL_SEC, BANDWIDTH_OPT)
+        else:
+            bandwidth = None
         duration = config.getint(GENERAL_SEC, DURATION_OPT)
         arPercent = config.get(GENERAL_SEC, AR_OPT)
         batchPercent = config.get(GENERAL_SEC, BATCH_OPT)
@@ -147,13 +160,19 @@ class TraceConf(ConfFile):
 
         arbatchDist = stats.DiscreteDistribution(["AR","BATCH"], [arProb,batchProb])
         
-        type = config.get(GENERAL_SEC, TYPE_OPT)
+        if config.has_option(GENERAL_SEC, TYPE_OPT):
+            type = config.get(GENERAL_SEC, TYPE_OPT)
+        else:
+            type = None
 
         numNodesDist = cls.createDiscreteDistributionFromSection(config, NUMNODES_SEC)
         imagesDist = cls.createDiscreteDistributionFromSection(config, IMAGES_SEC)
         intervalDist = cls.createDiscreteDistributionFromSection(config, INTERVAL_SEC)
-        deadlineDist = cls.createContinuousDistributionFromSection(config, DEADLINE_SEC)
         durationDist = cls.createContinuousDistributionFromSection(config, DURATION_SEC)
+        if config.has_section(DEADLINE_SEC):
+            deadlineDist = cls.createContinuousDistributionFromSection(config, DEADLINE_SEC)
+        else:
+            deadlineDist = None
         
         # Get image sizes
         imageSizesOpt = config.get(IMAGES_SEC, SIZES_OPT).split(",")
@@ -274,16 +293,27 @@ class Thermometer(object):
         totalNodes = 0
         totalMB = 0
         duration = int(self.trace.entries[-1].fields["time"])
-        
+        images = {}        
+        imagesNodes = {}
+ 
         for entry in self.trace.entries:
+	    numNodes = int(entry.fields["numNodes"])
+            img = entry.fields["uri"]
+            if images.has_key(img):
+                images[img] += 1
+                imagesNodes[img] += numNodes
+            else:
+                images[img] = 1
+                imagesNodes[img] = numNodes
+            
             if entry.fields["tag"] == "AR":
                 numAR += 1
-                numARNodes += int(entry.fields["numNodes"])
+                numARNodes += numNodes
             elif entry.fields["tag"] == "BATCH":
                 numBatch += 1
-                numBatchNodes += int(entry.fields["numNodes"])
-            totalNodes += int(entry.fields["numNodes"])
-            totalMB += int(entry.fields["size"])
+                numBatchNodes += numNodes
+            totalNodes += numNodes
+            totalMB += int(entry.fields["size"]) * numNodes 
 
         submissionRatioA2B = self.ratio(numAR, numBatch)
         submissionRatioB2A = self.ratio(numBatch, numAR)
@@ -295,9 +325,9 @@ class Thermometer(object):
         batchNodePercent = float(numBatchNodes) / totalNodes
         ARNodePercent = float(numARNodes) / totalNodes
         
-        bandwidth = float(totalMB) / duration
         
         print "SUBMISSIONS"
+        print "-----------"
         print "  Batch =",numBatch
         print "     AR =", numAR
         print "% Batch =",batchPercent
@@ -305,7 +335,9 @@ class Thermometer(object):
         print "Ratio (AR-to-Batch) =", submissionRatioA2B
         print "Ratio (Batch-to-AR) =", submissionRatioB2A
         print ""
+        print ""
         print "NODES"
+        print "-----"
         print "Batch =",numBatchNodes
         print "   AR =", numARNodes
         print "Ratio (AR-to-Batch) =", nodesRatioA2B 
@@ -313,9 +345,17 @@ class Thermometer(object):
         print "% Batch =",batchNodePercent
         print "   % AR =", ARNodePercent
         print ""
+        print ""
         print "IMAGES"
-        print "     Total MB =",totalMB
-        print "Req.Bandwidth =",bandwidth, "MB/s"
+        print "------"
+        print "Total MB =",totalMB
+        sortedkeys = images.keys()
+        sortedkeys.sort()
+        for img in sortedkeys:
+            imgname = img.split("/")[-1]
+            percentOfSubmit = float(images[img]) / totalSubmit
+            percentOfNodes = float(imagesNodes[img]) / totalNodes
+            print "%s: %u  (%.2f %% of submissions) %u nodes (%.2f %% of nodes)" % (imgname, images[img],  percentOfSubmit, imagesNodes[img], percentOfNodes)
 
         
 if __name__ == "__main__":
