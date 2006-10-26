@@ -61,6 +61,28 @@ class Cooker(object):
             entries.append(files.TraceEntry(fields))
             
         return files.TraceFile(entries)
+
+
+class OfflineScheduleEntry(object):
+    def __init__(self, traceentry, transferTime):
+        self.traceentry = traceentry
+        self.transferTime = transferTime
+     
+class OfflineAdmissionControl(object):
+    def __init__(self, trace, bandwidth):
+        self.trace = trace
+        self.bandwidth = bandwidth
+        self.schedule = []
+
+    def filterInfeasible(self):
+        for entry in self.trace.entries:
+            pass
+            # For each entry, try to fit in schedule,
+            # rescheduling past entries if necessary
+            
+        # Iterate over schedule and create new trace.
+        # Maybe return rejected entries?        
+        
     
         
 class ConfFile(object):
@@ -272,6 +294,8 @@ class ARInjector(object):
     
     def run(self, *argv):
         print "Does nothing"
+     
+     
      
 # Merge into TraceFile     
 class Thermometer(object):
