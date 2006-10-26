@@ -43,7 +43,8 @@ class Cooker(object):
             fields["uri"] = img
             imgsize = self.conf.imageSizes[img]
             fields["size"] = str(imgsize)
-            fields["numNodes"] = str(self.conf.numNodesDist.get())
+            numNodes = self.conf.numNodesDist.get()
+            fields["numNodes"] = str(numNodes)
             fields["mode"] = "RW"
             type = self.conf.arbatchDist.get()
             if type == "AR":
@@ -64,25 +65,56 @@ class Cooker(object):
 
 
 class OfflineScheduleEntry(object):
-    def __init__(self, traceentry, transferTime):
+    def __init__(self, traceentry, idealTransferTime, realTransferTime, absdeadline):
         self.traceentry = traceentry
-        self.transferTime = transferTime
+        self.idealTransferTime = idealTransferTime
+        self.realTransferTime = realTransferTime
+        self.absdeadline = absdeadline
+        
+    def compare(a, b):
+        return a.absdeadline - b.absdeadline
      
 class OfflineAdmissionControl(object):
-    def __init__(self, trace, bandwidth):
+    def __init__(self, trace, netbandwidth, practicalbandwidth):
         self.trace = trace
-        self.bandwidth = bandwidth
+        self.netbandwidth = netbandwidth
+        self.practicalbandwidth = practicalbandwidth
         self.schedule = []
 
     def filterInfeasible(self):
+        dlentries = []
         for entry in self.trace.entries:
-            pass
-            # For each entry, try to fit in schedule,
-            # rescheduling past entries if necessary
-            
-        # Iterate over schedule and create new trace.
-        # Maybe return rejected entries?        
+            time = int(entry.fields["time"])
+            deadline = int (entry.fields["deadline"])
+            absdeadline = time + deadline
+            numNodes = int(entry.fields["numNodes"])
+            imgsize = int(entry.fields["size"])
+            imgsizeKB = imgsize * 1024 * numNodes
+            idealTransferTime = float(imgsizeKB) / self.netbandwidth
+            realTransferTime = imgsize * 1024 / self.practicalbandwidth
+            dlentry = OfflineScheduleEntry(entry, idealTransferTime, realTransferTime, absdeadline)
+            dlentries.append(dlentry)
+
+        dlentries.sort(OfflineScheduleEntry.compare)
+        for entry in dlentries:
+            print entry.traceentry.toLine(), ";", entry.realTransferTime, ";", entry.idealTransferTime, ";",  entry.absdeadline
         
+        nextstarttime = 0
+        accepted = []
+        rejected = []
+
+        for entry in dlentries:
+            transferendtime = nextstarttime + entry.realTransferTime
+            if transferendtime < entry.absdeadline:
+                accepted.append(entry.traceentry)
+                nextstarttime = nextstarttime + entry.idealTransferTime
+            else:
+                rejected.append(entry.traceentry)
+            
+        accepted.sort(files.TraceEntry.compare)
+        rejected.sort(files.TraceEntry.compare)
+            
+        return (files.TraceFile(accepted), files.TraceFile(rejected))        
     
         
 class ConfFile(object):
@@ -373,6 +405,8 @@ class Thermometer(object):
         print "IMAGES"
         print "------"
         print "Total MB =",totalMB
+        bandwidth = totalMB/duration
+        print "Bandwidth = %u (MB/s)" % bandwidth        
         sortedkeys = images.keys()
         sortedkeys.sort()
         for img in sortedkeys:
@@ -394,4 +428,20 @@ if __name__ == "__main__":
     trace.toFile(sys.stdout)
     therm = Thermometer(trace)
     therm.printStats()
+    
+    ac = OfflineAdmissionControl(trace, 10240, 800)
+    (accepted, rejected) = ac.filterInfeasible()
+    print "\n\n\nACCEPTED"
+    accepted.toFile(sys.stdout)
+    therm = Thermometer(accepted)
+    therm.printStats()
+    
+    print "\n\n\nREJECTED"
+    if len(rejected.entries) > 0:
+        rejected.toFile(sys.stdout)
+        therm = Thermometer(rejected)
+        therm.printStats()
+    else:
+        print "None"
+    
     
