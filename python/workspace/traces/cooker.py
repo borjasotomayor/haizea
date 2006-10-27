@@ -12,6 +12,7 @@ DEADLINE_SEC = "deadline"
 IMAGES_SEC = "images"
 
 BANDWIDTH_OPT = "bandwidth"
+NETBANDWIDTH_OPT = "netbandwidth"
 DURATION_OPT = "duration"
 AR_OPT = "ar"
 BATCH_OPT = "batch"
@@ -183,7 +184,7 @@ class TraceConf(ConfFile):
     
     def __init__(self, _imageDist, _numNodesDist, _deadlineDist,
                    _durationDist, _imageSizes, _bandwidth, _intervalDist,
-                   _duration, _arbatchDist, _type):
+                   _duration, _arbatchDist, _type, _netbandwidth):
         self.imageDist = _imageDist
         self.imageSizes = _imageSizes
         self.numNodesDist = _numNodesDist
@@ -192,6 +193,7 @@ class TraceConf(ConfFile):
         self.intervalDist = _intervalDist
         self.traceDuration = _duration
         self.bandwidth = _bandwidth
+        self.netbandwidth = _netbandwidth
         self.arbatchDist = _arbatchDist
         self.type = _type
     
@@ -205,6 +207,10 @@ class TraceConf(ConfFile):
             bandwidth = config.getint(GENERAL_SEC, BANDWIDTH_OPT)
         else:
             bandwidth = None
+        if config.has_option(GENERAL_SEC, NETBANDWIDTH_OPT):
+            netbandwidth = config.getint(GENERAL_SEC, NETBANDWIDTH_OPT)
+        else:
+            netbandwidth = None
         duration = config.getint(GENERAL_SEC, DURATION_OPT)
         arPercent = config.get(GENERAL_SEC, AR_OPT)
         batchPercent = config.get(GENERAL_SEC, BATCH_OPT)
@@ -239,7 +245,7 @@ class TraceConf(ConfFile):
             imgsize = fields[imageSizesField]
             imageSizes[imgname] = int(imgsize)
 
-        return cls(_imageDist=imagesDist, _numNodesDist=numNodesDist, _deadlineDist=deadlineDist,
+        return cls(_imageDist=imagesDist, _numNodesDist=numNodesDist, _deadlineDist=deadlineDist, _netbandwidth=netbandwidth,
                    _durationDist = durationDist, _imageSizes = imageSizes, _bandwidth = bandwidth, _intervalDist= intervalDist,
                    _duration = duration, _arbatchDist = arbatchDist, _type = type)        
 
