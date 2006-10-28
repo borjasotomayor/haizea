@@ -88,23 +88,23 @@ function getImageThroughCache()
     then
         log "--CACHE_HIT-- Image: $IMG_ID"
     else
-	log "--CACHE_MISS-- Image: $IMG_ID"
 	#TODO: Images that can't fit in the cache should be downloaded directly to the
 	#      image directory (not to the local cache)
-
-	#TODO: Make this more concurrency friendly (use a download lock)
-	if [ -f $DOWNLOAD_IMG ];
-	then
-	    log "--DOWNLOAD_WAIT_START-- Image is already being downloaded by another process. Sleeping."
-	    while [ -f $DOWNLOAD_IMG ];
-	    do
-		sleep 5
-	    done
-	    log "--DOWNLOAD_WAIT_END-- Awake: Other process finished downloading image."
-	else
+        if lock $DOWNLOAD_IMG;
+        then
+	    log "--CACHE_MISS-- Image: $IMG_ID"
             freeCache $IMG_SIZE
-	    downloadImage $CACHED_IMG;
-	fi
+	    downloadImage $CACHED_IMG
+            unlock $DOWNLOAD_IMG
+        else
+	    log "--CACHE_HALFMISS-- Image: $IMG_ID"
+	    log "--DOWNLOAD_WAIT_START-- Image is already being downloaded by another process. Sleeping."
+            while testLock $DOWNLOAD_IMG;
+            do
+                sleep 5
+            done
+	    log "--DOWNLOAD_WAIT_END-- Awake: Other process finished downloading image."
+        fi
     fi
     log "--GETIMAGE_END--"
 
