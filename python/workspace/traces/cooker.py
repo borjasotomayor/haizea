@@ -1,6 +1,6 @@
 import ConfigParser, os
 from workspace.util import stats
-from workspace.traces import files
+from workspace.traces.files import *
 import random
 import sys
 
@@ -27,6 +27,12 @@ ITEMS_OPT = "items"
 ITEMSPROBS_OPT = "itemswithprobs"
 MEAN_OPT = "mean"
 STDEV_OPT = "stdev"
+
+MAXDURATION_OPT = "maxduration"
+MAXNODES_OPT = "maxnodes"
+TRUNCATEDURATION_OPT = "truncateduration"
+QUEUE_OPT = "queue"
+PARTITION_OPT = "partition"
         
 class Cooker(object):
     def __init__(self, conffile):
@@ -67,9 +73,9 @@ class Cooker(object):
                     fields["tag"] = "BATCH"
                     
                 fields["duration"] = str(int(self.conf.durationDist.get()))
-                entries.append(files.TraceEntry(fields))
+                entries.append(TraceEntry(fields))
             
-        return files.TraceFile(entries)
+        return TraceFile(entries)
 
 
 class OfflineScheduleEntry(object):
@@ -119,10 +125,10 @@ class OfflineAdmissionControl(object):
             else:
                 rejected.append(entry.traceentry)
             
-        accepted.sort(files.TraceEntry.compare)
-        rejected.sort(files.TraceEntry.compare)
+        accepted.sort(TraceEntry.compare)
+        rejected.sort(TraceEntry.compare)
             
-        return (files.TraceFile(accepted), files.TraceFile(rejected))        
+        return (TraceFile(accepted), TraceFile(rejected))        
     
         
 class ConfFile(object):
@@ -134,7 +140,7 @@ class ConfFile(object):
     def createDiscreteDistributionFromSection(config, section):
         distType = config.get(section, DISTRIBUTION_OPT)
         probs = None
-        if config.has_option(section, MIN_OPT) and config.has_option(section, MIN_OPT):
+        if config.has_option(section, MIN_OPT) and config.has_option(section, MAX_OPT):
             min = config.getint(section, MIN_OPT)
             max = config.getint(section, MAX_OPT)
             values = range(min,max+1)
@@ -303,6 +309,60 @@ class InjectorConf(ConfFile):
         return cls(_imageDist=imagesDist, _numNodesDist=numNodesDist, _deadlineDist=deadlineDist,
                    _durationDist = durationDist, _imageSizes = imageSizes, _bandwidth = bandwidth,
                    _intervalDist = intervalDist) 
+ 
+class SWF2TraceConf(ConfFile):
+    
+    def __init__(self, _imageDist, _maxNodes, _maxDuration, _truncateDuration,
+                   _imageSizes, _range, _partition, _queue):
+        self.imageDist = _imageDist
+        self.maxNodes = _maxNodes
+        self.maxDuration = _maxDuration
+        self.truncateDuration = _truncateDuration
+        self.imageSizes = _imageSizes
+        self.range = _range
+        self.partition = _partition
+        self.queue = _queue
+    
+    @classmethod
+    def fromFile(cls, filename):
+        file = open (filename, "r")
+        config = ConfigParser.ConfigParser()
+        config.readfp(file)
+        
+        maxduration = config.getint(GENERAL_SEC, MAXDURATION_OPT)
+        maxnodes = config.getint(GENERAL_SEC, MAXNODES_OPT)
+        truncateduration = config.getboolean(GENERAL_SEC, TRUNCATEDURATION_OPT)
+        if config.has_option(GENERAL_SEC, QUEUE_OPT):
+            queue = config.getint(GENERAL_SEC, QUEUE_OPT)
+        else:
+            queue = None
+        if config.has_option(GENERAL_SEC, PARTITION_OPT):
+            partition = config.getint(GENERAL_SEC, PARTITION_OPT)
+        else:
+            partition = None
+            
+        if config.has_option(GENERAL_SEC, MIN_OPT) and config.has_option(GENERAL_SEC, MAX_OPT):
+            min = config.getint(GENERAL_SEC, MIN_OPT)
+            max = config.getint(GENERAL_SEC, MAX_OPT)
+            r = (min,max)
+        else:
+            r = None
+
+        imagesDist = cls.createDiscreteDistributionFromSection(config, IMAGES_SEC)
+
+        # Get image sizes
+        imageSizesOpt = config.get(IMAGES_SEC, SIZES_OPT).split(",")
+        imageSizesFile = open(imageSizesOpt[0], "r")
+        imageSizesField = int(imageSizesOpt[1])
+        imageSizes = {}
+        for line in imageSizesFile:
+            fields = line.split(";")
+            imgname = fields[0]
+            imgsize = fields[imageSizesField]
+            imageSizes[imgname] = int(imgsize)
+
+        return cls(_imageDist=imagesDist, _maxNodes=maxnodes, _maxDuration=maxduration, _truncateDuration=truncateduration,
+                   _imageSizes=imageSizes, _partition=partition, _queue=queue, _range=r)        
     
 
 # TODO: Merge into TraceFile
@@ -312,7 +372,7 @@ class ARInjector(object):
         self.conf = InjectorConf.fromFile(conffile)
         
     def injectIntoTrace(self):
-        artrace = files.TraceFile()
+        artrace = TraceFile()
         maxtime = self.trace.entries[-1].fields["time"]
         time = 0
         while int(time) < int(maxtime):
@@ -333,15 +393,15 @@ class ARInjector(object):
             fields["deadline"] = str(deadline)
             fields["duration"] = str(int(self.conf.durationDist.get()))
             fields["tag"] = "AR"
-            artrace.entries.append(files.TraceEntry(fields))
+            artrace.entries.append(TraceEntry(fields))
         
         # Add BATCH tag
         for entry in self.trace.entries:
             entry.fields["tag"] = "BATCH"
             
         newTraceEntries = self.trace.entries + artrace.entries    
-        newTraceEntries.sort(files.TraceEntry.compare)
-        return files.TraceFile(newTraceEntries)
+        newTraceEntries.sort(TraceEntry.compare)
+        return TraceFile(newTraceEntries)
     
     def run(self, *argv):
         print "Does nothing"
@@ -436,7 +496,7 @@ class Thermometer(object):
 
         
 if __name__ == "__main__":
-    #trace = files.TraceFile.fromFile("256.random.trace")
+    #trace = TraceFile.fromFile("256.random.trace")
     #injector = ARInjector(trace, "example.inject")
     #newtrace = injector.injectIntoTrace()
     #newtrace.toFile(sys.stdout)

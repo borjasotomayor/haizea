@@ -1,5 +1,6 @@
 import sys
 import re
+import workspace.traces.cooker
 from workspace.graphing.graph import *
 
 
@@ -165,7 +166,7 @@ class SWFFile(object):
         for entry in self.entries:
             print >>file, entry.toLine()      
             
-    def toTrace(self, imageDist, imageSizes, maxnodes=-1, maxduration=-1, truncateDurations = False, range=None):
+    def toTrace(self, imageDist, imageSizes, maxnodes=-1, maxduration=-1, truncateDurations = False, range=None, partition=None, queue=None):
         tEntries = []
         if range == None:
             range = (0,len(self.entries)-1)
@@ -173,16 +174,23 @@ class SWFFile(object):
             status = int(entry.fields["status"])
             numNodes = entry.fields["proc_alloc"]
             duration = entry.fields["t_run"]
-            if status in (1,-1) and (maxnodes == -1 or int(numNodes) <= maxnodes) and duration >= 1 and (maxduration == -1 or truncateDurations or int(duration) <= maxduration):
+            entryqueue = entry.fields["queue"]
+            entrypartition = entry.fields["partition"]
+            if status in (1,-1) \
+            and (maxnodes == -1 or int(numNodes) <= maxnodes) \
+            and duration >= 1 \
+            and (maxduration == -1 or truncateDurations or int(duration) <= maxduration) \
+            and (partition == None or entrypartition == partition) \
+            and (queue == None or entryqueue == queue):
                 fields = {}
                 fields["time"] = entry.fields["t_submit"]
                 image = imageDist.get()
                 fields["uri"] = image
-                fields["size"] = imageSizes[image]
-                fields["numNodes"] = numNodes 
+                fields["size"] = str(imageSizes[image])
+                fields["numNodes"] = str(numNodes) 
                 fields["mode"] = "RW"
                 fields["deadline"] = "NULL"
-                
+                fields["tag"]="BATCH"
                 if truncateDurations and int(duration) > maxduration:
                     fields["duration"] = str(maxduration)
                 else:
@@ -216,10 +224,13 @@ if __name__ == "__main__":
 #    
 #    fig.plot()
 #    fig.show()
+    c = workspace.traces.cooker.SWF2TraceConf.fromFile("exampleswf2trace.desc")
     swf = SWFFile.fromFile("example.swf")
-    trace = swf.toTrace(imageDist=None, imageSizes=None, maxnodes=16, maxduration=1000, range=(0,100))
+    print c.range
+    trace = swf.toTrace(imageDist=c.imageDist, imageSizes=c.imageSizes, maxnodes=c.maxNodes, maxduration=c.maxDuration, range=c.range)
     trace.toFile(sys.stdout)
-    
+    therm = workspace.traces.cooker.Thermometer(trace)
+    therm.printStats()
     g = trace.toScheduleGraph()
     g.plot()
     g.show()
