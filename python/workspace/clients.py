@@ -105,13 +105,27 @@ class Cooker(object):
     def run(self, argv):
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        
+        p.add_option(Option("-r", "--rejected-file", action="store", type="string", dest="rejectedFile", default=""))
+        p.add_option(Option("-a", "--admission-control", action="store_true", dest="admission"))
+        p.set_defaults(admission=False)
+
         opt, args = p.parse_args(argv)
         
         c = cooker.Cooker(opt.conf)
         trace = c.generateTrace()
-        trace.toFile(sys.stdout)
-        
+
+        if opt.admission:
+            bandwidth = c.conf.bandwidth
+            netbandwidth = c.conf.netbandwidth
+            ac = cooker.OfflineAdmissionControl(trace, netbandwidth, bandwidth)
+            (accepted, rejected) = ac.filterInfeasible()
+            accepted.toFile(sys.stdout)
+            if opt.rejectedFile != "" and len(rejected.entries) > 0:
+                    file = open(opt.rejectedFile,"w")
+                    rejected.toFile(file)                    
+        else:
+	    trace.toFile(sys.stdout)
+            
 class Thermometer(object):
     def __init__(self):
         pass
