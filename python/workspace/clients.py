@@ -110,7 +110,7 @@ class Cooker(object):
         
         c = cooker.Cooker(opt.conf)
         trace = c.generateTrace()
-	trace.toFile(sys.stdout)
+        trace.toFile(sys.stdout)
         
 class Thermometer(object):
     def __init__(self):
