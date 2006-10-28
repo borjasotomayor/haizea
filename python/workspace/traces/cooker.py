@@ -10,6 +10,7 @@ NUMNODES_SEC = "numnodes"
 DURATION_SEC = "duration"
 DEADLINE_SEC = "deadline"
 IMAGES_SEC = "images"
+SIMULTANEOUS_SEC = "simultaneousrequests"
 
 BANDWIDTH_OPT = "bandwidth"
 NETBANDWIDTH_OPT = "netbandwidth"
@@ -38,29 +39,35 @@ class Cooker(object):
         while int(time) < int(maxtime):
             entrytime = self.conf.intervalDist.get()
             time += entrytime
-            fields = {}
-            fields["time"] = str(time)
-            img = self.conf.imageDist.get()
-            fields["uri"] = img
-            imgsize = self.conf.imageSizes[img]
-            fields["size"] = str(imgsize)
-            numNodes = self.conf.numNodesDist.get()
-            fields["numNodes"] = str(numNodes)
-            fields["mode"] = "RW"
-            type = self.conf.arbatchDist.get()
-            if type == "AR":
-                tightness = self.conf.deadlineDist.get() / 100
-                imgsizeKB = imgsize * 1024
-                transferTime = imgsizeKB / self.conf.bandwidth
-                deadline = int(transferTime * (1 + tightness))
-                fields["deadline"] = str(deadline)
-                fields["tag"] = "AR"
-            elif type == "BATCH":
-                fields["deadline"] = "NULL"
-                fields["tag"] = "BATCH"
-                
-            fields["duration"] = str(int(self.conf.durationDist.get()))
-            entries.append(files.TraceEntry(fields))
+            if self.conf.simulDist == None:
+                numRequests = 1
+            else:
+                numRequests = self.conf.simulDist.get()
+            
+            for i in xrange(1,numRequests):
+                fields = {}
+                fields["time"] = str(time)
+                img = self.conf.imageDist.get()
+                fields["uri"] = img
+                imgsize = self.conf.imageSizes[img]
+                fields["size"] = str(imgsize)
+                numNodes = self.conf.numNodesDist.get()
+                fields["numNodes"] = str(numNodes)
+                fields["mode"] = "RW"
+                type = self.conf.arbatchDist.get()
+                if type == "AR":
+                    tightness = self.conf.deadlineDist.get() / 100
+                    imgsizeKB = imgsize * 1024
+                    transferTime = imgsizeKB / self.conf.bandwidth
+                    deadline = int(transferTime * (1 + tightness))
+                    fields["deadline"] = str(deadline)
+                    fields["tag"] = "AR"
+                elif type == "BATCH":
+                    fields["deadline"] = "NULL"
+                    fields["tag"] = "BATCH"
+                    
+                fields["duration"] = str(int(self.conf.durationDist.get()))
+                entries.append(files.TraceEntry(fields))
             
         return files.TraceFile(entries)
 
@@ -183,7 +190,7 @@ class ConfFile(object):
 class TraceConf(ConfFile):
     
     def __init__(self, _imageDist, _numNodesDist, _deadlineDist,
-                   _durationDist, _imageSizes, _bandwidth, _intervalDist,
+                   _durationDist, _imageSizes, _bandwidth, _intervalDist, _simulDist,
                    _duration, _arbatchDist, _type, _netbandwidth):
         self.imageDist = _imageDist
         self.imageSizes = _imageSizes
@@ -195,6 +202,7 @@ class TraceConf(ConfFile):
         self.bandwidth = _bandwidth
         self.netbandwidth = _netbandwidth
         self.arbatchDist = _arbatchDist
+        self.simulDist = _simulDist
         self.type = _type
     
     @classmethod
@@ -234,6 +242,11 @@ class TraceConf(ConfFile):
         else:
             deadlineDist = None
         
+        if config.has_section(SIMULTANEOUS_SEC):
+            simulDist = cls.createDiscreteDistributionFromSection(config, SIMULTANEOUS_SEC)
+        else:
+            simulDist = None
+
         # Get image sizes
         imageSizesOpt = config.get(IMAGES_SEC, SIZES_OPT).split(",")
         imageSizesFile = open(imageSizesOpt[0], "r")
@@ -247,7 +260,7 @@ class TraceConf(ConfFile):
 
         return cls(_imageDist=imagesDist, _numNodesDist=numNodesDist, _deadlineDist=deadlineDist, _netbandwidth=netbandwidth,
                    _durationDist = durationDist, _imageSizes = imageSizes, _bandwidth = bandwidth, _intervalDist= intervalDist,
-                   _duration = duration, _arbatchDist = arbatchDist, _type = type)        
+                   _duration = duration, _arbatchDist = arbatchDist, _type = type, _simulDist = simulDist)        
 
 
 class InjectorConf(ConfFile):
