@@ -1,6 +1,5 @@
 import sys
 import re
-import workspace.traces.cooker
 from workspace.graphing.graph import *
 
 

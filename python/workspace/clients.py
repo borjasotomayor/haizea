@@ -73,8 +73,7 @@ class Cooker(object):
 
         if opt.admission:
             bandwidth = c.conf.bandwidth
-            netbandwidth = c.conf.netbandwidth
-            ac = cooker.OfflineAdmissionControl(trace, netbandwidth, bandwidth)
+            ac = cooker.OfflineAdmissionControl(trace, bandwidth, c.conf.numNodesDist)
             (accepted, rejected) = ac.filterInfeasible()
             accepted.toFile(sys.stdout)
             if opt.rejectedFile != "" and len(rejected.entries) > 0:

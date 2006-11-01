@@ -1,6 +1,6 @@
 import ConfigParser, os
 from workspace.util import stats
-from workspace.traces.files import *
+from workspace.traces.files import TraceFile, TraceEntry
 import random
 import sys
 
@@ -13,7 +13,6 @@ IMAGES_SEC = "images"
 SIMULTANEOUS_SEC = "simultaneousrequests"
 
 BANDWIDTH_OPT = "bandwidth"
-NETBANDWIDTH_OPT = "netbandwidth"
 DURATION_OPT = "duration"
 AR_OPT = "ar"
 BATCH_OPT = "batch"
@@ -49,8 +48,8 @@ class Cooker(object):
                 numRequests = 1
             else:
                 numRequests = self.conf.simulDist.get()
-            
-            for i in xrange(1,numRequests):
+
+            for i in xrange(0,numRequests):
                 fields = {}
                 fields["time"] = str(time)
                 img = self.conf.imageDist.get()
@@ -63,7 +62,7 @@ class Cooker(object):
                 type = self.conf.arbatchDist.get()
                 if type == "AR":
                     tightness = self.conf.deadlineDist.get() / 100
-                    imgsizeKB = imgsize * 1024
+                    imgsizeKB = imgsize * 1024 * numNodes
                     transferTime = imgsizeKB / self.conf.bandwidth
                     deadline = int(transferTime * (1 + tightness))
                     fields["deadline"] = str(deadline)
@@ -74,25 +73,23 @@ class Cooker(object):
                     
                 fields["duration"] = str(int(self.conf.durationDist.get()))
                 entries.append(TraceEntry(fields))
-            
         return TraceFile(entries)
 
 
 class OfflineScheduleEntry(object):
-    def __init__(self, traceentry, idealTransferTime, realTransferTime, absdeadline):
+    def __init__(self, traceentry, transferTime, absdeadline):
         self.traceentry = traceentry
-        self.idealTransferTime = idealTransferTime
-        self.realTransferTime = realTransferTime
+        self.transferTime = transferTime
         self.absdeadline = absdeadline
         
     def compare(a, b):
         return a.absdeadline - b.absdeadline
      
 class OfflineAdmissionControl(object):
-    def __init__(self, trace, netbandwidth, practicalbandwidth):
+    def __init__(self, trace, bandwidth, numNodesDist):
         self.trace = trace
-        self.netbandwidth = netbandwidth
-        self.practicalbandwidth = practicalbandwidth
+        self.bandwidth = bandwidth
+        self.numNodesDist = numNodesDist
         self.schedule = []
 
     def filterInfeasible(self):
@@ -104,26 +101,26 @@ class OfflineAdmissionControl(object):
             numNodes = int(entry.fields["numNodes"])
             imgsize = int(entry.fields["size"])
             imgsizeKB = imgsize * 1024 * numNodes
-            idealTransferTime = float(imgsizeKB) / self.netbandwidth
-            realTransferTime = imgsize * 1024 / self.practicalbandwidth
-            dlentry = OfflineScheduleEntry(entry, idealTransferTime, realTransferTime, absdeadline)
+            transferTime = (float(imgsizeKB) / self.bandwidth) +(10*numNodes)
+            dlentry = OfflineScheduleEntry(entry, transferTime, absdeadline)
             dlentries.append(dlentry)
 
         dlentries.sort(OfflineScheduleEntry.compare)
-        for entry in dlentries:
-            print entry.traceentry.toLine(), ";", entry.realTransferTime, ";", entry.idealTransferTime, ";",  entry.absdeadline
         
         nextstarttime = 0
         accepted = []
         rejected = []
-
+        desiredNumNodes = self.numNodesDist.get()
         for entry in dlentries:
-            transferendtime = nextstarttime + entry.realTransferTime
-            if transferendtime < entry.absdeadline:
-                accepted.append(entry.traceentry)
-                nextstarttime = nextstarttime + entry.idealTransferTime
-            else:
-                rejected.append(entry.traceentry)
+            if int(entry.traceentry.fields["numNodes"]) == desiredNumNodes:
+                transferendtime = nextstarttime + entry.transferTime
+                if transferendtime < entry.absdeadline:
+                    accepted.append(entry.traceentry)
+                    nextstarttime = nextstarttime + entry.transferTime
+                    desiredNumNodes = self.numNodesDist.get()
+                else:
+                    rejected.append(entry.traceentry)
+
             
         accepted.sort(TraceEntry.compare)
         rejected.sort(TraceEntry.compare)
@@ -197,7 +194,7 @@ class TraceConf(ConfFile):
     
     def __init__(self, _imageDist, _numNodesDist, _deadlineDist,
                    _durationDist, _imageSizes, _bandwidth, _intervalDist, _simulDist,
-                   _duration, _arbatchDist, _type, _netbandwidth):
+                   _duration, _arbatchDist, _type):
         self.imageDist = _imageDist
         self.imageSizes = _imageSizes
         self.numNodesDist = _numNodesDist
@@ -206,7 +203,6 @@ class TraceConf(ConfFile):
         self.intervalDist = _intervalDist
         self.traceDuration = _duration
         self.bandwidth = _bandwidth
-        self.netbandwidth = _netbandwidth
         self.arbatchDist = _arbatchDist
         self.simulDist = _simulDist
         self.type = _type
@@ -221,10 +217,6 @@ class TraceConf(ConfFile):
             bandwidth = config.getint(GENERAL_SEC, BANDWIDTH_OPT)
         else:
             bandwidth = None
-        if config.has_option(GENERAL_SEC, NETBANDWIDTH_OPT):
-            netbandwidth = config.getint(GENERAL_SEC, NETBANDWIDTH_OPT)
-        else:
-            netbandwidth = None
         duration = config.getint(GENERAL_SEC, DURATION_OPT)
         arPercent = config.get(GENERAL_SEC, AR_OPT)
         batchPercent = config.get(GENERAL_SEC, BATCH_OPT)
@@ -264,7 +256,7 @@ class TraceConf(ConfFile):
             imgsize = fields[imageSizesField]
             imageSizes[imgname] = int(imgsize)
 
-        return cls(_imageDist=imagesDist, _numNodesDist=numNodesDist, _deadlineDist=deadlineDist, _netbandwidth=netbandwidth,
+        return cls(_imageDist=imagesDist, _numNodesDist=numNodesDist, _deadlineDist=deadlineDist, 
                    _durationDist = durationDist, _imageSizes = imageSizes, _bandwidth = bandwidth, _intervalDist= intervalDist,
                    _duration = duration, _arbatchDist = arbatchDist, _type = type, _simulDist = simulDist)        
 
@@ -484,8 +476,8 @@ class Thermometer(object):
         print "IMAGES"
         print "------"
         print "Total MB =",totalMB
-        bandwidth = totalMB/duration
-        print "Bandwidth = %u (MB/s)" % bandwidth        
+        bandwidth = float(totalMB)/duration
+        print "Bandwidth = %.2f (MB/s)" % bandwidth        
         sortedkeys = images.keys()
         sortedkeys.sort()
         for img in sortedkeys:
