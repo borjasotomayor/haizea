@@ -11,6 +11,7 @@ DURATION_SEC = "duration"
 DEADLINE_SEC = "deadline"
 IMAGES_SEC = "images"
 SIMULTANEOUS_SEC = "simultaneousrequests"
+ADMISSIONCONTROL_SEC = "admissioncontrol"
 
 BANDWIDTH_OPT = "bandwidth"
 DURATION_OPT = "duration"
@@ -32,6 +33,10 @@ MAXNODES_OPT = "maxnodes"
 TRUNCATEDURATION_OPT = "truncateduration"
 QUEUE_OPT = "queue"
 PARTITION_OPT = "partition"
+
+NUMC_OPT = "numclusters"
+WINSIZE_OPT = "windowsize"
+
         
 class Cooker(object):
     def __init__(self, conffile):
@@ -86,11 +91,13 @@ class OfflineScheduleEntry(object):
         return a.absdeadline - b.absdeadline
      
 class OfflineAdmissionControl(object):
-    def __init__(self, trace, bandwidth, numNodesDist):
+    def __init__(self, trace, bandwidth, mode, numNodesDist, numClusters, windowSize):
         self.trace = trace
         self.bandwidth = bandwidth
         self.numNodesDist = numNodesDist
-        self.schedule = []
+        self.mode = mode
+        self.numClusters = numClusters
+        self.windowSize = windowSize
 
     def filterInfeasible(self):
         dlentries = []
@@ -110,16 +117,31 @@ class OfflineAdmissionControl(object):
         nextstarttime = 0
         accepted = []
         rejected = []
-        desiredNumNodes = self.numNodesDist.get()
-        for entry in dlentries:
-            if int(entry.traceentry.fields["numNodes"]) == desiredNumNodes:
-                transferendtime = nextstarttime + entry.transferTime
-                if transferendtime < entry.absdeadline:
-                    accepted.append(entry.traceentry)
-                    nextstarttime = nextstarttime + entry.transferTime
-                    desiredNumNodes = self.numNodesDist.get()
-                else:
-                    rejected.append(entry.traceentry)
+        if self.mode == "clustered_dl":
+            clusterinterval = dlentries[-1].absdeadline / self.numClusters
+            curwindow = [clusterinterval, clusterinterval + self.windowSize]
+            for entry in dlentries:
+                if entry.absdeadline > curwindow[0] and entry.absdeadline < curwindow[1]:
+                    transferendtime = nextstarttime + entry.transferTime
+                    if transferendtime < entry.absdeadline:
+                        accepted.append(entry.traceentry)
+                        nextstarttime = nextstarttime + entry.transferTime
+                    else:
+                        rejected.append(entry.traceentry)
+                if entry.absdeadline > curwindow[1]:
+                    curwindow[0] += clusterinterval
+                    curwindow[1] += clusterinterval
+        elif self.mode == "nodes":
+            desiredNumNodes = self.numNodesDist.get()
+            for entry in dlentries:
+                if int(entry.traceentry.fields["numNodes"]) == desiredNumNodes:
+                    transferendtime = nextstarttime + entry.transferTime
+                    if transferendtime < entry.absdeadline:
+                        accepted.append(entry.traceentry)
+                        nextstarttime = nextstarttime + entry.transferTime
+                        desiredNumNodes = self.numNodesDist.get()
+                    else:
+                        rejected.append(entry.traceentry)
 
             
         accepted.sort(TraceEntry.compare)
@@ -194,7 +216,7 @@ class TraceConf(ConfFile):
     
     def __init__(self, _imageDist, _numNodesDist, _deadlineDist,
                    _durationDist, _imageSizes, _bandwidth, _intervalDist, _simulDist,
-                   _duration, _arbatchDist, _type):
+                   _duration, _arbatchDist, _type, _admissioncontrol, _numc, _winsize):
         self.imageDist = _imageDist
         self.imageSizes = _imageSizes
         self.numNodesDist = _numNodesDist
@@ -206,6 +228,9 @@ class TraceConf(ConfFile):
         self.arbatchDist = _arbatchDist
         self.simulDist = _simulDist
         self.type = _type
+        self.admissioncontrol = _admissioncontrol
+        self.numc = _numc
+        self.winsize = _winsize
     
     @classmethod
     def fromFile(cls, filename):
@@ -230,6 +255,17 @@ class TraceConf(ConfFile):
             type = config.get(GENERAL_SEC, TYPE_OPT)
         else:
             type = None
+
+        if config.has_section(ADMISSIONCONTROL_SEC):
+            admissioncontrol = config.get(ADMISSIONCONTROL_SEC, TYPE_OPT)
+            if admissioncontrol == "clustered_dl":
+                numc = config.getint(ADMISSIONCONTROL_SEC, NUMC_OPT)
+                winsize = config.getint(ADMISSIONCONTROL_SEC, WINSIZE_OPT)
+        else:
+            admissioncontrol = None
+            numc = None
+            winsize = None
+
 
         numNodesDist = cls.createDiscreteDistributionFromSection(config, NUMNODES_SEC)
         imagesDist = cls.createDiscreteDistributionFromSection(config, IMAGES_SEC)
@@ -258,7 +294,8 @@ class TraceConf(ConfFile):
 
         return cls(_imageDist=imagesDist, _numNodesDist=numNodesDist, _deadlineDist=deadlineDist, 
                    _durationDist = durationDist, _imageSizes = imageSizes, _bandwidth = bandwidth, _intervalDist= intervalDist,
-                   _duration = duration, _arbatchDist = arbatchDist, _type = type, _simulDist = simulDist)        
+                   _duration = duration, _arbatchDist = arbatchDist, _type = type, _simulDist = simulDist,
+                   _admissioncontrol = admissioncontrol, _numc = numc, _winsize = winsize)        
 
 
 class InjectorConf(ConfFile):
@@ -496,23 +533,23 @@ if __name__ == "__main__":
     #therm.printStats()
     c = Cooker("exampletrace.desc")
     trace = c.generateTrace()
-    trace.toFile(sys.stdout)
-    therm = Thermometer(trace)
-    therm.printStats()
+    #trace.toFile(sys.stdout)
+    #therm = Thermometer(trace)
+    #therm.printStats()
     
-    ac = OfflineAdmissionControl(trace, 10240, 800)
+    ac = OfflineAdmissionControl(trace, 10240, c.conf.admissioncontrol, None, c.conf.numc, c.conf.winsize)
     (accepted, rejected) = ac.filterInfeasible()
     print "\n\n\nACCEPTED"
     accepted.toFile(sys.stdout)
     therm = Thermometer(accepted)
     therm.printStats()
     
-    print "\n\n\nREJECTED"
-    if len(rejected.entries) > 0:
-        rejected.toFile(sys.stdout)
-        therm = Thermometer(rejected)
-        therm.printStats()
-    else:
-        print "None"
+    #print "\n\n\nREJECTED"
+    #if len(rejected.entries) > 0:
+    #    rejected.toFile(sys.stdout)
+    #    therm = Thermometer(rejected)
+    #    therm.printStats()
+    #else:
+    #    print "None"
     
     
