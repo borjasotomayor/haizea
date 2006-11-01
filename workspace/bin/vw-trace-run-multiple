@@ -130,6 +130,7 @@ then
         do
             vw-trace-stats -t $WORKSPACE_DIR/traces/$TRACE > $WORKSPACE_DIR/traces/$TRACE.stats
             cp $WORKSPACE_DIR/traces/$TRACE $HTML_DIR/traces
+            cp $WORKSPACE_DIR/traces/$TRACE.conf $HTML_DIR/traces
             cp $WORKSPACE_DIR/traces/$TRACE.stats $HTML_DIR/traces
         done
         

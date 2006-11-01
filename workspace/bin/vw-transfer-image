@@ -228,7 +228,7 @@ else
     fi
     if $REMOVE;
     then
-	log "Removing local image"
+	log "Removing local image: $LOCAL_IMG"
 	rm $LOCAL_IMG
 	rm $LOCAL_IMG.done
     else
