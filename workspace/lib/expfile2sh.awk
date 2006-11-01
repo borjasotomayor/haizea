@@ -97,7 +97,8 @@ $1 == "graph" {
     log_ids=""
     if ($2=="hitmiss")
     {
-	graphDir=getGraphDir(3)
+        graphdirpost="hitmiss-"
+	graphDir=getGraphDir(3) "-" graphdirpost
 	log_ids=getLogIDs(3)
 	runCmd = "vw-log-plot-cachehitmiss -d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png " tagopt " " log_ids
     }
@@ -112,7 +113,8 @@ $1 == "graph" {
     else if ($2=="count")
     {
 	event=$3
-	graphDir=getGraphDir(4)
+        graphdirpost="count" event "-"
+	graphDir=getGraphDir(4) "-" graphdirpost
 	log_ids=getLogIDs(4)
 	runCmd = "vw-plot-count -d " ENVIRON["WORKSPACE_VAR"] "/graphs/" graphDir " -o png -e " event " "  tagopt " "log_ids
     }

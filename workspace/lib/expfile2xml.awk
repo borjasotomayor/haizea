@@ -89,7 +89,8 @@ $1 == "graph" {
     if ($2=="hitmiss")
     {
 	graphTitle="Cache hit/miss"
-	graphDir=getGraphDir(3)
+        graphdirpost= "hitmiss-"
+	graphDir=getGraphDir(3) "-" graphdirpost
     }
     else if ($2=="avg")
     {
@@ -99,7 +100,8 @@ $1 == "graph" {
     else if ($2=="count")
     {
 	graphTitle="Accumulation of " $3
-	graphDir=getGraphDir(4)
+        graphdirpost= "count" $3 "-"
+	graphDir=getGraphDir(4) "-" graphdirpost
     }
     else if ($2=="durationstats")
     {

@@ -51,10 +51,13 @@ BEGIN	{
     else
 	traceopt="-t " trace
 
+    transfersopt=""
+
     if (transfersched == "JIT")
     {
-	transfertime = size / netbw
-	jobstart=deadline - (transfertime + 30)
+	transfertime = num_nodes * img_size * 1024 / netbw
+        transfertime += 10
+	jobstart=deadline - (transfertime + 15)
 	jobstart=strftime("%Y%m%d%H%M.%S", jobstart)
 	sgedlopt="-a " jobstart	
     } else if (transfersched == "AsJob")
@@ -65,15 +68,18 @@ BEGIN	{
     }
     else if (transfersched == "SmartJIT")
     {
-	transfertime = img_size / netbw
+        submittime = timestamp + seconds
+	transfertime = num_nodes * img_size * 1024 / netbw
+        transfertime += num_nodes * 10
 	sgedl=deadline - transfertime 
-	if ((sgedl-timestamp) > transfertime)
-	    sgestart=timestamp + (2/3)*(sgedl-timestamp)
-	else
-	    sgestart=timestamp
+	#if ((sgedl-submittime) > transfertime)
+	#    sgestart=submittime + (1/3)*(sgedl-submittime)
+	#else
+	sgestart=submittime
 	sgestart=strftime("%Y%m%d%H%M.%S", sgestart)
 	sgedl=strftime("%Y%m%d%H%M.%S", sgedl)
-	sgedlopt="-dl " sgedl " -a " sgestart
+	sgedlopt="-dl " sgedl 
+        transfersopt="-hard -l transfers=" (1/num_nodes)
     } else if (transfersched == "Aggressive")
     {
 	sgedlopt=""
@@ -85,7 +91,7 @@ BEGIN	{
     }
     else
     {
-	print "qsub " sgedlopt " -q transfer.q -soft -l vm_image=\"*(" img_id ")*\" -t 1-" num_nodes " -N VW" i " " ENVIRON["WORKSPACE_DIR"] "/bin/vw-transfer-image-sgewrapper -i " img_uri " -s " img_size " -l " tracename " " configopt " " duropt " " traceopt " " dlopt
+	print "qsub " sgedlopt " -q transfer.q -soft -l vm_image=\"*(" img_id ")*\" " transfersopt " -t 1-" num_nodes " -N VW" i " " ENVIRON["WORKSPACE_DIR"] "/bin/vw-transfer-image-sgewrapper -i " img_uri " -s " img_size " -l " tracename " " configopt " " duropt " " traceopt " " dlopt
     }
     i++;
 }
