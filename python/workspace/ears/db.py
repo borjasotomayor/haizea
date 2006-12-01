@@ -50,6 +50,63 @@ class ReservationDB(object):
         
         return cur        
 
+    def findAvailableSlots(self, time, amount=None, type=None, slots=None, closed=True):
+        if closed:
+            gt = ">="
+            lt = "<="
+        else:
+            gt = ">"
+            lt = "<"
+            
+        # Select slots which are partially occupied at that time
+        sql = """select nod_id, sl_id, sl_capacity - sum(all_amount) as available  
+        from v_allocslot 
+        where ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND""" % (gt)
+
+        if type != None:
+            filter = "slt_id = %i" % type
+        if slots != None:
+            filter = "sl_id in (%s)" % slots.__str__().strip('[]') 
+       
+        sql += " AND %s" % filter
+        
+        sql += " group by sl_id" 
+        
+        if amount != None:
+            sql += " having available >= %f" % amount
+
+        # And add slots which are completely free
+        sql += " union select nod_id as nod_id, sl_id as sl_id, sl_capacity as available from v_allocslot va"
+        sql += " where %s" % filter
+        sql += """and not exists 
+        (select * from tb_alloc a 
+         where a.sl_id=va.sl_id and  
+         ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND)""" % (gt)
+
+        cur = self.getConn().cursor()
+        cur.execute(sql, (time, time, time, time))
+        
+        return cur          
+
+    def findChangePoints(self, start, end, slot, closed=True):
+        if closed:
+            gt = ">="
+            lt = "<="
+        else:
+            gt = ">"
+            lt = "<"
+        
+        sql = """select distinct all_schedstart as time from tb_alloc 
+        where sl_id=? and all_schedstart %s ? and all_schedstart %s ?
+        union select distinct all_schedend as time from tb_alloc 
+        where sl_id=? and all_schedend %s ? and all_schedend %s ?"""  % (gt,lt,gt,lt)
+
+        cur = self.getConn().cursor()
+        cur.execute(sql, (slot, start, end, slot, start, end))
+        
+        return cur
+        
+        
     def getReservationsWithStartingAllocationsInInterval(self, time, td, **kwargs):
         distinctfields=("RES_ID","RES_NAME","RES_STATUS")
         return self.getAllocationsInInterval(time,td,"all_schedstart", distinct=distinctfields, **kwargs)
@@ -91,6 +148,19 @@ class ReservationDB(object):
         
         cur = self.getConn().cursor()
         cur.execute(sql, (status,) + interval)
+
+    def addReservation(self, name):
+        #TODO: DB code
+        return 0
+    
+    def addReservationPart(self, res_id, name, type):
+        #TODO: DB code
+        return 0
+    
+    def addSlot(self, rsp_id, sl_id, startTime, endTime, amount):
+        print "Reserving %f in slot %i from %s to %s" % (amount, sl_id, startTime, endTime)
+        #TODO: DB code
+    
 
     def isReservationDone(self, res_id):
         sql = "SELECT COUNT(*) FROM V_ALLOCATION WHERE res_id=? AND all_status in (0,1)" # Hardcoding bad!
