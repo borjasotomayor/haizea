@@ -27,7 +27,7 @@ class ReservationDB(object):
         else:
             return True
 
-    def getAllocationsInInterval(self, time, td, eventfield, distinct=None, allocstatus=None, res=None):
+    def getAllocationsInInterval(self, time, eventfield, td=None, distinct=None, allocstatus=None, res=None, sl_id=None):
         if distinct==None:
             sql = "SELECT * FROM v_allocation"
         else:
@@ -37,7 +37,10 @@ class ReservationDB(object):
             sql=sql[:-1]
             sql += " FROM v_allocation" 
                 
-        sql += " WHERE %s >= ? AND %s < ?" % (eventfield, eventfield)        
+        if td != None:
+            sql += " WHERE %s >= ? AND %s < ?" % (eventfield, eventfield)        
+        else:
+            sql += " WHERE %s >= ? " % (eventfield)        
 
         if allocstatus != None:
             sql += " AND all_status = %i" % allocstatus
@@ -45,9 +48,15 @@ class ReservationDB(object):
         if res != None:
             sql += " AND res_id = %i" % res
 
+        if sl_id != None:
+            sql += " AND sl_id = %i" % sl_id
+
         cur = self.getConn().cursor()
-        cur.execute(sql, (time, time+td))
-        
+        if td != None:
+            cur.execute(sql, (time, time+td))
+        else:
+            cur.execute(sql, (time,))
+
         return cur        
 
     def findAvailableSlots(self, time, amount=None, type=None, slots=None, closed=True):
@@ -109,19 +118,26 @@ class ReservationDB(object):
         
     def getReservationsWithStartingAllocationsInInterval(self, time, td, **kwargs):
         distinctfields=("RES_ID","RES_NAME","RES_STATUS")
-        return self.getAllocationsInInterval(time,td,"all_schedstart", distinct=distinctfields, **kwargs)
+        return self.getAllocationsInInterval(time,td=td,eventfield="all_schedstart", distinct=distinctfields, **kwargs)
 
     def getResPartsWithStartingAllocationsInInterval(self, time, td, **kwargs):
         distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS")
-        return self.getAllocationsInInterval(time,td,"all_schedstart", distinct=distinctfields, **kwargs)
+        return self.getAllocationsInInterval(time,td=td,eventfield="all_schedstart", distinct=distinctfields, **kwargs)
 
     def getReservationsWithEndingAllocationsInInterval(self, time, td, **kwargs):
         distinctfields=("RES_ID","RES_NAME","RES_STATUS")
-        return self.getAllocationsInInterval(time,td,"all_schedend", distinct=distinctfields, **kwargs)
+        return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", distinct=distinctfields, **kwargs)
 
     def getResPartsWithEndingAllocationsInInterval(self, time, td, **kwargs):
         distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS")
-        return self.getAllocationsInInterval(time,td,"all_schedend", distinct=distinctfields, **kwargs)
+        return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", distinct=distinctfields, **kwargs)
+
+    def getFutureAllocationsInSlot(self, time, sl_id, **kwargs):
+        return self.getAllocationsInInterval(time, td=None, eventfield="all_schedstart",sl_id=sl_id,**kwargs)
+
+    def getCurrentAllocationsInSlot(self, time, sl_id, **kwargs):
+        return self.getAllocationsInInterval(time, td=None, eventfield="all_schedend",sl_id=sl_id,**kwargs)
+
     
     def updateReservationStatus(self, res_id, status):
         sql = "UPDATE TB_RESERVATION SET RES_STATUS = ? WHERE RES_ID = ?"
@@ -149,6 +165,10 @@ class ReservationDB(object):
         cur = self.getConn().cursor()
         cur.execute(sql, (status,) + interval)
 
+    def updateAllocation(self, sl_id, rsp_id, all_schedstart, newstart=None, end=None):
+        print "Updating allocation %i,%i beginning at %s with start time %s and end time %s" % (sl_id, rsp_id, all_schedstart, newstart, end)
+        #TODO: DB code
+
     def addReservation(self, name):
         #TODO: DB code
         return 0
@@ -157,7 +177,7 @@ class ReservationDB(object):
         #TODO: DB code
         return 0
     
-    def addSlot(self, rsp_id, sl_id, startTime, endTime, amount):
+    def addSlot(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None):
         print "Reserving %f in slot %i from %s to %s" % (amount, sl_id, startTime, endTime)
         #TODO: DB code
     
@@ -179,7 +199,7 @@ class ReservationDB(object):
     
 class SQLiteReservationDB(ReservationDB):
     def __init__(self, dbfile):
-        self.conn = sqlite.connect(dbfile)
+        self.conn = sqlite.connect(dbfile, detect_types=sqlite.PARSE_DECLTYPES)
         self.conn.row_factory = sqlite.Row
         
     def getConn(self):
