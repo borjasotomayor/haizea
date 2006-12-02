@@ -2,6 +2,8 @@ from workspace.ears import db
 from workspace.traces.files import TraceFile
 from datetime import datetime, timedelta
 from sets import Set
+from mx.DateTime import *
+from mx.DateTime.ISO import *
 
 STATUS_PENDING = 0
 STATUS_RUNNING = 1
@@ -10,10 +12,16 @@ STATUS_DONE = 2
 SLOTTYPE_CPU=1
 SLOTTYPE_MEM=2
 
+SLOT_IMGNODE=5 # This should be fetched from the database
+
+class SchedException(Exception):
+    pass
+
 class BaseServer(object):
     def __init__(self, resDB, trace):
         self.resDB = resDB
         self.trace = trace
+        self.reqnum=4
         
     def processReservations(self, time, td):
         # Check for reservations which must start
@@ -88,17 +96,22 @@ class BaseServer(object):
             
             resources = {SLOTTYPE_CPU: 25.0, SLOTTYPE_MEM: 256.0}
             
-            self.processRequest(startTime, endTime, None, numnodes=numNodes, resources=resources)
+            res_id = self.resDB.addReservation("Test Reservation %i" % self.reqnum)
+            self.reqnum+=1
+            
+            try:
+                self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources)
+                self.scheduleImageTransfer(res_id, reqTime, startTime, numNodes, None, imgslot=SLOT_IMGNODE)
+            except SchedException:
+                print "Scheduling error. Must rollback!"
+
         
         self.trace.entries = newtrace
         
-    def processRequest(self, startTime, endTime, imguri, numnodes, resources):
-        # Estimate image transfer time 
-        imgTransferTime = timedelta(minutes=15) # We assume 15 minutes for tests
+    def scheduleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources):
         
-        slottypes = [SLOTTYPE_CPU, SLOTTYPE_MEM]
+        slottypes = resources.keys()
         
-        # Let the slot fitting begin!
         # First, find candidate slots
         candidateslots = {}
         
@@ -209,8 +222,6 @@ class BaseServer(object):
 
         if allfits:
             print "This VW is feasible"
-            # Create reservation in db
-            res_id = self.resDB.addReservation("Test Reservation")
             for vwnode in range(0,numnodes):
                 rsp_id = self.resDB.addReservationPart(res_id, "VM %i" % (vwnode+1), 0)
                 for slottype in slottypes:
@@ -221,8 +232,87 @@ class BaseServer(object):
             print "This VW is unfeasible"
             return
         
-        # Is image transfer feasible?
-
+    def scheduleImageTransfer(self, res_id, reqTime, deadline, numnodes, imgsize, imgslot=None):
+        # Algorithm for fitting image transfers is essentially the same as 
+        # the one used in scheduleVMs. The main difference is that we can
+        # scale down the code since we know a priori what slot we're fitting the
+        # network transfer in, and the transfers might be moveable (which means
+        # we will have to do some Earliest Deadline First magic)
+        
+        # Estimate image transfer time 
+        imgTransferTime = timedelta(minutes=15) # We assume 15 minutes for tests
+        
+        # Find next schedulable transfer time
+        # If there are no image transfers in progress, that means now.
+        # If there is an image transfer in progress, then that means right after the transfer.
+        transferscur = self.resDB.getCurrentAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_RUNNING)
+        transfers = transferscur.fetchall()
+        if len(transfers) == 0:
+            startTime = reqTime
+        else:
+            startTime = transfers[0]["all_schedend"]
+            startTime = datetime(*(ISO.ParseDateTime(startTime).tuple()[:6]))
+        
+        # Take all the image transfers scheduled from the current time onwards
+        # (not including image transfers which have already started)
+        transferscur = self.resDB.getFutureAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_PENDING)
+        transfers = []
+        for t in transferscur:
+            transfer={}
+            transfer["sl_id"] = t["sl_id"]
+            transfer["rsp_id"] = t["rsp_id"]
+            transfer["all_schedstart"] = datetime(*(ISO.ParseDateTime(t["all_schedstart"]).tuple()[:6]))
+            transfer["all_duration"] = timedelta(seconds=t["all_duration"])
+            # Next line is very kludgy. We should move everything to mx.DateTime for sanity
+            transfer["all_deadline"] = datetime(*(ISO.ParseDateTime(t["all_deadline"]).tuple()[:6]))
+            transfer["new"] = False
+            transfers.append(transfer)
+            
+        newtransfer = {}
+        newtransfer["sl_id"] = imgslot
+        newtransfer["rsp_id"] = self.resDB.addReservationPart(res_id, "Image transfer", 0)
+        newtransfer["all_schedstart"] = None
+        newtransfer["all_duration"] = imgTransferTime
+        newtransfer["all_deadline"] = deadline
+        newtransfer["new"] = True
+        transfers.append(newtransfer)
+        
+        def comparedates(x,y):
+            dx=x["all_deadline"]
+            dy=y["all_deadline"]
+            if x>y:
+                return 1
+            elif x==y:
+                return 0
+            else:
+                return -1
+        
+        # Order transfers by deadline
+        transfers.sort(comparedates)
+        
+        # Compute start times and make sure that deadlines are met
+        fits = True
+        for transfer in transfers:
+             transfer["new_all_schedstart"] = startTime
+             transfer["all_schedend"] = startTime + transfer["all_duration"]
+             if transfer["all_schedend"] > transfer["all_deadline"]:
+                 fits = False
+                 break
+             startTime = transfer["all_schedend"]
+             
+        if not fits:
+             print "Adding this VW results in an unfeasible image transfer schedule. Rejecting!"
+             return
+ 
+        # Make changes in database     
+        for t in transfers:
+            if t["new"]:
+                self.resDB.addSlot(t["rsp_id"], t["sl_id"], t["new_all_schedstart"], t["all_schedend"], 100.0, moveable=True, deadline=t["all_deadline"], duration=t["all_duration"])
+            else:
+                self.resDB.updateAllocation(t["sl_id"], t["rsp_id"], t["all_schedstart"], newstart=t["new_all_schedstart"], end=t["all_schedend"])            
+        
+        
+        
 
     def startReservation(self, res_id, row=None):
         if row != None:
