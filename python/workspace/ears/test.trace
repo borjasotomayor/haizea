@@ -1,4 +1,8 @@
-1200;nfs:///var/workspace/images/256M_0.img;256;1;RW;1500;900;AR
-4800;nfs:///var/workspace/images/256M_0.img;256;1;RW;1500;2700;AR
-5400;nfs:///var/workspace/images/256M_0.img;256;2;RW;2700;900;AR
-5400;nfs:///var/workspace/images/256M_0.img;256;2;RW;3600;1800;AR
+0;nfs:///var/workspace/images/256M_0.img;256;1;1024;100;RW;1800;2700;AR
+0;nfs:///var/workspace/images/256M_0.img;256;3;512;50;RW;1800;2700;AR
+1200;nfs:///var/workspace/images/256M_0.img;256;1;256;25;RW;1500;900;AR
+1800;nfs:///var/workspace/images/256M_0.img;256;2;256;25;RW;2700;5400;AR
+1800;nfs:///var/workspace/images/256M_0.img;256;2;256;25;RW;900;900;AR
+4800;nfs:///var/workspace/images/256M_0.img;256;1;256;25;RW;1500;2700;AR
+5400;nfs:///var/workspace/images/256M_0.img;256;2;256;25;RW;2700;900;AR
+5400;nfs:///var/workspace/images/256M_0.img;256;3;256;25;RW;3600;1800;AR
