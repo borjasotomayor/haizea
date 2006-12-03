@@ -167,20 +167,31 @@ class ReservationDB(object):
 
     def updateAllocation(self, sl_id, rsp_id, all_schedstart, newstart=None, end=None):
         print "Updating allocation %i,%i beginning at %s with start time %s and end time %s" % (sl_id, rsp_id, all_schedstart, newstart, end)
-        #TODO: DB code
+        sql = """UPDATE tb_alloc 
+        SET all_schedstart=?, all_schedend=?
+        WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
+        cur = self.getConn().cursor()
+        cur.execute(sql, (newstart,end,sl_id,rsp_id,all_schedstart))
 
     def addReservation(self, name):
-        #TODO: DB code
-        return 0
+        sql = "INSERT INTO tb_reservation(res_name,res_status) values (?,0)"
+        cur = self.getConn().cursor()
+        cur.execute(sql, (name,))
+        res_id=cur.lastrowid
+        return res_id
     
     def addReservationPart(self, res_id, name, type):
-        #TODO: DB code
-        return 0
+        sql = "INSERT INTO tb_respart(rsp_name,res_id,rspt_id,rsp_status) values (?,?,?,0)"
+        cur = self.getConn().cursor()
+        cur.execute(sql, (name,res_id,type))
+        rsp_id=cur.lastrowid
+        return rsp_id
     
     def addSlot(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None):
         print "Reserving %f in slot %i from %s to %s" % (amount, sl_id, startTime, endTime)
-        #TODO: DB code
-    
+        sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_amount,all_moveable,all_deadline,all_duration,all_status) values (?,?,?,?,?,?,?,?,0)"
+        cur = self.getConn().cursor()
+        cur.execute(sql, (rsp_id, sl_id, startTime, endTime, amount, moveable, deadline, duration))            
 
     def isReservationDone(self, res_id):
         sql = "SELECT COUNT(*) FROM V_ALLOCATION WHERE res_id=? AND all_status in (0,1)" # Hardcoding bad!
@@ -196,6 +207,9 @@ class ReservationDB(object):
 
     def commit(self):
         self.getConn().commit()
+
+    def rollback(self):
+        self.getConn().rollback()
     
 class SQLiteReservationDB(ReservationDB):
     def __init__(self, dbfile):

@@ -1,5 +1,5 @@
 from workspace.ears import db
-from workspace.traces.files import TraceFile
+from workspace.traces.files import TraceFile, TraceEntryV2
 from datetime import datetime, timedelta
 from sets import Set
 from mx.DateTime import *
@@ -18,12 +18,41 @@ class SchedException(Exception):
     pass
 
 class BaseServer(object):
-    def __init__(self, resDB, trace):
+    def __init__(self, resDB, trace, commit=True):
         self.resDB = resDB
         self.trace = trace
         self.reqnum=4
+        self.commit=commit
+        self.accepted=[]
+        self.rejected=[]
         
     def processReservations(self, time, td):
+        # Check for reservations which must end
+        rescur = self.resDB.getReservationsWithEndingAllocationsInInterval(time, td, allocstatus=STATUS_RUNNING)
+        reservations = rescur.fetchall()
+        some = False
+        for res in reservations:
+            some = True
+          
+            # Get reservation parts that have to end
+            rspcur = self.resDB.getResPartsWithEndingAllocationsInInterval(time,td, allocstatus=STATUS_RUNNING, res=res["RES_ID"])
+            resparts = rspcur.fetchall()
+            
+            for respart in resparts:
+                if respart["RSP_STATUS"] == STATUS_RUNNING:
+                    # An allocation in this reservation part is ending.
+                    # Is it the last one?
+                    if self.isReservationPartEnd(respart["RSP_ID"], time, td):
+                        self.stopReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
+                        self.stopAllocations(respart["RSP_ID"], time, td)
+                    else:
+                        print "Resource allocation resizing not supported yet"
+
+             # Check to see if this ends the reservation
+            if self.isReservationDone(res["RES_ID"]):
+                self.stopReservation(res["RES_ID"], row=res)
+        if some: print ""
+
         # Check for reservations which must start
         rescur = self.resDB.getReservationsWithStartingAllocationsInInterval(time, td, allocstatus=STATUS_PENDING)
         reservations = rescur.fetchall()
@@ -52,32 +81,7 @@ class BaseServer(object):
             
         if some: print ""
         
-        rescur = self.resDB.getReservationsWithEndingAllocationsInInterval(time, td, allocstatus=STATUS_RUNNING)
-        reservations = rescur.fetchall()
-        some = False
-        for res in reservations:
-            some = True
-          
-            # Get reservation parts that have to end
-            rspcur = self.resDB.getResPartsWithEndingAllocationsInInterval(time,td, allocstatus=STATUS_RUNNING, res=res["RES_ID"])
-            resparts = rspcur.fetchall()
-            
-            for respart in resparts:
-                if respart["RSP_STATUS"] == STATUS_RUNNING:
-                    # An allocation in this reservation part is ending.
-                    # Is it the last one?
-                    if self.isReservationPartEnd(respart["RSP_ID"], time, td):
-                        self.stopReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
-                        self.stopAllocations(respart["RSP_ID"], time, td)
-                    else:
-                        print "Resource allocation resizing not supported yet"
-
-             # Check to see if this ends the reservation
-            if self.isReservationDone(res["RES_ID"]):
-                self.stopReservation(res["RES_ID"], row=res)
-        if some: print ""
-        
-        #self.resDB.commit()
+        if self.commit: self.resDB.commit()
 
     def processTraceRequests(self, delta):
         seconds = delta.seconds
@@ -89,23 +93,29 @@ class BaseServer(object):
             startTime = reqTime + timedelta(seconds=int(r.fields["deadline"]))
             endTime = startTime + timedelta(seconds=int(r.fields["duration"]))
             numNodes = int(r.fields["numNodes"])
-            print "%s: Received request for VW" % reqTime
+            print "%s: Received request for VW %i" % (reqTime, self.reqnum)
             print "\tStart time: %s" % startTime
             print "\tEnd time: %s" % endTime
             print "\tNodes: %i" % numNodes
             
-            resources = {SLOTTYPE_CPU: 25.0, SLOTTYPE_MEM: 256.0}
+            resources = {SLOTTYPE_CPU: float(r.fields["cpu"]), SLOTTYPE_MEM: float(r.fields["memory"])}
             
-            res_id = self.resDB.addReservation("Test Reservation %i" % self.reqnum)
-            self.reqnum+=1
+            res_id = self.resDB.addReservation("Test Reservation #%i" % self.reqnum)
             
             try:
                 self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources)
                 self.scheduleImageTransfer(res_id, reqTime, startTime, numNodes, None, imgslot=SLOT_IMGNODE)
-            except SchedException:
-                print "Scheduling error. Must rollback!"
+                if self.commit: resDB.commit()
+                self.accepted.append(self.reqnum)
+            except SchedException, msg:
+                print "Scheduling exception: %s" % msg
+                self.rejected.append(self.reqnum)
+                self.resDB.rollback()
+                
+            self.reqnum+=1
 
-        
+
+                
         self.trace.entries = newtrace
         
     def scheduleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources):
@@ -177,8 +187,7 @@ class BaseServer(object):
             nodeset &= nodes
                 
         if len(nodeset) == 0:
-            print "This VW is unfeasible"
-            return
+            raise SchedException, "No physical node has enough available resources for this request"
         
         # Keep only slots from nodeset
         candidatenodes = {}
@@ -200,6 +209,8 @@ class BaseServer(object):
         # in O(numvirtualnodes). We'll worry about that later.
         allfits = True
         assignment = {}
+        orderednodes = self.prioritizenodes(nodeset,candidatenodes,imguri,resources)
+        
         for vwnode in range(0,numnodes):
             assignment[vwnode] = {}
             for physnode in nodeset:
@@ -215,22 +226,18 @@ class BaseServer(object):
                         candidatenodes[physnode][slottype][2] -= res
                     break # Ouch
             else:
-                print "Could not fit this virtual nodes in any physical node"
-                allfits = False
-                break
-            
+                raise SchedException, "Could not fit node %i in any physical node" % vwnode
 
         if allfits:
             print "This VW is feasible"
             for vwnode in range(0,numnodes):
-                rsp_id = self.resDB.addReservationPart(res_id, "VM %i" % (vwnode+1), 0)
+                rsp_id = self.resDB.addReservationPart(res_id, "VM %i" % (vwnode+1), 1)
                 for slottype in slottypes:
                     amount = resources[slottype]
                     sl_id = assignment[vwnode][slottype]
                     self.resDB.addSlot(rsp_id, sl_id, startTime, endTime, amount)
         else:
-            print "This VW is unfeasible"
-            return
+            raise SchedException
         
     def scheduleImageTransfer(self, res_id, reqTime, deadline, numnodes, imgsize, imgslot=None):
         # Algorithm for fitting image transfers is essentially the same as 
@@ -270,26 +277,34 @@ class BaseServer(object):
             
         newtransfer = {}
         newtransfer["sl_id"] = imgslot
-        newtransfer["rsp_id"] = self.resDB.addReservationPart(res_id, "Image transfer", 0)
+        newtransfer["rsp_id"] = self.resDB.addReservationPart(res_id, "Image transfer", 2)
         newtransfer["all_schedstart"] = None
         newtransfer["all_duration"] = imgTransferTime
         newtransfer["all_deadline"] = deadline
         newtransfer["new"] = True
         transfers.append(newtransfer)
-        
+
         def comparedates(x,y):
             dx=x["all_deadline"]
             dy=y["all_deadline"]
-            if x>y:
+            if dx>dy:
                 return 1
-            elif x==y:
-                return 0
+            elif dx==dy:
+                # If deadlines are equal, we break the tie by order of arrival
+                # (currently, we just check the "new" attribute; in the future, an
+                # arrival timestamp might be necessary)
+                if not x["new"]:
+                    return -1
+                elif not y["new"]:
+                    return 1
+                else:
+                    return 0
             else:
                 return -1
         
         # Order transfers by deadline
         transfers.sort(comparedates)
-        
+
         # Compute start times and make sure that deadlines are met
         fits = True
         for transfer in transfers:
@@ -301,17 +316,29 @@ class BaseServer(object):
              startTime = transfer["all_schedend"]
              
         if not fits:
-             print "Adding this VW results in an unfeasible image transfer schedule. Rejecting!"
-             return
+             raise SchedException, "Adding this VW results in an unfeasible image transfer schedule."
  
         # Make changes in database     
         for t in transfers:
             if t["new"]:
-                self.resDB.addSlot(t["rsp_id"], t["sl_id"], t["new_all_schedstart"], t["all_schedend"], 100.0, moveable=True, deadline=t["all_deadline"], duration=t["all_duration"])
+                self.resDB.addSlot(t["rsp_id"], t["sl_id"], t["new_all_schedstart"], t["all_schedend"], 100.0, moveable=True, deadline=t["all_deadline"], duration=t["all_duration"].seconds)
             else:
                 self.resDB.updateAllocation(t["sl_id"], t["rsp_id"], t["all_schedstart"], newstart=t["new_all_schedstart"], end=t["all_schedend"])            
+
         
-        
+    def prioritizenodes(nodeset,candidatenodes,imguri,resources):
+        # TODO: This function should prioritize nodes greedily:
+        #  * First, choose nodes where the required image is already cached 
+        #    and more than one virtual node can be fit.
+        #  * Then, choose nodes where the required image is already cached, 
+        #    but only one virtual node can be fit.
+        #  * Next, choose nodes where the image is not cached, but more than 
+        #    one virtual node can be fit.
+        #  * Finally, choose all remaining nodes. 
+        # 
+        # TODO2: Choose appropriate prioritizing function based on a
+        # config file, instead of hardcoding it)
+        return nodeset
         
 
     def startReservation(self, res_id, row=None):
@@ -352,8 +379,8 @@ class BaseServer(object):
     
 
 class SimulatingServer(BaseServer):
-    def __init__(self, resDB, trace):
-        BaseServer.__init__(self, resDB, trace)
+    def __init__(self, resDB, trace, commit):
+        BaseServer.__init__(self, resDB, trace, commit)
         self.time = None
         
     def start(self, forceStartTime=None):
@@ -371,7 +398,12 @@ class SimulatingServer(BaseServer):
             self.processReservations(self.time, td)
             self.time = self.time + td
 
-        print "done"
+        print ""
+        print "Number of accepted requests: %i" % len(self.accepted)
+        print "Accepted requests: %s" % self.accepted 
+        print ""
+        print "Number of rejected requests: %i" % len(self.rejected)
+        print "Rejected requests: %s" % self.rejected 
 
     def getTime(self):
         return self.time
@@ -390,8 +422,8 @@ if __name__ == "__main__":
     dbfile = "/home/borja/files/db/reservations.db"
     resDB = db.SQLiteReservationDB(dbfile)
     
-    trace = TraceFile.fromFile("test.trace")
+    trace = TraceFile.fromFile("test.trace", entryType=TraceEntryV2)
     
-    s = SimulatingServer(resDB, trace)
+    s = SimulatingServer(resDB, trace, commit=True)
     startTime = datetime(2006, 11, 25, 13, 00, 00) 
     s.start(forceStartTime=startTime)
