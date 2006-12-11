@@ -1,9 +1,10 @@
+import ConfigParser, os
 from workspace.ears import db
 from workspace.traces.files import TraceFile, TraceEntryV2
-from datetime import datetime, timedelta
 from sets import Set
 from mx.DateTime import *
 from mx.DateTime.ISO import *
+from workspace.ears import srvlog, reslog
 
 STATUS_PENDING = 0
 STATUS_RUNNING = 1
@@ -11,29 +12,71 @@ STATUS_DONE = 2
 
 SLOTTYPE_CPU=1
 SLOTTYPE_MEM=2
+SLOTTYPE_OUTNET=4
 
-SLOT_IMGNODE=5 # This should be fetched from the database
+GENERAL_SEC="general"
+SIMULATION_SEC="simulation"
+
+TYPE_OPT="type"
+TEMPLATEDB_OPT="templatedb"
+TARGETDB_OPT="targetdb"
+DB_OPT="db"
+NODES_OPT="nodes"
+BANDWIDTH_OPT="bandwidth"
+RESOURCES_OPT="resources"
+STARTTIME_OPT="starttime"
+
+
+#def str2datetime(str):
+#    return datetime(*(ISO.ParseDateTime(str).tuple()[:6]))
+
+def createEARS(configfile, tracefile):
+    # Process configuration file
+    file = open (configfile, "r")
+    config = ConfigParser.ConfigParser()
+    config.readfp(file)
+    
+    if config.get(GENERAL_SEC, TYPE_OPT) == "simulation":
+        # Are we using a template db or working directly on an existing database?
+        if config.has_option(SIMULATION_SEC, TEMPLATEDB_OPT):
+            templatedb = config.get(SIMULATION_SEC, TEMPLATEDB_OPT)
+            if config.get(SIMULATION_SEC, TARGETDB_OPT) == "memory":
+                resDB = db.SQLiteReservationDB.toMemFromFile(templatedb)
+            else:
+                # Target DB is a file
+                targetdb = config.get(SIMULATION_SEC, TARGETDB_OPT)
+                resDB = db.SQLiteReservationDB.toFileFromFile(templatedb, targetdb)
+        elif config.has_option(SIMULATION_SEC, DB_OPT):
+            dbfile=config.get(SIMULATION_SEC, DB_OPT)
+            resDB = db.SQLiteReservationDB.fromFile(dbfile)
+            
+            
+        trace = TraceFile.fromFile(tracefile, entryType=TraceEntryV2)    
+    
+        return SimulatingServer(config, resDB, trace, commit=True)
+    elif config.get(GENERAL_SEC,TYPE_OPT) == "real":
+        return None #Not implemented yet
 
 class SchedException(Exception):
     pass
 
 class BaseServer(object):
-    def __init__(self, resDB, trace, commit=True):
+    def __init__(self, config, resDB, trace, commit=True):
+        self.config = config        
         self.resDB = resDB
         self.trace = trace
-        self.reqnum=4
+        self.reqnum=1
         self.commit=commit
         self.accepted=[]
         self.rejected=[]
+        self.imagenodeslot = None
         
     def processReservations(self, time, td):
         # Check for reservations which must end
         rescur = self.resDB.getReservationsWithEndingAllocationsInInterval(time, td, allocstatus=STATUS_RUNNING)
         reservations = rescur.fetchall()
-        some = False
-        for res in reservations:
-            some = True
-          
+
+        for res in reservations:          
             # Get reservation parts that have to end
             rspcur = self.resDB.getResPartsWithEndingAllocationsInInterval(time,td, allocstatus=STATUS_RUNNING, res=res["RES_ID"])
             resparts = rspcur.fetchall()
@@ -46,19 +89,17 @@ class BaseServer(object):
                         self.stopReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
                         self.stopAllocations(respart["RSP_ID"], time, td)
                     else:
-                        print "Resource allocation resizing not supported yet"
+                        srvlog.warning("Resource allocation resizing not supported yet")
 
              # Check to see if this ends the reservation
             if self.isReservationDone(res["RES_ID"]):
                 self.stopReservation(res["RES_ID"], row=res)
-        if some: print ""
 
         # Check for reservations which must start
         rescur = self.resDB.getReservationsWithStartingAllocationsInInterval(time, td, allocstatus=STATUS_PENDING)
         reservations = rescur.fetchall()
-        some = False
+
         for res in reservations:
-            some = True
              # Check to see if this is the start of a reservation
             if res["RES_STATUS"] == STATUS_PENDING:
                 self.startReservation(res["RES_ID"], row=res)
@@ -78,8 +119,6 @@ class BaseServer(object):
                     # The reservation part has already started
                     # This is a change in resource allocation
                     self.resizeAllocation(respart["RSP_ID"], row=respart)                
-            
-        if some: print ""
         
         if self.commit: self.resDB.commit()
 
@@ -90,13 +129,13 @@ class BaseServer(object):
         
         for r in reqToProcess:
             reqTime = self.getTime() #Should starttime + seconds
-            startTime = reqTime + timedelta(seconds=int(r.fields["deadline"]))
-            endTime = startTime + timedelta(seconds=int(r.fields["duration"]))
+            startTime = reqTime + TimeDelta(seconds=int(r.fields["deadline"]))
+            endTime = startTime + TimeDelta(seconds=int(r.fields["duration"]))
             numNodes = int(r.fields["numNodes"])
-            print "%s: Received request for VW %i" % (reqTime, self.reqnum)
-            print "\tStart time: %s" % startTime
-            print "\tEnd time: %s" % endTime
-            print "\tNodes: %i" % numNodes
+            srvlog.info("%s: Received request for VW %i" % (reqTime, self.reqnum))
+            srvlog.info("\tStart time: %s" % startTime)
+            srvlog.info("\tEnd time: %s" % endTime)
+            srvlog.info("\tNodes: %i" % numNodes)
             
             resources = {SLOTTYPE_CPU: float(r.fields["cpu"]), SLOTTYPE_MEM: float(r.fields["memory"])}
             
@@ -104,17 +143,15 @@ class BaseServer(object):
             
             try:
                 self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources)
-                self.scheduleImageTransfer(res_id, reqTime, startTime, numNodes, None, imgslot=SLOT_IMGNODE)
-                if self.commit: resDB.commit()
+                self.scheduleImageTransfer(res_id, reqTime, startTime, numNodes, None, imgslot=self.imagenodeslot)
+                if self.commit: self.resDB.commit()
                 self.accepted.append(self.reqnum)
             except SchedException, msg:
-                print "Scheduling exception: %s" % msg
+                srvlog.warning("Scheduling exception: %s" % msg)
                 self.rejected.append(self.reqnum)
                 self.resDB.rollback()
                 
             self.reqnum+=1
-
-
                 
         self.trace.entries = newtrace
         
@@ -173,7 +210,7 @@ class BaseServer(object):
                 if maxavail >= needed:
                     candidateslots[slottype].append([slot[0],slot[1],maxavail])
             
-            print "Slot type %i has candidates %s" % (slottype,candidateslots[slottype])
+            srvlog.info("Slot type %i has candidates %s" % (slottype,candidateslots[slottype]))
         
         # Make sure that available resources are all available on the same node
         # (e.g. discard candidate nodes where we can provision memory but not the cpu)
@@ -199,7 +236,7 @@ class BaseServer(object):
                         candidatenodes[nod_id]={}
                     candidatenodes[nod_id][slottype] = slot
         for node in nodeset:    
-            print "Node %i has final candidates %s" % (node,candidatenodes[node])
+            srvlog.info("Node %i has final candidates %s" % (node,candidatenodes[node]))
 
 
         # Decide if we can actually fit the entire VW
@@ -229,13 +266,13 @@ class BaseServer(object):
                 raise SchedException, "Could not fit node %i in any physical node" % vwnode
 
         if allfits:
-            print "This VW is feasible"
+            srvlog.info( "This VW is feasible")
             for vwnode in range(0,numnodes):
                 rsp_id = self.resDB.addReservationPart(res_id, "VM %i" % (vwnode+1), 1)
                 for slottype in slottypes:
                     amount = resources[slottype]
                     sl_id = assignment[vwnode][slottype]
-                    self.resDB.addSlot(rsp_id, sl_id, startTime, endTime, amount)
+                    self.resDB.addAllocation(rsp_id, sl_id, startTime, endTime, amount)
         else:
             raise SchedException
         
@@ -247,7 +284,7 @@ class BaseServer(object):
         # we will have to do some Earliest Deadline First magic)
         
         # Estimate image transfer time 
-        imgTransferTime = timedelta(minutes=15) # We assume 15 minutes for tests
+        imgTransferTime = TimeDelta(minutes=15) # We assume 15 minutes for tests
         
         # Find next schedulable transfer time
         # If there are no image transfers in progress, that means now.
@@ -258,7 +295,7 @@ class BaseServer(object):
             startTime = reqTime
         else:
             startTime = transfers[0]["all_schedend"]
-            startTime = datetime(*(ISO.ParseDateTime(startTime).tuple()[:6]))
+            startTime = ISO.ParseDateTime(startTime)
         
         # Take all the image transfers scheduled from the current time onwards
         # (not including image transfers which have already started)
@@ -268,10 +305,10 @@ class BaseServer(object):
             transfer={}
             transfer["sl_id"] = t["sl_id"]
             transfer["rsp_id"] = t["rsp_id"]
-            transfer["all_schedstart"] = datetime(*(ISO.ParseDateTime(t["all_schedstart"]).tuple()[:6]))
-            transfer["all_duration"] = timedelta(seconds=t["all_duration"])
+            transfer["all_schedstart"] = ISO.ParseDateTime(t["all_schedstart"])
+            transfer["all_duration"] = TimeDelta(seconds=t["all_duration"])
             # Next line is very kludgy. We should move everything to mx.DateTime for sanity
-            transfer["all_deadline"] = datetime(*(ISO.ParseDateTime(t["all_deadline"]).tuple()[:6]))
+            transfer["all_deadline"] = ISO.ParseDateTime(t["all_deadline"])
             transfer["new"] = False
             transfers.append(transfer)
             
@@ -321,12 +358,12 @@ class BaseServer(object):
         # Make changes in database     
         for t in transfers:
             if t["new"]:
-                self.resDB.addSlot(t["rsp_id"], t["sl_id"], t["new_all_schedstart"], t["all_schedend"], 100.0, moveable=True, deadline=t["all_deadline"], duration=t["all_duration"].seconds)
+                self.resDB.addAllocation(t["rsp_id"], t["sl_id"], t["new_all_schedstart"], t["all_schedend"], 100.0, moveable=True, deadline=t["all_deadline"], duration=t["all_duration"].seconds)
             else:
                 self.resDB.updateAllocation(t["sl_id"], t["rsp_id"], t["all_schedstart"], newstart=t["new_all_schedstart"], end=t["all_schedend"])            
 
         
-    def prioritizenodes(nodeset,candidatenodes,imguri,resources):
+    def prioritizenodes(self,nodeset,candidatenodes,imguri,resources):
         # TODO: This function should prioritize nodes greedily:
         #  * First, choose nodes where the required image is already cached 
         #    and more than one virtual node can be fit.
@@ -343,17 +380,17 @@ class BaseServer(object):
 
     def startReservation(self, res_id, row=None):
         if row != None:
-            print "%s: Starting reservation '%s'" % (self.getTime(), row["RES_NAME"])
+            srvlog.info( "%s: Starting reservation '%s'" % (self.getTime(), row["RES_NAME"]))
         self.resDB.updateReservationStatus(res_id, STATUS_RUNNING)
 
     def stopReservation(self, res_id, row=None):
         if row != None:
-            print "%s: Stopping reservation '%s'" % (self.getTime(), row["RES_NAME"])
+            srvlog.info( "%s: Stopping reservation '%s'" % (self.getTime(), row["RES_NAME"]))
         self.resDB.updateReservationStatus(res_id, STATUS_DONE)
     
     def startReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
-            print "%s: Starting reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname)
+            srvlog.info( "%s: Starting reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_RUNNING)
 
     def startAllocations(self, respart_id, time, td):
@@ -364,7 +401,7 @@ class BaseServer(object):
 
     def stopReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
-            print "%s: Stopping reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname)
+            srvlog.info( "%s: Stopping reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_DONE)
 
     def isReservationDone(self, res_id):
@@ -375,55 +412,92 @@ class BaseServer(object):
         return True
 
     def resizeAllocation(self, respart_id, row=None):
-        print "An allocation has to be resized here. This should not be happening!"
+        srvlog.error( "An allocation has to be resized here. This should not be happening!")
     
 
 class SimulatingServer(BaseServer):
-    def __init__(self, resDB, trace, commit):
-        BaseServer.__init__(self, resDB, trace, commit)
+    def __init__(self, config, resDB, trace, commit):
+        BaseServer.__init__(self, config, resDB, trace, commit)
+        self.createDatabase()
         self.time = None
-        
-    def start(self, forceStartTime=None):
-        if forceStartTime == None:
-            self.time = startTime = datetime.now()
+        if self.config.has_option(SIMULATION_SEC,STARTTIME_OPT):
+            self.time = ISO.ParseDateTime(self.config.get(SIMULATION_SEC,STARTTIME_OPT))
         else:
-            self.time = startTime = forceStartTime
+            self.time = DateTime.now()
             
-        td = timedelta(minutes=1)
         
-        while self.resDB.existsRemainingReservations(self.time):
+    def createDatabase(self):
+        numnodes = self.config.getint(SIMULATION_SEC,NODES_OPT)
+        resources = self.config.get(SIMULATION_SEC,RESOURCES_OPT).split(";")
+        bandwidth = self.config.getint(SIMULATION_SEC, BANDWIDTH_OPT)
+        
+        slottypes = []
+        for r in resources:
+            resourcename = r.split(",")[0]
+            resourcecapacity = r.split(",")[1]
+            slottypes.append((self.resDB.getSlotTypeID(resourcename), resourcecapacity))
+            
+        # Create nodes
+        for node in range(numnodes):
+            nod_id = self.resDB.addNode("fakenode-%i.mcs.anl.gov" % (node+1))
+            # Create slots
+            for slottype in slottypes:
+                self.resDB.addSlot(nod_id,slt_id=slottype[0],sl_capacity=slottype[1])
+                
+        # Create image node
+        nod_id = self.resDB.addNode("fakeimagenode.mcs.anl.gov")
+        sl_id = self.resDB.addSlot(nod_id,slt_id=SLOTTYPE_OUTNET,sl_capacity=bandwidth)
+        
+        self.imagenodeslot = sl_id
+        
+        self.resDB.commit()
+
+        
+    def start(self):
+        startTime = self.time
+        
+        srvlog.info("Starting")            
+        td = TimeDelta(minutes=1)
+        
+        while self.resDB.existsRemainingReservations(self.time) or len(self.trace.entries) > 0:
             if len(self.trace.entries) > 0:
                 delta = self.time - startTime
                 self.processTraceRequests(delta)
             self.processReservations(self.time, td)
             self.time = self.time + td
 
-        print ""
-        print "Number of accepted requests: %i" % len(self.accepted)
-        print "Accepted requests: %s" % self.accepted 
-        print ""
-        print "Number of rejected requests: %i" % len(self.rejected)
-        print "Rejected requests: %s" % self.rejected 
+        srvlog.info("Number of accepted requests: %i" % len(self.accepted))
+        srvlog.info("Accepted requests: %s" % self.accepted )
+        srvlog.info("Number of rejected requests: %i" % len(self.rejected))
+        srvlog.info("Rejected requests: %s" % self.rejected )
 
+        self.generateUtilizationStats(startTime, self.time)
+        
     def getTime(self):
         return self.time
 
-
-        
-
     def stop(self):
         pass
+
+    def generateUtilizationStats(self, start, end):
+        changepoints = self.resDB.findChangePoints(start, end)
+        for point in changepoints:
+            cur = self.resDB.getUtilization(point["time"], type=SLOTTYPE_CPU)
+            totalcapacity = 0
+            totalused =0
+            for row in cur:
+                totalcapacity += row["sl_capacity"]
+                totalused += row["used"]
+            utilization = totalused / totalcapacity
+            print "%s %f" % (point["time"], utilization)
+
 
 class RealServer(BaseServer):
     pass
 
 
 if __name__ == "__main__":
-    dbfile = "/home/borja/files/db/reservations.db"
-    resDB = db.SQLiteReservationDB(dbfile)
-    
-    trace = TraceFile.fromFile("test.trace", entryType=TraceEntryV2)
-    
-    s = SimulatingServer(resDB, trace, commit=True)
-    startTime = datetime(2006, 11, 25, 13, 00, 00) 
-    s.start(forceStartTime=startTime)
+    configfile="ears.conf"
+    tracefile="test2.trace"
+    s = createEARS(configfile, tracefile)
+    s.start()
