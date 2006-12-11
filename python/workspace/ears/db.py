@@ -1,5 +1,12 @@
 from pysqlite2 import dbapi2 as sqlite
+from mx.DateTime import *
+from mx.DateTime.ISO import *
+from workspace.ears import srvlog, reslog
 
+def adapt_datetime(datetime):
+    return ISO.str(datetime)
+
+sqlite.register_adapter(DateTimeType, adapt_datetime)
 
 class ReservationDB(object):
     def __init__(self):
@@ -87,17 +94,18 @@ class ReservationDB(object):
         # And add slots which are completely free
         sql += " union select nod_id as nod_id, sl_id as sl_id, sl_capacity as available from v_allocslot va"
         sql += " where %s" % filter
-        sql += """and not exists 
+        sql += """ and not exists 
         (select * from tb_alloc a 
          where a.sl_id=va.sl_id and  
          ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND)""" % (gt)
-
+        # print sql
+        # print time
         cur = self.getConn().cursor()
         cur.execute(sql, (time, time, time, time))
         
         return cur          
 
-    def findChangePoints(self, start, end, slot, closed=True):
+    def findChangePoints(self, start, end, slot=None, closed=True):
         if closed:
             gt = ">="
             lt = "<="
@@ -105,16 +113,47 @@ class ReservationDB(object):
             gt = ">"
             lt = "<"
         
-        sql = """select distinct all_schedstart as time from tb_alloc 
-        where sl_id=? and all_schedstart %s ? and all_schedstart %s ?
-        union select distinct all_schedend as time from tb_alloc 
-        where sl_id=? and all_schedend %s ? and all_schedend %s ?"""  % (gt,lt,gt,lt)
+        if slot != None:
+            filter = "and sl_id = %i" % slot 
+        else:
+            filter = ""
+        
+        sql = """select distinct all_schedstart as time from tb_alloc where
+        all_schedstart %s ? and all_schedstart %s ? %s
+        union select distinct all_schedend as time from tb_alloc where
+        all_schedend %s ? and all_schedend %s ? %s"""  % (gt,lt,filter,gt,lt,filter)
 
         cur = self.getConn().cursor()
-        cur.execute(sql, (slot, start, end, slot, start, end))
+        cur.execute(sql, (start, end, start, end))
         
         return cur
+
+    def getUtilization(self, time, type=None, slots=None):
+        # Select slots which are partially occupied at that time
+        sql = """select nod_id, sl_id, sl_capacity, sum(all_amount) as used  
+        from v_allocslot where ? >= ALL_SCHEDSTART AND ? < ALL_SCHEDEND"""
+
+        if type != None:
+            filter = "slt_id = %i" % type
+        if slots != None:
+            filter = "sl_id in (%s)" % slots.__str__().strip('[]') 
+       
+        sql += " AND %s" % filter
         
+        sql += " group by sl_id"
+
+        # And add slots which are completely free
+        sql += " union select nod_id as nod_id, sl_id as sl_id, sl_capacity as sl_capacity, 0 as used from v_allocslot va"
+        sql += " where %s" % filter
+        sql += """ and not exists 
+        (select * from tb_alloc a 
+         where a.sl_id=va.sl_id and  
+         ? >= ALL_SCHEDSTART AND ? < ALL_SCHEDEND)"""
+
+        cur = self.getConn().cursor()
+        cur.execute(sql, (time, time, time, time))
+        
+        return cur           
         
     def getReservationsWithStartingAllocationsInInterval(self, time, td, **kwargs):
         distinctfields=("RES_ID","RES_NAME","RES_STATUS")
@@ -138,6 +177,15 @@ class ReservationDB(object):
     def getCurrentAllocationsInSlot(self, time, sl_id, **kwargs):
         return self.getAllocationsInInterval(time, td=None, eventfield="all_schedend",sl_id=sl_id,**kwargs)
 
+    def getImageNodeSlot(self):
+        # Ideally, we should do this by flagging nodes as either image nodes or worker nodes
+        # For now, we simply seek out the node with the outbound network slot (only the image
+        # node will have such a slot in the current implementation)
+        sql = "SELECT DISTINCT SL_ID FROM V_ALLOCSLOT WHERE SLT_ID=4" # Hardcoding BAD!
+        cur = self.getConn().cursor()
+        cur.execute(sql)
+
+        return cur.fetchone()[0]
     
     def updateReservationStatus(self, res_id, status):
         sql = "UPDATE TB_RESERVATION SET RES_STATUS = ? WHERE RES_ID = ?"
@@ -166,7 +214,7 @@ class ReservationDB(object):
         cur.execute(sql, (status,) + interval)
 
     def updateAllocation(self, sl_id, rsp_id, all_schedstart, newstart=None, end=None):
-        print "Updating allocation %i,%i beginning at %s with start time %s and end time %s" % (sl_id, rsp_id, all_schedstart, newstart, end)
+        srvlog.info( "Updating allocation %i,%i beginning at %s with start time %s and end time %s" % (sl_id, rsp_id, all_schedstart, newstart, end))
         sql = """UPDATE tb_alloc 
         SET all_schedstart=?, all_schedend=?
         WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
@@ -187,11 +235,23 @@ class ReservationDB(object):
         rsp_id=cur.lastrowid
         return rsp_id
     
-    def addSlot(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None):
-        print "Reserving %f in slot %i from %s to %s" % (amount, sl_id, startTime, endTime)
+    def addAllocation(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None):
+        srvlog.info( "Reserving %f in slot %i from %s to %s" % (amount, sl_id, startTime, endTime))
         sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_amount,all_moveable,all_deadline,all_duration,all_status) values (?,?,?,?,?,?,?,?,0)"
         cur = self.getConn().cursor()
         cur.execute(sql, (rsp_id, sl_id, startTime, endTime, amount, moveable, deadline, duration))            
+
+    def addNode(self, nod_hostname, nod_enabled=True):
+        sql = "INSERT INTO tb_node(nod_hostname, nod_enabled) VALUES (?,?)"
+        cur = self.getConn().cursor()
+        cur.execute(sql, (nod_hostname, nod_enabled))
+        return cur.lastrowid
+
+    def addSlot(self, nod_id,slt_id,sl_capacity):
+        sql = "INSERT INTO tb_slot(nod_id, slt_id, sl_capacity) VALUES (?,?,?)"
+        cur = self.getConn().cursor()
+        cur.execute(sql, (nod_id,slt_id,sl_capacity))
+        return cur.lastrowid
 
     def isReservationDone(self, res_id):
         sql = "SELECT COUNT(*) FROM V_ALLOCATION WHERE res_id=? AND all_status in (0,1)" # Hardcoding bad!
@@ -205,6 +265,16 @@ class ReservationDB(object):
         else:
             return False
 
+    def getSlotTypeID(self, resourcename):
+        sql = "SELECT SLT_ID FROM TB_SLOT_TYPE WHERE SLT_NAME=?"
+        cur = self.getConn().cursor()
+        cur.execute(sql, (resourcename,))
+        
+        return cur.fetchone()[0]
+    
+    
+
+
     def commit(self):
         self.getConn().commit()
 
@@ -212,9 +282,49 @@ class ReservationDB(object):
         self.getConn().rollback()
     
 class SQLiteReservationDB(ReservationDB):
-    def __init__(self, dbfile):
-        self.conn = sqlite.connect(dbfile, detect_types=sqlite.PARSE_DECLTYPES)
+    def __init__(self, conn):
+        self.conn = conn
         self.conn.row_factory = sqlite.Row
         
     def getConn(self):
         return self.conn
+    
+    @classmethod
+    def dump(cls, templatedb, targetdb):
+        conn = sqlite.connect(targetdb, detect_types=sqlite.PARSE_DECLTYPES)
+        cur = conn.cursor()
+        cur.execute("attach '%s' as __templatedb" % templatedb)
+        
+        cur.execute("select name, sql from __templatedb.sqlite_master where type='table'")
+        tables = cur.fetchall()
+        for table in tables:
+            # Poor man's "drop table if exists". Can be removed with sqlite 3.3
+            try:
+                cur.execute("drop table main.%s" % table[0])
+            except:
+                pass
+            cur.execute(table[1])
+            cur.execute("insert into main.%s select * from __templatedb.%s" % (table[0], table[0]))
+        
+        cur.execute("select name,sql from __templatedb.sqlite_master where type='view'")
+        views = cur.fetchall()
+        for view in views:
+            try:
+                cur.execute("drop view main.%s" % view[0])
+            except:
+                pass
+            cur.execute(view[1])
+
+        cur.execute("detach __templatedb")
+        conn.commit()
+        
+        return cls(conn)
+    
+    @classmethod
+    def toMemFromFile(cls, templatedb):
+        return cls.dump(templatedb, ":memory:")
+    
+    @classmethod
+    def toFileFromFile(cls, templatedb, targetdb):
+        return cls.dump(templatedb, targetdb)
+    
