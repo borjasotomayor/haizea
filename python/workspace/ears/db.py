@@ -228,10 +228,10 @@ class ReservationDB(object):
         res_id=cur.lastrowid
         return res_id
     
-    def addReservationPart(self, res_id, name, type):
-        sql = "INSERT INTO tb_respart(rsp_name,res_id,rspt_id,rsp_status) values (?,?,?,0)"
+    def addReservationPart(self, res_id, name, type, preemptible=False):
+        sql = "INSERT INTO tb_respart(rsp_name,res_id,rspt_id,rsp_status, rsp_preemptible) values (?,?,?,0,?)"
         cur = self.getConn().cursor()
-        cur.execute(sql, (name,res_id,type))
+        cur.execute(sql, (name,res_id,type, preemptible))
         rsp_id=cur.lastrowid
         return rsp_id
     
@@ -254,7 +254,7 @@ class ReservationDB(object):
         return cur.lastrowid
 
     def isReservationDone(self, res_id):
-        sql = "SELECT COUNT(*) FROM V_ALLOCATION WHERE res_id=? AND all_status in (0,1)" # Hardcoding bad!
+        sql = "SELECT COUNT(*) FROM V_ALLOCATION WHERE res_id=? AND rsp_status in (0,1)" # Hardcoding bad!
         cur = self.getConn().cursor()
         cur.execute(sql, (res_id,))
         
