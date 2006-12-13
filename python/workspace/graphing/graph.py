@@ -93,15 +93,33 @@ class ScheduleGraph(object):
         pylab.show()
         
 class PointGraph(Graph):
-    def __init__(self, data, legends=[]):
+    def __init__(self, data, xlabel="", ylabel="", legends=[]):
+        Graph.__init__(self,xlabel,ylabel)
         self.data = data
         self.legends = legends
 
     def plot(self):
+        Graph.plot(self)        
         for dataset in self.data:
             x = map(lambda x: x[0], dataset)
             y = map(lambda x: x[1], dataset)
             pylab.plot(x,y)
+    
+    def show(self):
+        pylab.show()
+        
+class StepGraph(Graph):
+    def __init__(self, data, xlabel="", ylabel="", legends=[]):
+        Graph.__init__(self,xlabel,ylabel)
+        self.data = data
+        self.legends = legends
+
+    def plot(self):
+        Graph.plot(self)
+        for dataset in self.data:
+            x = map(lambda x: x[0], dataset)
+            y = map(lambda x: x[1], dataset)
+            pylab.plot(x,y, linestyle="steps")
     
     def show(self):
         pylab.show()
