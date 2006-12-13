@@ -4,7 +4,7 @@ from workspace.traces.files import TraceFile, TraceEntryV2
 from sets import Set
 from mx.DateTime import *
 from mx.DateTime.ISO import *
-from workspace.ears import srvlog, reslog
+from workspace.ears import srvlog, reslog, loglevel
 
 STATUS_PENDING = 0
 STATUS_RUNNING = 1
@@ -27,17 +27,12 @@ NODES_OPT="nodes"
 BANDWIDTH_OPT="bandwidth"
 RESOURCES_OPT="resources"
 STARTTIME_OPT="starttime"
+DURADJUST_OPT="durationadjust"
+LOGLEVEL_OPT="loglevel"
 
 
-#def str2datetime(str):
-#    return datetime(*(ISO.ParseDateTime(str).tuple()[:6]))
-
-def createEARS(configfile, tracefile):
+def createEARS(config, tracefile):
     # Process configuration file
-    file = open (configfile, "r")
-    config = ConfigParser.ConfigParser()
-    config.readfp(file)
-    
     if config.get(GENERAL_SEC, TYPE_OPT) == "simulation":
         # Are we using a template db or working directly on an existing database?
         if config.has_option(SIMULATION_SEC, TEMPLATEDB_OPT):
@@ -53,7 +48,14 @@ def createEARS(configfile, tracefile):
             resDB = db.SQLiteReservationDB.fromFile(dbfile)
             
             
-        trace = TraceFile.fromFile(tracefile, entryType=TraceEntryV2)    
+        trace = TraceFile.fromFile(tracefile, entryType=TraceEntryV2)
+        
+        # Adjust duration if necessary
+        if config.has_option(SIMULATION_SEC, DURADJUST_OPT):
+            adjust = config.getfloat(SIMULATION_SEC, DURADJUST_OPT)
+            for i,v in enumerate(trace.entries):
+                duration = int(int(v.fields["duration"]) * adjust)
+                trace.entries[i].fields["duration"] = duration.__str__()
     
         return SimulatingServer(config, resDB, trace, commit=True)
     elif config.get(GENERAL_SEC,TYPE_OPT) == "real":
@@ -69,11 +71,15 @@ class BaseServer(object):
         self.trace = trace
         self.reqnum=1
         self.commit=commit
+        self.acceptednum=0
+        self.rejectednum=0
         self.accepted=[]
         self.rejected=[]
         self.batchqueue=[]
         self.imagenodeslot_ar = None
         self.imagenodeslot_batch = None
+        log = self.config.get(GENERAL_SEC, LOGLEVEL_OPT)
+        srvlog.setLevel(loglevel[log])
         
     def processReservations(self, time, td):
         # Check for reservations which must end
@@ -155,13 +161,15 @@ class BaseServer(object):
         res_id = self.resDB.addReservation("Test (AR) Reservation #%i" % self.reqnum)
         
         try:
-            self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources)
+            self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
             self.scheduleImageTransferEDF(res_id, reqTime, startTime, numNodes, None, imgslot=self.imagenodeslot_ar)
             if self.commit: self.resDB.commit()
-            self.accepted.append(self.reqnum)
+            self.acceptednum += 1
+            self.accepted.append((reqTime, self.acceptednum))
         except SchedException, msg:
             srvlog.warning("Scheduling exception: %s" % msg)
-            self.rejected.append(self.reqnum)
+            self.rejectednum += 1
+            self.rejected.append((reqTime, self.rejectednum))
             self.resDB.rollback()
                 
     def processBatchRequest(self, r):
@@ -174,20 +182,21 @@ class BaseServer(object):
         
         resources = {SLOTTYPE_CPU: float(r.fields["cpu"]), SLOTTYPE_MEM: float(r.fields["memory"])}
 
-        # We create reservation and reservation parts, but we don't make allocations
-        # yet (here we only queue requests... processQueue takes care of working
-        # through these --and other queued requests-- to see which ones should
-        # be dispatched)
+        # We create the reservation, but we don't make the reservation parts or
+        # allocations yet (here we only queue requests... processQueue takes care 
+        # of working through these --and other queued requests-- to see which ones 
+        # should be dispatched)
         res_id = self.resDB.addReservation("Test (Batch) Reservation #%i" % self.reqnum)
+        node = 1
         for vwnode in range(numNodes):
             vw = {}
             vw["res_id"]=res_id
             vw["duration"]=duration
             vw["resources"]=resources
-            rsp_id = self.resDB.addReservationPart(res_id, "VM %i" % (vwnode+1), type=1)
-            vw["vw_rsp"] = rsp_id
             rsp_id = self.resDB.addReservationPart(res_id, "Image transfer for VM %i" % (vwnode+1), type=2)
             vw["transfer_rsp"] = rsp_id
+            vw["node"] = node
+            node += 1
             self.batchqueue.append(vw)
         
         if self.commit: self.resDB.commit()
@@ -198,6 +207,7 @@ class BaseServer(object):
             res_id = vm["res_id"]
             duration = vm["duration"]
             resources = vm["resources"]
+            nodename = "VM " + vm["node"].__str__()
             
             # Tentatively schedule an image transfer
             # We do this in case it turns out we *have* to transfer this image.
@@ -219,7 +229,7 @@ class BaseServer(object):
                 endTime = startTime + duration
                 srvlog.info("Attempting to schedule VM for reservation %i from %s to %s" % (res_id,startTime,endTime))
                 try:
-                    self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=False)
+                    self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=False, canpreempt=False, forceName=nodename)
                     if self.commit: self.resDB.commit()
                     mustremove.append(i)
                 except SchedException, msg:
@@ -236,7 +246,7 @@ class BaseServer(object):
                 endTime = startTime + duration
                 srvlog.info("Attempting to schedule VM for reservation %i from %s to %s" % (res_id,startTime,endTime))
                 try:
-                    self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=True)
+                    self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=True, canpreempt=False, forceName=nodename)
                     if self.commit: self.resDB.commit()
                     mustremove.append(i)
                 except SchedException, msg:
@@ -249,7 +259,7 @@ class BaseServer(object):
 
         self.batchqueue = newbatchqueue
         
-    def scheduleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources, preemptible=False):
+    def scheduleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources, preemptible=False, canpreempt=True, forceName=None):
         
         slottypes = resources.keys()
         
@@ -261,28 +271,71 @@ class BaseServer(object):
         for slottype in slottypes:
             candidateslots[slottype] = []
             needed = resources[slottype]
-            slots = []
+            
+            # This variable stores the (possibly multiple) availabilities of a slot
+            # during the requested time interval. It is a dictionary with the slot id
+            # as a key. The value is itself a dictionary, with the time (at which
+            # availability is measured) as a key. The value is a list with two elements:
+            #    [ available resources,
+            #      available resources (assuming we can preempt ]
             capacity={}
             
+            # This is a list of candidate slot id's
+            slots = []
+
+            # TODO: Lots of code here which can be factored out into a function
+
             # First sieve: select all slots that have enough resources at the beginning
-            slots1 = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype)
+            slotsbegin = []
+            slots1 = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, canpreempt=False)
             for slot in slots1:
                 slot_id = slot["SL_ID"]
-                slots.append(slot_id)
+                slotsbegin.append(slot_id)
                 if not capacity.has_key(slot_id):
-                    capacity[slot_id] = []
-                capacity[slot_id].append((startTime,slot["available"]))
+                    capacity[slot_id] = {}
+                capacity[slot_id][startTime] =[slot["available"],0]
+                
+            # Find available resources if we can do preemption    
+            if canpreempt:
+                slots1 = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, canpreempt=True)
+                for slot in slots1:
+                    slot_id = slot["SL_ID"]
+                    if not slot_id in slots:
+                        slotsbegin.append(slot_id)
+                    if not capacity.has_key(slot_id):
+                        capacity[slot_id] = {}
+                        capacity[slot_id][startTime]=[0,slot["available"]]
+                    else:
+                        capacity[slot_id][startTime][1]=slot["available"]
 
             # Second sieve: remove slots that don't have enough resources at the end
-            slots2 = self.resDB.findAvailableSlots(time=endTime, amount=needed, slots=slots, closed=False)
+            slots2 = self.resDB.findAvailableSlots(time=endTime, amount=needed, slots=slotsbegin, closed=False, canpreempt=False)
             slots = []
             for slot in slots2:
                 nod_id = slot["NOD_ID"]
                 slot_id = slot["SL_ID"]
                 slots.append((nod_id,slot_id))
                 if not capacity.has_key(slot_id):
-                    capacity[slot_id] = []
-                capacity[slot_id].append((endTime,slot["available"]))
+                    capacity[slot_id] = {}
+                capacity[slot_id][endTime] = [slot["available"], 0]
+                
+            # Find available resources if we can do preemption    
+            if canpreempt:
+                slots2 = self.resDB.findAvailableSlots(time=endTime, amount=needed, slots=slotsbegin, closed=False, canpreempt=True)
+                for slot in slots2:
+                    nod_id = slot["NOD_ID"]
+                    slot_id = slot["SL_ID"]
+                    srvlog.info(slot_id)
+                    if not (nod_id,slot_id) in slots:
+                        slots.append((nod_id,slot_id))
+                    if not capacity.has_key(slot_id):
+                        capacity[slot_id] = {}
+                        capacity[slot_id][endTime]=[0,slot["available"]]
+                    else:
+                        if capacity[slot_id].has_key(endTime):
+                            capacity[slot_id][endTime][1]=slot["available"]
+                        else:
+                            capacity[slot_id][endTime] = [0,slot["available"]]
 
             # Final sieve: Determine "resource change points" and make sure that 
             # there is enough resources at each point too (and determine maximum
@@ -292,17 +345,29 @@ class BaseServer(object):
                 changepoints = self.resDB.findChangePoints(startTime, endTime, slot_id, closed=False)
                 for point in changepoints:
                     time = point["time"]
-                    cur = self.resDB.findAvailableSlots(time=time, slots=[slot_id])
+                    cur = self.resDB.findAvailableSlots(time=time, slots=[slot_id], canpreempt=False)
                     avail = cur.fetchone()["available"]
-                    capacity[slot_id].append((time,avail))
-                    
-                maxavail = float("inf")    
-                for cap in capacity[slot_id]:
-                    if cap[1] < maxavail:
-                        maxavail = cap[1]
+                    if canpreempt:
+                        cur = self.resDB.findAvailableSlots(time=time, slots=[slot_id], canpreempt=True)
+                        availpreempt = cur.fetchone()["available"]
+                    else:
+                        availpreempt = 0
                         
-                if maxavail >= needed:
-                    candidateslots[slottype].append([slot[0],slot[1],maxavail])
+                    capacity[slot_id][time]=[avail, availpreempt]
+                    
+                maxavail = float("inf")
+                if canpreempt:
+                    maxavailpreempt = float("inf")
+                for cap in capacity[slot_id].values():
+                    if cap[0] < maxavail:
+                        maxavail = cap[0]
+                    if canpreempt and cap[1] < maxavailpreempt:
+                        maxavailpreempt = cap[1]
+                        
+                if not canpreempt and maxavail >= needed:
+                    candidateslots[slottype].append([slot[0],slot[1],maxavail, 0])
+                elif canpreempt and maxavailpreempt >= needed:
+                    candidateslots[slottype].append([slot[0],slot[1],maxavail, maxavailpreempt])
             
             srvlog.info("Slot type %i has candidates %s" % (slottype,candidateslots[slottype]))
         
@@ -344,17 +409,22 @@ class BaseServer(object):
         
         for vwnode in range(0,numnodes):
             assignment[vwnode] = {}
-            for physnode in nodeset:
+            for physnode in orderednodes:
                 fits = True
                 for slottype in slottypes:
                     res = resources[slottype]
-                    if res > candidatenodes[physnode][slottype][2]:
+                    if not canpreempt and res > candidatenodes[physnode][slottype][2]:
+                        fits = False
+                    elif canpreempt and res > candidatenodes[physnode][slottype][3]:
                         fits = False
                 if fits:
                     for slottype in slottypes:
                         res = resources[slottype]
                         assignment[vwnode][slottype] = candidatenodes[physnode][slottype][1]
-                        candidatenodes[physnode][slottype][2] -= res
+                        if not canpreempt:
+                            candidatenodes[physnode][slottype][2] -= res
+                        elif canpreempt:
+                            candidatenodes[physnode][slottype][3] -= res
                     break # Ouch
             else:
                 raise SchedException, "Could not fit node %i in any physical node" % vwnode
@@ -362,7 +432,12 @@ class BaseServer(object):
         if allfits:
             srvlog.info( "This VW is feasible")
             for vwnode in range(0,numnodes):
-                rsp_id = self.resDB.addReservationPart(res_id, "VM %i" % (vwnode+1), 1)
+                if forceName == None:
+                    rsp_name = "VM %i" % (vwnode+1)
+                else:
+                    rsp_name = forceName
+                    rsp_name += " (node %i)" % (vwnode+1)
+                rsp_id = self.resDB.addReservationPart(res_id, rsp_name, 1, preemptible)
                 for slottype in slottypes:
                     amount = resources[slottype]
                     sl_id = assignment[vwnode][slottype]
@@ -559,6 +634,7 @@ class SimulatingServer(BaseServer):
             self.time = ISO.ParseDateTime(self.config.get(SIMULATION_SEC,STARTTIME_OPT))
         else:
             self.time = DateTime.now()
+        self.startTime = None
             
         
     def createDatabase(self):
@@ -594,26 +670,33 @@ class SimulatingServer(BaseServer):
 
         
     def start(self):
-        startTime = self.time
+        self.startTime = self.time
         
         srvlog.info("Starting")            
         td = TimeDelta(minutes=1)
+        self.accepted.append((self.startTime, self.acceptednum))
+        self.rejected.append((self.startTime, self.rejectednum))
         
         while self.resDB.existsRemainingReservations(self.time) or len(self.trace.entries) > 0:
             if len(self.trace.entries) > 0:
-                delta = self.time - startTime
+                delta = self.time - self.startTime
                 self.processTraceRequests(delta)
             if len(self.batchqueue) > 0:
                 self.processQueue()
             self.processReservations(self.time, td)
             self.time = self.time + td
+            
+        self.accepted.append((self.time, self.acceptednum))
+        self.rejected.append((self.time, self.rejectednum))
+        
+        print "Number of accepted requests: %i" % self.acceptednum
+        print "Number of rejected requests: %i" % self.rejectednum
+#        srvlog.info("Number of accepted requests: %i" % len(self.accepted))
+#        srvlog.info("Accepted requests: %s" % self.accepted )
+#        srvlog.info("Number of rejected requests: %i" % len(self.rejected))
+#        srvlog.info("Rejected requests: %s" % self.rejected )
 
-        srvlog.info("Number of accepted requests: %i" % len(self.accepted))
-        srvlog.info("Accepted requests: %s" % self.accepted )
-        srvlog.info("Number of rejected requests: %i" % len(self.rejected))
-        srvlog.info("Rejected requests: %s" % self.rejected )
-
-        self.generateUtilizationStats(startTime, self.time)
+        
         
     def getTime(self):
         return self.time
@@ -627,6 +710,7 @@ class SimulatingServer(BaseServer):
         accumUtil=0
         prevTime = None
         startVM = None
+        stats = []
         for point in changepoints:
             cur = self.resDB.getUtilization(point["time"], type=SLOTTYPE_CPU)
             totalcapacity = 0
@@ -646,12 +730,13 @@ class SimulatingServer(BaseServer):
                 average = accumUtil/seconds
             else:
                 average = utilization
-            print "%i %f %f" % (seconds, utilization, average)
+            stats.append((seconds, utilization, average))
             prevTime = time
             prevUtilization = utilization
-            
-        print "Average utilization (1): %f" % (accumUtil/seconds)
-        print "Average utilization (2): %f" % (accumUtil/(seconds-startVM))
+        
+        return stats
+        #print "Average utilization (1): %f" % (accumUtil/seconds)
+        #print "Average utilization (2): %f" % (accumUtil/(seconds-startVM))
 
 
 class RealServer(BaseServer):
@@ -661,5 +746,8 @@ class RealServer(BaseServer):
 if __name__ == "__main__":
     configfile="ears.conf"
     tracefile="test_mixed.trace"
-    s = createEARS(configfile, tracefile)
+    file = open (configfile, "r")
+    config = ConfigParser.ConfigParser()
+    config.readfp(file)    
+    s = createEARS(config, tracefile)
     s.start()
