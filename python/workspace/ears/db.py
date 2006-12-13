@@ -66,7 +66,7 @@ class ReservationDB(object):
 
         return cur        
 
-    def findAvailableSlots(self, time, amount=None, type=None, slots=None, closed=True):
+    def findAvailableSlots(self, time, amount=None, type=None, slots=None, closed=True, canpreempt=False):
         if closed:
             gt = ">="
             lt = "<="
@@ -83,8 +83,19 @@ class ReservationDB(object):
             filter = "slt_id = %i" % type
         if slots != None:
             filter = "sl_id in (%s)" % slots.__str__().strip('[]') 
-       
+              
         sql += " AND %s" % filter
+        
+       # If we can preempt slots, then we're only interested in finding out
+       # the available resource when ONLY counting the non-preemptible slots
+       # (as we will be able to preempt all others if necessary)
+       
+        if canpreempt:
+            preemptfilter = " and rsp_preemptible = 0"
+        else:
+            preemptfilter = ""
+
+        sql += preemptfilter
         
         sql += " group by sl_id" 
         
@@ -95,9 +106,9 @@ class ReservationDB(object):
         sql += " union select nod_id as nod_id, sl_id as sl_id, sl_capacity as available from v_allocslot va"
         sql += " where %s" % filter
         sql += """ and not exists 
-        (select * from tb_alloc a 
-         where a.sl_id=va.sl_id and  
-         ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND)""" % (gt)
+        (select * from v_allocslot a 
+         where a.sl_id=va.sl_id %s and  
+         ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND)""" % (preemptfilter, gt)
         # print sql
         # print time
         cur = self.getConn().cursor()
