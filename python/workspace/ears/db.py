@@ -34,15 +34,15 @@ class ReservationDB(object):
         else:
             return True
 
-    def getAllocationsInInterval(self, time, eventfield, td=None, distinct=None, allocstatus=None, res=None, sl_id=None):
+    def getAllocationsInInterval(self, time, eventfield, td=None, distinct=None, allocstatus=None, res=None, nod_id=None, sl_id=None, rsp_preemptible=None, view="v_allocation"):
         if distinct==None:
-            sql = "SELECT * FROM v_allocation"
+            sql = "SELECT * FROM %s" % view
         else:
             sql = "SELECT DISTINCT"
             for field in distinct:
                 sql += " %s," % field
             sql=sql[:-1]
-            sql += " FROM v_allocation" 
+            sql += " FROM %s" % view
                 
         if td != None:
             sql += " WHERE %s >= ? AND %s < ?" % (eventfield, eventfield)        
@@ -57,6 +57,12 @@ class ReservationDB(object):
 
         if sl_id != None:
             sql += " AND sl_id = %i" % sl_id
+
+        if nod_id != None:
+            sql += " AND nod_id = %i" % nod_id
+
+        if rsp_preemptible != None:
+            sql += " AND rsp_preemptible = %i" % rsp_preemptible
 
         cur = self.getConn().cursor()
         if td != None:
@@ -188,6 +194,9 @@ class ReservationDB(object):
     def getCurrentAllocationsInSlot(self, time, sl_id, **kwargs):
         return self.getAllocationsInInterval(time, td=None, eventfield="all_schedend",sl_id=sl_id,**kwargs)
 
+    def getCurrentAllocationsInNode(self, time, nod_id, **kwargs):
+        return self.getAllocationsInInterval(time, td=None, eventfield="all_schedend",nod_id=nod_id, view="v_allocslot",**kwargs)
+
     def getImageNodeSlot(self):
         # Ideally, we should do this by flagging nodes as either image nodes or worker nodes
         # For now, we simply seek out the node with the outbound network slot (only the image
@@ -263,6 +272,14 @@ class ReservationDB(object):
         cur = self.getConn().cursor()
         cur.execute(sql, (nod_id,slt_id,sl_capacity))
         return cur.lastrowid
+    
+    def removeReservationPart(self, rsp_id):
+        sql = "DELETE FROM tb_respart WHERE rsp_id=?"
+        cur = self.getConn().cursor()
+        cur.execute(sql, (rsp_id,))
+        sql = "DELETE FROM tb_alloc WHERE rsp_id=?"
+        cur.execute(sql, (rsp_id,))
+
 
     def isReservationDone(self, res_id):
         sql = "SELECT COUNT(*) FROM V_ALLOCATION WHERE res_id=? AND rsp_status in (0,1)" # Hardcoding bad!
