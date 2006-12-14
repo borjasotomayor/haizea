@@ -30,6 +30,9 @@ STARTTIME_OPT="starttime"
 DURADJUST_OPT="durationadjust"
 LOGLEVEL_OPT="loglevel"
 
+BETTER = 1
+EQUAL = 0
+WORSE = -1
 
 def createEARS(config, tracefile):
     # Process configuration file
@@ -76,6 +79,7 @@ class BaseServer(object):
         self.accepted=[]
         self.rejected=[]
         self.batchqueue=[]
+        self.batchreservations={}
         self.imagenodeslot_ar = None
         self.imagenodeslot_batch = None
         log = self.config.get(GENERAL_SEC, LOGLEVEL_OPT)
@@ -161,7 +165,10 @@ class BaseServer(object):
         res_id = self.resDB.addReservation("Test (AR) Reservation #%i" % self.reqnum)
         
         try:
-            self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
+            (mustpreempt) = self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
+            if len(mustpreempt) > 0:
+                srvlog.info("Must preempt the following: %s", mustpreempt)
+                self.preemptResources(mustpreempt, startTime)
             self.scheduleImageTransferEDF(res_id, reqTime, startTime, numNodes, None, imgslot=self.imagenodeslot_ar)
             if self.commit: self.resDB.commit()
             self.acceptednum += 1
@@ -189,17 +196,21 @@ class BaseServer(object):
         res_id = self.resDB.addReservation("Test (Batch) Reservation #%i" % self.reqnum)
         node = 1
         for vwnode in range(numNodes):
-            vw = {}
-            vw["res_id"]=res_id
-            vw["duration"]=duration
-            vw["resources"]=resources
-            rsp_id = self.resDB.addReservationPart(res_id, "Image transfer for VM %i" % (vwnode+1), type=2)
-            vw["transfer_rsp"] = rsp_id
-            vw["node"] = node
-            node += 1
-            self.batchqueue.append(vw)
+            nodeName = (vwnode+1).__str__()
+            self.queueBatchRequest(res_id, duration, resources, nodeName)
+        self.batchreservations[res_id] = [duration, resources, 0]
         
         if self.commit: self.resDB.commit()
+
+    def queueBatchRequest(self,res_id, duration, resources, nodeName):
+        vw = {}
+        vw["res_id"]=res_id
+        vw["duration"]=duration
+        vw["resources"]=resources
+        rsp_id = self.resDB.addReservationPart(res_id, "Image transfer for %s" % nodeName, type=2)
+        vw["transfer_rsp"] = rsp_id
+        vw["node"] = nodeName
+        self.batchqueue.append(vw)
 
     def processQueue(self):
         mustremove = []
@@ -207,7 +218,7 @@ class BaseServer(object):
             res_id = vm["res_id"]
             duration = vm["duration"]
             resources = vm["resources"]
-            nodename = "VM " + vm["node"].__str__()
+            nodename = "VM " + vm["node"]
             
             # Tentatively schedule an image transfer
             # We do this in case it turns out we *have* to transfer this image.
@@ -259,11 +270,19 @@ class BaseServer(object):
 
         self.batchqueue = newbatchqueue
         
+    # TODO: This functions is getting unwieldy. It should be separated into scheduleVM (i.e.
+    # a *single VM*, and then a scheduleVMs function that calls that function.
     def scheduleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources, preemptible=False, canpreempt=True, forceName=None):
         
         slottypes = resources.keys()
         
-        # First, find candidate slots
+        # This variable stores the candidate slots. It is a dictionary, where the key
+        # is the slot type (i.e. this allows us easy access to the candidate slots for
+        # one type of slot). Each item is a list containing:
+        #    1. Node id
+        #    2. Slot id
+        #    3. Maximum available resources in that slot (without preemption)
+        #    4. Maximum available resources in that slot (with preemption)
         candidateslots = {}
         
         # TODO: There are multiple points at which the slot fitting could be aborted
@@ -325,7 +344,6 @@ class BaseServer(object):
                 for slot in slots2:
                     nod_id = slot["NOD_ID"]
                     slot_id = slot["SL_ID"]
-                    srvlog.info(slot_id)
                     if not (nod_id,slot_id) in slots:
                         slots.append((nod_id,slot_id))
                     if not capacity.has_key(slot_id):
@@ -365,7 +383,7 @@ class BaseServer(object):
                         maxavailpreempt = cap[1]
                         
                 if not canpreempt and maxavail >= needed:
-                    candidateslots[slottype].append([slot[0],slot[1],maxavail, 0])
+                    candidateslots[slottype].append([slot[0],slot[1],maxavail, maxavail])
                 elif canpreempt and maxavailpreempt >= needed:
                     candidateslots[slottype].append([slot[0],slot[1],maxavail, maxavailpreempt])
             
@@ -385,8 +403,12 @@ class BaseServer(object):
         if len(nodeset) == 0:
             raise SchedException, "No physical node has enough available resources for this request"
         
-        # Keep only slots from nodeset
+        # This variable contains essentially the same information as candidateslots, except
+        # access is done by node id and slottype (i.e. provides an easy way of asking
+        # "what is the slot id of the memory slot in node 5")
+        # Items have the same information as candidateslots.
         candidatenodes = {}
+        
         for slottype in slottypes:
             for slot in candidateslots[slottype]:
                 nod_id = slot[0]
@@ -405,29 +427,59 @@ class BaseServer(object):
         # in O(numvirtualnodes). We'll worry about that later.
         allfits = True
         assignment = {}
-        orderednodes = self.prioritizenodes(nodeset,candidatenodes,imguri,resources)
+        orderednodes = self.prioritizenodes(candidatenodes,imguri,resources, canpreempt)
+        
+        # We try to fit each virtual node into a physical node
+        # First we iterate through the physical nodes trying to fit the virtual node
+        # without using preemption. If preemption is allowed, we iterate through the
+        # nodes again but try to use preemptible resources.
+        
+        # This variable keeps track of how many resources we have to preempt on a node
+        mustpreempt={}
         
         for vwnode in range(0,numnodes):
             assignment[vwnode] = {}
+            # Without preemption
             for physnode in orderednodes:
                 fits = True
                 for slottype in slottypes:
                     res = resources[slottype]
-                    if not canpreempt and res > candidatenodes[physnode][slottype][2]:
-                        fits = False
-                    elif canpreempt and res > candidatenodes[physnode][slottype][3]:
+                    if res > candidatenodes[physnode][slottype][2]:
                         fits = False
                 if fits:
                     for slottype in slottypes:
                         res = resources[slottype]
                         assignment[vwnode][slottype] = candidatenodes[physnode][slottype][1]
-                        if not canpreempt:
-                            candidatenodes[physnode][slottype][2] -= res
-                        elif canpreempt:
-                            candidatenodes[physnode][slottype][3] -= res
+
+                        candidatenodes[physnode][slottype][2] -= res
+                        candidatenodes[physnode][slottype][3] -= res
                     break # Ouch
             else:
-                raise SchedException, "Could not fit node %i in any physical node" % vwnode
+                if not canpreempt:
+                    raise SchedException, "Could not fit node %i in any physical node (w/o preemption)" % vwnode
+                # Try preemption
+                for physnode in orderednodes:
+                    fits = True
+                    for slottype in slottypes:
+                        res = resources[slottype]
+                        if res > candidatenodes[physnode][slottype][3]:
+                            fits = False
+                    if fits:
+                        for slottype in slottypes:
+                            res = resources[slottype]
+                            assignment[vwnode][slottype] = candidatenodes[physnode][slottype][1]
+                            # See how much we have to preempt
+                            # Precond: res > candidatenodes[physnode][slottype][2]
+                            if candidatenodes[physnode][slottype][2] > 0:
+                                res -= candidatenodes[physnode][slottype][2]
+                                candidatenodes[physnode][slottype][2] = 0
+                            candidatenodes[physnode][slottype][3] -= res
+                            if not mustpreempt.has_key(physnode):
+                                mustpreempt[physnode] = {}
+                            mustpreempt[physnode][slottype]=res                                
+                        break # Ouch
+                else:
+                    raise SchedException, "Could not fit node %i in any physical node (w/preemption)" % vwnode
 
         if allfits:
             srvlog.info( "This VW is feasible")
@@ -442,8 +494,84 @@ class BaseServer(object):
                     amount = resources[slottype]
                     sl_id = assignment[vwnode][slottype]
                     self.resDB.addAllocation(rsp_id, sl_id, startTime, endTime, amount)
+            return mustpreempt
         else:
             raise SchedException
+
+    def prioritizenodes(self,candidatenodes,imguri,resources, canpreempt):
+        # TODO: This function should prioritize nodes greedily:
+        #  * First, choose nodes where the required image is already cached 
+        #    and more than one virtual node can be fit.
+        #  * Then, choose nodes where the required image is already cached, 
+        #    but only one virtual node can be fit.
+        #  * Next, choose nodes where the image is not cached, but more than 
+        #    one virtual node can be fit.
+        #  * Finally, choose all remaining nodes. 
+        # 
+        # TODO2: Choose appropriate prioritizing function based on a
+        # config file, instead of hardcoding it)
+        #
+        # TODO3: Basing decisions only on CPU allocations. This is ok for now,
+        # since the memory allocation is proportional to the CPU allocation.
+        # Later on we need to come up with some sort of weighed average.
+        
+        nodes = candidatenodes.keys()
+        
+        # Compares node x and node y. 
+        # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)
+        def comparenodes(x,y):
+            # TODO: Check caches
+            need = resources[SLOTTYPE_CPU]
+            # First comparison: A node with no preemptible VMs is preferible
+            # to one with preemptible VMs (i.e. we want to avoid preempting)
+            availX = candidatenodes[x][SLOTTYPE_CPU][2]
+            availpX = candidatenodes[x][SLOTTYPE_CPU][3]
+            preemptibleres = availpX - availX
+            hasPreemptibleX = preemptibleres > 0
+            
+            availY = candidatenodes[y][SLOTTYPE_CPU][2]
+            availpY = candidatenodes[y][SLOTTYPE_CPU][3]
+            preemptibleres = availpY - availY
+            hasPreemptibleY = preemptibleres > 0
+            
+            if hasPreemptibleX and not hasPreemptibleY:
+                return WORSE
+            elif not hasPreemptibleX and hasPreemptibleY:
+                return BETTER
+            else:
+             #
+                # Both have no preemptible resources XOR some preemptible resources
+                
+                # The next criteria is how many virtual nodes we could fit
+                # on each physical node (more is best) *without* preemption
+                canfitX = availX / need
+                canfitY = availY / need
+                if canfitX > canfitY:
+                    return BETTER
+                elif canfitX < canfitY:
+                    return WORSE
+                else:
+                    if not hasPreemptibleX and not hasPreemptibleY:
+                        # If both have no preemptible resources, we have no tie breaker
+                        return EQUAL # No tie breaker at this point
+                    elif hasPreemptibleX and hasPreemptibleY:
+                        # If both have (some) preemptible resources, we prefer those
+                        # that involve the less preemptions
+                        canfitpX = availpX / need
+                        canfitpY = availpY / need
+                        preemptX = canfitpX - canfitX
+                        preemptY = canfitpY - canfitY
+                        if preemptX < preemptY:
+                            return BETTER
+                        elif preemptX > preemptY:
+                            return WORSE
+                        else:
+                            return EQUAL # No tie breaker
+        
+        # Order nodes
+        nodes.sort(comparenodes)
+        return nodes
+
         
     def scheduleImageTransferEDF(self, res_id, reqTime, deadline, numnodes, imgsize, imgslot=None):
         # Algorithm for fitting image transfers is essentially the same as 
@@ -572,20 +700,73 @@ class BaseServer(object):
         return (rsp_id, imgslot, startTime, endTime)
 
 
+    def preemptResources(self, mustpreempt, time):
+        # Given multiple choices, we prefer to preempt VWs that have made the least
+        # progress (i.e. percentage of work completed: time-starttime / endtime-starttime)
+        # TODO: Make this configurable, and offer better algorithms. For example,
+        # the preemptability of a VW should be determined by a combination of:
+        # (1) amount of resources it consumes, (2) how long it's been running, and
+        # (3) how long it has left to run.
+        def comparepreemptability(x,y):
+            startX = ISO.ParseDateTime(x["ALL_SCHEDSTART"])
+            endX = ISO.ParseDateTime(x["ALL_ENDSTART"])
+            completedX = (time - startX).seconds / (endX - startX).seconds
+
+            startY = ISO.ParseDateTime(y["ALL_SCHEDSTART"])
+            endY = ISO.ParseDateTime(y["ALL_ENDSTART"])
+            completedY = (time - startY).seconds / (endY - startY).seconds
+            
+            if completedX < completedY:
+                return BETTER
+            elif completedX > completedY:
+                return WORSE
+            else:
+                return EQUAL
         
-    def prioritizenodes(self,nodeset,candidatenodes,imguri,resources):
-        # TODO: This function should prioritize nodes greedily:
-        #  * First, choose nodes where the required image is already cached 
-        #    and more than one virtual node can be fit.
-        #  * Then, choose nodes where the required image is already cached, 
-        #    but only one virtual node can be fit.
-        #  * Next, choose nodes where the image is not cached, but more than 
-        #    one virtual node can be fit.
-        #  * Finally, choose all remaining nodes. 
-        # 
-        # TODO2: Choose appropriate prioritizing function based on a
-        # config file, instead of hardcoding it)
-        return nodeset
+        # Get allocations at the specified time
+        for node in mustpreempt.keys():
+            preemptible = {}
+            cur = self.resDB.getCurrentAllocationsInNode(time, node, rsp_preemptible=True)
+            cur = cur.fetchall()
+            for alloc in cur:
+                restype=alloc["slt_id"]
+                if not preemptible.has_key(restype):
+                    preemptible[restype] = []
+                preemptible[restype].append(alloc)
+            
+            # Order preemptible resources
+            for restype in preemptible.keys():
+                preemptible[restype].sort(comparepreemptability)
+
+            resparts = Set()
+            respartsinfo = {}
+            for restype in mustpreempt[node].keys():
+                amountToPreempt = mustpreempt[node][restype]
+                for alloc in preemptible[restype]:
+                    amount = alloc["all_amount"]
+                    amountToPreempt -= amount
+                    rsp_key = alloc["rsp_id"]
+                    resparts.add(rsp_key)
+                    respartsinfo[rsp_key] = alloc
+                    if amountToPreempt < 0:
+                        break # Ugh
+            
+            for rsp_key in resparts:
+                respart = respartsinfo[rsp_key]
+                rsp_name = respart["RSP_NAME"]
+                rsp_status = respart["RSP_STATUS"]
+                srvlog.info("Preempting resource part %s (%s) with status %i" % (rsp_key, rsp_name, rsp_status))
+                
+                if rsp_status in (STATUS_PENDING, STATUS_RUNNING):
+                    self.cancelReservationPart(rsp_key)
+                    res_id = respart["RES_ID"]
+                    duration = self.batchreservations[res_id][0]
+                    resources = self.batchreservations[res_id][1]
+                    self.batchreservations[res_id][2] += 1
+                    nodeName = "VM R%i" % self.batchreservations[res_id][2]
+                    self.queueBatchRequest(res_id, duration, resources, nodeName)
+                elif rsp_status == STATUS_DONE:
+                    srvlog.error("Preempting a VW that is already done. This should not be happening.")
         
 
     def startReservation(self, res_id, row=None):
@@ -597,6 +778,8 @@ class BaseServer(object):
         if row != None:
             srvlog.info( "%s: Stopping reservation '%s'" % (self.getTime(), row["RES_NAME"]))
         self.resDB.updateReservationStatus(res_id, STATUS_DONE)
+        if self.batchreservations.has_key(res_id):
+            del self.batchreservations[res_id]
     
     def startReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
@@ -613,6 +796,13 @@ class BaseServer(object):
         if row != None:
             srvlog.info( "%s: Stopping reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_DONE)
+
+    def cancelReservationPart(self, respart_id, row=None, resname=None):
+        if row != None:
+            srvlog.info( "%s: Cancelling reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
+        else:
+            srvlog.info( "%s: Cancelling reservation part %i" % (self.getTime(), respart_id))
+        self.resDB.removeReservationPart(respart_id)
 
     def isReservationDone(self, res_id):
         return self.resDB.isReservationDone(res_id)
@@ -745,7 +935,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="ears.conf"
-    tracefile="test_mixed.trace"
+    tracefile="test_preemption.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
