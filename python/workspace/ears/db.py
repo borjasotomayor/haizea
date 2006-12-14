@@ -1,10 +1,10 @@
 from pysqlite2 import dbapi2 as sqlite
 from mx.DateTime import *
-from mx.DateTime.ISO import *
+from mx.DateTime import ISO
 from workspace.ears import srvlog, reslog
 
 def adapt_datetime(datetime):
-    return ISO.str(datetime)
+    return str(datetime)
 
 sqlite.register_adapter(DateTimeType, adapt_datetime)
 
@@ -34,7 +34,7 @@ class ReservationDB(object):
         else:
             return True
 
-    def getAllocationsInInterval(self, time, eventfield, td=None, distinct=None, allocstatus=None, res=None, nod_id=None, sl_id=None, rsp_preemptible=None, view="v_allocation"):
+    def getAllocationsInInterval(self, time, eventfield, td=None, distinct=None, allocstatus=None, res=None, nod_id=None, sl_id=None, rsp_id = None, rsp_preemptible=None, view="v_allocation"):
         if distinct==None:
             sql = "SELECT * FROM %s" % view
         else:
@@ -54,6 +54,9 @@ class ReservationDB(object):
 
         if res != None:
             sql += " AND res_id = %i" % res
+
+        if rsp_id != None:
+            sql += " AND rsp_id = %i" % rsp_id
 
         if sl_id != None:
             sql += " AND sl_id = %i" % sl_id
@@ -115,14 +118,14 @@ class ReservationDB(object):
         (select * from v_allocslot a 
          where a.sl_id=va.sl_id %s and  
          ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND)""" % (preemptfilter, gt)
-        # print sql
+        #print sql
         # print time
         cur = self.getConn().cursor()
         cur.execute(sql, (time, time, time, time))
         
         return cur          
 
-    def findChangePoints(self, start, end, slot=None, closed=True):
+    def findChangePoints(self, start, end=None, slot=None, closed=True):
         if closed:
             gt = ">="
             lt = "<="
@@ -131,17 +134,23 @@ class ReservationDB(object):
             lt = "<"
         
         if slot != None:
-            filter = "and sl_id = %i" % slot 
+            filter = " and sl_id = %i" % slot 
         else:
             filter = ""
         
         sql = """select distinct all_schedstart as time from tb_alloc where
-        all_schedstart %s ? and all_schedstart %s ? %s
-        union select distinct all_schedend as time from tb_alloc where
-        all_schedend %s ? and all_schedend %s ? %s"""  % (gt,lt,filter,gt,lt,filter)
-
+        all_schedstart %s '%s'""" % (gt,start)
+        if end != None:
+            sql+=" and all_schedstart %s '%s'" % (lt,end)
+        sql += filter
+        sql += """union select distinct all_schedend as time from tb_alloc where
+        all_schedend %s '%s'""" % (gt,start)
+        if end != None:
+            sql +=" and all_schedend %s '%s'" % (lt,end) 
+        sql+=filter
+        sql += " order by time"
         cur = self.getConn().cursor()
-        cur.execute(sql, (start, end, start, end))
+        cur.execute(sql)
         
         return cur
 
@@ -197,6 +206,9 @@ class ReservationDB(object):
     def getCurrentAllocationsInNode(self, time, nod_id, **kwargs):
         return self.getAllocationsInInterval(time, td=None, eventfield="all_schedend",nod_id=nod_id, view="v_allocslot",**kwargs)
 
+    def getCurrentAllocationsInRespart(self, time, rsp_id, **kwargs):
+        return self.getAllocationsInInterval(time, td=None, eventfield="all_schedend",rsp_id=rsp_id,**kwargs)
+
     def getImageNodeSlot(self):
         # Ideally, we should do this by flagging nodes as either image nodes or worker nodes
         # For now, we simply seek out the node with the outbound network slot (only the image
@@ -240,6 +252,14 @@ class ReservationDB(object):
         WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
         cur = self.getConn().cursor()
         cur.execute(sql, (newstart,end,sl_id,rsp_id,all_schedstart))
+
+    def suspendAllocation(self, sl_id, rsp_id, all_schedstart, newend=None, nextstart=None):
+        srvlog.info( "Updating allocation %i,%i beginning at %s with end time %s and next start time %s" % (sl_id, rsp_id, all_schedstart, newend, nextstart))
+        sql = """UPDATE tb_alloc 
+        SET all_schedend=?, all_nextstart=?
+        WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
+        cur = self.getConn().cursor()
+        cur.execute(sql, (newend,nextstart,sl_id,rsp_id,all_schedstart))
 
     def addReservation(self, name):
         sql = "INSERT INTO tb_reservation(res_name,res_status) values (?,0)"
