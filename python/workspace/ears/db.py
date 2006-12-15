@@ -75,7 +75,7 @@ class ReservationDB(object):
 
         return cur        
 
-    def findAvailableSlots(self, time, amount=None, type=None, slots=None, closed=True, canpreempt=False):
+    def findAvailableSlots(self, time, amount=None, type=None, slots=None, node=None, closed=True, canpreempt=False):
         if closed:
             gt = ">="
             lt = "<="
@@ -90,8 +90,11 @@ class ReservationDB(object):
 
         if type != None:
             filter = "slt_id = %i" % type
+            if node != None:
+                filter += " and nod_id = %i" % node
         if slots != None:
             filter = "sl_id in (%s)" % slots.__str__().strip('[]') 
+
               
         sql += " AND %s" % filter
         
