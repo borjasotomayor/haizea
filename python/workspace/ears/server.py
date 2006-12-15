@@ -9,6 +9,7 @@ from workspace.ears import srvlog, reslog, loglevel
 STATUS_PENDING = 0
 STATUS_RUNNING = 1
 STATUS_DONE = 2
+STATUS_SUSPENDED = 3
 
 
 SLOTTYPE_CPU=1
@@ -30,9 +31,9 @@ STARTTIME_OPT="starttime"
 DURADJUST_OPT="durationadjust"
 LOGLEVEL_OPT="loglevel"
 
-BETTER = 1
+BETTER = -1
 EQUAL = 0
-WORSE = -1
+WORSE = 1
 
 def createEARS(config, tracefile):
     # Process configuration file
@@ -97,14 +98,35 @@ class BaseServer(object):
             
             for respart in resparts:
                 if respart["RSP_STATUS"] == STATUS_RUNNING:
-                    # An allocation in this reservation part is ending.
-                    # Is it the last one?
-                    if self.isReservationPartEnd(respart["RSP_ID"], time, td):
-                        self.stopReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
-                        self.stopAllocations(respart["RSP_ID"], time, td)
-                    else:
-                        srvlog.warning("Resource allocation resizing not supported yet")
+                    # Determine if we're suspending this reservation part, or if we actually
+                    # have to end it.
+                    rsp_id = respart["RSP_ID"]
+                    allcur=self.resDB.getEndingAllocationsInInterval(time,td,respart["RSP_ID"])
+                    suspending = False
+                    ending = False
+                    for alloc in allcur:
+                        if alloc["ALL_NEXTSTART"] != None:
+                            suspending = True
+                        else:
+                            ending = True
+                            
+                    if suspending and ending:
+                        srvlog.error("Reservation part %i has allocations that are set to both suspend and end. This should not happen" % rsp_id)
 
+                    if suspending:
+                        self.suspendReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
+                    elif ending:
+                        # Are we done with *all* the allocations for this resource part?
+                        if self.isReservationPartEnd(respart["RSP_ID"], time, td):
+                            self.stopReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
+                        else:
+                            srvlog.warning("Resource allocation resizing not supported yet")
+
+                    # All allocations are flagged as done, even if the reservation part is
+                    # suspended (suspension is not recorded at the allocation level, only
+                    # at the resource part level)
+                    self.stopAllocations(respart["RSP_ID"], time, td)
+                    
              # Check to see if this ends the reservation
             if self.isReservationDone(res["RES_ID"]):
                 self.stopReservation(res["RES_ID"], row=res)
@@ -133,6 +155,10 @@ class BaseServer(object):
                     # The reservation part has already started
                     # This is a change in resource allocation
                     self.resizeAllocation(respart["RSP_ID"], row=respart)                
+                elif respart["RSP_STATUS"] == STATUS_SUSPENDED:
+                    # The reservation part was suspended and must now be resumed.
+                    self.resumeReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
+                    self.startAllocations(respart["RSP_ID"], time, td)
         
         if self.commit: self.resDB.commit()
 
@@ -165,7 +191,7 @@ class BaseServer(object):
         res_id = self.resDB.addReservation("Test (AR) Reservation #%i" % self.reqnum)
         
         try:
-            (mustpreempt) = self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
+            (mustpreempt) = self.scheduleMultipleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
             if len(mustpreempt) > 0:
                 srvlog.info("Must preempt the following: %s", mustpreempt)
                 self.preemptResources(mustpreempt, startTime)
@@ -240,13 +266,13 @@ class BaseServer(object):
                 endTime = startTime + duration
                 srvlog.info("Attempting to schedule VM for reservation %i from %s to %s" % (res_id,startTime,endTime))
                 try:
-                    self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=False, canpreempt=False, forceName=nodename)
+                    self.scheduleMultipleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=False, canpreempt=False, forceName=nodename)
                     if self.commit: self.resDB.commit()
                     mustremove.append(i)
                 except SchedException, msg:
                     srvlog.warning("Can't schedule this batch VM now. Reason: %s" % msg)
                     self.resDB.rollback() # This will also roll back the image transfer
-            elif batchAlgorithm in ("onAR_resubmit", "onAR_suspend"):
+            elif batchAlgorithm == "onAR_resubmit":
                 # Here we support preemption, so we flag the VM as preemptible
                 # TODO: Currently. we only accept a request if we can run it from beginning 
                 # to end. With our slot table, we should be able to preschedule batch jobs,
@@ -254,7 +280,16 @@ class BaseServer(object):
                 endTime = startTime + duration
                 srvlog.info("Attempting to schedule VM for reservation %i from %s to %s" % (res_id,startTime,endTime))
                 try:
-                    self.scheduleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=True, canpreempt=False, forceName=nodename)
+                    self.scheduleMultipleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=True, canpreempt=False, forceName=nodename)
+                    if self.commit: self.resDB.commit()
+                    mustremove.append(i)
+                except SchedException, msg:
+                    srvlog.warning("Can't schedule this batch VM now. Reason: %s" % msg)
+                    self.resDB.rollback() # This will also roll back the image transfer
+            elif batchAlgorithm == "onAR_suspend":
+                srvlog.info("Attempting to schedule VM for reservation %i starting at %s with duration %s" % (res_id,startTime,duration))
+                try:
+                    self.scheduleSinglePreemptibleVM(res_id, startTime, duration, "nfs:///foobar", resources=resources, forceName=nodename)
                     if self.commit: self.resDB.commit()
                     mustremove.append(i)
                 except SchedException, msg:
@@ -266,9 +301,13 @@ class BaseServer(object):
 
         self.batchqueue = newbatchqueue
         
-    # TODO: This functions is getting unwieldy. It should be separated into scheduleVM (i.e.
-    # a *single VM*, and then a scheduleVMs function that calls that function.
-    def scheduleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources, preemptible=False, canpreempt=True, forceName=None):
+
+    # Note: The difference between scheduleMultipleVMs and scheduleSinglePreemptibleVM
+    # is that scheduleMultipleVMs requires that the VM be able to run from beginning to
+    # end. scheduleSinglePreemptibleVM can schedule a VM that is not able to run from
+    # beginning to end  by prescheduling suspend/resume points (of course, this is only
+    # acceptable in preemptible VMs)
+    def scheduleMultipleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources, preemptible=False, canpreempt=True, forceName=None):
         
         slottypes = resources.keys()
         
@@ -434,7 +473,7 @@ class BaseServer(object):
         
         # This variable keeps track of how many resources we have to preempt on a node
         mustpreempt={}
-        
+        srvlog.info("Node ordering: %s" % orderednodes)
         for vwnode in range(0,numnodes):
             assignment[vwnode] = {}
             # Without preemption
@@ -474,7 +513,10 @@ class BaseServer(object):
                             candidatenodes[physnode][slottype][3] -= res
                             if not mustpreempt.has_key(physnode):
                                 mustpreempt[physnode] = {}
-                            mustpreempt[physnode][slottype]=res                                
+                            if not mustpreempt[physnode].has_key(slottype):
+                                mustpreempt[physnode][slottype]=res                                
+                            else:
+                                mustpreempt[physnode][slottype]+=res                                
                         break # Ouch
                 else:
                     raise SchedException, "Could not fit node %i in any physical node (w/preemption)" % vwnode
@@ -495,6 +537,118 @@ class BaseServer(object):
             return mustpreempt
         else:
             raise SchedException
+
+    def scheduleSinglePreemptibleVM(self, res_id, startTime, duration, imguri, resources, forceName=False):
+        slottypes = resources.keys()
+        
+        # This variable stores the candidate slots. It is a dictionary, where the key
+        # is the slot type (i.e. this allows us easy access to the candidate slots for
+        # one type of slot). Each item is a list containing:
+        #    1. Node id
+        #    2. Slot id
+        #    3. Maximum available resources in that slot (without preemption)
+        candidateslots = {}
+        
+        # TODO: There are multiple points at which the slot fitting could be aborted
+        # for lack of resources. Currently, this is only checked at the very end.
+        for slottype in slottypes:
+            candidateslots[slottype] = []
+            needed = resources[slottype]
+            
+            # This variable stores the (possibly multiple) availabilities of a slot
+            # during the requested time interval. It is a dictionary with the slot id
+            # as a key. The value is itself a dictionary, with the time (at which
+            # availability is measured) as a key. The value is a list with two elements:
+            #    [ available resources,
+            #      available resources (assuming we can preempt ]
+            capacity={}
+            
+            # This is a list of candidate slot id's
+            slots = []
+            
+            # Select slots that have enough resources at the beginning
+            slotsbegin = []
+            slots1 = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, canpreempt=False)
+            for slot in slots1:
+                nod_id = slot["NOD_ID"]
+                slot_id = slot["SL_ID"]
+                slotsbegin.append(slot_id)
+                if not capacity.has_key(slot_id):
+                    capacity[slot_id] = {}
+                capacity[slot_id] = slot["available"]
+                candidateslots[slottype].append((nod_id,slot_id,slot["available"]))
+                
+        nodeset = Set()
+        for slottype in slottypes:
+            nodes = Set([s[0] for s in candidateslots[slottype]])
+            nodeset |= nodes
+            
+        for slottype in slottypes:
+            nodes = Set([s[0] for s in candidateslots[slottype]])
+            nodeset &= nodes
+                
+        if len(nodeset) == 0:
+            raise SchedException, "No physical node has enough available resources for this request at this time"
+        
+        # This variable contains essentially the same information as candidateslots, except
+        # access is done by node id and slottype (i.e. provides an easy way of asking
+        # "what is the slot id of the memory slot in node 5")
+        # Items have the same information as candidateslots.
+        candidatenodes = {}
+        
+        for slottype in slottypes:
+            for slot in candidateslots[slottype]:
+                nod_id = slot[0]
+                if nod_id in nodeset:
+                    if not candidatenodes.has_key(nod_id):
+                        candidatenodes[nod_id]={}
+                    candidatenodes[nod_id][slottype] = slot
+                    
+        # We want to choose the node that will allow this VM to end at the earliest possible
+        # time.
+        optimalNode = None
+        endTime = None
+        suspendTime = None
+        for node in nodeset:    
+            srvlog.info("Node %i has final candidates %s" % (node,candidatenodes[node]))
+            sl_id = candidatenodes[node][SLOTTYPE_CPU][1]
+            res_needed = resources[SLOTTYPE_CPU]
+            suspendpoints = self.findSuspendPoints(startTime, sl_id, res_needed, duration, suspensiontime=None)
+            srvlog.info("Suspend points:")
+            for point in suspendpoints:
+                srvlog.info("%s %s %s" % (point[0],point[1],point[2]))
+            nodeSuspendTime=suspendpoints[0][1]
+            nodeEndTime=suspendpoints[-1][1]
+            if endTime==None:
+                endTime = nodeEndTime
+                suspendTime = nodeSuspendTime
+                optimalNode = node 
+            elif endTime > nodeEndTime:
+                endTime = nodeEndTime
+                suspendTime = nodeSuspendTime
+                optimalNode = node 
+        srvlog.info("Node with best suspension points is %i" % optimalNode)
+        needsSuspension = (endTime != suspendTime)
+        
+        # Make allocations
+        if forceName == None:
+            rsp_name = "VM"
+        else:
+            rsp_name = forceName
+        rsp_id = self.resDB.addReservationPart(res_id, rsp_name, 1, True)
+        for slottype in slottypes:
+            amount = resources[slottype]
+            sl_id = candidatenodes[optimalNode][slottype][1]
+            endTime = startTime + duration
+            self.resDB.addAllocation(rsp_id, sl_id, startTime, endTime, amount)
+
+        if needsSuspension:
+            srvlog.info("This VM will require suspension.")
+            self.rescheduleReservationPartForSuspension(rsp_id, suspendTime)
+                
+
+        
+
 
     def prioritizenodes(self,candidatenodes,imguri,resources, canpreempt):
         # TODO: This function should prioritize nodes greedily:
@@ -531,7 +685,6 @@ class BaseServer(object):
             availpY = candidatenodes[y][SLOTTYPE_CPU][3]
             preemptibleres = availpY - availY
             hasPreemptibleY = preemptibleres > 0
-            
             if hasPreemptibleX and not hasPreemptibleY:
                 return WORSE
             elif not hasPreemptibleX and hasPreemptibleY:
@@ -715,9 +868,9 @@ class BaseServer(object):
             completedY = (time - startY).seconds / (endY - startY).seconds
             
             if completedX < completedY:
-                return WORSE
-            elif completedX > completedY:
                 return BETTER
+            elif completedX > completedY:
+                return WORSE
             else:
                 return EQUAL
         
@@ -728,9 +881,12 @@ class BaseServer(object):
             cur = cur.fetchall()
             for alloc in cur:
                 restype=alloc["slt_id"]
-                if not preemptible.has_key(restype):
-                    preemptible[restype] = []
-                preemptible[restype].append(alloc)
+                # Make sure this is not a future allocation
+                start = ISO.ParseDateTime(alloc["all_schedstart"])
+                if start <= time:
+                    if not preemptible.has_key(restype):
+                        preemptible[restype] = []
+                    preemptible[restype].append(alloc)
             
             # Order preemptible resources
             for restype in preemptible.keys():
@@ -768,71 +924,87 @@ class BaseServer(object):
                     elif rsp_status == STATUS_DONE:
                         srvlog.error("Preempting a VW that is already done. This should not be happening.")
                 elif batchAlgorithm == "onAR_suspend":
-                    if rsp_status in (STATUS_PENDING, STATUS_RUNNING):
-                        self.suspendReservationPart(rsp_key, time)
+                    if rsp_status in (STATUS_PENDING, STATUS_RUNNING, STATUS_SUSPENDED):
+                        self.rescheduleReservationPartForSuspension(rsp_key, time)
                     elif rsp_status == STATUS_DONE:
                         srvlog.error("Preempting a VW that is already done. This should not be happening.")
 
-    def suspendReservationPart(self, rsp_id, time):
+    def rescheduleReservationPartForSuspension(self, rsp_id, time):
         cur = self.resDB.getCurrentAllocationsInRespart(time, rsp_id)
         cur = cur.fetchall()
         for alloc in cur:
             sl_id = alloc["SL_ID"]
+            print sl_id
             rsp_id = alloc["RSP_ID"]
             all_schedstart = ISO.ParseDateTime(alloc["ALL_SCHEDSTART"])
             res_needed = alloc["ALL_AMOUNT"]
-            newend = time
-            needstime = ISO.ParseDateTime(alloc["ALL_SCHEDEND"]) - time
+            time_needed = ISO.ParseDateTime(alloc["ALL_SCHEDEND"]) - time
 
-            suspendpoints = [[all_schedstart,time,None]] # We don't know the next start time yet
-            self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, newend, None)
-            changepoints = self.resDB.findChangePoints(time, slot=sl_id, closed=False)
-            suspended = True
-            for point in changepoints:
-                changetime = ISO.ParseDateTime(point["time"])
-                cur = self.resDB.findAvailableSlots(time=changetime, slots=[sl_id])
-                avail = cur.fetchone()["available"]
-                if suspended and avail >= res_needed:
-                    # We have reached a point with enough resources. We can resume the VM.
-                    suspendpoints[-1][2] = changetime
-                    # We don't know when we will suspend/resume again
-                    suspendpoints.append([changetime, None, None])
-                    prev = (changetime, avail)
-                    suspended = False
-                elif not suspended and avail < res_needed:
-                    # We have reached a point where we might have to suspend.
-                    # Check if we can fit all remaning time here, or if we'll 
-                    # need to suspend/resume once more
-                    timediff = changetime - suspendpoints[-1][0]
-                    if needstime - timediff > 0:
-                        # We'll need to partitions more. Try to fit as much as possible.
-                        suspendpoints[-1][1] = changetime
-                        suspendpoints[-1][2] = None # We don't know resume time yet
-                        needstime -= timediff
-                        suspended = True
-                    else:
-                        # We can fit the entire virtual resource in this interval
-                        suspendpoints[-1][1] = suspendpoints[-1][0] + needstime
-                        suspendpoints[-1][2] = None 
-                        break  # Ugh
+            self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, time, None)
+            suspendpoints = self.findSuspendPoints(all_schedstart,sl_id,res_needed,time_needed,suspensiontime=time)
                 
-            # At this point, we have "infinite" time at our disposal
-            # So, if there's still time left over...
-            if needstime > 0:
-                laststart = suspendpoints[-1][0]
-                end = laststart + needstime
-                suspendpoints[-1][1]=end
-                
+            current = suspendpoints.pop(0)
+            print "First: %s %s %s" % (current[0],current[1],current[2])
+            if current[0] == current[1]:
+                # If the rescheduling results in the suspension time of the first allocation
+                # being equal to its start time, that means we are preempting a reservation
+                # part right at the beginning. We need to eliminate this first allocation
+                # as it is pointless.
+                self.resDB.removeAllocation(rsp_id, sl_id, all_schedstart)
+            else:
+                self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, current[1], current[2])
             for point in suspendpoints:
-                print "%s %s %s" % (point[0],point[1],point[2])
+                print "       %s %s %s" % (point[0],point[1],point[2])
+                self.resDB.addAllocation(rsp_id, sl_id, point[0], point[1], res_needed, nextstart=point[2])
 
-            #self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, newend, None)
         # TODO: Make sure all slots in a reservation part can be satisfied at the same time
         # in the same interval (i.e. avoid situations where, after a suspend, there is enough
         # CPU but not enough memory... the current implementation will not detect that)
         # Nonetheless, it should simply be a matter of merging the "suspendpoints" of each 
         # slot
 
+    def findSuspendPoints(self,starttime,sl_id,res_needed,time_needed,suspensiontime=None):
+        suspendpoints = [[starttime,suspensiontime,None]] # We don't know the next start time yet
+        suspended = (suspensiontime != None)
+        if suspended:
+            changepoints = self.resDB.findChangePoints(suspensiontime, slot=sl_id, closed=False)
+        else:
+            changepoints = self.resDB.findChangePoints(starttime, slot=sl_id, closed=False)
+        for point in changepoints:
+            changetime = ISO.ParseDateTime(point["time"])
+            cur = self.resDB.findAvailableSlots(time=changetime, slots=[sl_id])
+            avail = cur.fetchone()["available"]
+            if suspended and avail >= res_needed:
+                # We have reached a point with enough resources. We can resume the VM.
+                suspendpoints[-1][2] = changetime
+                # We don't know when we will suspend/resume again
+                suspendpoints.append([changetime, None, None])
+                suspended = False
+            elif not suspended and avail < res_needed:
+                # We have reached a point where we might have to suspend.
+                # Check if we can fit all remaning time here, or if we'll 
+                # need to suspend/resume once more
+                timediff = changetime - suspendpoints[-1][0]
+                if time_needed - timediff > 0:
+                    # We'll need to partitions more. Try to fit as much as possible.
+                    suspendpoints[-1][1] = changetime
+                    suspendpoints[-1][2] = None # We don't know resume time yet
+                    time_needed -= timediff
+                    suspended = True
+                else:
+                    # We can fit the entire virtual resource in this interval
+                    suspendpoints[-1][1] = suspendpoints[-1][0] + time_needed
+                    suspendpoints[-1][2] = None 
+                    break  # Ugh
+            
+        # At this point, we have "infinite" time at our disposal
+        # So, if there's still time left over...
+        if time_needed > 0:
+            laststart = suspendpoints[-1][0]
+            end = laststart + time_needed
+            suspendpoints[-1][1]=end
+        
+        return suspendpoints
 
     def startReservation(self, res_id, row=None):
         if row != None:
@@ -861,6 +1033,16 @@ class BaseServer(object):
         if row != None:
             srvlog.info( "%s: Stopping reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_DONE)
+
+    def suspendReservationPart(self, respart_id, row=None, resname=None):
+        if row != None:
+            srvlog.info( "%s: Suspending reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
+        self.resDB.updateReservationPartStatus(respart_id, STATUS_SUSPENDED)
+
+    def resumeReservationPart(self, respart_id, row=None, resname=None):
+        if row != None:
+            srvlog.info( "%s: Resuming reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
+        self.resDB.updateReservationPartStatus(respart_id, STATUS_RUNNING)
 
     def cancelReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
@@ -1000,7 +1182,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="ears.conf"
-    tracefile="test_preemption4.trace"
+    tracefile="test_mixed.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
