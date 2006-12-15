@@ -30,6 +30,12 @@ RESOURCES_OPT="resources"
 STARTTIME_OPT="starttime"
 DURADJUST_OPT="durationadjust"
 LOGLEVEL_OPT="loglevel"
+CACHE_OPT="cache"
+REDUNDANT_OPT="avoidredundanttransfers"
+
+TRANSFER_REQUIRED=0
+TRANSFER_REUSE=1
+TRANSFER_CACHED=2
 
 BETTER = -1
 EQUAL = 0
@@ -83,6 +89,7 @@ class BaseServer(object):
         self.batchreservations={}
         self.imagenodeslot_ar = None
         self.imagenodeslot_batch = None
+        self.imagetransfers={}
         log = self.config.get(GENERAL_SEC, LOGLEVEL_OPT)
         srvlog.setLevel(loglevel[log])
         
@@ -195,7 +202,7 @@ class BaseServer(object):
             if len(mustpreempt) > 0:
                 srvlog.info("Must preempt the following: %s", mustpreempt)
                 self.preemptResources(mustpreempt, startTime)
-            self.scheduleImageTransferEDF(res_id, reqTime, startTime, numNodes, None, imgslot=self.imagenodeslot_ar)
+            self.scheduleImageTransferEDF(res_id, reqTime, startTime, numNodes, None, None, imgslot=self.imagenodeslot_ar)
             if self.commit: self.resDB.commit()
             self.acceptednum += 1
             self.accepted.append((reqTime, self.acceptednum))
@@ -209,6 +216,8 @@ class BaseServer(object):
         reqTime = self.getTime() #Should be starttime + second
         duration = TimeDelta(seconds=int(r.fields["duration"]))
         numNodes = int(r.fields["numNodes"])
+        imgURI = r.fields["uri"]
+        imgSize = int(r.fields["size"])
         srvlog.info("%s: Received batch request for VW %i" % (reqTime, self.reqnum))
         srvlog.info("\tDuration: %s" % duration)
         srvlog.info("\tNodes: %i" % numNodes)
@@ -223,12 +232,12 @@ class BaseServer(object):
         node = 1
         for vwnode in range(numNodes):
             nodeName = (vwnode+1).__str__()
-            self.queueBatchRequest(res_id, duration, resources, nodeName)
-        self.batchreservations[res_id] = [duration, resources, 0]
+            self.queueBatchRequest(res_id, duration, resources, nodeName, imgURI, imgSize)
+        self.batchreservations[res_id] = [duration, resources, imgURI, imgSize, 0]
         
         if self.commit: self.resDB.commit()
 
-    def queueBatchRequest(self,res_id, duration, resources, nodeName):
+    def queueBatchRequest(self,res_id, duration, resources, nodeName, imgURI, imgSize):
         vw = {}
         vw["res_id"]=res_id
         vw["duration"]=duration
@@ -236,6 +245,8 @@ class BaseServer(object):
         rsp_id = self.resDB.addReservationPart(res_id, "Image transfer for %s" % nodeName, type=2)
         vw["transfer_rsp"] = rsp_id
         vw["node"] = nodeName
+        vw["imgURI"] = imgURI
+        vw["imgSize"] = imgSize
         self.batchqueue.append(vw)
 
     def processQueue(self):
@@ -245,17 +256,10 @@ class BaseServer(object):
             duration = vm["duration"]
             resources = vm["resources"]
             nodename = "VM " + vm["node"]
+            imgURI = vm["imgURI"]
+            imgSize = vm["imgSize"]
             
-            # Tentatively schedule an image transfer
-            # We do this in case it turns out we *have* to transfer this image.
-            # This way we can tell what the earliest start time would be.
-            # Nonetheless, the slot-fitting algorithm will first try to schedule
-            # the VM on a node with a cached image (starting immediately) and,
-            # if that is not possible, then will schedule it at the earliest
-            # possible time.
-            
-            transfer = self.scheduleImageTransferFIFO(vm["res_id"], vm["transfer_rsp"], self.getTime(), 1, None, imgslot=self.imagenodeslot_batch)
-            startTime = transfer[3]
+            startTimes = self.findEarliestStartingTimes(imgURI, imgSize, self.getTime())
             
             batchAlgorithm = self.config.get(GENERAL_SEC,BATCHALG_OPT)
             if batchAlgorithm == "nopreemption":
@@ -263,10 +267,12 @@ class BaseServer(object):
                 # resources to run the job from beginning to end (not allowing
                 # it to be preempted by an AR). As such, when the VMs are scheduled,
                 # they are flagged as non-preemptible
+                transfer = self.scheduleImageTransferFIFO(vm["transfer_rsp"], self.getTime(), 1, imgURI, imgSize, None, imgslot=self.imagenodeslot_batch)
+                startTime = transfer[3]
                 endTime = startTime + duration
                 srvlog.info("Attempting to schedule VM for reservation %i from %s to %s" % (res_id,startTime,endTime))
                 try:
-                    self.scheduleMultipleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=False, canpreempt=False, forceName=nodename)
+                    self.scheduleMultipleVMs(res_id, startTime, endTime, imgURI, numnodes=1, resources=resources, preemptible=False, canpreempt=False, forceName=nodename)
                     if self.commit: self.resDB.commit()
                     mustremove.append(i)
                 except SchedException, msg:
@@ -277,24 +283,34 @@ class BaseServer(object):
                 # TODO: Currently. we only accept a request if we can run it from beginning 
                 # to end. With our slot table, we should be able to preschedule batch jobs,
                 # so the necessary images can be transferred while other VMs are running
+                transfer = self.scheduleImageTransferFIFO(vm["transfer_rsp"], self.getTime(), 1, imgURI, imgSize, None, imgslot=self.imagenodeslot_batch)
+                startTime = transfer[3]
                 endTime = startTime + duration
                 srvlog.info("Attempting to schedule VM for reservation %i from %s to %s" % (res_id,startTime,endTime))
                 try:
-                    self.scheduleMultipleVMs(res_id, startTime, endTime, "nfs:///foobar", numnodes=1, resources=resources, preemptible=True, canpreempt=False, forceName=nodename)
+                    self.scheduleMultipleVMs(res_id, startTime, endTime, imgURI, numnodes=1, resources=resources, preemptible=True, canpreempt=False, forceName=nodename)
                     if self.commit: self.resDB.commit()
                     mustremove.append(i)
                 except SchedException, msg:
                     srvlog.warning("Can't schedule this batch VM now. Reason: %s" % msg)
                     self.resDB.rollback() # This will also roll back the image transfer
             elif batchAlgorithm == "onAR_suspend":
-                srvlog.info("Attempting to schedule VM for reservation %i starting at %s with duration %s" % (res_id,startTime,duration))
                 try:
-                    self.scheduleSinglePreemptibleVM(res_id, startTime, duration, "nfs:///foobar", resources=resources, forceName=nodename)
+                    srvlog.info("Attempting to schedule VM for reservation %i starting at %s with duration %s" % (res_id,self.getTime(),duration))
+                    result = self.scheduleSinglePreemptibleVM(res_id, startTimes, duration, imgURI, resources=resources, forceName=nodename)
+                    node = result[0]
+                    transfertype = startTimes[node][1]
+                    if transfertype == TRANSFER_REQUIRED:
+                        transfer = self.scheduleImageTransferFIFO(vm["transfer_rsp"], self.getTime(), 1, imgURI, imgSize, node, imgslot=self.imagenodeslot_batch)
+                    elif transfertype == TRANSFER_REUSE:
+                        pass
+                    elif transfertype == TRANSFER_CACHED:
+                        pass
                     if self.commit: self.resDB.commit()
                     mustremove.append(i)
                 except SchedException, msg:
                     srvlog.warning("Can't schedule this batch VM now. Reason: %s" % msg)
-                    self.resDB.rollback() # This will also roll back the image transfer
+                    self.resDB.rollback() 
 
 
         newbatchqueue = [vm for i,vm in enumerate(self.batchqueue) if i not in mustremove]
@@ -538,81 +554,50 @@ class BaseServer(object):
         else:
             raise SchedException
 
-    def scheduleSinglePreemptibleVM(self, res_id, startTime, duration, imguri, resources, forceName=False):
+    def scheduleSinglePreemptibleVM(self, res_id, startTimes, duration, imguri, resources, forceName=False):
         slottypes = resources.keys()
         
         # This variable stores the candidate slots. It is a dictionary, where the key
-        # is the slot type (i.e. this allows us easy access to the candidate slots for
-        # one type of slot). Each item is a list containing:
-        #    1. Node id
-        #    2. Slot id
-        #    3. Maximum available resources in that slot (without preemption)
-        candidateslots = {}
-        
-        # TODO: There are multiple points at which the slot fitting could be aborted
-        # for lack of resources. Currently, this is only checked at the very end.
-        for slottype in slottypes:
-            candidateslots[slottype] = []
-            needed = resources[slottype]
-            
-            # This variable stores the (possibly multiple) availabilities of a slot
-            # during the requested time interval. It is a dictionary with the slot id
-            # as a key. The value is itself a dictionary, with the time (at which
-            # availability is measured) as a key. The value is a list with two elements:
-            #    [ available resources,
-            #      available resources (assuming we can preempt ]
-            capacity={}
-            
-            # This is a list of candidate slot id's
-            slots = []
-            
-            # Select slots that have enough resources at the beginning
-            slotsbegin = []
-            slots1 = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, canpreempt=False)
-            for slot in slots1:
-                nod_id = slot["NOD_ID"]
-                slot_id = slot["SL_ID"]
-                slotsbegin.append(slot_id)
-                if not capacity.has_key(slot_id):
-                    capacity[slot_id] = {}
-                capacity[slot_id] = slot["available"]
-                candidateslots[slottype].append((nod_id,slot_id,slot["available"]))
-                
-        nodeset = Set()
-        for slottype in slottypes:
-            nodes = Set([s[0] for s in candidateslots[slottype]])
-            nodeset |= nodes
-            
-        for slottype in slottypes:
-            nodes = Set([s[0] for s in candidateslots[slottype]])
-            nodeset &= nodes
-                
-        if len(nodeset) == 0:
-            raise SchedException, "No physical node has enough available resources for this request at this time"
-        
-        # This variable contains essentially the same information as candidateslots, except
-        # access is done by node id and slottype (i.e. provides an easy way of asking
+        # is the node id and the slot type (i.e. provides an easy way of asking
         # "what is the slot id of the memory slot in node 5")
-        # Items have the same information as candidateslots.
+        # Each item is a list containing:
+        #    1. Slot id
+        #    2. Maximum available resources in that slot (without preemption)
+        #    3. Earlies start time
         candidatenodes = {}
-        
-        for slottype in slottypes:
-            for slot in candidateslots[slottype]:
-                nod_id = slot[0]
-                if nod_id in nodeset:
-                    if not candidatenodes.has_key(nod_id):
-                        candidatenodes[nod_id]={}
-                    candidatenodes[nod_id][slottype] = slot
+
+        for node in startTimes.keys():
+            enoughInAllSlots = True
+            candidatenodes[node] = {}
+            for slottype in slottypes:
+                needed = resources[slottype]
+                startTime = startTimes[node][0]
+                slots = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, node=node, canpreempt=False)            
+                slots = slots.fetchall()
+                if len(slots) == 0:
+                    enoughInAllSlots = False
+                else:
+                    slot = slots[0]
+                    sl_id = slot["SL_ID"]
+                    available = slot["available"]
+                    candidatenodes[node][slottype]= (sl_id, available, startTime)
+            if not enoughInAllSlots:
+                del candidatenodes[node]
+                                
+        if len(candidatenodes) == 0:
+            raise SchedException, "No physical node has enough available resources for this request at this time"
+
                     
         # We want to choose the node that will allow this VM to end at the earliest possible
         # time.
         optimalNode = None
         endTime = None
         suspendTime = None
-        for node in nodeset:    
+        for node in candidatenodes.keys():    
             srvlog.info("Node %i has final candidates %s" % (node,candidatenodes[node]))
-            sl_id = candidatenodes[node][SLOTTYPE_CPU][1]
+            sl_id = candidatenodes[node][SLOTTYPE_CPU][0]
             res_needed = resources[SLOTTYPE_CPU]
+            startTime = startTimes[node][0]
             suspendpoints = self.findSuspendPoints(startTime, sl_id, res_needed, duration, suspensiontime=None)
             srvlog.info("Suspend points:")
             for point in suspendpoints:
@@ -629,6 +614,7 @@ class BaseServer(object):
                 optimalNode = node 
         srvlog.info("Node with best suspension points is %i" % optimalNode)
         needsSuspension = (endTime != suspendTime)
+        startTime = startTimes[optimalNode][0]
         
         # Make allocations
         if forceName == None:
@@ -638,7 +624,7 @@ class BaseServer(object):
         rsp_id = self.resDB.addReservationPart(res_id, rsp_name, 1, True)
         for slottype in slottypes:
             amount = resources[slottype]
-            sl_id = candidatenodes[optimalNode][slottype][1]
+            sl_id = candidatenodes[optimalNode][slottype][0]
             endTime = startTime + duration
             self.resDB.addAllocation(rsp_id, sl_id, startTime, endTime, amount)
 
@@ -646,7 +632,7 @@ class BaseServer(object):
             srvlog.info("This VM will require suspension.")
             self.rescheduleReservationPartForSuspension(rsp_id, suspendTime)
                 
-
+        return [optimalNode]
         
 
 
@@ -724,7 +710,7 @@ class BaseServer(object):
         return nodes
 
         
-    def scheduleImageTransferEDF(self, res_id, reqTime, deadline, numnodes, imgsize, imgslot=None):
+    def scheduleImageTransferEDF(self, res_id, reqTime, deadline, numnodes, imguri, imgsize, imgslot=None):
         # Algorithm for fitting image transfers is essentially the same as 
         # the one used in scheduleVMs. The main difference is that we can
         # scale down the code since we know a priori what slot we're fitting the
@@ -811,7 +797,7 @@ class BaseServer(object):
                 self.resDB.updateAllocation(t["sl_id"], t["rsp_id"], t["all_schedstart"], newstart=t["new_all_schedstart"], end=t["all_schedend"])            
 
 
-    def scheduleImageTransferFIFO(self, res_id, rsp_id, reqTime, numnodes, imgsize, imgslot=None):
+    def scheduleImageTransferFIFO(self, rsp_id, reqTime, numnodes, imguri, imgsize, destinationNode, imgslot=None, allocate=True):
         # This schedules image transfers in a FIFO manner, appropriate when there is no
         # deadline for the image to arrive. Unlike EDF, we don't consider the
         # transfer allocations to be moveable. This results in:
@@ -822,7 +808,8 @@ class BaseServer(object):
         #    last queued transfer.
         
         # Estimate image transfer time 
-        imgTransferTime = TimeDelta(minutes=15) # We assume 15 minutes for tests
+        imgTransferTime=self.estimateTransferTime(imgsize)
+        
         
         # Find next schedulable transfer time
         # If there are no image transfers in progress, that means now.
@@ -846,7 +833,9 @@ class BaseServer(object):
             
         endTime = startTime+imgTransferTime
         
-        self.resDB.addAllocation(rsp_id, imgslot, startTime, endTime, 100.0, moveable=False)
+        if allocate:
+            self.resDB.addAllocation(rsp_id, imgslot, startTime, endTime, 100.0, moveable=False)
+            self.imagetransfers[rsp_id]=(imguri, destinationNode)
         
         return (rsp_id, imgslot, startTime, endTime)
 
@@ -918,9 +907,11 @@ class BaseServer(object):
                         res_id = respart["RES_ID"]
                         duration = self.batchreservations[res_id][0]
                         resources = self.batchreservations[res_id][1]
-                        self.batchreservations[res_id][2] += 1
-                        nodeName = "VM R%i" % self.batchreservations[res_id][2]
-                        self.queueBatchRequest(res_id, duration, resources, nodeName)
+                        imgURI = self.batchreservations[res_id][2]
+                        imgSize = self.batchreservations[res_id][3]
+                        self.batchreservations[res_id][4] += 1
+                        nodeName = "VM R%i" % self.batchreservations[res_id][4]
+                        self.queueBatchRequest(res_id, duration, resources, nodeName, imgURI, imgSize)
                     elif rsp_status == STATUS_DONE:
                         srvlog.error("Preempting a VW that is already done. This should not be happening.")
                 elif batchAlgorithm == "onAR_suspend":
@@ -1006,6 +997,41 @@ class BaseServer(object):
         
         return suspendpoints
 
+    def findEarliestStartingTimes(self, imageURI, imageSize, time):
+        avoidredundant = self.config.getboolean(GENERAL_SEC, REDUNDANT_OPT)
+        cache = self.config.getboolean(GENERAL_SEC, CACHE_OPT)
+
+        # Figure out starting time assuming we have to transfer the image
+        transfer = self.scheduleImageTransferFIFO(rsp_id=None, reqTime=time, numnodes=1, imguri=imageURI, imgsize=imageSize, imgslot=self.imagenodeslot_batch, destinationNode=None, allocate=False)
+        startTime = transfer[3]
+        
+        earliest = {}
+        for node in range(self.getNumNodes()):
+            earliest[node+1] = (startTime, TRANSFER_REQUIRED)
+        
+        if cache:
+            # TODO: Peek into caches. If an image is cached, availability is immediate
+            pass
+        
+        if avoidredundant:
+            cur = self.resDB.getCurrentAllocationsInSlot(self.getTime(), self.imagenodeslot_batch)
+            transfers = cur.fetchall()
+            for t in transfers:
+                transferImg = self.imagetransfers[t["RSP_ID"]][0]
+                node = self.imagetransfers[t["RSP_ID"]][1]
+                if transferImg == imageURI:
+                    startTime = ISO.ParseDateTime(t["ALL_SCHEDEND"])
+                    if startTime < earliest[node]:
+                        earliest[node] = (startTime, TRANSFER_REUSE)
+                    
+        print earliest
+        return earliest
+                    
+
+            
+    def estimateTransferTime(self, imgsize):
+        return TimeDelta(minutes=15) # We assume 15 minutes for tests
+
     def startReservation(self, res_id, row=None):
         if row != None:
             srvlog.info( "%s: Starting reservation '%s'" % (self.getTime(), row["RES_NAME"]))
@@ -1060,11 +1086,12 @@ class BaseServer(object):
 
     def resizeAllocation(self, respart_id, row=None):
         srvlog.error( "An allocation has to be resized here. This should not be happening!")
-    
+
 
 class SimulatingServer(BaseServer):
     def __init__(self, config, resDB, trace, commit):
         BaseServer.__init__(self, config, resDB, trace, commit)
+        self.numnodes = None
         self.createDatabase()
         self.time = None
         if self.config.has_option(SIMULATION_SEC,STARTTIME_OPT):
@@ -1072,7 +1099,6 @@ class SimulatingServer(BaseServer):
         else:
             self.time = DateTime.now()
         self.startTime = None
-            
         
     def createDatabase(self):
         numnodes = self.config.getint(SIMULATION_SEC,NODES_OPT)
@@ -1102,14 +1128,14 @@ class SimulatingServer(BaseServer):
         sl_id = self.resDB.addSlot(nod_id,slt_id=SLOTTYPE_OUTNET,sl_capacity=bandwidth)
         
         self.imagenodeslot_batch = sl_id
-        
+        self.numnodes = numnodes
         self.resDB.commit()
 
         
     def start(self):
         self.startTime = self.time
         
-        srvlog.info("Starting")            
+        srvlog.info("Starting")          
         td = TimeDelta(minutes=1)
         self.accepted.append((self.startTime, self.acceptednum))
         self.rejected.append((self.startTime, self.rejectednum))
@@ -1133,7 +1159,8 @@ class SimulatingServer(BaseServer):
 #        srvlog.info("Number of rejected requests: %i" % len(self.rejected))
 #        srvlog.info("Rejected requests: %s" % self.rejected )
 
-        
+    def getNumNodes(self):
+        return self.numnodes        
         
     def getTime(self):
         return self.time
@@ -1182,7 +1209,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="ears.conf"
-    tracefile="test_mixed.trace"
+    tracefile="test_redundanttransfer2.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
