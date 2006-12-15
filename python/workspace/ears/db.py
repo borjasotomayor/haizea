@@ -197,6 +197,9 @@ class ReservationDB(object):
         distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS")
         return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", distinct=distinctfields, **kwargs)
 
+    def getEndingAllocationsInInterval(self, time, td, rsp_id, **kwargs):
+        return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", rsp_id=rsp_id, **kwargs)
+
     def getFutureAllocationsInSlot(self, time, sl_id, **kwargs):
         return self.getAllocationsInInterval(time, td=None, eventfield="all_schedstart",sl_id=sl_id,**kwargs)
 
@@ -275,11 +278,11 @@ class ReservationDB(object):
         rsp_id=cur.lastrowid
         return rsp_id
     
-    def addAllocation(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None):
+    def addAllocation(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None, nextstart=None):
         srvlog.info( "Reserving %f in slot %i from %s to %s" % (amount, sl_id, startTime, endTime))
-        sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_amount,all_moveable,all_deadline,all_duration,all_status) values (?,?,?,?,?,?,?,?,0)"
+        sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_amount,all_moveable,all_deadline,all_duration,all_nextstart,all_status) values (?,?,?,?,?,?,?,?,?,0)"
         cur = self.getConn().cursor()
-        cur.execute(sql, (rsp_id, sl_id, startTime, endTime, amount, moveable, deadline, duration))            
+        cur.execute(sql, (rsp_id, sl_id, startTime, endTime, amount, moveable, deadline, duration, nextstart))            
 
     def addNode(self, nod_hostname, nod_enabled=True):
         sql = "INSERT INTO tb_node(nod_hostname, nod_enabled) VALUES (?,?)"
@@ -300,6 +303,10 @@ class ReservationDB(object):
         sql = "DELETE FROM tb_alloc WHERE rsp_id=?"
         cur.execute(sql, (rsp_id,))
 
+    def removeAllocation(self, rsp_id, sl_id, all_schedstart):
+        sql = "DELETE FROM tb_alloc WHERE rsp_id=? and sl_id=? and all_schedstart=?"
+        cur = self.getConn().cursor()
+        cur.execute(sql, (rsp_id,sl_id,all_schedstart))
 
     def isReservationDone(self, res_id):
         sql = "SELECT COUNT(*) FROM V_ALLOCATION WHERE res_id=? AND rsp_status in (0,1)" # Hardcoding bad!
