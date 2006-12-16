@@ -15,6 +15,8 @@ UTILAVGCOMB_OPT="utilavg-combined"
 ADMITINDIV_OPT="admission-individual"
 ADMITCOMB_OPT="admission-combined"
 
+BATCHCOMB_OPT="batch-combined"
+
 class EARS(object):
     def __init__(self, config, tracefile):
         self.profiles = {}
@@ -44,12 +46,15 @@ class EARS(object):
         utilavgcombined = self.config.getboolean(GRAPHS_SEC, UTILAVGCOMB_OPT)
         admittedindiv = self.config.getboolean(GRAPHS_SEC, ADMITINDIV_OPT)
         admittedcombined = self.config.getboolean(GRAPHS_SEC, ADMITCOMB_OPT)
+        batchcombined = self.config.getboolean(GRAPHS_SEC, BATCHCOMB_OPT)
         
         needutilstats = utilindiv or utilcombined or utilavgcombined
         needadmissionstats = admittedindiv or admittedcombined
+        needbatchstats = batchcombined
         utilstats = {}
         acceptedstats = {}
         rejectedstats = {}
+        batchstats = {}
         for profile in self.profiles.items():
             profilename = profile[0]
             profileconfig = profile[1]
@@ -80,6 +85,9 @@ class EARS(object):
                     pylab.ylim(0,s.acceptednum+1)
                     pylab.legend(["Accepted","Rejected"])
                     g1.show()
+            if needbatchstats:
+                batchcompleted = [((v[0] - s.startTime).seconds,v[1]) for v in s.batchcompleted]
+                batchstats[profilename] = batchcompleted
                 
         if utilcombined:
             utilization = [[(w[0],w[1]) for w in v] for v in utilstats.values()]
@@ -93,12 +101,14 @@ class EARS(object):
             average = [[(w[0],w[2]) for w in v] for v in utilstats.values()]
             g1 = PointGraph(average, "Time (s)", "Utilization (Avg)")
             g1.plot()
+            pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             pylab.legend(utilstats.keys(), loc='upper left')
             g1.show()
                 
         if admittedcombined:
             g1 = StepGraph(acceptedstats.values() + rejectedstats.values(), "Time (s)", "Requests")
             g1.plot()
+            pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             lengths = [len(l) for l in acceptedstats.values() + rejectedstats.values()]
             pylab.ylim(0, max(lengths)+1)
             legends  = ["Accepted " + v for v in acceptedstats.keys()]
@@ -106,13 +116,18 @@ class EARS(object):
             pylab.legend(legends)
             g1.show()
             
-            
-            
-            
+        if batchcombined:
+            g1 = PointGraph(batchstats.values(), "Time (s)", "Batch VWs completed")
+            g1.plot()
+            pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
+            lengths = [len(l) for l in batchstats.values()]
+            pylab.ylim(0, max(lengths)+1)
+            pylab.legend(batchstats.keys(), loc='upper left')
+            g1.show()
     
 if __name__ == "__main__":
     configfile="ears-multirun.conf"
-    tracefile="../ears/test_mixed.trace"
+    tracefile="../ears/test_sdsc_pareto.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)        
