@@ -21,23 +21,41 @@ class TraceEntry(object):
         
     def toLine(self):
         line = ""
-        for i in range(len(TraceEntry.pos)):
-            line += self.fields[TraceEntry.pos[i]] + ";"  
+        for i in range(self.numFields):
+            line += self.fields[self.pos[i]] + ";"  
         return line.rstrip(";")
         
     @classmethod
     def fromLine(cls,line):
         dictFields = {}
         fields = line.split(";")
-        if len(fields)!=TraceEntry.numFields:
+        if len(fields)!=cls.numFields:
             raise Exception, "Unexpected number of fields in line"
         for i,field in enumerate(fields):
-            dictFields[TraceEntry.pos[i]] = field
+            dictFields[cls.pos[i]] = field
         return cls(dictFields)    
     
     @staticmethod
     def compare(a, b):
         return int(a.fields["time"]) - int(b.fields["time"])
+
+class TraceEntryV2(TraceEntry):
+    pos = {
+                     0:"time",
+                     1:"uri",
+                     2:"size",
+                     3:"numNodes",
+                     4:"memory",
+                     5:"cpu",
+                     6:"mode",
+                     7:"deadline",
+                     8:"duration",
+                     9:"tag"
+                     }
+    numFields = len(pos)
+    
+    def __init__(self, fields={}):
+        TraceEntry.__init__(self,fields)
         
 
 class TraceFile(object):
@@ -45,11 +63,11 @@ class TraceFile(object):
         self.entries=entries
         
     @classmethod
-    def fromFile(cls, filename):
+    def fromFile(cls, filename, entryType=TraceEntry):
         file = open (filename, "r")
         entries = []
         for line in file:
-            entry = TraceEntry.fromLine(line.strip())
+            entry = entryType.fromLine(line.strip())
             entries.append(entry)
         return cls(entries)
         
