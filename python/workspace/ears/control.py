@@ -79,3 +79,6 @@ class SimulationControlBackend(BaseControlBackend):
         if self.caching:
             self.nodes[nod_id-1].addToCache(imgURI,imgSize)
         self.nodes[nod_id-1].addDeployedImage(imgURI,imgSize, rsp_id)
+        
+    def isImgCachedInNode(self,nod_id,imgURI):
+        return self.nodes[nod_id-1].isImgCached(imgURI)
