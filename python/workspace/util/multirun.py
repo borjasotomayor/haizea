@@ -3,6 +3,7 @@ import workspace.ears.server as ears
 from workspace.graphing.graph import Graph, PointGraph, StepGraph
 import matplotlib
 import pylab
+from pickle import Pickler, Unpickler
 
 MULTIRUN_SEC="multirun"
 PROFILES_OPT="profiles"
@@ -17,12 +18,15 @@ ADMITCOMB_OPT="admission-combined"
 
 BATCHCOMB_OPT="batch-combined"
 
+OUTPUT_OPT="output"
+
+
 class EARS(object):
     def __init__(self, config, tracefile):
         self.profiles = {}
         self.tracefile=tracefile
         self.config = config
-        
+        self.output = "x11"
         profilenames = [s.strip(' ') for s in config.get(MULTIRUN_SEC, PROFILES_OPT).split(",")]
     
         for profile in profilenames:
@@ -39,6 +43,15 @@ class EARS(object):
                     profileconfig.set(s_noprefix, item[0], item[1])
                     
             self.profiles[profile] = profileconfig
+            
+    def showGraph(self, graph, filename=None):
+        if self.output=="x11":
+            graph.show()
+        elif self.output == "png":
+            filename += ".png"
+            print "Saving graph to file %s" % filename
+            pylab.savefig(filename)
+            pylab.gcf().clear()
     
     def multirun(self):
         utilindiv = self.config.getboolean(GRAPHS_SEC, UTILINDIV_OPT)
@@ -47,6 +60,9 @@ class EARS(object):
         admittedindiv = self.config.getboolean(GRAPHS_SEC, ADMITINDIV_OPT)
         admittedcombined = self.config.getboolean(GRAPHS_SEC, ADMITCOMB_OPT)
         batchcombined = self.config.getboolean(GRAPHS_SEC, BATCHCOMB_OPT)
+        
+        if self.config.has_option(GRAPHS_SEC, OUTPUT_OPT):
+            self.output = self.config.get(GRAPHS_SEC, OUTPUT_OPT)
         
         needutilstats = utilindiv or utilcombined or utilavgcombined
         needadmissionstats = admittedindiv or admittedcombined
@@ -58,10 +74,57 @@ class EARS(object):
         for profile in self.profiles.items():
             profilename = profile[0]
             profileconfig = profile[1]
-            s = ears.createEARS(profileconfig, tracefile)
-            s.start()
-            if needutilstats:
+            utilstatsfilename = profilename + "-utilization.dat"
+            acceptedfilename = profilename + "-accepted.dat"
+            rejectedfilename = profilename + "-rejected.dat"
+            batchcompletedfilename = profilename + "-batchcompleted.dat"
+            print "Running profile '%s'" % profilename
+            
+            forceRun = False
+            mustRun = True
+            stats = None
+            accepted = None
+            rejected = None
+            batchcompleted = None
+            if not forceRun:
+                # Check if the data already exists. If so, we don't need to rerun
+                if os.path.exists(utilstatsfilename):
+                    file = open (utilstatsfilename, "r")
+                    u = Unpickler(file)
+                    stats = u.load()
+                    file = open (acceptedfilename, "r")
+                    u = Unpickler(file)
+                    accepted = u.load()
+                    file = open (rejectedfilename, "r")
+                    u = Unpickler(file)
+                    rejected = u.load()
+                    file = open (batchcompletedfilename, "r")
+                    u = Unpickler(file)
+                    batchcompleted = u.load()
+                    mustRun = False
+                    print "No need to run (data already saved from previous run)"
+            if mustRun:
+                s = ears.createEARS(profileconfig, self.tracefile)
+                s.start()
+
                 stats = s.generateUtilizationStats(s.startTime,s.time)
+                accepted = [((v[0] - s.startTime).seconds,v[1]) for v in s.accepted]
+                rejected = [((v[0] - s.startTime).seconds,v[1]) for v in s.rejected]
+                batchcompleted = [((v[0] - s.startTime).seconds,v[1]) for v in s.batchcompleted]
+                file = open (utilstatsfilename, "w")
+                p = Pickler(file)
+                p.dump(stats)
+                file = open (acceptedfilename, "w")
+                p = Pickler(file)
+                p.dump(accepted)
+                file = open (rejectedfilename, "w")
+                p = Pickler(file)
+                p.dump(rejected)
+                file = open (batchcompletedfilename, "w")
+                p = Pickler(file)
+                p.dump(batchcompleted)
+
+            if needutilstats:
                 if utilcombined or utilavgcombined:
                     utilstats[profilename] = stats
                 if utilindiv:
@@ -74,8 +137,6 @@ class EARS(object):
                     pylab.legend(["Utilization","Average"])
                     g1.show()
             if needadmissionstats:
-                accepted = [((v[0] - s.startTime).seconds,v[1]) for v in s.accepted]
-                rejected = [((v[0] - s.startTime).seconds,v[1]) for v in s.rejected]
                 if admittedcombined:
                     acceptedstats[profilename] = accepted
                     rejectedstats[profilename] = rejected
@@ -86,24 +147,25 @@ class EARS(object):
                     pylab.legend(["Accepted","Rejected"])
                     g1.show()
             if needbatchstats:
-                batchcompleted = [((v[0] - s.startTime).seconds,v[1]) for v in s.batchcompleted]
                 batchstats[profilename] = batchcompleted
                 
         if utilcombined:
             utilization = [[(w[0],w[1]) for w in v] for v in utilstats.values()]
-            g1 = StepGraph(utilization, "Time (s)", "Utilization")
+            g1 = PointGraph(utilization, "Time (s)", "Utilization")
             g1.plot()
+            pylab.ylim(0, 1.05)
             pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             pylab.legend(utilstats.keys(), loc='lower center')
-            g1.show()
+            self.showGraph(g1, "graph-utilization")
 
         if utilavgcombined:
             average = [[(w[0],w[2]) for w in v] for v in utilstats.values()]
             g1 = PointGraph(average, "Time (s)", "Utilization (Avg)")
             g1.plot()
+            pylab.ylim(0, 1.05)
             pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
-            pylab.legend(utilstats.keys(), loc='upper left')
-            g1.show()
+            pylab.legend(utilstats.keys(), loc='lower right')
+            self.showGraph(g1, "graph-utilizationavg")
                 
         if admittedcombined:
             g1 = StepGraph(acceptedstats.values() + rejectedstats.values(), "Time (s)", "Requests")
@@ -114,7 +176,7 @@ class EARS(object):
             legends  = ["Accepted " + v for v in acceptedstats.keys()]
             legends += ["Rejected " + v for v in rejectedstats.keys()]
             pylab.legend(legends)
-            g1.show()
+            self.showGraph(g1, "graph-admitted")
             
         if batchcombined:
             g1 = PointGraph(batchstats.values(), "Time (s)", "Batch VWs completed")
@@ -122,12 +184,12 @@ class EARS(object):
             pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             lengths = [len(l) for l in batchstats.values()]
             pylab.ylim(0, max(lengths)+1)
-            pylab.legend(batchstats.keys(), loc='upper left')
-            g1.show()
+            pylab.legend(batchstats.keys(), loc='lower right')
+            self.showGraph(g1, "graph-batchcompleted")
     
 if __name__ == "__main__":
-    configfile="ears-multirun.conf"
-    tracefile="../ears/test_sdsc_pareto.trace"
+    configfile="ears-multirun-utilization.conf"
+    tracefile="../ears/test_mixed.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)        
