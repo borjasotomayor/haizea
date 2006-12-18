@@ -182,7 +182,35 @@ class ReservationDB(object):
         cur = self.getConn().cursor()
         cur.execute(sql, (time, time, time, time))
         
-        return cur           
+        return cur
+    
+    def isFull(self, time, type=None):
+        # Select slots which are partially occupied at that time
+        sql = """select nod_id, sl_id, sl_capacity - sum(all_amount) as available  
+        from v_allocslot where ? >= ALL_SCHEDSTART AND ? < ALL_SCHEDEND"""
+
+        if type != None:
+            sql += " AND slt_id = %i" % type
+        
+        sql += " group by sl_id having available > 0"
+
+        # And add slots which are completely free
+        sql += " union select nod_id as nod_id, sl_id as sl_id, sl_capacity as available from v_allocslot va"
+        if type != None:
+            sql += " where slt_id = %i and " % type
+        else:
+            sql += " where"
+        sql += """ not exists 
+        (select * from tb_alloc a 
+         where a.sl_id=va.sl_id and  
+         ? >= ALL_SCHEDSTART AND ? < ALL_SCHEDEND)"""
+
+        cur = self.getConn().cursor()
+        cur.execute(sql, (time, time, time, time))
+        
+        rows = cur.fetchall()
+        
+        return len(rows)==0
         
     def getReservationsWithStartingAllocationsInInterval(self, time, td, **kwargs):
         distinctfields=("RES_ID","RES_NAME","RES_STATUS")
