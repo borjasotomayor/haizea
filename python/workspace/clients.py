@@ -1,8 +1,9 @@
-import sys
+import ConfigParser, sys
 from workspace.traces import files, cooker
 from workspace.graphing import graph
-from workspace.util import stats
+from workspace.util import stats, multirun
 from workspace.util.miscutil import *
+
 
 class TraceGraph(object):
     def __init__(self):
@@ -81,6 +82,37 @@ class Cooker(object):
                     rejected.toFile(file)                    
         else:
 	    trace.toFile(sys.stdout)
+        
+class EARSMultiRun(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        p.add_option(Option("-t", "--tracefile", action="store", type="string", dest="tracefile", required=True))
+
+        opt, args = p.parse_args(argv)
+        configfile=opt.conf
+        tracefile=opt.tracefile
+        
+        file = open (configfile, "r")
+        config = ConfigParser.ConfigParser()
+        config.readfp(file)        
+        
+        e = multirun.EARS(config, tracefile)
+        e.multirun()        
+
+#        if opt.admission:
+#            bandwidth = c.conf.bandwidth
+#            ac = cooker.OfflineAdmissionControl(trace, bandwidth, c.conf.admissioncontrol, c.conf.numNodesDist, c.conf.numc, c.conf.winsize)
+#            (accepted, rejected) = ac.filterInfeasible()
+#            accepted.toFile(sys.stdout)
+#            if opt.rejectedFile != "" and len(rejected.entries) > 0:
+#                    file = open(opt.rejectedFile,"w")
+#                    rejected.toFile(file)                    
+#        else:
+#            trace.toFile(sys.stdout)
             
 class Thermometer(object):
     def __init__(self):
@@ -92,7 +124,7 @@ class Thermometer(object):
         
         opt, args = p.parse_args(argv)
         
-        trace = files.TraceFile.fromFile(opt.trace)
+        trace = files.TraceFile.fromFile(opt.trace, entryType=files.TraceEntryV2)
         c = cooker.Thermometer(trace)
         c.printStats()
         
