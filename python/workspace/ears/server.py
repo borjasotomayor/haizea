@@ -35,6 +35,7 @@ REDUNDANT_OPT="avoidredundanttransfers"
 CACHE_OPT="cache"
 MAXCACHESIZE_OPT="maxcache"
 IMAGETRANSFERS_OPT="imagetransfers"
+DISABLEAR_OPT="disableAR"
 
 TRANSFER_REQUIRED=0
 TRANSFER_REUSE=1
@@ -186,9 +187,14 @@ class BaseServer(object):
         for r in reqToProcess:
             if r.fields["deadline"] == "NULL":
                 self.processBatchRequest(r)
+                self.reqnum+=1
             else:
-                self.processARRequest(r)
-            self.reqnum+=1
+                AR = True
+                if self.config.has_option(GENERAL_SEC, DISABLEAR_OPT) and self.config.getboolean(GENERAL_SEC, DISABLEAR_OPT):
+                    AR = False
+                if AR: 
+                    self.processARRequest(r)
+                    self.reqnum+=1
                 
         self.trace.entries = newtrace
 
@@ -217,7 +223,7 @@ class BaseServer(object):
             (mustpreempt, transfers) = self.scheduleMultipleVMs(res_id, startTime, endTime, imgURI, numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
             if len(mustpreempt) > 0:
                 srvlog.info("Must preempt the following: %s", mustpreempt)
-                self.preemptResources(mustpreempt, startTime)
+                self.preemptResources(mustpreempt, startTime, endTime)
             if dotransfer:
                 transfer_rsp_ids = {}
                 for transfer in transfers:
@@ -286,6 +292,8 @@ class BaseServer(object):
         mustremove = []
         dotransfer = self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT)
         srvlog.info("PROCESSING QUEUE")
+        isFull = {}
+        infeasibleRes = []
         for i,vm in enumerate(self.batchqueue):
             res_id = vm["res_id"]
             duration = vm["duration"]
@@ -293,10 +301,25 @@ class BaseServer(object):
             nodename = "VM " + vm["node"]
             imgURI = vm["imgURI"]
             imgSize = vm["imgSize"]
+            
+            if res_id in infeasibleRes:
+                srvlog.info("VMs for reservation %i are already known to be infeasible at this time. Skipping." % res_id)
+                continue
 
             if dotransfer:
                 startTimes = self.findEarliestStartingTimes(imgURI, imgSize, self.getTime())
+                someAvailable = False
+                for time in startTimes.values():
+                    if not isFull.has_key(time[0]):
+                        isFull[time[0]] = self.resDB.isFull(time[0], SLOTTYPE_CPU)
+                    someAvailable = someAvailable or (not isFull[time[0]])
+                if not someAvailable:
+                    srvlog.info("0% resources available at possible starting times. Skipping this request.")
+                    continue
             else:
+                if self.resDB.isFull(self.getTime(), SLOTTYPE_CPU):
+                    srvlog.info("0% resources available at this time. Skipping rest of queue.")
+                    break  # Ugh!
                 startTimes = dict([(node+1, (self.getTime(),TRANSFER_NO,None)) for node in range(self.getNumNodes()) ])
 
             batchAlgorithm = self.config.get(GENERAL_SEC,BATCHALG_OPT)
@@ -332,6 +355,7 @@ class BaseServer(object):
                 mustremove.append(i)
             except SchedException, msg:
                 srvlog.warning("Can't schedule this batch VM now. Reason: %s" % msg)
+                infeasibleRes.append(res_id)
                 self.resDB.rollback() 
 
 
@@ -696,6 +720,10 @@ class BaseServer(object):
             availpY = candidatenodes[y][SLOTTYPE_CPU][3]
             preemptibleres = availpY - availY
             hasPreemptibleY = preemptibleres > 0
+
+            canfitX = availX / need
+            canfitY = availY / need
+            
             if hasPreemptibleX and not hasPreemptibleY:
                 return WORSE
             elif not hasPreemptibleX and hasPreemptibleY:
@@ -706,8 +734,6 @@ class BaseServer(object):
                 elif not cachedX and cachedY: 
                     return WORSE
                 else:
-                    canfitX = availX / need
-                    canfitY = availY / need
                     if canfitX > canfitY: return BETTER
                     elif canfitX < canfitY: return WORSE
                     else: return EQUAL
@@ -866,7 +892,7 @@ class BaseServer(object):
         return (rsp_id, imgslot, startTime, endTime)
 
 
-    def preemptResources(self, mustpreempt, time):
+    def preemptResources(self, mustpreempt, startTime, endTime):
         # Given multiple choices, we prefer to preempt VWs that have made the least
         # progress (i.e. percentage of work completed: time-starttime / endtime-starttime)
         # TODO: Make this configurable, and offer better algorithms. For example,
@@ -876,11 +902,11 @@ class BaseServer(object):
         def comparepreemptability(x,y):
             startX = ISO.ParseDateTime(x["ALL_SCHEDSTART"])
             endX = ISO.ParseDateTime(x["ALL_SCHEDEND"])
-            completedX = (time - startX).seconds / (endX - startX).seconds
+            completedX = (startTime - startX).seconds / (endX - startX).seconds
 
             startY = ISO.ParseDateTime(y["ALL_SCHEDSTART"])
             endY = ISO.ParseDateTime(y["ALL_SCHEDEND"])
-            completedY = (time - startY).seconds / (endY - startY).seconds
+            completedY = (startTime - startY).seconds / (endY - startY).seconds
             
             if completedX < completedY:
                 return BETTER
@@ -888,61 +914,181 @@ class BaseServer(object):
                 return WORSE
             else:
                 return EQUAL
-        
+
+        def compareMiddlePreemptability(x,y):
+            startX = ISO.ParseDateTime(x["ALL_SCHEDSTART"])
+            startY = ISO.ParseDateTime(y["ALL_SCHEDSTART"])
+            
+            if startX < startY:
+                return WORSE
+            elif startX > startY:
+                return BETTER
+            else:
+                return EQUAL
+            
+        def resubmit (rsp_id, res_id, rsp_status):
+            if rsp_status in (STATUS_PENDING, STATUS_RUNNING):
+                self.cancelReservationPart(rsp_key)
+                duration = self.batchreservations[res_id][0]
+                resources = self.batchreservations[res_id][1]
+                imgURI = self.batchreservations[res_id][2]
+                imgSize = self.batchreservations[res_id][3]
+                self.batchreservations[res_id][4] += 1
+                nodeName = "VM R%i" % self.batchreservations[res_id][4]
+                self.queueBatchRequest(res_id, duration, resources, nodeName, imgURI, imgSize)
+            elif rsp_status == STATUS_DONE:
+                srvlog.error("Preempting a VW that is already done. This should not be happening.")
+
         # Get allocations at the specified time
         for node in mustpreempt.keys():
-            preemptible = {}
-            cur = self.resDB.getCurrentAllocationsInNode(time, node, rsp_preemptible=True)
+            preemptibleAtStart = {}
+            preemptibleAtMiddle = {}
+            cur = self.resDB.getCurrentAllocationsInNode(startTime, node, rsp_preemptible=True)
             cur = cur.fetchall()
             for alloc in cur:
                 restype=alloc["slt_id"]
-                # Make sure this is not a future allocation
+                # Make sure this allocation falls within the preemptible period
                 start = ISO.ParseDateTime(alloc["all_schedstart"])
-                if start <= time:
-                    if not preemptible.has_key(restype):
-                        preemptible[restype] = []
-                    preemptible[restype].append(alloc)
-            
-            # Order preemptible resources
-            for restype in preemptible.keys():
-                preemptible[restype].sort(comparepreemptability)
+                end = ISO.ParseDateTime(alloc["all_schedend"])
+                if start < startTime and end >= startTime:
+                    if not preemptibleAtStart.has_key(restype):
+                        preemptibleAtStart[restype] = []
+                    preemptibleAtStart[restype].append(alloc)
+                elif start < endTime:
+                    if not preemptibleAtMiddle.has_key(restype):
+                        preemptibleAtMiddle[restype] = []
+                    preemptibleAtMiddle[restype].append(alloc)
 
+#            print "Preemptible at start"
+#            for slottype in preemptibleAtStart.values():
+#                for alloc in slottype:
+#                    print alloc
+#
+#            print "Preemptible at the middle"
+#            for slottype in preemptibleAtMiddle.values():
+#                for alloc in slottype:
+#                    print alloc
+
+            # Reservation parts we will be preempting
             resparts = Set()
+            respartsStart = Set()
+            respartsMiddle = Set()
             respartsinfo = {}
-            for restype in mustpreempt[node].keys():
-                amountToPreempt = mustpreempt[node][restype]
-                for alloc in preemptible[restype]:
-                    amount = alloc["all_amount"]
-                    amountToPreempt -= amount
-                    rsp_key = alloc["rsp_id"]
-                    resparts.add(rsp_key)
-                    respartsinfo[rsp_key] = alloc
-                    if amountToPreempt <= 0:
-                        break # Ugh
+
+            # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
+            # These can potentially be already running, so we want to choose
+            # the ones which will be least impacted by being preempted
+            
+            if len(preemptibleAtStart) > 0:
+                # Order preemptible resources
+                for restype in preemptibleAtStart.keys():
+                    preemptibleAtStart[restype].sort(comparepreemptability)
+
+                # Start marking resources for preemption, until we've preempted
+                # all the resources we need.
+                for restype in mustpreempt[node].keys():
+                    amountToPreempt = mustpreempt[node][restype]
+                    for alloc in preemptibleAtStart[restype]:
+                        amount = alloc["all_amount"]
+                        amountToPreempt -= amount
+                        rsp_key = alloc["rsp_id"]
+                        resparts.add(rsp_key)
+                        respartsStart.add(rsp_key)
+                        respartsinfo[rsp_key] = alloc
+                        if amountToPreempt <= 0:
+                            break # Ugh
+            
+            # Second step: CHOOSE RESOURCES TO PREEMPT DURING RESERVATION
+            # These cannot be running, so we greedily choose the largest resources
+            # first, to minimize the number of preempted resources. This algorithm
+            # could potentially also take into account the scheduled starting time
+            # of the preempted resource (later is better)
+            
+            if len(preemptibleAtMiddle) > 0:
+                # Find changepoints
+                changepoints = Set()
+                for restype in mustpreempt[node].keys():
+                    for alloc in preemptibleAtMiddle[restype]:
+                        start = ISO.ParseDateTime(alloc["all_schedstart"])
+                        end = ISO.ParseDateTime(alloc["all_schedend"])
+                        if start < endTime:
+                            changepoints.add(start)
+                        if end < endTime:
+                            changepoints.add(end)
+                        
+                changepoints = list(changepoints)
+                changepoints.sort()
+                
+                #print resparts
+                
+                # Go through changepoints and, at each point, make sure we have enough
+                # resources
+                for changepoint in changepoints:
+                    #print changepoint
+                    for restype in mustpreempt[node].keys():
+                        # Find allocations in that changepoint
+                        allocs = []
+                        amountToPreempt = mustpreempt[node][restype]
+                        preemptallocs = preemptibleAtMiddle[restype]
+                        if len(preemptibleAtStart) > 0:
+                            preemptallocs += preemptibleAtStart[restype]
+                        for alloc in preemptallocs:
+                            start = ISO.ParseDateTime(alloc["all_schedstart"])
+                            end = ISO.ParseDateTime(alloc["all_schedend"])
+                            rsp_id = alloc["rsp_id"]
+                            # Only choose it if we have not already decided to preempt it
+                            if start <= changepoint and changepoint < end:
+                                #print rsp_id
+                                if not rsp_id in resparts:
+                                    allocs.append(alloc)
+                                else:
+                                    amountToPreempt -= alloc["all_amount"]
+                        allocs.sort(compareMiddlePreemptability)
+                        #print [v["rsp_id"] for v in allocs]
+                        for alloc in allocs:
+                            if amountToPreempt <= 0:
+                                break # Ugh
+                            amount = alloc["all_amount"]
+                            amountToPreempt -= amount
+                            rsp_key = alloc["rsp_id"]
+                            #print rsp_key, amountToPreempt
+                            resparts.add(rsp_key)
+                            respartsMiddle.add(rsp_key)
+                            respartsinfo[rsp_key] = alloc
+
+            srvlog.info("Preempting reservation parts (at start of reservation): %s" % respartsStart)
+            srvlog.info("Preempting reservation parts (in middle of reservation): %s" % respartsMiddle)
             
             batchAlgorithm = self.config.get(GENERAL_SEC,BATCHALG_OPT)
-            for rsp_key in resparts:
+            
+            # Start by preempting the middle rsp's. This will make room for
+            # resuming the suspended rsp at the start of the reservation
+            # (if this is supported)
+            for rsp_key in respartsMiddle:
+                # Right now, we just resubmit those VWs. A fair scheduler
+                # would push all (scheduled) future batch VWs to make
+                # room for the preempted VWs. However, we do not concern
+                # ourselves with fairness at this point.
                 respart = respartsinfo[rsp_key]
                 rsp_name = respart["RSP_NAME"]
                 rsp_status = respart["RSP_STATUS"]
+                res_id = respart["RES_ID"]
                 srvlog.info("Preempting resource part %s (%s) with status %i" % (rsp_key, rsp_name, rsp_status))
+                resubmit(rsp_id, res_id, rsp_status)
                 
+            # And now, we deal with the resources that intersect with the
+            # starting time of the reservation.
+            for rsp_key in respartsStart:
+                respart = respartsinfo[rsp_key]
+                rsp_name = respart["RSP_NAME"]
+                rsp_status = respart["RSP_STATUS"]
+                res_id = respart["RES_ID"]
+                srvlog.info("Preempting resource part %s (%s) with status %i" % (rsp_key, rsp_name, rsp_status))
                 if batchAlgorithm == "onAR_resubmit":
-                    if rsp_status in (STATUS_PENDING, STATUS_RUNNING):
-                        self.cancelReservationPart(rsp_key)
-                        res_id = respart["RES_ID"]
-                        duration = self.batchreservations[res_id][0]
-                        resources = self.batchreservations[res_id][1]
-                        imgURI = self.batchreservations[res_id][2]
-                        imgSize = self.batchreservations[res_id][3]
-                        self.batchreservations[res_id][4] += 1
-                        nodeName = "VM R%i" % self.batchreservations[res_id][4]
-                        self.queueBatchRequest(res_id, duration, resources, nodeName, imgURI, imgSize)
-                    elif rsp_status == STATUS_DONE:
-                        srvlog.error("Preempting a VW that is already done. This should not be happening.")
+                    resubmit(rsp_id, res_id, rsp_status)
                 elif batchAlgorithm == "onAR_suspend":
                     if rsp_status in (STATUS_PENDING, STATUS_RUNNING, STATUS_SUSPENDED):
-                        self.rescheduleReservationPartForSuspension(rsp_key, time)
+                        self.rescheduleReservationPartForSuspension(rsp_key, startTime)
                     elif rsp_status == STATUS_DONE:
                         srvlog.error("Preempting a VW that is already done. This should not be happening.")
 
@@ -1055,7 +1201,7 @@ class BaseServer(object):
 
             
     def estimateTransferTime(self, imgsize):
-        return TimeDelta(seconds=900) # We assume 15 minutes for tests
+        return TimeDelta(seconds=60) # We assume 15 minutes for tests
 
     def startReservation(self, res_id, row=None):
         if row != None:
@@ -1189,9 +1335,14 @@ class SimulatingServer(BaseServer):
         self.batchcompleted.append((self.startTime, self.batchcompletednum))
         
         while self.resDB.existsRemainingReservations(self.time) or len(self.trace.entries) > 0 or len(self.batchqueue) > 0:
+            if self.time.minute % 15 == 0:
+                print "Simulation time: %s" % self.time 
+                print "\tBatch VWs completed: %i" % self.batchcompletednum
             if len(self.trace.entries) > 0:
                 delta = self.time - self.startTime
                 self.processTraceRequests(delta)
+            if self.time.minute % 15 == 0:
+                print "\tNumber of VMs in queue: %i" % len(self.batchqueue)
             if len(self.batchqueue) > 0 and self.time.second == 0:
                 self.processQueue()
             # Temporary fix for incorrect processing of reservations when
@@ -1258,7 +1409,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="ears.conf"
-    tracefile="test_cache5.trace"
+    tracefile="test_preemption8.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
