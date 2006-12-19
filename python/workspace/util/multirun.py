@@ -110,7 +110,7 @@ class EARS(object):
                 stats = s.generateUtilizationStats(s.startTime,s.time)
                 accepted = [((v[0] - s.startTime).seconds,v[1]) for v in s.accepted]
                 rejected = [((v[0] - s.startTime).seconds,v[1]) for v in s.rejected]
-                batchcompleted = [((v[0] - s.startTime).seconds,v[1]) for v in s.batchcompleted]
+                batchcompleted = [((v[0] - s.startTime).seconds,v[1]) for v in s.batchvmcompleted]
                 file = open (utilstatsfilename, "w")
                 p = Pickler(file)
                 p.dump(stats)
