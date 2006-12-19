@@ -91,9 +91,12 @@ class BaseServer(object):
         self.acceptednum=0
         self.rejectednum=0
         self.batchcompletednum=0
+        self.batchvmcompletednum=0
         self.accepted=[]
         self.rejected=[]
         self.batchcompleted=[]
+        self.batchvmcompleted=[]
+        self.suspended=[]
         
         self.batchqueue=[]
         self.batchreservations={}
@@ -950,7 +953,7 @@ class BaseServer(object):
                 # Make sure this allocation falls within the preemptible period
                 start = ISO.ParseDateTime(alloc["all_schedstart"])
                 end = ISO.ParseDateTime(alloc["all_schedend"])
-                if start < startTime and end >= startTime:
+                if start < startTime and end > startTime:
                     if not preemptibleAtStart.has_key(restype):
                         preemptibleAtStart[restype] = []
                     preemptibleAtStart[restype].append(alloc)
@@ -1163,7 +1166,7 @@ class BaseServer(object):
             laststart = suspendpoints[-1][0]
             end = laststart + time_needed
             suspendpoints[-1][1]=end
-        
+        srvlog.info("Suspend points: %s" % suspendpoints)
         return suspendpoints
 
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
@@ -1211,6 +1214,7 @@ class BaseServer(object):
     def stopReservation(self, res_id, row=None):
         if row != None:
             srvlog.info( "%s: Stopping reservation '%s'" % (self.getTime(), row["RES_NAME"]))
+            #print( "%s: Stopping reservation '%s'" % (self.getTime(), row["RES_NAME"]))
         self.resDB.updateReservationStatus(res_id, STATUS_DONE)
         if self.batchreservations.has_key(res_id):
             self.batchcompletednum += 1
@@ -1220,6 +1224,7 @@ class BaseServer(object):
     def startReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
             srvlog.info( "%s: Starting reservation part %i '%s' of reservation %s" % (self.getTime(), respart_id, row["RSP_NAME"], resname))
+            #print( "%s: Starting reservation part %i '%s' of reservation %s" % (self.getTime(), respart_id, row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_RUNNING)
 
     def startAllocations(self, respart_id, time, td):
@@ -1231,6 +1236,7 @@ class BaseServer(object):
     def stopReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
             srvlog.info( "%s: Stopping reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
+            #print( "%s: Stopping reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_DONE)
         if self.imagetransfers.has_key(respart_id):
             # This is an image transfer. Notify the backend that it is done.
@@ -1240,16 +1246,24 @@ class BaseServer(object):
             VMrsp_ids = self.imagetransfers[respart_id][3]
             for VMrsp_id in VMrsp_ids:
                 self.backend.completedImgTransferToNode(nod_id, imgURI, imgSize, VMrsp_id)
+        elif self.batchreservations.has_key(row["RES_ID"]):
+            #print row["RSP_NAME"]
+            self.batchvmcompletednum += 1
+            self.batchvmcompleted.append((self.getTime(), self.batchvmcompletednum))
 
     def suspendReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
             srvlog.info( "%s: Suspending reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
+            #print( "%s: Suspending reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_SUSPENDED)
+        self.suspended.append((row["RES_ID"], respart_id))
 
     def resumeReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
             srvlog.info( "%s: Resuming reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
+            #print( "%s: Resuming reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_RUNNING)
+        self.suspended.remove((row["RES_ID"], respart_id))
 
     def cancelReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
@@ -1259,7 +1273,10 @@ class BaseServer(object):
         self.resDB.removeReservationPart(respart_id)
 
     def isReservationDone(self, res_id):
-        return self.resDB.isReservationDone(res_id)
+        pendingAllocations = not self.resDB.isReservationDone(res_id)
+        pendingInQueue = res_id in [vm["res_id"] for vm in self.batchqueue]
+        pendingInSuspend = res_id in [vm[0] for vm in self.suspended]
+        return not (pendingAllocations or pendingInQueue or pendingInSuspend)
 
     def isReservationPartEnd(self, respart_id, time, td):
         # We don't support changing allocation sizes yet
@@ -1337,7 +1354,10 @@ class SimulatingServer(BaseServer):
         while self.resDB.existsRemainingReservations(self.time) or len(self.trace.entries) > 0 or len(self.batchqueue) > 0:
             if self.time.minute % 15 == 0:
                 print "Simulation time: %s" % self.time 
+                print "\tBatch VMs completed: %i" % self.batchvmcompletednum
                 print "\tBatch VWs completed: %i" % self.batchcompletednum
+                print "\tAccepted ARs: %i" % self.acceptednum
+                print "\tRejected ARs: %i" % self.rejectednum
             if len(self.trace.entries) > 0:
                 delta = self.time - self.startTime
                 self.processTraceRequests(delta)
@@ -1353,9 +1373,6 @@ class SimulatingServer(BaseServer):
             
         self.accepted.append((self.time, self.acceptednum))
         self.rejected.append((self.time, self.rejectednum))
-        
-        print "Number of accepted requests: %i" % self.acceptednum
-        print "Number of rejected requests: %i" % self.rejectednum
         if self.config.getboolean(GENERAL_SEC, CACHE_OPT):
             self.backend.printNodes()
 
