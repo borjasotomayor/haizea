@@ -146,7 +146,7 @@ class ReservationDB(object):
         if end != None:
             sql+=" and all_schedstart %s '%s'" % (lt,end)
         sql += filter
-        sql += """union select distinct all_schedend as time from tb_alloc where
+        sql += """ union select distinct all_schedend as time from tb_alloc where
         all_schedend %s '%s'""" % (gt,start)
         if end != None:
             sql +=" and all_schedend %s '%s'" % (lt,end) 
@@ -217,7 +217,7 @@ class ReservationDB(object):
         return self.getAllocationsInInterval(time,td=td,eventfield="all_schedstart", distinct=distinctfields, **kwargs)
 
     def getResPartsWithStartingAllocationsInInterval(self, time, td, **kwargs):
-        distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS")
+        distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS","RES_ID")
         return self.getAllocationsInInterval(time,td=td,eventfield="all_schedstart", distinct=distinctfields, **kwargs)
 
     def getReservationsWithEndingAllocationsInInterval(self, time, td, **kwargs):
@@ -225,7 +225,7 @@ class ReservationDB(object):
         return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", distinct=distinctfields, **kwargs)
 
     def getResPartsWithEndingAllocationsInInterval(self, time, td, **kwargs):
-        distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS")
+        distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS", "RES_ID")
         return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", distinct=distinctfields, **kwargs)
 
     def getEndingAllocationsInInterval(self, time, td, rsp_id, **kwargs):
