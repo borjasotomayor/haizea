@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+from workspace import clients
+import sys
+
+c = clients.AdvanceAR()
+c.run(sys.argv)
