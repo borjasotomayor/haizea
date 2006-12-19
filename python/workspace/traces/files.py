@@ -70,6 +70,21 @@ class TraceFile(object):
             entry = entryType.fromLine(line.strip())
             entries.append(entry)
         return cls(entries)
+
+    @classmethod
+    def advanceAR(cls, trace):
+        newentries = []
+        for entry in trace.entries:
+            if entry.fields["deadline"] != "NULL":
+                time = int(entry.fields["time"])
+                deadline = int(entry.fields["deadline"])
+                entry.fields["time"] = "0"
+                entry.fields["deadline"] = str(time + deadline)
+                newentries.append(entry)
+        for entry in trace.entries:
+            if entry.fields["deadline"]== "NULL":
+                newentries.append(entry)
+        return cls(newentries)
         
     def toFile(self,file):
         for entry in self.entries:

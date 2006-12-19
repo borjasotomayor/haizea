@@ -128,6 +128,19 @@ class Thermometer(object):
         c = cooker.Thermometer(trace)
         c.printStats()
         
+class AdvanceAR(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-t", "--trace", action="store", type="string", dest="trace", required=True))
+        
+        opt, args = p.parse_args(argv)
+        
+        trace = files.TraceFile.fromFile(opt.trace, entryType=files.TraceEntryV2)
+        trace = files.TraceFile.advanceAR(trace)
+        trace.toFile(sys.stdout)
 
 if __name__ == "__main__":
     #tg = TraceGraph()
