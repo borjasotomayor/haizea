@@ -1,13 +1,16 @@
 import ConfigParser, os
 from workspace.util import stats
 from workspace.traces.files import TraceFile, TraceEntry, TraceEntryV2
+from mx.DateTime import *
 import random
 import sys
 
 GENERAL_SEC = "general"
 INTERVAL_SEC = "interval"
 NUMNODES_SEC = "numnodes"
+NUMNODESAR_SEC = "numnodesAR"
 DURATION_SEC = "duration"
+DURATIONAR_SEC = "durationAR"
 DEADLINE_SEC = "deadline"
 IMAGES_SEC = "images"
 SIMULTANEOUS_SEC = "simultaneousrequests"
@@ -64,28 +67,35 @@ class Cooker(object):
                 fields["uri"] = img
                 imgsize = self.conf.imageSizes[img]
                 fields["size"] = str(imgsize)
-                numNodes = self.conf.numNodesDist.get()
-                fields["numNodes"] = str(numNodes)
                 # TODO: Make memory and CPU configurable
                 fields["memory"] = str(512)
                 fields["cpu"] = str(50)
                 fields["mode"] = "RW"
                 type = self.conf.arbatchDist.get()
+                duration=None
                 if type == "AR":
+                    numNodes = self.conf.numNodesARDist.get()
+                    fields["numNodes"] = str(numNodes)
                     tightness = self.conf.deadlineDist.get() / 100
                     imgsizeKB = imgsize * 1024 * numNodes
                     transferTime = imgsizeKB / self.conf.bandwidth
                     deadline = int(transferTime * (1 + tightness))
                     if self.conf.round != None:
                         deadline = ((deadline / self.conf.round) + 1) * self.conf.round 
+                    if time + deadline > int(maxtime):
+                        continue # We don't want AR's beyond the maximum trace duration
                     fields["deadline"] = str(deadline)
                     fields["tag"] = "AR"
+                    duration = int(self.conf.durationARDist.get())
                 elif type == "BATCH":
                     fields["deadline"] = "NULL"
                     fields["tag"] = "BATCH"
+                    numNodes = self.conf.numNodesDist.get()
+                    fields["numNodes"] = str(numNodes)
+                    duration = int(self.conf.durationDist.get())
                 
-                duration = int(self.conf.durationDist.get())
-                if self.conf.round != None:
+                
+                if self.conf.round != None and duration % self.conf.round != 0:
                     duration = ((duration / self.conf.round) + 1) * self.conf.round
                 fields["duration"] = str(duration)
                 entries.append(TraceEntryV2(fields))
@@ -228,12 +238,14 @@ class TraceConf(ConfFile):
     def __init__(self, _imageDist, _numNodesDist, _deadlineDist,
                    _durationDist, _imageSizes, _bandwidth, _intervalDist, _simulDist,
                    _duration, _arbatchDist, _type, _admissioncontrol, _numc, _winsize,
-                   _round):
+                   _round, _durationARDist, _numNodesARDist):
         self.imageDist = _imageDist
         self.imageSizes = _imageSizes
         self.numNodesDist = _numNodesDist
+        self.numNodesARDist = _numNodesARDist
         self.deadlineDist = _deadlineDist
         self.durationDist = _durationDist
+        self.durationARDist = _durationARDist
         self.intervalDist = _intervalDist
         self.traceDuration = _duration
         self.bandwidth = _bandwidth
@@ -285,9 +297,18 @@ class TraceConf(ConfFile):
 
 
         numNodesDist = cls.createDiscreteDistributionFromSection(config, NUMNODES_SEC)
+        if config.has_section(NUMNODESAR_SEC):
+            numNodesARDist = cls.createDiscreteDistributionFromSection(config, NUMNODESAR_SEC)
+        else:
+            numNodesARDist = numNodesDist
         imagesDist = cls.createDiscreteDistributionFromSection(config, IMAGES_SEC)
         intervalDist = cls.createDiscreteDistributionFromSection(config, INTERVAL_SEC)
         durationDist = cls.createContinuousDistributionFromSection(config, DURATION_SEC)
+        if config.has_section(DURATIONAR_SEC):
+            durationARDist = cls.createDiscreteDistributionFromSection(config, DURATIONAR_SEC)
+        else:
+            durationARDist = durationDist
+
         if config.has_section(DEADLINE_SEC):
             deadlineDist = cls.createContinuousDistributionFromSection(config, DEADLINE_SEC)
         else:
@@ -312,7 +333,8 @@ class TraceConf(ConfFile):
         return cls(_imageDist=imagesDist, _numNodesDist=numNodesDist, _deadlineDist=deadlineDist, 
                    _durationDist = durationDist, _imageSizes = imageSizes, _bandwidth = bandwidth, _intervalDist= intervalDist,
                    _duration = duration, _arbatchDist = arbatchDist, _type = type, _simulDist = simulDist,
-                   _admissioncontrol = admissioncontrol, _numc = numc, _winsize = winsize, _round = round)        
+                   _admissioncontrol = admissioncontrol, _numc = numc, _winsize = winsize, _round = round,
+                   _numNodesARDist=numNodesARDist, _durationARDist=durationARDist)        
 
 
 class InjectorConf(ConfFile):
@@ -456,8 +478,9 @@ class ARInjector(object):
      
 # Merge into TraceFile     
 class Thermometer(object):
-    def __init__(self, trace):
+    def __init__(self, trace, nodes = None):
         self.trace = trace
+        self.nodes = nodes
 
     def ratio(self, a, b):
         if b == 0:
@@ -473,14 +496,17 @@ class Thermometer(object):
         totalSubmit = len(self.trace.entries)
         totalNodes = 0
         totalMB = 0
-        totalDuration = 0
-        duration = int(self.trace.entries[-1].fields["time"])
+        totalDurationBatch = 0
+        totalDurationAR = 0
+        totalDurationARSerial = 0
+        traceDuration = int(self.trace.entries[-1].fields["time"])
         images = {}        
         imagesNodes = {}
  
         for entry in self.trace.entries:
             numNodes = int(entry.fields["numNodes"])
-            duration = int(entry.fields["duration"]) * numNodes
+            duration = int(entry.fields["duration"])
+            serialDuration= duration * numNodes
             img = entry.fields["uri"]
             if images.has_key(img):
                 images[img] += 1
@@ -492,11 +518,13 @@ class Thermometer(object):
             if entry.fields["tag"] == "AR":
                 numAR += 1
                 numARNodes += numNodes
+                totalDurationAR += duration
+                totalDurationARSerial += serialDuration
             elif entry.fields["tag"] == "BATCH":
                 numBatch += 1
                 numBatchNodes += numNodes
+                totalDurationBatch += serialDuration
             totalNodes += numNodes
-            totalDuration += duration
             totalMB += int(entry.fields["size"]) * numNodes 
 
         submissionRatioA2B = self.ratio(numAR, numBatch)
@@ -509,9 +537,12 @@ class Thermometer(object):
         batchNodePercent = float(numBatchNodes) / totalNodes
         ARNodePercent = float(numARNodes) / totalNodes
         
+        avgBatchDuration = float(totalDurationBatch) / numBatchNodes
+        avgARDuration = float(totalDurationAR) / numAR
+        avgARNodeSize = float(numARNodes) / numAR
         
-        print "SUBMISSIONS"
-        print "-----------"
+        print "# of Batch and AR (measured in SUBMISSIONS)"
+        print "-------------------------------------------"
         print "  Batch =",numBatch
         print "     AR =", numAR
         print "% Batch =",batchPercent
@@ -519,10 +550,8 @@ class Thermometer(object):
         print "Ratio (AR-to-Batch) =", submissionRatioA2B
         print "Ratio (Batch-to-AR) =", submissionRatioB2A
         print ""
-        print "Total duration: %i" % totalDuration
-        print ""
-        print "NODES"
-        print "-----"
+        print "# of Batch and AR (measured in VIRTUAL NODES)"
+        print "---------------------------------------------"
         print "Batch =",numBatchNodes
         print "   AR =", numARNodes
         print "Ratio (AR-to-Batch) =", nodesRatioA2B 
@@ -530,11 +559,31 @@ class Thermometer(object):
         print "% Batch =",batchNodePercent
         print "   % AR =", ARNodePercent
         print ""
+        print "# of Batch and AR (measured in DURATION)"
+        print "----------------------------------------"
+        print "Batch =", totalDurationBatch
+        print "   AR =", totalDurationARSerial
+        print "% Batch =", float(totalDurationBatch) / (totalDurationBatch+totalDurationARSerial)
+        print "   % AR =", float(totalDurationARSerial) / (totalDurationBatch+totalDurationARSerial)
+        print ""
+        print "AR"
+        print "--"
+        print "Average # of virtual nodes in an AR request: %.2f" % avgARNodeSize
+        print ""
+        print "DURATION STATS"
+        print "--------------"
+        print "Average duration of a batch request: %.2f" % avgBatchDuration
+        print "Average duration of an AR request: %.2f" % avgARDuration
+        print "Sum of duration of batch requests (1): %s" % TimeDelta(seconds=totalDurationBatch)
+        if self.nodes != None:
+            print "Time to process (1) assuming %i virtual nodes: %s" % (self.nodes, TimeDelta(seconds=totalDurationBatch) / self.nodes)
+        print "Approximate total duration required by ARs: %s" % TimeDelta(seconds=numAR*avgARDuration)
         print ""
         print "IMAGES"
         print "------"
         print "Total MB =",totalMB
-        bandwidth = float(totalMB)/duration
+
+        bandwidth = float(totalMB)/traceDuration
         print "Bandwidth = %.2f (MB/s)" % bandwidth        
         sortedkeys = images.keys()
         sortedkeys.sort()
