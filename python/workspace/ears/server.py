@@ -92,8 +92,10 @@ class BaseServer(object):
         self.rejectednum=0
         self.batchcompletednum=0
         self.batchvmcompletednum=0
+        self.queuesizenum=0
         self.accepted=[]
         self.rejected=[]
+        self.queuesize=[]
         self.batchcompleted=[]
         self.batchvmcompleted=[]
         self.suspended=[]
@@ -290,6 +292,8 @@ class BaseServer(object):
         vw["imgURI"] = imgURI
         vw["imgSize"] = imgSize
         self.batchqueue.append(vw)
+        self.queuesizenum += 1
+        self.queuesize.append((self.getTime(), self.queuesizenum))
 
     def processQueue(self):
         mustremove = []
@@ -355,6 +359,8 @@ class BaseServer(object):
                 elif transfertype == TRANSFER_NO:
                     srvlog.info("Assuming no image has to be transfered")
                 if self.commit: self.resDB.commit()
+                self.queuesizenum -= 1
+                self.queuesize.append((self.getTime(), self.queuesizenum))
                 mustremove.append(i)
             except SchedException, msg:
                 srvlog.warning("Can't schedule this batch VM now. Reason: %s" % msg)
@@ -1077,7 +1083,7 @@ class BaseServer(object):
                 rsp_status = respart["RSP_STATUS"]
                 res_id = respart["RES_ID"]
                 srvlog.info("Preempting resource part %s (%s) with status %i" % (rsp_key, rsp_name, rsp_status))
-                resubmit(rsp_id, res_id, rsp_status)
+                resubmit(rsp_key, res_id, rsp_status)
                 
             # And now, we deal with the resources that intersect with the
             # starting time of the reservation.
@@ -1088,7 +1094,7 @@ class BaseServer(object):
                 res_id = respart["RES_ID"]
                 srvlog.info("Preempting resource part %s (%s) with status %i" % (rsp_key, rsp_name, rsp_status))
                 if batchAlgorithm == "onAR_resubmit":
-                    resubmit(rsp_id, res_id, rsp_status)
+                    resubmit(rsp_key, res_id, rsp_status)
                 elif batchAlgorithm == "onAR_suspend":
                     if rsp_status in (STATUS_PENDING, STATUS_RUNNING, STATUS_SUSPENDED):
                         self.rescheduleReservationPartForSuspension(rsp_key, startTime)
@@ -1350,6 +1356,7 @@ class SimulatingServer(BaseServer):
         self.accepted.append((self.startTime, self.acceptednum))
         self.rejected.append((self.startTime, self.rejectednum))
         self.batchcompleted.append((self.startTime, self.batchcompletednum))
+        self.queuesize.append((self.startTime, self.queuesizenum))
         
         while self.resDB.existsRemainingReservations(self.time) or len(self.trace.entries) > 0 or len(self.batchqueue) > 0:
             if self.time.minute % 15 == 0:
