@@ -78,6 +78,7 @@ class EARS(object):
             acceptedfilename = profilename + "-accepted.dat"
             rejectedfilename = profilename + "-rejected.dat"
             batchcompletedfilename = profilename + "-batchcompleted.dat"
+            queuesizefilename = profilename + "-queuesize.dat"
             print "Running profile '%s'" % profilename
             
             forceRun = False
@@ -86,6 +87,7 @@ class EARS(object):
             accepted = None
             rejected = None
             batchcompleted = None
+            queuesize = None
             if not forceRun:
                 # Check if the data already exists. If so, we don't need to rerun
                 if os.path.exists(utilstatsfilename):
@@ -101,6 +103,9 @@ class EARS(object):
                     file = open (batchcompletedfilename, "r")
                     u = Unpickler(file)
                     batchcompleted = u.load()
+                    file = open (queuesizefilename, "r")
+                    u = Unpickler(file)
+                    queuesize = u.load()
                     mustRun = False
                     print "No need to run (data already saved from previous run)"
             if mustRun:
@@ -111,6 +116,7 @@ class EARS(object):
                 accepted = [((v[0] - s.startTime).seconds,v[1]) for v in s.accepted]
                 rejected = [((v[0] - s.startTime).seconds,v[1]) for v in s.rejected]
                 batchcompleted = [((v[0] - s.startTime).seconds,v[1]) for v in s.batchvmcompleted]
+                queuesize = [((v[0] - s.startTime).seconds,v[1]) for v in s.queuesize]
                 file = open (utilstatsfilename, "w")
                 p = Pickler(file)
                 p.dump(stats)
@@ -123,6 +129,9 @@ class EARS(object):
                 file = open (batchcompletedfilename, "w")
                 p = Pickler(file)
                 p.dump(batchcompleted)
+                file = open (queuesizefilename, "w")
+                p = Pickler(file)
+                p.dump(queuesize)
 
             if needutilstats:
                 if utilcombined or utilavgcombined:
@@ -148,6 +157,36 @@ class EARS(object):
                     g1.show()
             if needbatchstats:
                 batchstats[profilename] = batchcompleted
+                
+        runtime = {}
+        utilization = {}
+        
+        for profile in self.profiles.items():        
+            profilename = profile[0]
+            utilization[profilename] = utilstats[profilename][-1][2]
+            runtime[profilename] = batchstats[profilename][-1][0]
+
+        profilenames = self.profiles.keys()
+        profilenames.sort()
+        csv = csvheader = ""
+        print "UTILIZATION"
+        print "-----------"
+        for profilename in profilenames:
+            print "%s: %.2f" % (profilename, utilization[profilename])
+            csv += "%f," % utilization[profilename]
+            csvheader+="%s," % profilename
+            
+        print ""
+        print "EXECUTION TIME"
+        print "--------------"
+        for profilename in profilenames:
+            print "%s: %.2f" % (profilename, runtime[profilename])
+            csv += ",%f" % runtime[profilename]
+            csvheader+=",%s" % profilename
+            
+        print "CSVHEADER:%s" % csvheader
+        print "CSV:%s" % csv
+        print ""
                 
         if utilcombined:
             utilization = [[(w[0],w[1]) for w in v] for v in utilstats.values()]
@@ -186,6 +225,7 @@ class EARS(object):
             pylab.ylim(0, max(lengths)+1)
             pylab.legend(batchstats.keys(), loc='lower right')
             self.showGraph(g1, "graph-batchcompleted")
+
     
 if __name__ == "__main__":
     configfile="ears-multirun-utilization.conf"
