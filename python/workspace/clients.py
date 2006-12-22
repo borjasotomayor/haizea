@@ -102,18 +102,7 @@ class EARSMultiRun(object):
         
         e = multirun.EARS(config, tracefile)
         e.multirun()        
-
-#        if opt.admission:
-#            bandwidth = c.conf.bandwidth
-#            ac = cooker.OfflineAdmissionControl(trace, bandwidth, c.conf.admissioncontrol, c.conf.numNodesDist, c.conf.numc, c.conf.winsize)
-#            (accepted, rejected) = ac.filterInfeasible()
-#            accepted.toFile(sys.stdout)
-#            if opt.rejectedFile != "" and len(rejected.entries) > 0:
-#                    file = open(opt.rejectedFile,"w")
-#                    rejected.toFile(file)                    
-#        else:
-#            trace.toFile(sys.stdout)
-            
+                    
 class Thermometer(object):
     def __init__(self):
         pass
@@ -121,11 +110,12 @@ class Thermometer(object):
     def run(self, argv):
         p = OptionParser()
         p.add_option(Option("-t", "--trace", action="store", type="string", dest="trace", required=True))
-        
+        p.add_option(Option("-n", "--nodes", action="store", type="int", dest="nodes"))
+        p.set_defaults(nodes=None)
         opt, args = p.parse_args(argv)
         
         trace = files.TraceFile.fromFile(opt.trace, entryType=files.TraceEntryV2)
-        c = cooker.Thermometer(trace)
+        c = cooker.Thermometer(trace, opt.nodes)
         c.printStats()
         
 class AdvanceAR(object):
