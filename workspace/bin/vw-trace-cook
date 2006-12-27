@@ -4,4 +4,6 @@ from workspace import clients
 import sys
 
 c = clients.Cooker()
-c.run(sys.argv)
+errno = c.run(sys.argv)
+
+sys.exit(errno)

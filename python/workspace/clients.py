@@ -65,23 +65,46 @@ class Cooker(object):
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
         p.add_option(Option("-r", "--rejected-file", action="store", type="string", dest="rejectedFile", default=""))
         p.add_option(Option("-a", "--admission-control", action="store_true", dest="admission"))
+        p.add_option(Option("-g", "--ratio-guarantee", action="store_true", dest="ratio"))
+        p.add_option(Option("-m", "--max-attempts", action="store", type="int", dest="attempts", default=10))
         p.set_defaults(admission=False)
 
         opt, args = p.parse_args(argv)
-        
         c = cooker.Cooker(opt.conf)
-        trace = c.generateTrace()
-
-        if opt.admission:
-            bandwidth = c.conf.bandwidth
-            ac = cooker.OfflineAdmissionControl(trace, bandwidth, c.conf.admissioncontrol, c.conf.numNodesDist, c.conf.numc, c.conf.winsize)
-            (accepted, rejected) = ac.filterInfeasible()
-            accepted.toFile(sys.stdout)
-            if opt.rejectedFile != "" and len(rejected.entries) > 0:
-                    file = open(opt.rejectedFile,"w")
-                    rejected.toFile(file)                    
-        else:
-	    trace.toFile(sys.stdout)
+        
+        done = False
+        attempt = 1
+        while not done and attempt <= opt.attempts:
+            result = c.generateTrace()
+            trace = result[0]
+            totalDurationAR = result[1]
+            totalDurationBatch = result[2]
+            
+            arPercent = float(c.conf.config.get(cooker.GENERAL_SEC, cooker.AR_OPT))/100
+            batchPercent = float(c.conf.config.get(cooker.GENERAL_SEC, cooker.BATCH_OPT))/100
+            
+            arPercentReal = float(totalDurationAR) / (totalDurationBatch+totalDurationAR)
+            batchPercentReal = float(totalDurationBatch) / (totalDurationBatch+totalDurationAR)
+            
+            if abs(arPercent - arPercentReal) <= 0.015 or not opt.ratio:
+                done = True
+                if opt.admission:
+                    bandwidth = c.conf.bandwidth
+                    ac = cooker.OfflineAdmissionControl(trace, bandwidth, c.conf.admissioncontrol, c.conf.numNodesDist, c.conf.numc, c.conf.winsize)
+                    (accepted, rejected) = ac.filterInfeasible()
+                    accepted.toFile(sys.stdout)
+                    if opt.rejectedFile != "" and len(rejected.entries) > 0:
+                        file = open(opt.rejectedFile,"w")
+                        rejected.toFile(file)                    
+                else:
+                    sys.stderr.write("FOUND: Expected: %f/%f   Real: %f/%f (diff=%.6f)\n" % (batchPercent, arPercent, batchPercentReal, arPercentReal, abs(arPercent - arPercentReal)))
+                    trace.toFile(sys.stdout)
+                    return 0
+            else:
+                sys.stderr.write("ATTEMPT #%i: Expected: %f/%f   Real: %f/%f\n" % (attempt, batchPercent, arPercent, batchPercentReal, arPercentReal))
+                attempt += 1
+        
+        return 1
         
 class EARSMultiRun(object):
     def __init__(self):

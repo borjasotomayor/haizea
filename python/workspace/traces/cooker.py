@@ -50,6 +50,8 @@ class Cooker(object):
         entries = []
         maxtime = self.conf.traceDuration
         time = 0
+        totalDurationBatch = 0
+        totalDurationAR = 0
         while int(time) < int(maxtime):
             entrytime = self.conf.intervalDist.get()
             if self.conf.round != None:
@@ -87,19 +89,22 @@ class Cooker(object):
                     fields["deadline"] = str(deadline)
                     fields["tag"] = "AR"
                     duration = int(self.conf.durationARDist.get())
+                    if self.conf.round != None and duration % self.conf.round != 0:
+                        duration = ((duration / self.conf.round) + 1) * self.conf.round
+                    totalDurationAR += duration*numNodes
                 elif type == "BATCH":
                     fields["deadline"] = "NULL"
                     fields["tag"] = "BATCH"
                     numNodes = self.conf.numNodesDist.get()
                     fields["numNodes"] = str(numNodes)
                     duration = int(self.conf.durationDist.get())
+                    if self.conf.round != None and duration % self.conf.round != 0:
+                        duration = ((duration / self.conf.round) + 1) * self.conf.round
+                    totalDurationBatch += duration*numNodes
                 
-                
-                if self.conf.round != None and duration % self.conf.round != 0:
-                    duration = ((duration / self.conf.round) + 1) * self.conf.round
                 fields["duration"] = str(duration)
                 entries.append(TraceEntryV2(fields))
-        return TraceFile(entries)
+        return (TraceFile(entries), totalDurationAR, totalDurationBatch)
 
 
 class OfflineScheduleEntry(object):
@@ -238,7 +243,7 @@ class TraceConf(ConfFile):
     def __init__(self, _imageDist, _numNodesDist, _deadlineDist,
                    _durationDist, _imageSizes, _bandwidth, _intervalDist, _simulDist,
                    _duration, _arbatchDist, _type, _admissioncontrol, _numc, _winsize,
-                   _round, _durationARDist, _numNodesARDist):
+                   _round, _durationARDist, _numNodesARDist, _config):
         self.imageDist = _imageDist
         self.imageSizes = _imageSizes
         self.numNodesDist = _numNodesDist
@@ -256,6 +261,7 @@ class TraceConf(ConfFile):
         self.numc = _numc
         self.winsize = _winsize
         self.round = _round
+        self.config = _config
     
     @classmethod
     def fromFile(cls, filename):
@@ -334,7 +340,7 @@ class TraceConf(ConfFile):
                    _durationDist = durationDist, _imageSizes = imageSizes, _bandwidth = bandwidth, _intervalDist= intervalDist,
                    _duration = duration, _arbatchDist = arbatchDist, _type = type, _simulDist = simulDist,
                    _admissioncontrol = admissioncontrol, _numc = numc, _winsize = winsize, _round = round,
-                   _numNodesARDist=numNodesARDist, _durationARDist=durationARDist)        
+                   _numNodesARDist=numNodesARDist, _durationARDist=durationARDist, _config=config)        
 
 
 class InjectorConf(ConfFile):
