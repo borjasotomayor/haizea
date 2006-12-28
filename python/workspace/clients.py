@@ -125,6 +125,95 @@ class EARSMultiRun(object):
         
         e = multirun.EARS(config, tracefile)
         e.multirun()        
+        
+        
+class EARSCompare(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-f", "--file", action="store", type="string", dest="file", required=True))
+        p.add_option(Option("-c", "--challenger", action="store", type="string", dest="challenger", required=True))
+        p.add_option(Option("-d", "--defender", action="store", type="string", dest="defender", required=True))
+        p.add_option(Option("-g", "--gnuplot", action="store_true", dest="gnuplot"))
+
+        opt, args = p.parse_args(argv)
+        
+        c = stats.EARSCompare(opt.file)
+        
+        r = c.compare(opt.challenger, opt.defender)
+        
+        if opt.gnuplot:
+            xlabels = {}
+            ylabels = {}
+            zlabels = {}
+            better = []
+            worse = []
+            equal = []
+            for i,l in enumerate((xlabels,ylabels,zlabels)):
+                aux = list(set([v[i] for v in r.keys()]))
+                aux.sort()
+                aux = dict([(v,aux.index(v)) for v in aux])
+                l.update(aux)
+            for k in r.keys():
+                line = []
+                line += k
+                xnum = `xlabels[k[0]]`
+                ynum = `ylabels[k[1]]`
+                znum = `zlabels[k[2]]`
+                line += (xnum,ynum,znum)
+                line += [`r[k][opt.challenger]`]
+                line += [`r[k][opt.defender]`]
+                comparison = r[k]["comparison"]
+                line += [`comparison`]
+                pointsize = 1
+                if abs(comparison) >= 0.20:
+                    pointsize = 4
+                elif abs(comparison) > 0:
+                    pointsize = 1 + ((abs(comparison) * 5) * 3)
+                elif abs(comparison) == 0:
+                    pointsize = 1
+                line += [`pointsize`]
+                color = None
+                if comparison > 0:
+                    color = "0x00ff00"
+                elif comparison < 0:
+                    color = "Oxff0000"
+                else:
+                    color = "0xcccccc"
+                line += [color]
+
+                linestr = " ".join(line)
+                if comparison > 0:
+                    better += [linestr]
+                elif comparison < 0:
+                    worse += [linestr]
+                else:
+                    equal += [linestr]
+            
+            for line in better:
+                print line
+            print "\n"
+            for line in worse:
+                print line
+            print "\n"
+            for line in equal:
+                print line
+        else:
+            print "VW duration,Resources requested by AR (%%),Proportion (Batch%%-AR%%),(1) %s,(2) %s,How much better is (1) than (2)?" % (opt.challenger, opt.defender)
+            keys = r.keys()
+            keys.sort()
+            for k in keys:
+                line=[]
+                line+=k
+                line += [`r[k][opt.challenger]`]
+                line += [`r[k][opt.defender]`]
+                comparison = r[k]["comparison"]
+                comparison = "%.3f%%" % (comparison*100)
+                line += [comparison]
+                print ",".join(line)
+                
                     
 class Thermometer(object):
     def __init__(self):

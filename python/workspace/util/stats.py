@@ -1,5 +1,6 @@
 import random
 from workspace.graphing import graph
+import csv
 
 TESTDIST_NUM_ITERS=10000
 
@@ -105,6 +106,43 @@ class ContinuousParetoDistribution(ContinuousDistributionBase):
 #                valid = True
 #        return number   
         return random.paretovariate(self.alpha)
+                  
+                  
+
+class EARSCompare(object):
+    def __init__(self,file):
+        reader = csv.reader(open(file, "rb"))
+        header = reader.next()
+        fields = {}
+        fieldnum = 0
+        firstdatafield = 0
+        for item in header:
+            if item == "":
+                fieldnum += 1
+                firstdatafield += 1
+            else:
+                fields[item] = fieldnum
+                fieldnum += 1
+
+        data={}
+        for line in reader:
+            key = tuple(line[0:firstdatafield])
+            data[key]={}
+            for i in fields.keys():
+                data[key][i] = line[fields[i]]
+        self.data = data
+        
+    def compare(self,challenger,defender):
+        comparison = {}
+        for k in self.data.keys():
+            comparison[k]={}
+            chalvalue = float(self.data[k][challenger])
+            defvalue = float(self.data[k][defender])
+            comparison[k][challenger] = chalvalue
+            comparison[k][defender] = defvalue
+            comparison[k]["comparison"] = 1.0 - (chalvalue/defvalue)
+        return comparison
+            
                         
 if __name__ == "__main__":    
 #    values=["A","B","C","D"]
