@@ -108,7 +108,8 @@ class BaseServer(object):
         log = self.config.get(GENERAL_SEC, LOGLEVEL_OPT)
         srvlog.setLevel(loglevel[log])
         
-    def processReservations(self, time, td):
+        
+    def processEndingReservations(self, time, td):
         # Check for reservations which must end
         rescur = self.resDB.getReservationsWithEndingAllocationsInInterval(time, td, allocstatus=STATUS_RUNNING)
         reservations = rescur.fetchall()
@@ -153,6 +154,8 @@ class BaseServer(object):
             if self.isReservationDone(res["RES_ID"]):
                 self.stopReservation(res["RES_ID"], row=res)
 
+
+    def processStartingReservations(self, time, td):
         # Check for reservations which must start
         rescur = self.resDB.getReservationsWithStartingAllocationsInInterval(time, td, allocstatus=STATUS_PENDING)
         reservations = rescur.fetchall()
@@ -181,6 +184,19 @@ class BaseServer(object):
                     # The reservation part was suspended and must now be resumed.
                     self.resumeReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
                     self.startAllocations(respart["RSP_ID"], time, td)
+        
+        
+    def processReservations(self, time, td):
+        self.processEndingReservations(time, td)
+        self.processStartingReservations(time, td)
+        # The starting reservations we just processed might end inside
+        # the same scheduling quantum, so we have to check for ending
+        # reservations again.
+        self.processEndingReservations(time, td)
+
+        # TODO: This is still not an ideal solution for reservations
+        # that start and end in the same scheduling quantum (it's good
+        # for simulations, but won't translate well to real scheduling)
         
         if self.commit: self.resDB.commit()
 
@@ -1210,7 +1226,10 @@ class BaseServer(object):
 
             
     def estimateTransferTime(self, imgsize):
-        return TimeDelta(seconds=60) # We assume 15 minutes for tests
+        bandwidth = self.config.getint(SIMULATION_SEC, BANDWIDTH_OPT)
+        bandwidthMBs = bandwidth / 8
+        seconds = imgsize / bandwidthMBs
+        return TimeDelta(seconds=seconds)
 
     def startReservation(self, res_id, row=None):
         if row != None:
@@ -1372,9 +1391,6 @@ class SimulatingServer(BaseServer):
                 print "\tNumber of VMs in queue: %i" % len(self.batchqueue)
             if len(self.batchqueue) > 0 and self.time.second == 0:
                 self.processQueue()
-            # Temporary fix for incorrect processing of reservations when
-            # there is a reservation that both starts and ends inside the delta
-            self.processReservations(self.time, td)
             self.processReservations(self.time, td)
             self.time = self.time + td
             
@@ -1433,7 +1449,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="ears.conf"
-    tracefile="test_preemption8.trace"
+    tracefile="test_preemption5.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
