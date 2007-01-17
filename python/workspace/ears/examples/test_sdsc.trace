@@ -1,0 +1,5 @@
+0;nfs:///var/workspace/images/600M_4.img;600;2;512;50;RW;NULL;26;BATCH
+373;nfs:///var/workspace/images/600M_1.img;600;2;512;50;RW;NULL;36;BATCH
+743;nfs:///var/workspace/images/600M_2.img;600;2;512;50;RW;NULL;48;BATCH
+744;nfs:///var/workspace/images/600M_2.img;600;2;512;50;RW;NULL;104;BATCH
+745;nfs:///var/workspace/images/600M_0.img;600;2;512;50;RW;NULL;91;BATCH
