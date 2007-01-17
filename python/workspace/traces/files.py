@@ -67,8 +67,9 @@ class TraceFile(object):
         file = open (filename, "r")
         entries = []
         for line in file:
-            entry = entryType.fromLine(line.strip())
-            entries.append(entry)
+            if line[0]!='#':
+                entry = entryType.fromLine(line.strip())
+                entries.append(entry)
         return cls(entries)
 
     @classmethod
