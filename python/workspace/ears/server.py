@@ -35,6 +35,8 @@ REDUNDANT_OPT="avoidredundanttransfers"
 CACHE_OPT="cache"
 MAXCACHESIZE_OPT="maxcache"
 IMAGETRANSFERS_OPT="imagetransfers"
+TRANSFERALG_OPT="transferalgorithm"
+FORCETRANSFER_OPT="forcetransfertime"
 DISABLEAR_OPT="disableAR"
 
 TRANSFER_REQUIRED=0
@@ -99,6 +101,7 @@ class BaseServer(object):
         self.batchcompleted=[]
         self.batchvmcompleted=[]
         self.suspended=[]
+        self.diskusage=[]
         
         self.batchqueue=[]
         self.batchreservations={}
@@ -259,10 +262,16 @@ class BaseServer(object):
                         # No transfer scheduled to this node. First, check if it is
                         # already cached.
                         if caching and self.backend.isImgCachedInNode(destinationNode, imgURI):
-                            self.backend.completedImgTransferToNode(destinationNode, imgURI, imgSize, [VMrsp_id])
+                            self.backend.completedImgTransferToNode(destinationNode, imgURI, imgSize, VMrsp_id)
                             srvlog.info("No need to schedule an image transfer (image is already cached in destination node)")                            
                         else:
-                            result = self.scheduleImageTransferEDF(res_id, reqTime, startTime, imgURI, imgSize, destinationNode, VMrsp_id, imgslot=self.imagenodeslot_ar)
+                            transferalg = self.config.get(GENERAL_SEC, TRANSFERALG_OPT)
+                            transferfunc = None
+                            if transferalg == "EDF":
+                                transferfunc = self.scheduleImageTransferEDF
+                            elif transferalg == "NaiveJIT":
+                                transferfunc = self.scheduleImageTransferNaiveJIT
+                            result = transferfunc(res_id, reqTime, startTime, imgURI, imgSize, destinationNode, VMrsp_id, imgslot=self.imagenodeslot_ar)
                             transfer_rsp_ids[destinationNode] = result[0]
                                 
             if self.commit: self.resDB.commit()
@@ -370,7 +379,7 @@ class BaseServer(object):
                     reusetransfer_rsp_id = startTimes[node][2]
                     self.imagetransfers[reusetransfer_rsp_id][3].append(VMrsp_id)
                 elif transfertype == TRANSFER_CACHED:
-                    self.backend.completedImgTransferToNode(node, imgURI, imgSize, [VMrsp_id])
+                    self.backend.completedImgTransferToNode(node, imgURI, imgSize, VMrsp_id)
                     srvlog.info("No need to schedule an image transfer (image is already cached in destination node)")
                 elif transfertype == TRANSFER_NO:
                     srvlog.info("Assuming no image has to be transfered")
@@ -782,7 +791,19 @@ class BaseServer(object):
         nodes.sort(comparenodes)
         return nodes
 
-        
+    def scheduleImageTransferNaiveJIT(self, res_id, reqTime, deadline, imgURI, imgsize, destinationNode, VMrsp_id, imgslot=None):
+        # Naive JIT, just for the purposes of comparison.
+
+        # Estimate image transfer time 
+        imgTransferTime=self.estimateTransferTime(imgsize)
+ 
+        rsp_id = self.resDB.addReservationPart(res_id, "Image transfer", 2)
+
+        self.resDB.addAllocation(rsp_id, imgslot, deadline-imgTransferTime, deadline, 100.0, moveable=True, deadline=deadline, duration=imgTransferTime.seconds)
+        self.imagetransfers[rsp_id]=(imgURI, imgsize, destinationNode, [VMrsp_id])
+
+        return (rsp_id,)
+       
     def scheduleImageTransferEDF(self, res_id, reqTime, deadline, imgURI, imgsize, destinationNode, VMrsp_id, imgslot=None):
         # Algorithm for fitting image transfers is essentially the same as 
         # the one used in scheduleVMs. The main difference is that we can
@@ -1226,10 +1247,14 @@ class BaseServer(object):
 
             
     def estimateTransferTime(self, imgsize):
-        bandwidth = self.config.getint(SIMULATION_SEC, BANDWIDTH_OPT)
-        bandwidthMBs = bandwidth / 8
-        seconds = imgsize / bandwidthMBs
-        return TimeDelta(seconds=seconds)
+        if self.config.has_option(GENERAL_SEC, FORCETRANSFER_OPT):
+            seconds = self.config.getint(GENERAL_SEC, FORCETRANSFER_OPT)
+            return TimeDelta(seconds=seconds)
+        else:      
+            bandwidth = self.config.getint(SIMULATION_SEC, BANDWIDTH_OPT)
+            bandwidthMBs = bandwidth / 8
+            seconds = imgsize / bandwidthMBs
+            return TimeDelta(seconds=seconds)
 
     def startReservation(self, res_id, row=None):
         if row != None:
@@ -1271,10 +1296,15 @@ class BaseServer(object):
             VMrsp_ids = self.imagetransfers[respart_id][3]
             for VMrsp_id in VMrsp_ids:
                 self.backend.completedImgTransferToNode(nod_id, imgURI, imgSize, VMrsp_id)
-        elif self.batchreservations.has_key(row["RES_ID"]):
-            #print row["RSP_NAME"]
-            self.batchvmcompletednum += 1
-            self.batchvmcompleted.append((self.getTime(), self.batchvmcompletednum))
+                self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
+        else:
+            nod_id = self.backend.removeImage(respart_id)
+            self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
+            if self.batchreservations.has_key(row["RES_ID"]):
+                #print row["RSP_NAME"]
+                self.batchvmcompletednum += 1
+                self.batchvmcompleted.append((self.getTime(), self.batchvmcompletednum))
+                
 
     def suspendReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
@@ -1376,6 +1406,8 @@ class SimulatingServer(BaseServer):
         self.rejected.append((self.startTime, self.rejectednum))
         self.batchcompleted.append((self.startTime, self.batchcompletednum))
         self.queuesize.append((self.startTime, self.queuesizenum))
+        for i in xrange(self.numnodes):
+            self.diskusage.append((self.startTime, i+1, 0))
         
         while self.resDB.existsRemainingReservations(self.time) or len(self.trace.entries) > 0 or len(self.batchqueue) > 0:
             if self.time.minute % 15 == 0:
@@ -1448,10 +1480,12 @@ class RealServer(BaseServer):
 
 
 if __name__ == "__main__":
-    configfile="ears.conf"
-    tracefile="test_preemption5.trace"
+    configfile="examples/ears.conf"
+    tracefile="examples/test_diskusage3.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
     s = createEARS(config, tracefile)
     s.start()
+    for u in s.diskusage:
+        print u

@@ -16,6 +16,9 @@ UTILAVGCOMB_OPT="utilavg-combined"
 ADMITINDIV_OPT="admission-individual"
 ADMITCOMB_OPT="admission-combined"
 
+DISKUSAGEINDIV_OPT="diskusage-individual"
+DISKUSAGECOMB_OPT="diskusage-combined"
+
 BATCHCOMB_OPT="batch-combined"
 
 OUTPUT_OPT="output"
@@ -27,9 +30,9 @@ class EARS(object):
         self.tracefile=tracefile
         self.config = config
         self.output = "x11"
-        profilenames = [s.strip(' ') for s in config.get(MULTIRUN_SEC, PROFILES_OPT).split(",")]
+        self.profilenames = [s.strip(' ') for s in config.get(MULTIRUN_SEC, PROFILES_OPT).split(",")]
     
-        for profile in profilenames:
+        for profile in self.profilenames:
             profileconfig = ConfigParser.ConfigParser()
             commonsections = [s for s in config.sections() if s.startswith("common:")]
             profilesections = [s for s in config.sections() if s.startswith(profile +":")]
@@ -59,6 +62,8 @@ class EARS(object):
         utilavgcombined = self.config.getboolean(GRAPHS_SEC, UTILAVGCOMB_OPT)
         admittedindiv = self.config.getboolean(GRAPHS_SEC, ADMITINDIV_OPT)
         admittedcombined = self.config.getboolean(GRAPHS_SEC, ADMITCOMB_OPT)
+        diskusageindiv = self.config.getboolean(GRAPHS_SEC, DISKUSAGEINDIV_OPT)
+        diskusagecombined = self.config.getboolean(GRAPHS_SEC, DISKUSAGECOMB_OPT)
         batchcombined = self.config.getboolean(GRAPHS_SEC, BATCHCOMB_OPT)
         
         if self.config.has_option(GRAPHS_SEC, OUTPUT_OPT):
@@ -66,26 +71,30 @@ class EARS(object):
         
         needutilstats = utilindiv or utilcombined or utilavgcombined
         needadmissionstats = admittedindiv or admittedcombined
+        needdiskusage = diskusageindiv or diskusagecombined
         needbatchstats = batchcombined
         utilstats = {}
         acceptedstats = {}
         rejectedstats = {}
         batchstats = {}
-        for profile in self.profiles.items():
-            profilename = profile[0]
-            profileconfig = profile[1]
+        diskusagestats = {}
+        for profile in self.profilenames:
+            profilename = profile
+            profileconfig = self.profiles[profile]
             utilstatsfilename = profilename + "-utilization.dat"
             acceptedfilename = profilename + "-accepted.dat"
             rejectedfilename = profilename + "-rejected.dat"
+            diskusagefilename = profilename + "-diskusage.dat"
             batchcompletedfilename = profilename + "-batchcompleted.dat"
             queuesizefilename = profilename + "-queuesize.dat"
             print "Running profile '%s'" % profilename
             
-            forceRun = False
+            forceRun = True
             mustRun = True
             stats = None
             accepted = None
             rejected = None
+            diskusage = None
             batchcompleted = None
             queuesize = None
             if not forceRun:
@@ -100,6 +109,9 @@ class EARS(object):
                     file = open (rejectedfilename, "r")
                     u = Unpickler(file)
                     rejected = u.load()
+                    file = open (diskusagefilename, "r")
+                    u = Unpickler(file)
+                    diskusage = u.load()
                     file = open (batchcompletedfilename, "r")
                     u = Unpickler(file)
                     batchcompleted = u.load()
@@ -116,6 +128,7 @@ class EARS(object):
                 accepted = [((v[0] - s.startTime).seconds,v[1]) for v in s.accepted]
                 rejected = [((v[0] - s.startTime).seconds,v[1]) for v in s.rejected]
                 batchcompleted = [((v[0] - s.startTime).seconds,v[1]) for v in s.batchvmcompleted]
+                diskusage = [((v[0] - s.startTime).seconds,v[1],v[2]) for v in s.diskusage]
                 queuesize = [((v[0] - s.startTime).seconds,v[1]) for v in s.queuesize]
                 file = open (utilstatsfilename, "w")
                 p = Pickler(file)
@@ -126,6 +139,9 @@ class EARS(object):
                 file = open (rejectedfilename, "w")
                 p = Pickler(file)
                 p.dump(rejected)
+                file = open (diskusagefilename, "w")
+                p = Pickler(file)
+                p.dump(diskusage)
                 file = open (batchcompletedfilename, "w")
                 p = Pickler(file)
                 p.dump(batchcompleted)
@@ -133,18 +149,16 @@ class EARS(object):
                 p = Pickler(file)
                 p.dump(queuesize)
 
-            if needutilstats:
-                if utilcombined or utilavgcombined:
-                    utilstats[profilename] = stats
-                if utilindiv:
-                    utilization = [(s[0],s[1]) for s in stats]
-                    utilavg = [(s[0],s[2]) for s in stats]
-                    g1 = StepGraph([utilization], "Time (s)", "Utilization")
-                    g2 = PointGraph([utilavg], "Time (s)", "Utilization")
-                    g1.plot()
-                    g2.plot()
-                    pylab.legend(["Utilization","Average"])
-                    g1.show()
+            utilstats[profilename] = stats
+            if utilindiv:
+                utilization = [(s[0],s[1]) for s in stats]
+                utilavg = [(s[0],s[2]) for s in stats]
+                g1 = StepGraph([utilization], "Time (s)", "Utilization")
+                g2 = PointGraph([utilavg], "Time (s)", "Utilization")
+                g1.plot()
+                g2.plot()
+                pylab.legend(["Utilization","Average"])
+                g1.show()
             if needadmissionstats:
                 if admittedcombined:
                     acceptedstats[profilename] = accepted
@@ -155,16 +169,47 @@ class EARS(object):
                     pylab.ylim(0,s.acceptednum+1)
                     pylab.legend(["Accepted","Rejected"])
                     g1.show()
-            if needbatchstats:
-                batchstats[profilename] = batchcompleted
+            if needdiskusage:
+                # Compute maximum
+                # TODO: Compute average, others?
+                maxusage = []
+                nodes = []
+                for v in diskusage:
+                    if not v[1] in nodes:
+                        nodes.append(v[1])
+                usage = dict([(v,0) for v in nodes])
+                for u in diskusage:
+                    time=u[0]
+                    nod_id=u[1]
+                    mbytes=u[2]
+                    
+                    usage[nod_id]=mbytes
+                    
+                    m = max(usage.values())
+                    if len(maxusage)>0 and maxusage[-1][0] == time:
+                        maxusage[-1] = (time,m)
+                    else:
+                        maxusage.append((time,m))
+                    
+                if diskusagecombined:
+                    diskusagestats[profilename] = maxusage
+                if diskusageindiv:
+                    g1 = StepGraph([maxusage], "Time (s)", "Usage")
+                    g1.plot()
+                    #pylab.ylim(0,s.acceptednum+1)
+                    pylab.legend(["Max"])
+                    g1.show()
+            batchstats[profilename] = batchcompleted
                 
         runtime = {}
         utilization = {}
         
-        for profile in self.profiles.items():        
-            profilename = profile[0]
-            utilization[profilename] = utilstats[profilename][-1][2]
-            runtime[profilename] = batchstats[profilename][-1][0]
+        for profile in self.profilenames:        
+            utilization[profile] = utilstats[profile][-1][2]
+            if batchstats[profile]==[]:
+                runtime[profile]=0
+            else:
+                runtime[profile] = batchstats[profile][-1][0]
 
         profilenames = self.profiles.keys()
         profilenames.sort()
@@ -198,12 +243,13 @@ class EARS(object):
             self.showGraph(g1, "graph-utilization")
 
         if utilavgcombined:
-            average = [[(w[0],w[2]) for w in v] for v in utilstats.values()]
+            values = [utilstats[profile] for profile in self.profilenames]
+            average = [[(w[0],w[2]) for w in v] for v in values]
             g1 = PointGraph(average, "Time (s)", "Utilization (Avg)")
             g1.plot()
             pylab.ylim(0, 1.05)
             pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
-            pylab.legend(utilstats.keys(), loc='lower right')
+            pylab.legend(self.profilenames, loc='lower right')
             self.showGraph(g1, "graph-utilizationavg")
                 
         if admittedcombined:
@@ -216,20 +262,31 @@ class EARS(object):
             legends += ["Rejected " + v for v in rejectedstats.keys()]
             pylab.legend(legends)
             self.showGraph(g1, "graph-admitted")
+
+        if diskusagecombined:
+            values = [diskusagestats[profile] for profile in self.profilenames]
+            g1 = StepGraph(values, "Time (s)", "Max disk used")
+            g1.plot()
+            pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
+            lengths = [len(l) for l in diskusagestats.values()]
+            #pylab.ylim(0, max(lengths)+1)
+            pylab.legend(self.profilenames, loc='lower right')
+            self.showGraph(g1, "graph-diskusage")
             
         if batchcombined:
-            g1 = PointGraph(batchstats.values(), "Time (s)", "Batch VWs completed")
+            values = [batchstats[profile] for profile in self.profilenames]
+            g1 = PointGraph(values, "Time (s)", "Batch VWs completed")
             g1.plot()
             pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             lengths = [len(l) for l in batchstats.values()]
             pylab.ylim(0, max(lengths)+1)
-            pylab.legend(batchstats.keys(), loc='lower right')
+            pylab.legend(self.profilenames, loc='lower right')
             self.showGraph(g1, "graph-batchcompleted")
 
     
 if __name__ == "__main__":
-    configfile="ears-multirun-utilization.conf"
-    tracefile="../ears/test_mixed.trace"
+    configfile="../ears/examples/ears-multirun.conf"
+    tracefile="../ears/examples/test_diskusage5.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)        
