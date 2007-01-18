@@ -69,10 +69,6 @@ class EARS(object):
         if self.config.has_option(GRAPHS_SEC, OUTPUT_OPT):
             self.output = self.config.get(GRAPHS_SEC, OUTPUT_OPT)
         
-        needutilstats = utilindiv or utilcombined or utilavgcombined
-        needadmissionstats = admittedindiv or admittedcombined
-        needdiskusage = diskusageindiv or diskusagecombined
-        needbatchstats = batchcombined
         utilstats = {}
         acceptedstats = {}
         rejectedstats = {}
@@ -149,6 +145,7 @@ class EARS(object):
                 p = Pickler(file)
                 p.dump(queuesize)
 
+            # UTILIZATION
             utilstats[profilename] = stats
             if utilindiv:
                 utilization = [(s[0],s[1]) for s in stats]
@@ -159,50 +156,55 @@ class EARS(object):
                 g2.plot()
                 pylab.legend(["Utilization","Average"])
                 g1.show()
-            if needadmissionstats:
-                if admittedcombined:
-                    acceptedstats[profilename] = accepted
-                    rejectedstats[profilename] = rejected
-                if admittedindiv:
-                    g1 = StepGraph([accepted,rejected], "Time (s)", "Requests")
-                    g1.plot()
-                    pylab.ylim(0,s.acceptednum+1)
-                    pylab.legend(["Accepted","Rejected"])
-                    g1.show()
-            if needdiskusage:
-                # Compute maximum
-                # TODO: Compute average, others?
-                maxusage = []
-                nodes = []
-                for v in diskusage:
-                    if not v[1] in nodes:
-                        nodes.append(v[1])
-                usage = dict([(v,0) for v in nodes])
-                for u in diskusage:
-                    time=u[0]
-                    nod_id=u[1]
-                    mbytes=u[2]
-                    
-                    usage[nod_id]=mbytes
-                    
-                    m = max(usage.values())
-                    if len(maxusage)>0 and maxusage[-1][0] == time:
-                        maxusage[-1] = (time,m)
-                    else:
-                        maxusage.append((time,m))
-                    
-                if diskusagecombined:
-                    diskusagestats[profilename] = maxusage
-                if diskusageindiv:
-                    g1 = StepGraph([maxusage], "Time (s)", "Usage")
-                    g1.plot()
-                    #pylab.ylim(0,s.acceptednum+1)
-                    pylab.legend(["Max"])
-                    g1.show()
+                
+            # ARs ADMITTED/REJECTED
+            acceptedstats[profilename] = accepted
+            rejectedstats[profilename] = rejected
+            if admittedindiv:
+                g1 = StepGraph([accepted,rejected], "Time (s)", "Requests")
+                g1.plot()
+                pylab.ylim(0,s.acceptednum+1)
+                pylab.legend(["Accepted","Rejected"])
+                g1.show()
+                
+            # DISK USAGE
+            # Compute maximum
+            # TODO: Compute average, others?
+            maxusage = []
+            nodes = []
+            for v in diskusage:
+                if not v[1] in nodes:
+                    nodes.append(v[1])
+            usage = dict([(v,0) for v in nodes])
+            for u in diskusage:
+                time=u[0]
+                nod_id=u[1]
+                mbytes=u[2]
+                
+                usage[nod_id]=mbytes
+                
+                m = max(usage.values())
+                if len(maxusage)>0 and maxusage[-1][0] == time:
+                    maxusage[-1] = (time,m)
+                else:
+                    maxusage.append((time,m))
+                
+            diskusagestats[profilename] = maxusage
+            if diskusageindiv:
+                g1 = StepGraph([maxusage], "Time (s)", "Usage")
+                g1.plot()
+                #pylab.ylim(0,s.acceptednum+1)
+                pylab.legend(["Max"])
+                g1.show()
+
+            # BATCH COMPLETED
             batchstats[profilename] = batchcompleted
                 
         runtime = {}
         utilization = {}
+        peakdiskusage = {}
+        accepted = {}
+        rejected = {}
         
         for profile in self.profilenames:        
             utilization[profile] = utilstats[profile][-1][2]
@@ -210,28 +212,39 @@ class EARS(object):
                 runtime[profile]=0
             else:
                 runtime[profile] = batchstats[profile][-1][0]
+            peakdiskusage[profile] = max([v[1] for v in diskusagestats[profile]])
+            accepted[profile] = acceptedstats[profile][-1][1]
+            rejected[profile] = rejectedstats[profile][-1][1]
 
         profilenames = self.profiles.keys()
         profilenames.sort()
-        csv = csvheader = ""
+        csvutil = csvruntime = csvaccept = csvreject = cvsdiskusage = ""
+        
+        # Print info to stdout
+        
         print "UTILIZATION"
         print "-----------"
         for profilename in profilenames:
             print "%s: %.2f" % (profilename, utilization[profilename])
-            csv += "%f," % utilization[profilename]
-            csvheader+="%s," % profilename
             
         print ""
         print "EXECUTION TIME"
         print "--------------"
         for profilename in profilenames:
             print "%s: %.2f" % (profilename, runtime[profilename])
-            csv += ",%f" % runtime[profilename]
-            csvheader+=",%s" % profilename
             
-        print "CSVHEADER:%s" % csvheader
-        print "CSV:%s" % csv
-        print ""
+
+        # Generate CSV files
+        # TODO: Use csv module
+        csvheader=",".join(profilenames)        
+        for stats in [(utilization,"utilization"),(runtime,"runtime"),(accepted,"accepted"),(rejected,"rejected"),(peakdiskusage,"peakdiskusage")]:
+            csvline=",".join(`stats[0][profilename]` for profilename in profilenames )
+            filename="%s.csv" % stats[1]
+            print "Saving CSV file %s" % filename
+            f=open(filename, 'w')
+            f.write("%s\n" % csvheader)
+            f.write("%s\n" % csvline)
+            f.close()
                 
         if utilcombined:
             utilization = [[(w[0],w[1]) for w in v] for v in utilstats.values()]
@@ -286,7 +299,7 @@ class EARS(object):
     
 if __name__ == "__main__":
     configfile="../ears/examples/ears-multirun.conf"
-    tracefile="../ears/examples/test_diskusage5.trace"
+    tracefile="../ears/examples/test_mixed.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)        
