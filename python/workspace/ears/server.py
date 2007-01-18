@@ -245,14 +245,14 @@ class BaseServer(object):
         resources = {SLOTTYPE_CPU: float(r.fields["cpu"]), SLOTTYPE_MEM: float(r.fields["memory"])}
         
         res_id = self.resDB.addReservation("Test (AR) Reservation #%i" % self.reqnum)
-        
+
+        transfer_rsp_ids = {}
         try:
             (mustpreempt, transfers) = self.scheduleMultipleVMs(res_id, startTime, endTime, imgURI, numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
             if len(mustpreempt) > 0:
                 srvlog.info("Must preempt the following: %s", mustpreempt)
                 self.preemptResources(mustpreempt, startTime, endTime)
             if dotransfer:
-                transfer_rsp_ids = {}
                 for transfer in transfers:
                     destinationNode = transfer[0]
                     VMrsp_id = transfer[1]
