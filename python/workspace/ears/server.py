@@ -12,10 +12,12 @@ STATUS_RUNNING = 1
 STATUS_DONE = 2
 STATUS_SUSPENDED = 3
 
-
 SLOTTYPE_CPU=1
 SLOTTYPE_MEM=2
 SLOTTYPE_OUTNET=4
+
+EDF_REGULAR=1
+EDF_JIT=2
 
 GENERAL_SEC="general"
 SIMULATION_SEC="simulation"
@@ -36,6 +38,7 @@ CACHE_OPT="cache"
 MAXCACHESIZE_OPT="maxcache"
 IMAGETRANSFERS_OPT="imagetransfers"
 TRANSFERALG_OPT="transferalgorithm"
+JITBUFFER_OPT="jitbuffer"
 FORCETRANSFER_OPT="forcetransfertime"
 DISABLEAR_OPT="disableAR"
 
@@ -253,6 +256,7 @@ class BaseServer(object):
                 for transfer in transfers:
                     destinationNode = transfer[0]
                     VMrsp_id = transfer[1]
+                    srvlog.info("Scheduling image transfer for rsp_id=%i to node=%i" % (VMrsp_id, destinationNode))
                     if transfer_rsp_ids.has_key(destinationNode):
                         # We've already scheduled a transfer to this node. Reuse it.
                         srvlog.info("No need to schedule an image transfer (reusing an existing transfer to destination node)")
@@ -269,6 +273,8 @@ class BaseServer(object):
                             transferfunc = None
                             if transferalg == "EDF":
                                 transferfunc = self.scheduleImageTransferEDF
+                            elif transferalg == "EDFJIT":
+                                transferfunc = self.scheduleImageTransferEDFJIT
                             elif transferalg == "NaiveJIT":
                                 transferfunc = self.scheduleImageTransferNaiveJIT
                             result = transferfunc(res_id, reqTime, startTime, imgURI, imgSize, destinationNode, VMrsp_id, imgslot=self.imagenodeslot_ar)
@@ -279,6 +285,8 @@ class BaseServer(object):
             self.accepted.append((reqTime, self.acceptednum))
         except SchedException, msg:
             srvlog.warning("Scheduling exception: %s" % msg)
+            for rsp_id in transfer_rsp_ids.values():
+                del self.imagetransfers[rsp_id]
             self.rejectednum += 1
             self.rejected.append((reqTime, self.rejectednum))
             self.resDB.rollback()
@@ -803,8 +811,16 @@ class BaseServer(object):
         self.imagetransfers[rsp_id]=(imgURI, imgsize, destinationNode, [VMrsp_id])
 
         return (rsp_id,)
+
+    def scheduleImageTransferEDF(self, *args, **kwargs):
+        kwargs["type"]=EDF_REGULAR
+        return self.do_scheduleImageTransferEDF(*args, **kwargs)
+
+    def scheduleImageTransferEDFJIT(self, *args, **kwargs):
+        kwargs["type"]=EDF_JIT
+        return self.do_scheduleImageTransferEDF(*args, **kwargs)
        
-    def scheduleImageTransferEDF(self, res_id, reqTime, deadline, imgURI, imgsize, destinationNode, VMrsp_id, imgslot=None):
+    def do_scheduleImageTransferEDF(self, res_id, reqTime, deadline, imgURI, imgsize, destinationNode, VMrsp_id, imgslot=None, type=None):
         # Algorithm for fitting image transfers is essentially the same as 
         # the one used in scheduleVMs. The main difference is that we can
         # scale down the code since we know a priori what slot we're fitting the
@@ -882,7 +898,43 @@ class BaseServer(object):
              
         if not fits:
              raise SchedException, "Adding this VW results in an unfeasible image transfer schedule."
- 
+
+        # EDF allows us to check that the deadlines will be met, but it results in
+        # an aggressive staging schedule. In EDF/JIT, we push all the image transfers 
+        # as close as possible to their deadlines. Note that this does not affect
+        # the feasibility of the schedule in this precise moment, but might
+        # make future requests infeasible.
+        feasibleEndTime=transfers[-1]["all_deadline"]        
+        if type==EDF_JIT:
+            fits = False
+            if self.config.has_option(GENERAL_SEC, JITBUFFER_OPT):
+                jitbuffer = self.config.getint(GENERAL_SEC, JITBUFFER_OPT)
+                fits = True
+                for transfer in reversed(transfers):
+                    deadline = transfer["all_deadline"]
+                    duration = transfer["all_duration"]
+
+                    newEndTime=min([deadline,feasibleEndTime]) - TimeDelta(seconds=jitbuffer)
+                    transfer["all_schedend"]=newEndTime
+                    newStartTime=newEndTime-duration
+                    transfer["new_all_schedstart"]=newStartTime
+                    feasibleEndTime=newStartTime
+                    if transfer["all_schedend"] > transfer["all_deadline"] or newStartTime < self.getTime():
+                        fits = False
+                        break
+            
+            if not fits:
+                feasibleEndTime=transfers[-1]["all_deadline"]        
+                for transfer in reversed(transfers):
+                    deadline = transfer["all_deadline"]
+                    duration = transfer["all_duration"]
+    
+                    newEndTime=min([deadline,feasibleEndTime])
+                    transfer["all_schedend"]=newEndTime
+                    newStartTime=newEndTime-duration
+                    transfer["new_all_schedstart"]=newStartTime
+                    feasibleEndTime=newStartTime
+        
         # Make changes in database     
         for t in transfers:
             if t["new"]:
@@ -1285,7 +1337,7 @@ class BaseServer(object):
 
     def stopReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
-            srvlog.info( "%s: Stopping reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
+            srvlog.info( "%s: Stopping reservation part %i '%s' of reservation %s" % (self.getTime(), respart_id, row["RSP_NAME"], resname))
             #print( "%s: Stopping reservation part '%s' of reservation %s" % (self.getTime(), row["RSP_NAME"], resname))
         self.resDB.updateReservationPartStatus(respart_id, STATUS_DONE)
         if self.imagetransfers.has_key(respart_id):
@@ -1297,6 +1349,7 @@ class BaseServer(object):
             for VMrsp_id in VMrsp_ids:
                 self.backend.completedImgTransferToNode(nod_id, imgURI, imgSize, VMrsp_id)
                 self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
+            del self.imagetransfers[respart_id]
         else:
             nod_id = self.backend.removeImage(respart_id)
             self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
@@ -1481,7 +1534,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/ears.conf"
-    tracefile="examples/test_diskusage3.trace"
+    tracefile="examples/test_diskusage5.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
