@@ -57,6 +57,9 @@ class BaseNode(object):
         else:
             return reduce(int.__add__, [v[1] for v in self.deployedimages])
         
+    def printDeployedImages(self):
+        rsp_ids=[v[2] for v in self.deployedimages]
+        srvlog.info("Node %i has %iMB (rsp_ids: %s)" % (self.nod_id,self.totalDeployedImageSize(),rsp_ids))
 
 class SimulationNode(BaseNode):
     def __init__(self, backend, nod_id):
@@ -84,20 +87,26 @@ class SimulationControlBackend(BaseControlBackend):
         BaseControlBackend.__init__(self, nodes, caching, maxCacheSize)
         
     def completedImgTransferToNode(self,nod_id,imgURI,imgSize,rsp_id):
+        srvlog.info("Adding image for rsp_id=%i in nod_id=%i" % (rsp_id,nod_id))
+        self.nodes[nod_id-1].printDeployedImages()
         if self.caching:
             self.nodes[nod_id-1].addToCache(imgURI,imgSize)
         self.nodes[nod_id-1].addDeployedImage(imgURI, imgSize, rsp_id)
+        self.nodes[nod_id-1].printDeployedImages()
         
         
     def isImgCachedInNode(self,nod_id,imgURI):
         return self.nodes[nod_id-1].isImgCached(imgURI)
     
     def removeImage(self,rsp_id):
+        srvlog.info("Removing image for rsp_id=%i" % rsp_id)
         nod_id = None
         for node in self.nodes:
             if rsp_id in [v[2] for v in node.deployedimages]:
                 nod_id = node.nod_id
+                node.printDeployedImages()
                 node.deployedimages = [v for v in node.deployedimages if v[2] != rsp_id]
+                node.printDeployedImages()
                 break #Ugh
         return nod_id
         
