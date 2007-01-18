@@ -111,6 +111,7 @@ class BaseServer(object):
         self.imagenodeslot_ar = None
         self.imagenodeslot_batch = None
         self.imagetransfers={}
+        self.distinctimages=Set()
         log = self.config.get(GENERAL_SEC, LOGLEVEL_OPT)
         srvlog.setLevel(loglevel[log])
         
@@ -212,6 +213,7 @@ class BaseServer(object):
         newtrace = [r for r in self.trace.entries if int(r.fields["time"]) > seconds]
         
         for r in reqToProcess:
+            self.distinctimages.add((r.fields["uri"],int(r.fields["size"])))
             if r.fields["deadline"] == "NULL":
                 self.processBatchRequest(r)
                 self.reqnum+=1
@@ -1351,8 +1353,9 @@ class BaseServer(object):
                 self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
             del self.imagetransfers[respart_id]
         else:
-            nod_id = self.backend.removeImage(respart_id)
-            self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
+            if self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT):
+                nod_id = self.backend.removeImage(respart_id)
+                self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
             if self.batchreservations.has_key(row["RES_ID"]):
                 #print row["RSP_NAME"]
                 self.batchvmcompletednum += 1
@@ -1459,8 +1462,9 @@ class SimulatingServer(BaseServer):
         self.rejected.append((self.startTime, self.rejectednum))
         self.batchcompleted.append((self.startTime, self.batchcompletednum))
         self.queuesize.append((self.startTime, self.queuesizenum))
-        for i in xrange(self.numnodes):
-            self.diskusage.append((self.startTime, i+1, 0))
+        if self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT):
+            for i in xrange(self.numnodes):
+                self.diskusage.append((self.startTime, i+1, 0))
         
         while self.resDB.existsRemainingReservations(self.time) or len(self.trace.entries) > 0 or len(self.batchqueue) > 0:
             if self.time.minute % 15 == 0:
@@ -1481,6 +1485,12 @@ class SimulatingServer(BaseServer):
             
         self.accepted.append((self.time, self.acceptednum))
         self.rejected.append((self.time, self.rejectednum))
+        if not self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT):
+            imagesize = reduce(int.__add__, [v[1] for v in self.distinctimages])
+            for i in xrange(self.numnodes):
+                self.diskusage.append((self.startTime, i+1, imagesize))
+                self.diskusage.append((self.time, i+1, imagesize))
+            
         if self.config.getboolean(GENERAL_SEC, CACHE_OPT):
             self.backend.printNodes()
 
