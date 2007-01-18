@@ -288,7 +288,7 @@ class ReservationDB(object):
         cur.execute(sql, (newstart,end,sl_id,rsp_id,all_schedstart))
 
     def suspendAllocation(self, sl_id, rsp_id, all_schedstart, newend=None, nextstart=None):
-        srvlog.info( "Updating allocation %i,%i beginning at %s with end time %s and next start time %s" % (sl_id, rsp_id, all_schedstart, newend, nextstart))
+        srvlog.info( "Updating allocation (sl_id: %i, rsp_id: %i) beginning at %s with end time %s and next start time %s" % (sl_id, rsp_id, all_schedstart, newend, nextstart))
         sql = """UPDATE tb_alloc 
         SET all_schedend=?, all_nextstart=?
         WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
@@ -310,7 +310,7 @@ class ReservationDB(object):
         return rsp_id
     
     def addAllocation(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None, nextstart=None):
-        srvlog.info( "Reserving %f in slot %i from %s to %s" % (amount, sl_id, startTime, endTime))
+        srvlog.info( "Reserving %f in slot %i from %s to %s (rsp_id: %i)" % (amount, sl_id, startTime, endTime, rsp_id))
         sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_amount,all_moveable,all_deadline,all_duration,all_nextstart,all_status) values (?,?,?,?,?,?,?,?,?,0)"
         cur = self.getConn().cursor()
         cur.execute(sql, (rsp_id, sl_id, startTime, endTime, amount, moveable, deadline, duration, nextstart))            
