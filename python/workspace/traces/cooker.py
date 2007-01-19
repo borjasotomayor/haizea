@@ -583,6 +583,7 @@ class Thermometer(object):
         print "Sum of duration of batch requests (1): %s" % TimeDelta(seconds=totalDurationBatch)
         if self.nodes != None:
             print "Time to process (1) assuming %i virtual nodes: %s" % (self.nodes, TimeDelta(seconds=totalDurationBatch) / self.nodes)
+            print "Time to process entire workload assuming %i virtual nodes: %s" % (self.nodes, TimeDelta(seconds=totalDurationBatch+totalDurationARSerial) / self.nodes)
         print "Approximate total duration required by ARs: %s" % TimeDelta(seconds=numAR*avgARDuration)
         print ""
         print "IMAGES"

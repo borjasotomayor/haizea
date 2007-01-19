@@ -85,7 +85,7 @@ class EARS(object):
             queuesizefilename = profilename + "-queuesize.dat"
             print "Running profile '%s'" % profilename
             
-            forceRun = True
+            forceRun = False
             mustRun = True
             stats = None
             accepted = None
@@ -99,21 +99,27 @@ class EARS(object):
                     file = open (utilstatsfilename, "r")
                     u = Unpickler(file)
                     stats = u.load()
+                    file.close()
                     file = open (acceptedfilename, "r")
                     u = Unpickler(file)
                     accepted = u.load()
+                    file.close()
                     file = open (rejectedfilename, "r")
                     u = Unpickler(file)
                     rejected = u.load()
+                    file.close()
                     file = open (diskusagefilename, "r")
                     u = Unpickler(file)
                     diskusage = u.load()
+                    file.close()
                     file = open (batchcompletedfilename, "r")
                     u = Unpickler(file)
                     batchcompleted = u.load()
+                    file.close()
                     file = open (queuesizefilename, "r")
                     u = Unpickler(file)
                     queuesize = u.load()
+                    file.close()
                     mustRun = False
                     print "No need to run (data already saved from previous run)"
             if mustRun:
@@ -129,21 +135,27 @@ class EARS(object):
                 file = open (utilstatsfilename, "w")
                 p = Pickler(file)
                 p.dump(stats)
+                file.close()
                 file = open (acceptedfilename, "w")
                 p = Pickler(file)
                 p.dump(accepted)
+                file.close()
                 file = open (rejectedfilename, "w")
                 p = Pickler(file)
                 p.dump(rejected)
+                file.close()
                 file = open (diskusagefilename, "w")
                 p = Pickler(file)
                 p.dump(diskusage)
+                file.close()
                 file = open (batchcompletedfilename, "w")
                 p = Pickler(file)
                 p.dump(batchcompleted)
+                file.close()
                 file = open (queuesizefilename, "w")
                 p = Pickler(file)
                 p.dump(queuesize)
+                file.close()
 
             # UTILIZATION
             utilstats[profilename] = stats
@@ -299,7 +311,7 @@ class EARS(object):
     
 if __name__ == "__main__":
     configfile="../ears/examples/ears-multirun.conf"
-    tracefile="../ears/examples/test_mixed.trace"
+    tracefile="../ears/examples/test_diskusage3.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)        
