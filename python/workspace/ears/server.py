@@ -52,6 +52,7 @@ TRANSFER_REQUIRED=0
 TRANSFER_REUSE=1
 TRANSFER_CACHED=2
 TRANSFER_NO=3
+TRANSFER_COW=4
 
 BETTER = -1
 EQUAL = 0
@@ -89,6 +90,18 @@ def createEARS(config, tracefile):
 
 class SchedException(Exception):
     pass
+
+class ImageTransfer(object):
+    def __init__(self, imgURI, imgSize, destinationNode, deadline=None):
+        self.imgURI = imgURI
+        self.imgSize = imgSize
+        self.destinationNode = destinationNode
+        self.deadline = deadline
+        self.VMs = []
+        
+    def addVM(self, VM_rsp_id, VM_endtime):
+        self.VMs.append((VM_rsp_id, VM_endtime))
+
 
 class BaseServer(object):
     def __init__(self, config, resDB, trace, commit=True):
@@ -243,7 +256,7 @@ class BaseServer(object):
         imgSize = int(r.fields["size"])
 
         dotransfer = self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT)
-        caching = self.config.getboolean(GENERAL_SEC, CACHE_OPT)
+        reusealg = self.config.get(GENERAL_SEC, REUSEALG_OPT)
         
         srvlog.info("%s: Received request for VW %i" % (reqTime, self.reqnum))
         srvlog.info("\tStart time: %s" % startTime)
@@ -254,13 +267,32 @@ class BaseServer(object):
         
         res_id = self.resDB.addReservation("Test (AR) Reservation #%i" % self.reqnum)
 
-        transfer_rsp_ids = {}
         try:
             (mustpreempt, transfers) = self.scheduleMultipleVMs(res_id, startTime, endTime, imgURI, numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
             if len(mustpreempt) > 0:
                 srvlog.info("Must preempt the following: %s", mustpreempt)
                 self.preemptResources(mustpreempt, startTime, endTime)
             if dotransfer:
+                # First off, see if we can use existing transfers
+                new_transfers = []
+                for transfer in transfers:
+                    destinationNode = transfer[0]
+                    VMrsp_id = transfer[1]
+                    candidate_transfers = [rsp_id for rsp_id in self.imagetransfers.keys() if self.imagetransfers[rsp_id].destinationNode == destinationNode and startTime >= self.imagetransfers[rsp_id].deadline]
+                    # TODO: Filter by 'idle time' between image usages
+                    if len(candidate_transfers)==0:
+                        new_transfers.append(transfer)
+                    else:
+                        # Arbitrarily choose first transfer.
+                        # TODO: Come up with better criteria for choosing the transfer
+                        rsp_id=candidate_transfers[0]
+                        self.imagetransfers[rsp_id].addVM(VMrsp_id,endTime)    
+                        srvlog.info("Image transfer for rsp_id=%i to node=%i will piggy back on existing transfer rsp_id=%i" % (VMrsp_id, destinationNode, rsp_id))
+
+                transfers = new_transfers
+                
+                # Otherwise, try to schedule image transfer
+                transfer_rsp_ids = {}
                 for transfer in transfers:
                     destinationNode = transfer[0]
                     VMrsp_id = transfer[1]
@@ -269,13 +301,16 @@ class BaseServer(object):
                         # We've already scheduled a transfer to this node. Reuse it.
                         srvlog.info("No need to schedule an image transfer (reusing an existing transfer to destination node)")
                         reusetransfer_rsp_id = transfer_rsp_ids[destinationNode]
-                        self.imagetransfers[reusetransfer_rsp_id][3].append((VMrsp_id,endTime))
+                        self.imagetransfers[reusetransfer_rsp_id].addVM(VMrsp_id,endTime)
                     else:
                         # No transfer scheduled to this node. First, check if it is
                         # already cached.
-                        if caching and self.backend.isImgCachedInNode(destinationNode, imgURI):
+                        if reusealg=="cache" and self.backend.isImgCachedInNode(destinationNode, imgURI):
                             self.backend.completedImgTransferToNode(destinationNode, imgURI, imgSize, VMrsp_id)
                             srvlog.info("No need to schedule an image transfer (image is already cached in destination node)")                            
+                        elif reusealg=="cowpool" and self.backend.isImgDeployedLater(destinationNode, imgURI, startTime):
+                            self.backend.addVMtoCOWImg(destinationNode, imgURI, VMrsp_id, endTime)
+                            srvlog.info("No need to schedule an image transfer (can COW-reuse existing image in node)")                            
                         else:
                             transferalg = self.config.get(GENERAL_SEC, TRANSFERALG_OPT)
                             transferfunc = None
@@ -286,7 +321,8 @@ class BaseServer(object):
                             elif transferalg == "NaiveJIT":
                                 transferfunc = self.scheduleImageTransferNaiveJIT
                             (rsp_id,) = transferfunc(res_id, reqTime, startTime, imgURI, imgSize, destinationNode, VMrsp_id, imgslot=self.imagenodeslot_ar)
-                            self.imagetransfers[rsp_id]=(imgURI, imgSize, destinationNode, [(VMrsp_id,endTime)])
+                            self.imagetransfers[rsp_id]=ImageTransfer(imgURI, imgSize, destinationNode, deadline=startTime)
+                            self.imagetransfers[rsp_id].addVM(VMrsp_id,endTime)
                             transfer_rsp_ids[destinationNode] = rsp_id
                                 
             if self.commit: self.resDB.commit()
@@ -386,19 +422,21 @@ class BaseServer(object):
                 srvlog.info("Attempting to schedule VM for batch reservation %i starting at %s with duration %s" % (res_id,self.getTime(),duration))
                 srvlog.info("%s" % startTimes)
                 (node,VMrsp_id,endTime) = self.scheduleSingleVM(res_id, startTimes, duration, imgURI, resources=resources, preemptible=preemptible, suspendable=suspendable, forceName=nodename)
-                node = result[0]
-                VMrsp_id = result[1]
                 transfertype = startTimes[node][1]
                 if transfertype == TRANSFER_REQUIRED:
                     transfer = self.scheduleImageTransferFIFO(res_id, self.getTime(), 1, imgURI, imgSize, node, VMrsp_id, imgslot=self.imagenodeslot_batch)
-                    self.imagetransfers[transfer[0]]=(imguri, imgsize, destinationNode, [(VMrsp_id,endTime)])
+                    self.imagetransfers[transfer[0]]=ImageTransfer(imgURI, imgSize, node, None)
+                    self.imagetransfers[transfer[0]].addVM(VMrsp_id,endTime)
                 elif transfertype == TRANSFER_REUSE:
                     srvlog.info("No need to schedule an image transfer (reusing an existing transfer to destination node)")
                     reusetransfer_rsp_id = startTimes[node][2]
-                    self.imagetransfers[reusetransfer_rsp_id][3].append((VMrsp_id,endTime))
+                    self.imagetransfers[reusetransfer_rsp_id].addVM(VMrsp_id,endTime)
                 elif transfertype == TRANSFER_CACHED:
                     self.backend.completedImgTransferToNode(node, imgURI, imgSize, VMrsp_id)
                     srvlog.info("No need to schedule an image transfer (image is already cached in destination node)")
+                elif transfertype == TRANSFER_COW:
+                    self.backend.addVMtoCOWImg(node, imgURI, VMrsp_id, endTime)
+                    srvlog.info("No need to schedule an image transfer (COW-reusing image in destination node)")
                 elif transfertype == TRANSFER_NO:
                     srvlog.info("Assuming no image has to be transfered")
                 if self.commit: self.resDB.commit()
@@ -809,18 +847,18 @@ class BaseServer(object):
         nodes.sort(comparenodes)
         return nodes
 
-    def scheduleImageTransferNaiveJIT(self, res_id, reqTime, deadline, imgURI, imgsize, destinationNode, VMrsp_id, imgslot=None):
-        # Naive JIT, just for the purposes of comparison.
-
-        # Estimate image transfer time 
-        imgTransferTime=self.estimateTransferTime(imgsize)
- 
-        rsp_id = self.resDB.addReservationPart(res_id, "Image transfer", 2)
-
-        self.resDB.addAllocation(rsp_id, imgslot, deadline-imgTransferTime, deadline, 100.0, moveable=True, deadline=deadline, duration=imgTransferTime.seconds)
-        self.imagetransfers[rsp_id]=(imgURI, imgsize, destinationNode, [VMrsp_id])
-
-        return (rsp_id,)
+#    def scheduleImageTransferNaiveJIT(self, res_id, reqTime, deadline, imgURI, imgsize, destinationNode, VMrsp_id, imgslot=None):
+#        # Naive JIT, just for the purposes of comparison.
+#
+#        # Estimate image transfer time 
+#        imgTransferTime=self.estimateTransferTime(imgsize)
+# 
+#        rsp_id = self.resDB.addReservationPart(res_id, "Image transfer", 2)
+#
+#        self.resDB.addAllocation(rsp_id, imgslot, deadline-imgTransferTime, deadline, 100.0, moveable=True, deadline=deadline, duration=imgTransferTime.seconds)
+#        self.imagetransfers[rsp_id]=(imgURI, imgsize, destinationNode, [VMrsp_id])
+#
+#        return (rsp_id,)
 
     def scheduleImageTransferEDF(self, *args, **kwargs):
         kwargs["type"]=EDF_REGULAR
@@ -1277,7 +1315,7 @@ class BaseServer(object):
 
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
         avoidredundant = self.config.getboolean(GENERAL_SEC, REDUNDANT_OPT)
-        cache = self.config.getboolean(GENERAL_SEC, CACHE_OPT)
+        reusealg = self.config.get(GENERAL_SEC, REUSEALG_OPT)
 
         # Figure out starting time assuming we have to transfer the image
         transfer = self.scheduleImageTransferFIFO(res_id=None, reqTime=time, numnodes=1, imguri=imageURI, imgsize=imageSize, imgslot=self.imagenodeslot_batch, VMrsp_id=None, destinationNode=None, allocate=False)
@@ -1287,19 +1325,23 @@ class BaseServer(object):
         for node in range(self.getNumNodes()):
             earliest[node+1] = (startTime, TRANSFER_REQUIRED, None)
         
-        if cache:
+        if reusealg=="cache":
             nodeswithcached = self.backend.getNodesWithCachedImg(imageURI)
             for node in nodeswithcached:
                 earliest[node] = (time, TRANSFER_CACHED, None) 
                 
+        if reusealg=="cowpool":
+            nodeswithimg = self.backend.getNodesWithImg(imageURI)
+            for node in nodeswithimg:
+                earliest[node] = (time, TRANSFER_COW, None) 
 
         
         if avoidredundant:
             cur = self.resDB.getCurrentAllocationsInSlot(self.getTime(), self.imagenodeslot_batch)
             transfers = cur.fetchall()
             for t in transfers:
-                transferImg = self.imagetransfers[t["RSP_ID"]][0]
-                node = self.imagetransfers[t["RSP_ID"]][2]
+                transferImg = self.imagetransfers[t["RSP_ID"]].imgURI
+                node = self.imagetransfers[t["RSP_ID"]].destinationNode
                 if transferImg == imageURI:
                     startTime = ISO.ParseDateTime(t["ALL_SCHEDEND"])
                     if startTime < earliest[node]:
@@ -1353,10 +1395,10 @@ class BaseServer(object):
         self.resDB.updateReservationPartStatus(respart_id, STATUS_DONE)
         if self.imagetransfers.has_key(respart_id):
             # This is an image transfer. Notify the backend that it is done.
-            imgURI = self.imagetransfers[respart_id][0]
-            imgSize = self.imagetransfers[respart_id][1]
-            nod_id = self.imagetransfers[respart_id][2]
-            VMrsp_ids = self.imagetransfers[respart_id][3]
+            imgURI = self.imagetransfers[respart_id].imgURI
+            imgSize = self.imagetransfers[respart_id].imgSize
+            nod_id = self.imagetransfers[respart_id].destinationNode
+            VMrsp_ids = self.imagetransfers[respart_id].VMs
             rsp_ids = [rsp_id for (rsp_id,end) in VMrsp_ids]
             print [end for (rsp_id,end) in VMrsp_ids]
             timeout = max([end for (rsp_id,end) in VMrsp_ids])
@@ -1511,7 +1553,7 @@ class SimulatingServer(BaseServer):
                 self.diskusage.append((self.startTime, i+1, imagesize))
                 self.diskusage.append((self.time, i+1, imagesize))
             
-        if self.config.getboolean(GENERAL_SEC, CACHE_OPT):
+        if self.config.get(GENERAL_SEC, REUSEALG_OPT)=="cache":
             self.backend.printNodes()
 
     def getNumNodes(self):
@@ -1564,7 +1606,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/ears.conf"
-    tracefile="examples/test_reuse1.trace"
+    tracefile="examples/test_mixed.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
