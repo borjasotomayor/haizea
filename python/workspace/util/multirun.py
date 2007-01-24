@@ -295,7 +295,7 @@ class EARS(object):
             pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             lengths = [len(l) for l in diskusagestats.values()]
             #pylab.ylim(0, max(lengths)+1)
-            pylab.legend(self.profilenames, loc='lower right')
+            pylab.legend(self.profilenames, loc='upper right')
             self.showGraph(g1, "graph-diskusage")
             
         if batchcombined:
@@ -311,7 +311,7 @@ class EARS(object):
     
 if __name__ == "__main__":
     configfile="../ears/examples/ears-multirun.conf"
-    tracefile="../ears/examples/test_diskusage3.trace"
+    tracefile="../ears/examples/test_mixed.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)        
