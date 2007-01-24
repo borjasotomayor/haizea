@@ -19,6 +19,10 @@ SLOTTYPE_OUTNET=4
 EDF_REGULAR=1
 EDF_JIT=2
 
+REUSE_NONE=0
+REUSE_CACHE=1
+REUSE_COWPOOL=2
+
 GENERAL_SEC="general"
 SIMULATION_SEC="simulation"
 
@@ -38,6 +42,8 @@ CACHE_OPT="cache"
 MAXCACHESIZE_OPT="maxcache"
 IMAGETRANSFERS_OPT="imagetransfers"
 TRANSFERALG_OPT="transferalgorithm"
+REUSEALG_OPT="reusealgorithm"
+MAXDEPLOYED_OPT="maxdeployedimages"
 JITBUFFER_OPT="jitbuffer"
 FORCETRANSFER_OPT="forcetransfertime"
 DISABLEAR_OPT="disableAR"
@@ -263,7 +269,7 @@ class BaseServer(object):
                         # We've already scheduled a transfer to this node. Reuse it.
                         srvlog.info("No need to schedule an image transfer (reusing an existing transfer to destination node)")
                         reusetransfer_rsp_id = transfer_rsp_ids[destinationNode]
-                        self.imagetransfers[reusetransfer_rsp_id][3].append(VMrsp_id)
+                        self.imagetransfers[reusetransfer_rsp_id][3].append((VMrsp_id,endTime))
                     else:
                         # No transfer scheduled to this node. First, check if it is
                         # already cached.
@@ -279,8 +285,9 @@ class BaseServer(object):
                                 transferfunc = self.scheduleImageTransferEDFJIT
                             elif transferalg == "NaiveJIT":
                                 transferfunc = self.scheduleImageTransferNaiveJIT
-                            result = transferfunc(res_id, reqTime, startTime, imgURI, imgSize, destinationNode, VMrsp_id, imgslot=self.imagenodeslot_ar)
-                            transfer_rsp_ids[destinationNode] = result[0]
+                            (rsp_id,) = transferfunc(res_id, reqTime, startTime, imgURI, imgSize, destinationNode, VMrsp_id, imgslot=self.imagenodeslot_ar)
+                            self.imagetransfers[rsp_id]=(imgURI, imgSize, destinationNode, [(VMrsp_id,endTime)])
+                            transfer_rsp_ids[destinationNode] = rsp_id
                                 
             if self.commit: self.resDB.commit()
             self.acceptednum += 1
@@ -378,16 +385,17 @@ class BaseServer(object):
             try:
                 srvlog.info("Attempting to schedule VM for batch reservation %i starting at %s with duration %s" % (res_id,self.getTime(),duration))
                 srvlog.info("%s" % startTimes)
-                result = self.scheduleSingleVM(res_id, startTimes, duration, imgURI, resources=resources, preemptible=preemptible, suspendable=suspendable, forceName=nodename)
+                (node,VMrsp_id,endTime) = self.scheduleSingleVM(res_id, startTimes, duration, imgURI, resources=resources, preemptible=preemptible, suspendable=suspendable, forceName=nodename)
                 node = result[0]
                 VMrsp_id = result[1]
                 transfertype = startTimes[node][1]
                 if transfertype == TRANSFER_REQUIRED:
                     transfer = self.scheduleImageTransferFIFO(res_id, self.getTime(), 1, imgURI, imgSize, node, VMrsp_id, imgslot=self.imagenodeslot_batch)
+                    self.imagetransfers[transfer[0]]=(imguri, imgsize, destinationNode, [(VMrsp_id,endTime)])
                 elif transfertype == TRANSFER_REUSE:
                     srvlog.info("No need to schedule an image transfer (reusing an existing transfer to destination node)")
                     reusetransfer_rsp_id = startTimes[node][2]
-                    self.imagetransfers[reusetransfer_rsp_id][3].append(VMrsp_id)
+                    self.imagetransfers[reusetransfer_rsp_id][3].append((VMrsp_id,endTime))
                 elif transfertype == TRANSFER_CACHED:
                     self.backend.completedImgTransferToNode(node, imgURI, imgSize, VMrsp_id)
                     srvlog.info("No need to schedule an image transfer (image is already cached in destination node)")
@@ -729,9 +737,9 @@ class BaseServer(object):
 
         if needsSuspension:
             srvlog.info("This VM will require suspension.")
-            self.rescheduleReservationPartForSuspension(rsp_id, suspendTime)
+            (endTime,) = self.rescheduleReservationPartForSuspension(rsp_id, suspendTime)
                 
-        return (optimalNode, rsp_id)
+        return (optimalNode, rsp_id, endTime)
         
 
 
@@ -941,7 +949,6 @@ class BaseServer(object):
         for t in transfers:
             if t["new"]:
                 self.resDB.addAllocation(t["rsp_id"], t["sl_id"], t["new_all_schedstart"], t["all_schedend"], 100.0, moveable=True, deadline=t["all_deadline"], duration=t["all_duration"].seconds)
-                self.imagetransfers[rsp_id]=(imgURI, imgsize, destinationNode, [VMrsp_id])
             else:
                 self.resDB.updateAllocation(t["sl_id"], t["rsp_id"], t["all_schedstart"], newstart=t["new_all_schedstart"], end=t["all_schedend"])            
         
@@ -987,7 +994,6 @@ class BaseServer(object):
         if allocate:
             rsp_id = self.resDB.addReservationPart(res_id, "Image transfer for rsp_id=%s" % VMrsp_id, type=2)
             self.resDB.addAllocation(rsp_id, imgslot, startTime, endTime, 100.0, moveable=False)
-            self.imagetransfers[rsp_id]=(imguri, imgsize, destinationNode, [VMrsp_id])
         
         return (rsp_id, imgslot, startTime, endTime)
 
@@ -1195,6 +1201,7 @@ class BaseServer(object):
     def rescheduleReservationPartForSuspension(self, rsp_id, time):
         cur = self.resDB.getCurrentAllocationsInRespart(time, rsp_id)
         cur = cur.fetchall()
+        endTime = None
         for alloc in cur:
             sl_id = alloc["SL_ID"]
             rsp_id = alloc["RSP_ID"]
@@ -1204,7 +1211,6 @@ class BaseServer(object):
 
             self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, time, None)
             suspendpoints = self.findSuspendPoints(all_schedstart,sl_id,res_needed,time_needed,suspensiontime=time)
-                
             current = suspendpoints.pop(0)
             if current[0] == current[1]:
                 # If the rescheduling results in the suspension time of the first allocation
@@ -1216,6 +1222,9 @@ class BaseServer(object):
                 self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, current[1], current[2])
             for point in suspendpoints:
                 self.resDB.addAllocation(rsp_id, sl_id, point[0], point[1], res_needed, nextstart=point[2])
+                endTime = point[1]
+
+        return (endTime,)
 
         # TODO: Make sure all slots in a reservation part can be satisfied at the same time
         # in the same interval (i.e. avoid situations where, after a suspend, there is enough
@@ -1348,9 +1357,13 @@ class BaseServer(object):
             imgSize = self.imagetransfers[respart_id][1]
             nod_id = self.imagetransfers[respart_id][2]
             VMrsp_ids = self.imagetransfers[respart_id][3]
-            for VMrsp_id in VMrsp_ids:
-                self.backend.completedImgTransferToNode(nod_id, imgURI, imgSize, VMrsp_id)
-                self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
+            rsp_ids = [rsp_id for (rsp_id,end) in VMrsp_ids]
+            print [end for (rsp_id,end) in VMrsp_ids]
+            timeout = max([end for (rsp_id,end) in VMrsp_ids])
+            print timeout
+            self.backend.completedImgTransferToNode(nod_id, imgURI, imgSize, rsp_ids, timeout)
+            self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
+            
             del self.imagetransfers[respart_id]
         else:
             if self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT):
@@ -1444,14 +1457,21 @@ class SimulatingServer(BaseServer):
 
     def createBackend(self):
         numnodes = self.config.getint(SIMULATION_SEC,NODES_OPT)
-        caching = self.config.getboolean(GENERAL_SEC, CACHE_OPT)
+        reusealg = self.config.get(GENERAL_SEC, REUSEALG_OPT)
         
-        if caching:
+        maxCacheSize=None
+        maxDeployImg=None
+        
+        if reusealg=="none":
+            reusealg = REUSE_NONE
+        elif reusealg=="caching":
             maxCacheSize = self.config.getint(GENERAL_SEC, MAXCACHESIZE_OPT)
-        else:
-            maxCacheSize = None
+            reusealg = REUSE_CACHE
+        elif reusealg == "cowpool":
+            maxDeployImg=None
+            reusealg = REUSE_COWPOOL
             
-        self.backend=SimulationControlBackend(numnodes, caching, maxCacheSize)
+        self.backend=SimulationControlBackend(self, numnodes, reusealg, maxCacheSize, maxDeployImg)
         
     def start(self):
         self.startTime = self.time
@@ -1544,7 +1564,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/ears.conf"
-    tracefile="examples/test_diskusage5.trace"
+    tracefile="examples/test_reuse1.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    

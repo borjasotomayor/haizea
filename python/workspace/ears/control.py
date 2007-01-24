@@ -10,6 +10,32 @@ from workspace.ears import srvlog
 # 2. Image size
 # 3. Reservation ID (i.e. "What reservation does this image belong to?")
 
+REUSE_NONE=0
+REUSE_CACHE=1
+REUSE_COWPOOL=2
+
+
+class VMImage(object):
+    def __init__(self, imgURI, imgSize):
+        self.imgURI = imgURI
+        self.imgSize = imgSize
+        self.rsp_ids = set([])
+        self.timeout = None
+        
+    def add_rspid(self, rsp_id):
+        self.rsp_ids.add(rsp_id)
+        
+    def updateTimeout(self, timeout):
+        self.timeout = timeout
+        
+    def isExpired(self, curTime):
+        if self.timeout == None:
+            return False
+        elif self.timeout > curTime:
+            return True
+        else:
+            return False
+
 class BaseNode(object):
     def __init__(self, backend, nod_id):
         self.backend = backend
@@ -45,8 +71,8 @@ class BaseNode(object):
             i = [v[0] for v in self.cache].index(imgURI)
             self.cache[i][2] += 1
             
-    def addDeployedImage(self, imgURI, imgSize, rsp_id):
-        self.deployedimages.append([imgURI,imgSize,rsp_id])
+    def addDeployedImage(self, img):
+        self.deployedimages.append(img)
         #print self.nod_id
         #print rsp_id
         #print "XXXXXXXXX %i, %i" % (self.nod_id, rsp_id)
@@ -55,22 +81,37 @@ class BaseNode(object):
         if len(self.deployedimages) == 0:
             return 0
         else:
-            return reduce(int.__add__, [v[1] for v in self.deployedimages])
+            return sum([v.imgSize for v in self.deployedimages])
         
     def printDeployedImages(self):
-        rsp_ids=[v[2] for v in self.deployedimages]
-        srvlog.info("Node %i has %iMB (rsp_ids: %s)" % (self.nod_id,self.totalDeployedImageSize(),rsp_ids))
+        images = ""
+        if len(self.deployedimages) > 0:
+            images += "[ "
+            for img in self.deployedimages:
+                imgname=img.imgURI.split("/")[-1]
+                images += imgname
+                images += "("
+                images += ",".join([`rsp_id` for rsp_id in img.rsp_ids])
+                images += ")(%s) " % img.timeout
+            images += "]"
+        srvlog.info("Node %i has %iMB %s" % (self.nod_id,self.totalDeployedImageSize(),images))
 
 class SimulationNode(BaseNode):
     def __init__(self, backend, nod_id):
         BaseNode.__init__(self, backend, nod_id)
 
 class BaseControlBackend(object):
-    def __init__(self, nodes, caching, maxCacheSize=None):
+    def __init__(self, server, nodes, reusealg, maxCacheSize=None, maxDeployImg=None):
+        self.server = server
         self.nodes = nodes
-        self.caching = caching
+        self.reusealg = reusealg
         self.maxCacheSize = maxCacheSize
+        self.maxDeployImg = maxDeployImg
+        self.rspnode = {}
         
+    def getNode(self,nod_id):
+        return self.nodes[nod_id-1]
+    
     def getNodesWithCachedImg(self,imgURI):
         return [n.nod_id for n in self.nodes if n.isImgCached(imgURI)]
         
@@ -82,31 +123,59 @@ class BaseControlBackend(object):
                 srvlog.info("\t%s" % entry)
 
 class SimulationControlBackend(BaseControlBackend):
-    def __init__(self, numnodes, caching, maxCacheSize):
+    def __init__(self, server, numnodes, reusealg, maxCacheSize=None, maxDeployImg=None):
         nodes = [SimulationNode(self, i+1) for i in range(numnodes)]
-        BaseControlBackend.__init__(self, nodes, caching, maxCacheSize)
+        BaseControlBackend.__init__(self, server, nodes, reusealg, maxCacheSize, maxDeployImg)
         
-    def completedImgTransferToNode(self,nod_id,imgURI,imgSize,rsp_id):
-        srvlog.info("Adding image for rsp_id=%i in nod_id=%i" % (rsp_id,nod_id))
-        self.nodes[nod_id-1].printDeployedImages()
-        if self.caching:
-            self.nodes[nod_id-1].addToCache(imgURI,imgSize)
-        self.nodes[nod_id-1].addDeployedImage(imgURI, imgSize, rsp_id)
-        self.nodes[nod_id-1].printDeployedImages()
+    def completedImgTransferToNode(self,nod_id,imgURI,imgSize,rsp_ids,timeout=None):
+        srvlog.info("Adding image for rsp_ids=%s in nod_id=%i" % (rsp_ids,nod_id))
+        self.getNode(nod_id).printDeployedImages()
+        if self.reusealg == REUSE_CACHE:
+            self.getNode(nod_id).addToCache(imgURI,imgSize)
+
+        if self.reusealg in [REUSE_NONE,REUSE_CACHE]:
+            for rsp_id in rsp_ids:
+                img = VMImage(imgURI, imgSize)
+                img.add_rspid(rsp_id)
+                self.getNode(nod_id).addDeployedImage(img)
+        elif self.reusealg == REUSE_COWPOOL:
+            img = VMImage(imgURI, imgSize)
+            img.timeout = timeout
+            for rsp_id in rsp_ids:
+                img.add_rspid(rsp_id)
+            self.getNode(nod_id).addDeployedImage(img)
+
+        for rsp_id in rsp_ids:
+            self.rspnode[rsp_id]=nod_id
+            
+        self.getNode(nod_id).printDeployedImages()
         
         
     def isImgCachedInNode(self,nod_id,imgURI):
-        return self.nodes[nod_id-1].isImgCached(imgURI)
+        return self.getNode(nod_id).isImgCached(imgURI)
     
     def removeImage(self,rsp_id):
-        srvlog.info("Removing image for rsp_id=%i" % rsp_id)
-        nod_id = None
-        for node in self.nodes:
-            if rsp_id in [v[2] for v in node.deployedimages]:
-                nod_id = node.nod_id
+        srvlog.info("Removing images for rsp_id=%i" % rsp_id)
+        nod_id = self.rspnode[rsp_id]
+        node = self.getNode(nod_id)
+        node.printDeployedImages()
+        newimages = []
+        for img in node.deployedimages:
+            if rsp_id in img.rsp_ids:
+                img.rsp_ids.remove(rsp_id)
                 node.printDeployedImages()
-                node.deployedimages = [v for v in node.deployedimages if v[2] != rsp_id]
-                node.printDeployedImages()
-                break #Ugh
+            else:
+                newimages.append(img)
+                
+            # Might have to keep the image if we're using a cowpool
+            if self.reusealg == REUSE_COWPOOL:
+                if img.timeout >= self.server.getTime() and len(img.rsp_ids) == 0:
+                    srvlog.info("Removing image %s" % img.imgURI)
+                else:
+                    newimages.append(img)
+
+        node.deployedimages = newimages
+        node.printDeployedImages()
+                            
         return nod_id
         
