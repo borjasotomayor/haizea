@@ -102,6 +102,8 @@ class ImageTransfer(object):
     def addVM(self, VM_rsp_id, VM_endtime):
         self.VMs.append((VM_rsp_id, VM_endtime))
 
+    def removeVM(self, VM_rsp_id):
+        self.VMs = [i for i in self.VMs if i[0] !=VM_rsp_id]
 
 class BaseServer(object):
     def __init__(self, config, resDB, trace, commit=True):
@@ -267,6 +269,9 @@ class BaseServer(object):
         
         res_id = self.resDB.addReservation("Test (AR) Reservation #%i" % self.reqnum)
 
+        transfer_rsp_ids = {}
+        piggyback_rsp_ids = {}
+        cowreuse_rsp_ids = []
         try:
             (mustpreempt, transfers) = self.scheduleMultipleVMs(res_id, startTime, endTime, imgURI, numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
             if len(mustpreempt) > 0:
@@ -286,13 +291,13 @@ class BaseServer(object):
                         # Arbitrarily choose first transfer.
                         # TODO: Come up with better criteria for choosing the transfer
                         rsp_id=candidate_transfers[0]
-                        self.imagetransfers[rsp_id].addVM(VMrsp_id,endTime)    
+                        self.imagetransfers[rsp_id].addVM(VMrsp_id,endTime)   
+                        piggyback_rsp_ids[rsp_id]=VMrsp_id 
                         srvlog.info("Image transfer for rsp_id=%i to node=%i will piggy back on existing transfer rsp_id=%i" % (VMrsp_id, destinationNode, rsp_id))
 
                 transfers = new_transfers
                 
                 # Otherwise, try to schedule image transfer
-                transfer_rsp_ids = {}
                 for transfer in transfers:
                     destinationNode = transfer[0]
                     VMrsp_id = transfer[1]
@@ -311,6 +316,7 @@ class BaseServer(object):
                         elif reusealg=="cowpool" and self.backend.isImgDeployedLater(destinationNode, imgURI, startTime):
                             self.backend.addVMtoCOWImg(destinationNode, imgURI, VMrsp_id, endTime)
                             srvlog.info("No need to schedule an image transfer (can COW-reuse existing image in node)")                            
+                            cowreuse_rsp_ids.append(VMrsp_id)
                         else:
                             transferalg = self.config.get(GENERAL_SEC, TRANSFERALG_OPT)
                             transferfunc = None
@@ -324,14 +330,18 @@ class BaseServer(object):
                             self.imagetransfers[rsp_id]=ImageTransfer(imgURI, imgSize, destinationNode, deadline=startTime)
                             self.imagetransfers[rsp_id].addVM(VMrsp_id,endTime)
                             transfer_rsp_ids[destinationNode] = rsp_id
-                                
             if self.commit: self.resDB.commit()
             self.acceptednum += 1
             self.accepted.append((reqTime, self.acceptednum))
         except SchedException, msg:
             srvlog.warning("Scheduling exception: %s" % msg)
+            # Rollback!
             for rsp_id in transfer_rsp_ids.values():
                 del self.imagetransfers[rsp_id]
+            for rsp_id in piggyback_rsp_ids.keys():
+                self.imagetransfers[rsp_id].removeVM(piggyback_rsp_ids[rsp_id])
+            for rsp_id in cowreuse_rsp_ids:
+                self.backend.removeImage(rsp_id)
             self.rejectednum += 1
             self.rejected.append((reqTime, self.rejectednum))
             self.resDB.rollback()
