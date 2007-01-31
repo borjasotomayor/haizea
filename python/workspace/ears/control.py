@@ -131,6 +131,10 @@ class BaseControlBackend(object):
 
     def getNodesWithImg(self,imgURI):
         return [n.nod_id for n in self.nodes if n.isImgDeployed(imgURI)]
+    
+    def getNodesWithImgLater(self,imgURI,time):
+        return [n.nod_id for n in self.nodes if n.isImgDeployedLater(imgURI,time)]
+    
         
     def printNodes(self):
         for node in self.nodes:

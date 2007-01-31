@@ -627,7 +627,7 @@ class BaseServer(object):
         allfits = True
         assignment = {}
         nodeassignment = {}
-        orderednodes = self.prioritizenodes(candidatenodes,imguri,resources, canpreempt)
+        orderednodes = self.prioritizenodes(candidatenodes,imguri,startTime, resources, canpreempt)
         
         # We try to fit each virtual node into a physical node
         # First we iterate through the physical nodes trying to fit the virtual node
@@ -791,7 +791,7 @@ class BaseServer(object):
         
 
 
-    def prioritizenodes(self,candidatenodes,imguri,resources, canpreempt):
+    def prioritizenodes(self,candidatenodes,imguri,startTime,resources, canpreempt):
         # TODO2: Choose appropriate prioritizing function based on a
         # config file, instead of hardcoding it)
         #
@@ -800,13 +800,19 @@ class BaseServer(object):
         # Later on we need to come up with some sort of weighed average.
         
         nodes = candidatenodes.keys()
-        nodeswithcachedimg = self.backend.getNodesWithCachedImg(imguri)
+        
+        reusealg = self.config.get(GENERAL_SEC, REUSEALG_OPT)
+        nodeswithimg=[]
+        if reusealg=="cache":
+            nodeswithimg = self.backend.getNodesWithCachedImg(imguri)
+        elif reusealg=="cowpool":
+            nodeswithimg = self.backend.getNodesWithImgLater(imguri, startTime)
         
         # Compares node x and node y. 
         # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)
         def comparenodes(x,y):
-            cachedX = x in nodeswithcachedimg
-            cachedY = y in nodeswithcachedimg
+            hasimgX = x in nodeswithimg
+            hasimgY = y in nodeswithimg
 
             need = resources[SLOTTYPE_CPU]
             # First comparison: A node with no preemptible VMs is preferible
@@ -829,9 +835,9 @@ class BaseServer(object):
             elif not hasPreemptibleX and hasPreemptibleY:
                 return BETTER
             elif not hasPreemptibleX and not hasPreemptibleY:
-                if cachedX and not cachedY: 
+                if hasimgX and not hasimgY: 
                     return BETTER
-                elif not cachedX and cachedY: 
+                elif not hasimgX and hasimgY: 
                     return WORSE
                 else:
                     if canfitX > canfitY: return BETTER
@@ -849,8 +855,8 @@ class BaseServer(object):
                 elif preemptX > preemptY:
                     return WORSE
                 else:
-                    if cachedX and not cachedY: return BETTER
-                    elif not cachedX and cachedY: return WORSE
+                    if hasimgX and not hasimgY: return BETTER
+                    elif not hasimgX and hasimgY: return WORSE
                     else: return EQUAL
         
         # Order nodes
@@ -1410,9 +1416,7 @@ class BaseServer(object):
             nod_id = self.imagetransfers[respart_id].destinationNode
             VMrsp_ids = self.imagetransfers[respart_id].VMs
             rsp_ids = [rsp_id for (rsp_id,end) in VMrsp_ids]
-            print [end for (rsp_id,end) in VMrsp_ids]
             timeout = max([end for (rsp_id,end) in VMrsp_ids])
-            print timeout
             self.backend.completedImgTransferToNode(nod_id, imgURI, imgSize, rsp_ids, timeout)
             self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
             
@@ -1616,7 +1620,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/ears.conf"
-    tracefile="examples/test_mixed.trace"
+    tracefile="examples/test_reuse3.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
