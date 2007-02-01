@@ -416,7 +416,7 @@ class BaseServer(object):
                 if self.resDB.isFull(self.getTime(), SLOTTYPE_CPU):
                     srvlog.info("0% resources available at this time. Skipping rest of queue.")
                     break  # Ugh!
-                startTimes = dict([(node+1, (self.getTime(),TRANSFER_NO,None)) for node in range(self.getNumNodes()) ])
+                startTimes = dict([(node+1, [self.getTime(),TRANSFER_NO,None]) for node in range(self.getNumNodes()) ])
 
             batchAlgorithm = self.config.get(GENERAL_SEC,BATCHALG_OPT)
             if batchAlgorithm == "nopreemption":
