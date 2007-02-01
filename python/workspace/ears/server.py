@@ -282,9 +282,9 @@ class BaseServer(object):
                 self.preemptResources(mustpreempt, startTime, endTime)
             if dotransfer:
                 # First off, see if we can use existing transfers
-                new_transfers = []
                 
                 if avoidredundant:
+                    new_transfers = []
                     for transfer in transfers:
                         destinationNode = transfer[0]
                         VMrsp_id = transfer[1]
@@ -299,8 +299,7 @@ class BaseServer(object):
                             self.imagetransfers[rsp_id].addVM(VMrsp_id,endTime)   
                             piggyback_rsp_ids[rsp_id]=VMrsp_id 
                             srvlog.info("Image transfer for rsp_id=%i to node=%i will piggy back on existing transfer rsp_id=%i" % (VMrsp_id, destinationNode, rsp_id))
-
-                transfers = new_transfers
+                    transfers = new_transfers
                 
                 # Otherwise, try to schedule image transfer
                 for transfer in transfers:
