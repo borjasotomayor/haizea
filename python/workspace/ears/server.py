@@ -761,6 +761,7 @@ class BaseServer(object):
                     if startTime == None:
                         enoughInAllSlots = False
                     else:
+                        startTimes[node][0] = startTime
                         for slottype in slottypes:
                             needed = resources[slottype]
                             avail = getAvail(startTime, needed, slottype, node)
@@ -1376,17 +1377,17 @@ class BaseServer(object):
         
         earliest = {}
         for node in range(self.getNumNodes()):
-            earliest[node+1] = (startTime, TRANSFER_REQUIRED, None)
+            earliest[node+1] = [startTime, TRANSFER_REQUIRED, None]
         
         if reusealg=="cache":
             nodeswithcached = self.backend.getNodesWithCachedImg(imageURI)
             for node in nodeswithcached:
-                earliest[node] = (time, TRANSFER_CACHED, None) 
+                earliest[node] = [time, TRANSFER_CACHED, None]
                 
         if reusealg=="cowpool":
             nodeswithimg = self.backend.getNodesWithImg(imageURI)
             for node in nodeswithimg:
-                earliest[node] = (time, TRANSFER_COW, None) 
+                earliest[node] = [time, TRANSFER_COW, None]
 
         
         if avoidredundant:
@@ -1398,7 +1399,7 @@ class BaseServer(object):
                 if transferImg == imageURI:
                     startTime = ISO.ParseDateTime(t["ALL_SCHEDEND"])
                     if startTime < earliest[node]:
-                        earliest[node] = (startTime, TRANSFER_REUSE, t["RSP_ID"])
+                        earliest[node] = [startTime, TRANSFER_REUSE, t["RSP_ID"]]
 
         return earliest
                     
@@ -1657,7 +1658,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/ears.conf"
-    tracefile="examples/test_lookahead1.trace"
+    tracefile="examples/test_lookahead2.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
