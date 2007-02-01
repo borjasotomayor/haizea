@@ -387,7 +387,8 @@ class BaseServer(object):
     def processQueue(self):
         mustremove = []
         dotransfer = self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT)
-        srvlog.info("PROCESSING QUEUE")
+        lookahead = self.config.has_option(GENERAL_SEC,BATCHLOOKAHEAD_OPT)
+        srvlog.info("%s PROCESSING QUEUE" % self.getTime())
         isFull = {}
         infeasibleRes = []
         for i,vm in enumerate(self.batchqueue):
@@ -404,16 +405,17 @@ class BaseServer(object):
 
             if dotransfer:
                 startTimes = self.findEarliestStartingTimes(imgURI, imgSize, self.getTime())
-                someAvailable = False
-                for time in startTimes.values():
-                    if not isFull.has_key(time[0]):
-                        isFull[time[0]] = self.resDB.isFull(time[0], SLOTTYPE_CPU)
-                    someAvailable = someAvailable or (not isFull[time[0]])
-                if not someAvailable:
-                    srvlog.info("0% resources available at possible starting times. Skipping this request.")
-                    continue
+                if not lookahead:
+                    someAvailable = False
+                    for time in startTimes.values():
+                        if not isFull.has_key(time[0]):
+                            isFull[time[0]] = self.resDB.isFull(time[0], SLOTTYPE_CPU)
+                        someAvailable = someAvailable or (not isFull[time[0]])
+                    if not someAvailable:
+                        srvlog.info("0% resources available at possible starting times. Skipping this request.")
+                        continue
             else:
-                if self.resDB.isFull(self.getTime(), SLOTTYPE_CPU):
+                if not lookahead and self.resDB.isFull(self.getTime(), SLOTTYPE_CPU):
                     srvlog.info("0% resources available at this time. Skipping rest of queue.")
                     break  # Ugh!
                 startTimes = dict([(node+1, [self.getTime(),TRANSFER_NO,None]) for node in range(self.getNumNodes()) ])
@@ -1658,7 +1660,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/ears.conf"
-    tracefile="examples/test_lookahead2.trace"
+    tracefile="examples/test_lookahead1.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
