@@ -28,6 +28,7 @@ SIMULATION_SEC="simulation"
 
 TYPE_OPT="type"
 BATCHALG_OPT="batchalgorithm"
+BATCHLOOKAHEAD_OPT="batchlookahead"
 TEMPLATEDB_OPT="templatedb"
 TARGETDB_OPT="targetdb"
 DB_OPT="db"
@@ -718,23 +719,59 @@ class BaseServer(object):
         #    3. Earlies start time
         candidatenodes = {}
 
+        def getAvail(startTime, needed, slottype, node):
+            slots = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, node=node, canpreempt=False)            
+            slots = slots.fetchall()
+            if len(slots) == 0:
+                return None
+            else:
+                slot = slots[0]
+                sl_id = slot["SL_ID"]
+                available = slot["available"]
+                return (sl_id, available, startTime)
+
         for node in startTimes.keys():
             enoughInAllSlots = True
             candidatenodes[node] = {}
             for slottype in slottypes:
                 needed = resources[slottype]
                 startTime = startTimes[node][0]
-                slots = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, node=node, canpreempt=False)            
-                slots = slots.fetchall()
-                if len(slots) == 0:
-                    enoughInAllSlots = False
+                avail = getAvail(startTime, needed, slottype, node)
+                if avail==None:
+                    enoughInAllSlots=False
                 else:
-                    slot = slots[0]
-                    sl_id = slot["SL_ID"]
-                    available = slot["available"]
-                    candidatenodes[node][slottype]= (sl_id, available, startTime)
+                    candidatenodes[node][slottype] = avail
+
             if not enoughInAllSlots:
-                del candidatenodes[node]
+                # Currently, only a lookahead of 1 is supported
+                lookahead = self.config.has_option(GENERAL_SEC,BATCHLOOKAHEAD_OPT)
+                if lookahead:
+                    srvlog.info("Node %i has no resources at current time. Attempting lookahead." % node)
+                    # Try again with different starttime
+                    enoughInAllSlots = True
+                    earliestStartTime = startTimes[node][0]
+                    allocs = self.resDB.getCurrentAllocationsInNode(time=earliestStartTime, nod_id=node)
+                    allocs = allocs.fetchall()
+                    startTime = None
+                    for alloc in allocs:
+                        #if self.batchreservations.has_key(alloc["RES_ID"]):
+                        endtime = ISO.ParseDateTime(alloc["ALL_SCHEDEND"])
+                        if startTime == None or startTime > endtime:
+                            startTime = endtime
+                    if startTime == None:
+                        enoughInAllSlots = False
+                    else:
+                        for slottype in slottypes:
+                            needed = resources[slottype]
+                            avail = getAvail(startTime, needed, slottype, node)
+                            if avail==None:
+                                enoughInAllSlots=False
+                            else:
+                                candidatenodes[node][slottype] = avail
+                    if not enoughInAllSlots:
+                        del candidatenodes[node]
+                else:
+                    del candidatenodes[node]
                                 
         if len(candidatenodes) == 0:
             raise SchedException, "No physical node has enough available resources for this request at this time"
@@ -1524,7 +1561,7 @@ class SimulatingServer(BaseServer):
             maxCacheSize = self.config.getint(GENERAL_SEC, MAXCACHESIZE_OPT)
             reusealg = REUSE_CACHE
         elif reusealg == "cowpool":
-            maxDeployImg=None
+            maxDeployImg=self.config.getint(GENERAL_SEC, MAXDEPLOYED_OPT)
             reusealg = REUSE_COWPOOL
             
         self.backend=SimulationControlBackend(self, numnodes, reusealg, maxCacheSize, maxDeployImg)
@@ -1620,7 +1657,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/ears.conf"
-    tracefile="examples/test_reuse3.trace"
+    tracefile="examples/test_lookahead1.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
