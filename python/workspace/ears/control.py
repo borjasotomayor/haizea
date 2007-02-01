@@ -96,6 +96,32 @@ class BaseNode(object):
             return 0
         else:
             return sum([v.imgSize for v in self.deployedimages])
+
+    def getNumDeployedImg(self):
+        return len(self.deployedimages)
+    
+    def purgeOldestUnusedImage(self):
+        unused = [img for img in self.deployedimages if len(img.rsp_ids)==0]
+        if len(unused) == 0:
+            return 0
+        else:
+            i = iter(unused)
+            oldest = i.next()
+            for img in i:
+                if img.timeout < oldest.timeout:
+                    oldest = img
+            self.deployedimages.remove(oldest)
+            return 1
+    
+    def purgeImagesDownTo(self, target):
+        done = False
+        while not done:
+            removed = self.purgeOldestUnusedImage()
+            if removed==0:
+                done = True
+            elif removed == 1:
+                if len(self.deployedimages) == target:
+                    done = True
         
     def printDeployedImages(self):
         images = ""
@@ -160,11 +186,25 @@ class SimulationControlBackend(BaseControlBackend):
                 img.add_rspid(rsp_id)
                 self.getNode(nod_id).addDeployedImage(img)
         elif self.reusealg == REUSE_COWPOOL:
-            img = VMImage(imgURI, imgSize)
-            img.timeout = timeout
-            for rsp_id in rsp_ids:
-                img.add_rspid(rsp_id)
-            self.getNode(nod_id).addDeployedImage(img)
+            # Sometimes we might find that the image is already deployed
+            # (although unused). In that case, don't add another copy to
+            # the pool. Just "reactivate" it.
+            if self.getNode(nod_id).isImgDeployed(imgURI):
+                for rsp_id in rsp_ids:
+                    self.getNode(nod_id).addVMtoCOWImg(imgURI, rsp_id, timeout)
+            else:
+                img = VMImage(imgURI, imgSize)
+                img.timeout = timeout
+                for rsp_id in rsp_ids:
+                    img.add_rspid(rsp_id)
+                if self.maxDeployImg != None:
+                    numDeployed = self.getNode(nod_id).getNumDeployedImg()
+                    if numDeployed >= self.maxDeployImg:
+                        srvlog.info("Node %i has %i deployed images. Will try to bring it down to %i" % (nod_id, numDeployed, self.maxDeployImg -1))
+                        self.getNode(nod_id).printDeployedImages()
+                        self.getNode(nod_id).purgeImagesDownTo(self.maxDeployImg - 1)
+                        self.getNode(nod_id).printDeployedImages()
+                self.getNode(nod_id).addDeployedImage(img)
 
         for rsp_id in rsp_ids:
             self.rspnode[rsp_id]=nod_id
@@ -198,14 +238,15 @@ class SimulationControlBackend(BaseControlBackend):
                 img.rsp_ids.remove(rsp_id)
                 node.printDeployedImages()
                 # Might have to keep the image if we're using a cowpool
-                if self.reusealg == REUSE_COWPOOL:
+                if self.reusealg == REUSE_COWPOOL and self.maxDeployImg==None:
                     if img.timeout >= self.server.getTime() and len(img.rsp_ids) == 0:
                         srvlog.info("Removing image %s" % img.imgURI)
                     else:
                         newimages.append(img)
+                else:
+                    newimages.append(img)
             else:
                 newimages.append(img)
-                
 
         node.deployedimages = newimages
         node.printDeployedImages()
