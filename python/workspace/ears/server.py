@@ -260,6 +260,8 @@ class BaseServer(object):
 
         dotransfer = self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT)
         reusealg = self.config.get(GENERAL_SEC, REUSEALG_OPT)
+        avoidredundant = self.config.getboolean(GENERAL_SEC, REDUNDANT_OPT)
+
         
         srvlog.info("%s: Received request for VW %i" % (reqTime, self.reqnum))
         srvlog.info("\tStart time: %s" % startTime)
@@ -281,20 +283,22 @@ class BaseServer(object):
             if dotransfer:
                 # First off, see if we can use existing transfers
                 new_transfers = []
-                for transfer in transfers:
-                    destinationNode = transfer[0]
-                    VMrsp_id = transfer[1]
-                    candidate_transfers = [rsp_id for rsp_id in self.imagetransfers.keys() if self.imagetransfers[rsp_id].destinationNode == destinationNode and startTime >= self.imagetransfers[rsp_id].deadline]
-                    # TODO: Filter by 'idle time' between image usages
-                    if len(candidate_transfers)==0:
-                        new_transfers.append(transfer)
-                    else:
-                        # Arbitrarily choose first transfer.
-                        # TODO: Come up with better criteria for choosing the transfer
-                        rsp_id=candidate_transfers[0]
-                        self.imagetransfers[rsp_id].addVM(VMrsp_id,endTime)   
-                        piggyback_rsp_ids[rsp_id]=VMrsp_id 
-                        srvlog.info("Image transfer for rsp_id=%i to node=%i will piggy back on existing transfer rsp_id=%i" % (VMrsp_id, destinationNode, rsp_id))
+                
+                if avoidredundant:
+                    for transfer in transfers:
+                        destinationNode = transfer[0]
+                        VMrsp_id = transfer[1]
+                        candidate_transfers = [rsp_id for rsp_id in self.imagetransfers.keys() if self.imagetransfers[rsp_id].destinationNode == destinationNode and startTime >= self.imagetransfers[rsp_id].deadline]
+                        # TODO: Filter by 'idle time' between image usages
+                        if len(candidate_transfers)==0:
+                            new_transfers.append(transfer)
+                        else:
+                            # Arbitrarily choose first transfer.
+                            # TODO: Come up with better criteria for choosing the transfer
+                            rsp_id=candidate_transfers[0]
+                            self.imagetransfers[rsp_id].addVM(VMrsp_id,endTime)   
+                            piggyback_rsp_ids[rsp_id]=VMrsp_id 
+                            srvlog.info("Image transfer for rsp_id=%i to node=%i will piggy back on existing transfer rsp_id=%i" % (VMrsp_id, destinationNode, rsp_id))
 
                 transfers = new_transfers
                 
@@ -1564,7 +1568,10 @@ class SimulatingServer(BaseServer):
             maxCacheSize = self.config.getint(GENERAL_SEC, MAXCACHESIZE_OPT)
             reusealg = REUSE_CACHE
         elif reusealg == "cowpool":
-            maxDeployImg=self.config.getint(GENERAL_SEC, MAXDEPLOYED_OPT)
+            if self.config.has_option(GENERAL_SEC, MAXDEPLOYED_OPT):
+                maxDeployImg=self.config.getint(GENERAL_SEC, MAXDEPLOYED_OPT)
+            else:
+                maxDeployImg=None
             reusealg = REUSE_COWPOOL
             
         self.backend=SimulationControlBackend(self, numnodes, reusealg, maxCacheSize, maxDeployImg)
