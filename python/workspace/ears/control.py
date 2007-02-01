@@ -243,6 +243,11 @@ class SimulationControlBackend(BaseControlBackend):
                         srvlog.info("Removing image %s" % img.imgURI)
                     else:
                         newimages.append(img)
+                elif self.reusealg == REUSE_NONE:
+                    if len(img.rsp_ids) == 0:
+                        srvlog.info("Removing image %s" % img.imgURI)
+                    else:
+                        newimages.append(img)                    
                 else:
                     newimages.append(img)
             else:
