@@ -162,10 +162,10 @@ class BaseServer(object):
                         else:
                             ending = True
                             
-                    if suspending and ending:
-                        srvlog.error("Reservation part %i has allocations that are set to both suspend and end. This should not happen" % rsp_id)
+                    #if suspending and ending:
+                    #    srvlog.error("Reservation part %i has allocations that are set to both suspend and end. This should not happen" % rsp_id)
 
-                    if suspending:
+                    if suspending and not ending:
                         self.suspendReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
                     elif ending:
                         # Are we done with *all* the allocations for this resource part?
@@ -372,7 +372,8 @@ class BaseServer(object):
             nodeName = (vwnode+1).__str__()
             self.queueBatchRequest(res_id, duration, resources, nodeName, imgURI, imgSize)
         self.batchreservations[res_id] = [duration, resources, imgURI, imgSize, 0]
-        
+        #print "Add %i (%s)" % (res_id, self.batchreservations.keys())
+
         if self.commit: self.resDB.commit()
 
     def queueBatchRequest(self,res_id, duration, resources, nodeName, imgURI, imgSize):
@@ -759,10 +760,14 @@ class BaseServer(object):
                     allocs = allocs.fetchall()
                     startTime = None
                     for alloc in allocs:
-                        #if self.batchreservations.has_key(alloc["RES_ID"]):
-                        endtime = ISO.ParseDateTime(alloc["ALL_SCHEDEND"])
-                        if startTime == None or startTime > endtime:
-                            startTime = endtime
+			            # No point trying to schedule after a batch reservation that is going
+			            # to be preempted right after the allocation ends.
+                        if alloc["ALL_NEXTSTART"] == None:
+                            allocres = self.resDB.getResID(alloc["RSP_ID"])
+                            if self.batchreservations.has_key(allocres):
+                                endtime = ISO.ParseDateTime(alloc["ALL_SCHEDEND"])
+                                if startTime == None or startTime > endtime:
+                                    startTime = endtime
                     if startTime == None:
                         enoughInAllSlots = False
                     else:
@@ -1422,18 +1427,20 @@ class BaseServer(object):
 
     def startReservation(self, res_id, row=None):
         if row != None:
-            srvlog.info( "%s: Starting reservation '%s'" % (self.getTime(), row["RES_NAME"]))
+            srvlog.info( "%s: Starting reservation %i '%s'" % (self.getTime(), res_id, row["RES_NAME"]))
         self.resDB.updateReservationStatus(res_id, STATUS_RUNNING)
 
     def stopReservation(self, res_id, row=None):
         if row != None:
-            srvlog.info( "%s: Stopping reservation '%s'" % (self.getTime(), row["RES_NAME"]))
+            srvlog.info( "%s: Stopping reservation %i '%s'" % (self.getTime(), res_id, row["RES_NAME"]))
             #print( "%s: Stopping reservation '%s'" % (self.getTime(), row["RES_NAME"]))
         self.resDB.updateReservationStatus(res_id, STATUS_DONE)
         if self.batchreservations.has_key(res_id):
             self.batchcompletednum += 1
             self.batchcompleted.append((self.getTime(), self.batchcompletednum))
             del self.batchreservations[res_id]
+            #print "Stop res %i (%s)" % (res_id, self.batchreservations.keys())
+
     
     def startReservationPart(self, respart_id, row=None, resname=None):
         if row != None:
@@ -1468,6 +1475,7 @@ class BaseServer(object):
             if self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT):
                 nod_id = self.backend.removeImage(respart_id)
                 self.diskusage.append((self.getTime(), nod_id, self.backend.nodes[nod_id-1].totalDeployedImageSize()))
+            #print "Stop respart %i of %i (%s)" % (respart_id, row["RES_ID"], self.batchreservations.keys())
             if self.batchreservations.has_key(row["RES_ID"]):
                 #print row["RSP_NAME"]
                 self.batchvmcompletednum += 1
