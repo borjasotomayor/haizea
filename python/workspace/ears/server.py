@@ -123,6 +123,8 @@ class BaseServer(object):
         self.queuesizenum=0
         self.accepted=[]
         self.rejected=[]
+        self.accepted_ids=[]
+        self.rejected_ids=[]
         self.queuesize=[]
         self.batchcompleted=[]
         self.batchvmcompleted=[]
@@ -251,7 +253,6 @@ class BaseServer(object):
         self.trace.entries = newtrace
 
     def processARRequest(self, r):
-        self.backend.printNodes()
         reqTime = self.getTime() #Should be starttime + seconds
         startTime = reqTime + TimeDelta(seconds=int(r.fields["deadline"]))
         endTime = startTime + TimeDelta(seconds=int(r.fields["duration"]))
@@ -338,6 +339,7 @@ class BaseServer(object):
             if self.commit: self.resDB.commit()
             self.acceptednum += 1
             self.accepted.append((reqTime, self.acceptednum))
+            self.accepted_ids.append(self.reqnum)
         except SchedException, msg:
             srvlog.warning("Scheduling exception: %s" % msg)
             # Rollback!
@@ -349,6 +351,7 @@ class BaseServer(object):
                 self.backend.removeImage(rsp_id)
             self.rejectednum += 1
             self.rejected.append((reqTime, self.rejectednum))
+            self.rejected_ids.append(self.reqnum)
             self.resDB.rollback()
                 
     def processBatchRequest(self, r):
@@ -419,7 +422,6 @@ class BaseServer(object):
         srvlog.info("%s PROCESSING QUEUE" % self.getTime())
         isFull = {}
         infeasibleRes = []
-        lookaheadStart=None
         
         for i,vm in enumerate(self.batchqueue):
             res_id = vm["res_id"]
@@ -428,6 +430,7 @@ class BaseServer(object):
             nodename = "VM " + vm["node"]
             imgURI = vm["imgURI"]
             imgSize = vm["imgSize"]
+            lookAheadStart={}
             
             if res_id in infeasibleRes:
                 srvlog.info("VMs for reservation %i are already known to be infeasible at this time. Skipping." % res_id)
@@ -476,7 +479,7 @@ class BaseServer(object):
                                 isFull[time] = self.resDB.isFull(time, SLOTTYPE_CPU)
                             if isFull[time]:
                                 del lookAheadStart[node]
-                        
+
             batchAlgorithm = self.config.get(GENERAL_SEC,BATCHALG_OPT)
             if batchAlgorithm == "nopreemption":
                 preemptible = False

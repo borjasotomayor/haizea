@@ -72,6 +72,8 @@ class EARS(object):
         utilstats = {}
         acceptedstats = {}
         rejectedstats = {}
+        acceptedidsstats = {}
+        rejectedidsstats = {}
         batchstats = {}
         diskusagestats = {}
         for profile in self.profilenames:
@@ -211,6 +213,9 @@ class EARS(object):
 
             # BATCH COMPLETED
             batchstats[profilename] = batchcompleted
+            
+            acceptedidsstats[profilename] = s.accepted_ids
+            rejectedidsstats[profilename] = s.rejected_ids
                 
         runtime = {}
         utilization = {}
@@ -233,6 +238,13 @@ class EARS(object):
         csvutil = csvruntime = csvaccept = csvreject = cvsdiskusage = ""
         
         # Print info to stdout
+        
+        print "ADVANCE RESERVATIONS"
+        print "-----------"
+        for profilename in profilenames:
+            print profilename
+            print "\tAccepted: %s" % ",".join([`id` for id in acceptedidsstats[profilename]])
+            print "\tRejected: %s" % ",".join([`id` for id in rejectedidsstats[profilename]])
         
         print "UTILIZATION"
         print "-----------"
@@ -311,7 +323,7 @@ class EARS(object):
     
 if __name__ == "__main__":
     configfile="../ears/examples/ears-multirun.conf"
-    tracefile="../ears/examples/test_mixed.trace"
+    tracefile="../ears/examples/test_predeploy1.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)        
