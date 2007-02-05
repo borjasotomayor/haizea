@@ -816,6 +816,7 @@ class BaseServer(object):
                     enoughInAllSlots=False
                 else:
                     candidatenodes[node][slottype] = avail
+
             if not enoughInAllSlots and lookaheadStart != None:
                 if lookaheadStart.has_key(node) and lookaheadStart[node] != None:
                     enoughInAllSlots = True
@@ -832,6 +833,8 @@ class BaseServer(object):
                         del candidatenodes[node]
                     else:
                         startTimes[node]=lookaheadStart[node]
+                else:
+                    del candidatenodes[node]
             elif not enoughInAllSlots:
                 del candidatenodes[node]
 
@@ -1725,7 +1728,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/ears.conf"
-    tracefile="examples/test_lookahead1.trace"
+    tracefile="examples/test_stress.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
