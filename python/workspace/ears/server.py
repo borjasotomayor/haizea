@@ -6,6 +6,7 @@ from mx.DateTime import *
 from mx.DateTime import ISO
 from workspace.ears import srvlog, reslog, loglevel
 from workspace.ears.control import SimulationControlBackend
+import copy
 
 STATUS_PENDING = 0
 STATUS_RUNNING = 1
@@ -389,12 +390,37 @@ class BaseServer(object):
         self.queuesize.append((self.getTime(), self.queuesizenum))
 
     def processQueue(self):
+        def findLookahead(earliestStartingTimes):
+            lookaheadStart={}
+            for node in earliestStartingTimes.keys():
+                earliestStartTime = earliestStartingTimes[node][0]
+                allocs = self.resDB.getCurrentAllocationsInNode(time=earliestStartTime, nod_id=node)
+                allocs = allocs.fetchall()
+                startTimeLA = None
+                for alloc in allocs:
+                    # No point trying to schedule after a batch reservation that is going
+                    # to be preempted right after the allocation ends.
+                    if alloc["ALL_NEXTSTART"] == None:
+                        allocres = self.resDB.getResID(alloc["RSP_ID"])
+                        if self.batchreservations.has_key(allocres):
+                            endtime = ISO.ParseDateTime(alloc["ALL_SCHEDEND"])
+                            if (startTimeLA == None or startTimeLA > endtime) and endtime > earliestStartTime:
+                                startTimeLA = endtime
+                if startTimeLA == None:
+                    lookaheadStart[node] = None
+                else:
+                    lookaheadStart[node] = copy.deepcopy(earliestStartingTimes[node])
+                    lookaheadStart[node][0] = startTimeLA
+            return lookaheadStart
+        
         mustremove = []
         dotransfer = self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT)
         lookahead = self.config.has_option(GENERAL_SEC,BATCHLOOKAHEAD_OPT)
         srvlog.info("%s PROCESSING QUEUE" % self.getTime())
         isFull = {}
         infeasibleRes = []
+        lookaheadStart=None
+        
         for i,vm in enumerate(self.batchqueue):
             res_id = vm["res_id"]
             duration = vm["duration"]
@@ -409,13 +435,31 @@ class BaseServer(object):
 
             if dotransfer:
                 startTimes = self.findEarliestStartingTimes(imgURI, imgSize, self.getTime())
-                if not lookahead:
-                    someAvailable = False
-                    for time in startTimes.values():
-                        if not isFull.has_key(time[0]):
-                            isFull[time[0]] = self.resDB.isFull(time[0], SLOTTYPE_CPU)
-                        someAvailable = someAvailable or (not isFull[time[0]])
-                    if not someAvailable:
+                someAvailable = False
+                for node in startTimes.keys():
+                    time = startTimes[node][0]
+                    if not isFull.has_key(time):
+                        isFull[time] = self.resDB.isFull(time, SLOTTYPE_CPU)
+                    if isFull[time]:
+                        del startTimes[node]
+                    else:
+                        someAvailable = True
+                if not lookahead and not someAvailable:
+                    srvlog.info("0% resources available at possible starting times. Skipping this request.")
+                    continue
+                elif lookahead:
+                    lookAheadStart = findLookahead(startTimes)
+                    someAvailableLookAhead = False
+                    for node in lookAheadStart.keys():
+                        if lookAheadStart[node] != None:
+                            time = lookAheadStart[node][0]
+                            if not isFull.has_key(time):
+                                isFull[time] = self.resDB.isFull(time, SLOTTYPE_CPU)
+                            if isFull[time]:
+                                del lookAheadStart[node]
+                            else:
+                                someAvailableLookAhead = True
+                    if not someAvailable and not someAvailableLookAhead:
                         srvlog.info("0% resources available at possible starting times. Skipping this request.")
                         continue
             else:
@@ -423,7 +467,16 @@ class BaseServer(object):
                     srvlog.info("0% resources available at this time. Skipping rest of queue.")
                     break  # Ugh!
                 startTimes = dict([(node+1, [self.getTime(),TRANSFER_NO,None]) for node in range(self.getNumNodes()) ])
-
+                if lookahead:
+                    lookAheadStart = findLookahead(startTimes)
+                    for node in lookAheadStart.keys():
+                        if lookAheadStart[node] != None:
+                            time = lookAheadStart[node][0]
+                            if not isFull.has_key(time):
+                                isFull[time] = self.resDB.isFull(time, SLOTTYPE_CPU)
+                            if isFull[time]:
+                                del lookAheadStart[node]
+                        
             batchAlgorithm = self.config.get(GENERAL_SEC,BATCHALG_OPT)
             if batchAlgorithm == "nopreemption":
                 preemptible = False
@@ -437,8 +490,24 @@ class BaseServer(object):
 
             try:
                 srvlog.info("Attempting to schedule VM for batch reservation %i starting at %s with duration %s" % (res_id,self.getTime(),duration))
-                srvlog.info("%s" % startTimes)
-                (node,VMrsp_id,endTime) = self.scheduleSingleVM(res_id, startTimes, duration, imgURI, resources=resources, preemptible=preemptible, suspendable=suspendable, forceName=nodename)
+                srvlog.info("Earliest start times:")
+                for node in startTimes.keys():
+                    srvlog.info("\tNode %i: %s" % (node,startTimes[node][0]))
+                if len([t for t in lookAheadStart.values() if t != None]) > 0:
+                    srvlog.info("Lookahead start times:")
+                    for node in [n for n in lookAheadStart.keys() if lookAheadStart[n] != None]:
+                        srvlog.info("\tNode %i: %s" % (node,lookAheadStart[node][0]))
+
+                if len(lookAheadStart)==0:
+                    lookAheadStart=None
+                    
+                (node,VMrsp_id,endTime, startTime) = self.scheduleSingleVM(res_id, startTimes, lookAheadStart, duration, imgURI, resources=resources, preemptible=preemptible, suspendable=suspendable, forceName=nodename)
+
+                if not isFull.has_key(startTime):
+                    isFull[startTime] = self.resDB.isFull(startTime, SLOTTYPE_CPU)
+                if not isFull.has_key(endTime):
+                    isFull[endTime] = self.resDB.isFull(endTime, SLOTTYPE_CPU)
+                
                 transfertype = startTimes[node][1]
                 if transfertype == TRANSFER_REQUIRED:
                     transfer = self.scheduleImageTransferFIFO(res_id, self.getTime(), 1, imgURI, imgSize, node, VMrsp_id, imgslot=self.imagenodeslot_batch)
@@ -713,7 +782,7 @@ class BaseServer(object):
             raise SchedException
 
     # Schedules a single VM on a best-effort basis
-    def scheduleSingleVM(self, res_id, startTimes, duration, imguri, resources, preemptible, suspendable, forceName=False):
+    def scheduleSingleVM(self, res_id, startTimes, lookaheadStart, duration, imguri, resources, preemptible, suspendable, forceName=False):
         slottypes = resources.keys()
         
         # This variable stores the candidate slots. It is a dictionary, where the key
@@ -739,51 +808,33 @@ class BaseServer(object):
         for node in startTimes.keys():
             enoughInAllSlots = True
             candidatenodes[node] = {}
+            startTime = startTimes[node][0]
             for slottype in slottypes:
                 needed = resources[slottype]
-                startTime = startTimes[node][0]
                 avail = getAvail(startTime, needed, slottype, node)
                 if avail==None:
                     enoughInAllSlots=False
                 else:
                     candidatenodes[node][slottype] = avail
-
-            if not enoughInAllSlots:
-                # Currently, only a lookahead of 1 is supported
-                lookahead = self.config.has_option(GENERAL_SEC,BATCHLOOKAHEAD_OPT)
-                if lookahead:
-                    srvlog.info("Node %i has no resources at current time. Attempting lookahead." % node)
-                    # Try again with different starttime
+            if not enoughInAllSlots and lookaheadStart != None:
+                if lookaheadStart.has_key(node) and lookaheadStart[node] != None:
                     enoughInAllSlots = True
-                    earliestStartTime = startTimes[node][0]
-                    allocs = self.resDB.getCurrentAllocationsInNode(time=earliestStartTime, nod_id=node)
-                    allocs = allocs.fetchall()
-                    startTime = None
-                    for alloc in allocs:
-			            # No point trying to schedule after a batch reservation that is going
-			            # to be preempted right after the allocation ends.
-                        if alloc["ALL_NEXTSTART"] == None:
-                            allocres = self.resDB.getResID(alloc["RSP_ID"])
-                            if self.batchreservations.has_key(allocres):
-                                endtime = ISO.ParseDateTime(alloc["ALL_SCHEDEND"])
-                                if startTime == None or startTime > endtime:
-                                    startTime = endtime
-                    if startTime == None:
-                        enoughInAllSlots = False
-                    else:
-                        startTimes[node][0] = startTime
-                        for slottype in slottypes:
-                            needed = resources[slottype]
-                            avail = getAvail(startTime, needed, slottype, node)
-                            if avail==None:
-                                enoughInAllSlots=False
-                            else:
-                                candidatenodes[node][slottype] = avail
+                    candidatenodes[node] = {}
+                    for slottype in slottypes:
+                        needed = resources[slottype]
+                        startTime = lookaheadStart[node][0]
+                        avail = getAvail(startTime, needed, slottype, node)
+                        if avail==None:
+                            enoughInAllSlots=False
+                        else:
+                            candidatenodes[node][slottype] = avail
                     if not enoughInAllSlots:
                         del candidatenodes[node]
-                else:
-                    del candidatenodes[node]
-                                
+                    else:
+                        startTimes[node]=lookaheadStart[node]
+            elif not enoughInAllSlots:
+                del candidatenodes[node]
+
         if len(candidatenodes) == 0:
             raise SchedException, "No physical node has enough available resources for this request at this time"
 
@@ -801,7 +852,7 @@ class BaseServer(object):
             suspendpoints = self.findSuspendPoints(startTime, sl_id, res_needed, duration, suspensiontime=None)
             srvlog.info("Suspend points:")
             for point in suspendpoints:
-                srvlog.info("\t%s %s %s" % (point[0],point[1],point[2]))
+                srvlog.info("\t%s  -->  %s  (Next: %s)" % (point[0],point[1],point[2]))
             nodeSuspendTime=suspendpoints[0][1]
             nodeEndTime=suspendpoints[-1][1]
             if suspendable or len(suspendpoints)==1:
@@ -835,7 +886,7 @@ class BaseServer(object):
             srvlog.info("This VM will require suspension.")
             (endTime,) = self.rescheduleReservationPartForSuspension(rsp_id, suspendTime)
                 
-        return (optimalNode, rsp_id, endTime)
+        return (optimalNode, rsp_id, endTime, startTime)
         
 
 
@@ -1374,7 +1425,6 @@ class BaseServer(object):
             laststart = suspendpoints[-1][0]
             end = laststart + time_needed
             suspendpoints[-1][1]=end
-        srvlog.info("Suspend points: %s" % suspendpoints)
         return suspendpoints
 
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
@@ -1613,13 +1663,14 @@ class SimulatingServer(BaseServer):
             self.processReservations(self.time, td)
             self.time = self.time + td
             
-        self.accepted.append((self.time, self.acceptednum))
-        self.rejected.append((self.time, self.rejectednum))
+        finaltime = self.time - td
+        self.accepted.append((finaltime, self.acceptednum))
+        self.rejected.append((finaltime, self.rejectednum))
         if not self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT):
             imagesize = reduce(int.__add__, [v[1] for v in self.distinctimages])
             for i in xrange(self.numnodes):
                 self.diskusage.append((self.startTime, i+1, imagesize))
-                self.diskusage.append((self.time, i+1, imagesize))
+                self.diskusage.append((finaltime, i+1, imagesize))
             
         if self.config.get(GENERAL_SEC, REUSEALG_OPT)=="cache":
             self.backend.printNodes()
