@@ -92,6 +92,9 @@ class EARS(object):
             stats = None
             accepted = None
             rejected = None
+            # TODO: Persist these two
+            acceptedids = []
+            rejectedids = []
             diskusage = None
             batchcompleted = None
             queuesize = None
@@ -134,6 +137,8 @@ class EARS(object):
                 batchcompleted = [((v[0] - s.startTime).seconds,v[1]) for v in s.batchvmcompleted]
                 diskusage = [((v[0] - s.startTime).seconds,v[1],v[2]) for v in s.diskusage]
                 queuesize = [((v[0] - s.startTime).seconds,v[1]) for v in s.queuesize]
+                acceptedids = s.accepted_ids
+                rejectedids = s.rejected_ids
                 file = open (utilstatsfilename, "w")
                 p = Pickler(file)
                 p.dump(stats)
@@ -214,8 +219,8 @@ class EARS(object):
             # BATCH COMPLETED
             batchstats[profilename] = batchcompleted
             
-            acceptedidsstats[profilename] = s.accepted_ids
-            rejectedidsstats[profilename] = s.rejected_ids
+            acceptedidsstats[profilename] = acceptedids
+            rejectedidsstats[profilename] = rejectedids
                 
         runtime = {}
         utilization = {}
@@ -246,6 +251,7 @@ class EARS(object):
             print "\tAccepted: %s" % ",".join([`id` for id in acceptedidsstats[profilename]])
             print "\tRejected: %s" % ",".join([`id` for id in rejectedidsstats[profilename]])
         
+        print ""
         print "UTILIZATION"
         print "-----------"
         for profilename in profilenames:
