@@ -243,6 +243,13 @@ class ReservationDB(object):
     def getCurrentAllocationsInRespart(self, time, rsp_id, **kwargs):
         return self.getAllocationsInInterval(time, td=None, eventfield="all_schedend",rsp_id=rsp_id,**kwargs)
 
+    def getResID(self, rsp_id):
+        sql = "SELECT RES_ID FROM TB_RESPART WHERE RSP_ID=%i" % rsp_id
+        cur = self.getConn().cursor()
+        cur.execute(sql)
+
+        return cur.fetchone()[0]
+
     def getImageNodeSlot(self):
         # Ideally, we should do this by flagging nodes as either image nodes or worker nodes
         # For now, we simply seek out the node with the outbound network slot (only the image
@@ -310,7 +317,7 @@ class ReservationDB(object):
         return rsp_id
     
     def addAllocation(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None, nextstart=None):
-        srvlog.info( "Reserving %f in slot %i from %s to %s (rsp_id: %i)" % (amount, sl_id, startTime, endTime, rsp_id))
+        srvlog.info( "Reserving %f in slot %i from %s to %s (rsp_id: %i) [with nextstart=%s]" % (amount, sl_id, startTime, endTime, rsp_id, nextstart))
         sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_amount,all_moveable,all_deadline,all_duration,all_nextstart,all_status) values (?,?,?,?,?,?,?,?,?,0)"
         cur = self.getConn().cursor()
         cur.execute(sql, (rsp_id, sl_id, startTime, endTime, amount, moveable, deadline, duration, nextstart))            
