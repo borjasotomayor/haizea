@@ -79,6 +79,13 @@ class Cooker(object):
             trace = result[0]
             totalDurationAR = result[1]
             totalDurationBatch = result[2]
+            totalDuration = totalDurationAR + totalDurationBatch
+
+            maxDuration = c.conf.traceDuration
+            if  totalDuration <= maxDuration:
+                sys.stderr.write("ATTEMPT #%i: Insufficient duration. Expected >= %i   Real: %i\n" % (attempt, maxDuration, totalDuration))
+                attempt += 1
+                continue
             
             arPercent = float(c.conf.config.get(cooker.GENERAL_SEC, cooker.AR_OPT))/100
             batchPercent = float(c.conf.config.get(cooker.GENERAL_SEC, cooker.BATCH_OPT))/100
@@ -114,16 +121,18 @@ class EARSMultiRun(object):
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
         p.add_option(Option("-t", "--tracefile", action="store", type="string", dest="tracefile", required=True))
+        p.add_option(Option("-p", "--profile", action="store", type="string", dest="profile", default=None, required=False))
 
         opt, args = p.parse_args(argv)
         configfile=opt.conf
         tracefile=opt.tracefile
+        profile=opt.profile
         
         file = open (configfile, "r")
         config = ConfigParser.ConfigParser()
         config.readfp(file)        
         
-        e = multirun.EARS(config, tracefile)
+        e = multirun.EARS(config, tracefile, profile)
         e.multirun()        
         
         

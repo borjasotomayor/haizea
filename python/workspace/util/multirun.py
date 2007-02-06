@@ -25,12 +25,16 @@ OUTPUT_OPT="output"
 
 
 class EARS(object):
-    def __init__(self, config, tracefile):
+    def __init__(self, config, tracefile, onlyprofile=None):
         self.profiles = {}
         self.tracefile=tracefile
         self.config = config
+        self.onlyprofile = onlyprofile
         self.output = "x11"
-        self.profilenames = [s.strip(' ') for s in config.get(MULTIRUN_SEC, PROFILES_OPT).split(",")]
+        if onlyprofile == None:
+            self.profilenames = [s.strip(' ') for s in config.get(MULTIRUN_SEC, PROFILES_OPT).split(",")]
+        else:
+            self.profilenames = [onlyprofile]
     
         for profile in self.profilenames:
             profileconfig = ConfigParser.ConfigParser()
@@ -222,6 +226,9 @@ class EARS(object):
             acceptedidsstats[profilename] = acceptedids
             rejectedidsstats[profilename] = rejectedids
                 
+        if self.onlyprofile != None:
+            sys.exit()
+        
         runtime = {}
         utilization = {}
         peakdiskusage = {}
