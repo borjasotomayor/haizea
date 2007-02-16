@@ -1,24 +1,3 @@
-\section{Grid Computing}
-\label{sec:grid}
-
-\emph{Grid computing} \cite{gridbook} is a distributed computing model where computational resources and users from different administrative domains are integrated into a \emph{virtual organization}, a new administrative domain spanning the resources of the different `real' organizations. Virtual organizations, thus, can provide their users with more computing resources than would be available at a single site.
-
-Foster \cite{threepointgrid} provides the following three--point definition of what constitutes a ``grid'':
-
-\begin{quote}
-A Grid is a system that:
-\begin{itemize}
-\item \emph{coordinates resources that are not subject to centralized control} - (A Grid integrates and coordinates resources and users that live within different control domains for example, the user's desktop vs. central computing; different administrative units of the same company; or different companies; and addresses the issues of security, policy, payment, membership, and so forth that arise in these settings. Otherwise, we are dealing with a local management system.)
-\item \emph{using standard, open, general-purpose protocols and interfaces} - (A Grid is built from multi-purpose protocols and interfaces that address such fundamental issues as authentication, authorization, resource discovery, and resource access. As I discuss further below, it is important that these protocols and interfaces be standard and open. Otherwise, we are dealing with an application-specific system.)
-\item \emph{to deliver nontrivial qualities of service} - (A Grid allows its constituent resources to be used in a coordinated fashion to deliver various qualities of service, relating for example to response time, throughput, availability, and security, and/or co-allocation of multiple resource types to meet complex user demands, so that the utility of the combined system is significantly greater than that of the sum of its parts.)
-\end{itemize}
-\end{quote} 
-
-Creating grid systems requires a wide variety of protocols, services, and software development kits \cite{anatomy}. Most notably, the Open Grid Services Architecture \cite{physiology, ogsa, ogsaweb}, or OGSA, provides an architecture for service-oriented grid protocols, most of which are developed by the Open Grid Forum \cite{ogfweb}. The Web Services Resource Framework \cite{wsrfweb}, or WSRF, provides a stateful web services transport layer for OGSA protocols. The Globus Toolkit 4 \cite{globusweb,gt4book}, or GT4,  is an open source toolkit organized as a collection of loosely-coupled components in the areas of security, data management, execution management, and information services. These components, which include services, programming libraries and development tools, can be used to build grid systems. Some of the services included with GT4 implement OGF specifications, such as GridFTP, while other services meet the requirements outlined in OGSA and provide a \emph{de facto} standard for the grid community. GT4 also includes an implementation of WSRF, and most, but not all, of the component in GT4 use WSRF as a transport layer.
-
-The Globus Toolkit 4 includes a \emph{Virtual Workspace Service}\footnote{This component is, as of this writing, an ``incubator project'', a status comparable to a ``proto--project'' or a ``technology preview''. More details on the specific meaning of ``incubation'' within the Globus Alliance's development model can be found in \url{http://dev.globus.org}} component, on which we build upon in our work.
-
-\section{Virtual Workspaces}
 \label{sec:vw}
 
 In Section~\ref{cha:introduction}, we introduced the concept of \emph{virtual workspaces}. In this section we provide a more in--depth description of the term virtual workspace, a discussion of why virtual machines are a promising vehicle for virtual workspaces, and approaches to implementing workspaces, including the Globus Toolkit 4 Workspace Service.
@@ -35,14 +14,14 @@ The two distinguishing aspects of virtual workspaces are:
 The idea of on--demand creation and management of execution environments is not a new one, and there are multiple approaches to this problem, such as cluster node imaging (e.g. Cluster--on--Demand \cite{codweb}), configuration management (e.g. bcfg2 \cite{bcfg2web}), or package management (e.g. Pacman \cite{pacmanweb}). However, these approaches are not adequate for the stated goals. From the quality of life perspective, cluster node imaging and configuration management limit the software environments the user can choose. From the quality of service perspective, deploying hard drive images to cluster nodes requires a preparation time during which those nodes will be unavailable, and package management takes a long time to install and configure all necessary packages to create a software environment. Furthermore, none of these approaches support enforceable fine--grained resource allocation.
 
 
-\subsection{VM--based Virtual Workspaces}
+\section{VM--based Virtual Workspaces}
 \label{sec:vm}
 
 The use of virtualization technologies \cite{vmbook} holds great potential for Grid Computing. Figueiredo et al.\cite{gridvm} outlined the following general advantages of using virtual machines in the context of Grid Computing:
 
 \begin{description}
 \item[Security and isolation:] Virtualization isolates the actions performed in one VM from other VMs running in the same physical machine. Thus, VMs add an extra layer that must be broken by malicious grid users before the performance of co--allocated VMs can be affected, and before physical resource integrity can be compromised.
-\item[Customization:] Virtual machines can be customized with specific software and hardware requirements, without restarting physical nodes
+\item[Customization:] Virtual machines can be customized with specific software and hardware requirements, without restarting physical nodes.
 \item[Legacy support:] As a consequence of customization, virtual machines can be configured to replicate legacy software and hardware environments, enabling support of legacy code without affecting the software environment of users requiring newer software.
 \item[Administrator privileges:] Users can be granted administrator privileges inside a virtual machine, since any malicious activity will be confined to the virtual machine, and will not affect the underlying physical machine.\footnote{Figueiredo et al. makes no reference to the fact that granting administrator privileges can enable malicious users to initiate attacks that require ``root'' access (such as a denial--of--service attack by flooding the network with packages, something which a non-privileged user user cannot do). Granting administrator privileges inside a virtual machine is, nonetheless, preferable to granting them on a physical machine, as system administrators can easily shut down malicious virtual machines without affecting any co--allocated virtual machines.}
 \item[Resource control:] Virtual machines enable enforceable fine--grained resource allocations that can be specified when creating the virtual machine, but also modified during the virtual machine's runtime. The resource enforcement mechanisms of virtual machines allow administrators to limit the impact of a VM's resource consumption on other co--allocated virtual machines, and also enables fine--grained accounting of resource usage. 
@@ -53,7 +32,7 @@ Quality of life and service in virtual workspaces can be enhanced by leveraging 
 
 Virtual machine (VM) technologies  are, thus, a promising vehicle for achieving high quality of life and service in virtual workspaces. In a VM--based virtual workspace, the software environment required by the user would be encapsulated inside a virtual machine, and resource allocations would be enforced by a virtual machine manager.
 
-\subsection{Representation of VM--based Virtual Workspaces}
+\section{Representation of VM--based Virtual Workspaces}
 \label{sec:vwrepresentation}
 
 \begin{figure}
@@ -71,13 +50,13 @@ In a VM-based virtual workspace deployment, one or more virtual machines will be
 
 Deployment--independent configuration information is factored out of the VM image and into an XML \emph{metadata file}. This approach allows workspaces to be described in terms of \emph{VM image templates}, generic reusable VM images with the system software and tools for some specific purpose (e.g. a worker node for an Open Science Grid cluster), but lacking all the configuration information specific to a particular type of deployment. This information, contained in the metadata file, is \emph{bound} to the VM image at runtime to produce an \emph{image instance}.
 
-To better illustrate the concept of image templates and why information in the metadata file is deployment--independent we present the following example:
+To illustrate the concept of image templates and why information in the metadata file is deployment--independent we present the following example:
 
 \begin{enumerate}
 \item A user wishes to deploy a virtual workspace representing an Open Science Grid (OSG) cluster with 100 worker nodes (for the purposes of this example, we will ignore the head node and focus only on the worker nodes). We assume that worker nodes differ only in their network configuration, and that the user wants to specify a single private IP address for each worker node manually (and not rely on other mechanisms, such as DHCP). Since each worker node will have a different network configuration, the user could prepare 100 worker node images, $W_1\ldots W_{100}$, that differ only in their network configuration. By using image templates and metadata files, the user only needs to provide a \emph{single} VM image $W$ and a metadata file $mf$ containing the network configuration of each of the worker nodes ($conf_1\ldots conf_{100}$).
 \item When the virtual workspace is deployed, multiple copies of the image template are made, and each is bound to the configuration contained in the metadata file to produce runnable image instances (e.g. $W(conf_{42})=W_{42}$). Note that the image template is reusable, since a single copy of an image template can be used to yield multiple image instances.
 \item Metadata file $mf$ can be reused for future deployments of a 100--node OSG cluster. In this sense, the configuration information contained in the metadata file is \emph{deployment--independent}.
-\item In the future, the user wishes to deploy a 150--node cluster, using the same VM image $W$. Metadata file $mf$ cannot be used as it only includes configuration for 100 nodes. To deploy the new workspace, the user must create a new metadata file, $mf'$, with configuration information for all the nodes ($conf_1\ldots conf_{150}$). Similarly, if the user wishes to deploy the 100--node cluster but using network addresses different from the ones specified in $mf$, a new metadata file would also be required. Therefore, we consider that any configuration information that \emph{need not} change across deployments is deployment--independent. Furthermore, this also shows how an image template can be reused not just in a single deployment (by using it to create multiple image instances) but across deployments, since all potentially mutable information is contained in the metadata file, not in the VM image.
+\item In the future, the user wishes to deploy a 150--node cluster, using the same VM image $W$. Metadata file $mf$ cannot be used as it only includes configuration for 100 nodes. To deploy the new workspace, the user must create a new metadata file, $mf'$, with configuration information for all the nodes ($conf_1\ldots conf_{150}$). Similarly, if the user wishes to deploy the 100--node cluster but using network addresses different from the ones specified in $mf$, a new metadata file would also be required. Therefore, we consider that any configuration information that \emph{need not} change across deployments is deployment--independent. Furthermore, this example also shows how an image template can be reused not just in a single deployment (by using it to create multiple image instances) but across deployments, since all potentially mutable information is contained in the metadata file, not in the VM image.
 \end{enumerate}
 
 In Section~\ref{cha:design} we will explore optimizations that result from the reusability of image templates.
@@ -87,7 +66,7 @@ allocation required by the workspace, including both availability and hardware r
 CPU\%). This information is \emph{deployment--dependent}, since resource allocation requirements generally vary across deployments (e.g., the user might be interested in performing CPU--intensive work in one deployment, and I/O--intensive work in another), and also during a deployment (to adapt to changing requirements and conditions).
 
 
-\subsection{GT4 Workspace Service}
+\section{GT4 Workspace Service}
 
 \begin{figure}
   \begin{center}

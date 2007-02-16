@@ -7,9 +7,9 @@ deployed.
 Our experiments are divided into three sets:
 
 \begin{description}
-\item[\#1 Accuracy of AR deployments:] Investigates effect of scheduling image transfers on accuracy, using AR--only deployments. These experiments are run on our physical testbed, with our SGE--based implementation. A simulated experiment is also run to compare disk usage between the EDF and EDF/JIT image transfer algorithms.
-\item[\#2 Efficiency in Best--effort deployments:] Investigates effect of image reuse in Best--effort deployments. These experiments are run on our physical testbed, with our SGE--based implementation.
-\item[\#3 Mixing Best--effort and AR workloads:] Investigates what types of mixed workloads (Best--effort and AR) stand to benefit from using VMs, by using all off the techniques discussed in the previous sections. We focus on measuring the effect that virtualization has on utilization and running time of mixed workloads. These experiments are run using our simulator.
+\item[\#1 Accuracy of AR deployments:] Investigates effect of scheduling image transfers on accuracy, using AR--only deployments. These experiments were run on our physical testbed, with our SGE--based implementation. We also ran a simulated experiment to compare disk usage between the EDF and EDF/JIT image transfer algorithms.
+\item[\#2 Efficiency in Best--effort deployments:] Investigates effect of image reuse in Best--effort deployments. These experiments were run on our physical testbed, with our SGE--based implementation.
+\item[\#3 Mixing Best--effort and AR workloads:] Investigates what types of mixed workloads (Best--effort and AR) stand to benefit from using VMs, by using all of the techniques discussed in the previous sections. We focus on measuring the effect that virtualization has on utilization and running time of mixed workloads. These experiments were run using our simulator.
 \end{description}
 
 The physical testbed for experiments \#1 and \#2 is composed of 10 dual{}-CPU Pentium
@@ -26,7 +26,7 @@ cases, we used real workload traces, while for the AR cases, lacking
 real AR submission workloads, we produced artificial traces using a
 trace generator.
 
-The simulated testbed for part of experiment \#1 and for experiment \#3 is also composed of 10 dual{}--CPU nodes, each with 1GB of memory, with eight worker nodes, one head node, and an image repository node. Nodes are connected using a 100 Mb/s switched Ethernet. We do not impose a limit on the local disk in each node, but keep track of how much disk space is used throughout the experiments, since the purpose of some of the experiments is precisely to show that disk usage can, in some cases, be excessive. The traces used in the simulations were artificially generated. The simulations were run on the University of Chicago's Department of Computer Science's Condor pool.
+The simulated testbed used for part of experiment \#1 and for experiment \#3 is also composed of 10 dual{}--CPU nodes, each with 1GB of memory, with eight worker nodes, one head node, and an image repository node. Nodes are connected using a 100 Mb/s switched Ethernet. We do not impose a limit on the local disk in each node, but keep track of how much disk space is used throughout the experiments. The simulations were run on the University of Chicago's Department of Computer Science's Condor pool.
 
 For all our experiments, we assumed that all virtual workspace requests
 involved the same amount of CPU\% and memory for each virtual node. We
@@ -34,7 +34,7 @@ allowed at most 2 VMs to be deployed to a single physical node. Since
 we focus on preparation overhead, the VW remains idle during its
 runtime, and we assume that the VM generates no network traffic that
 would share bandwidth with preparation overhead. This assumption is
-reasonable in the case of highly parallel applications.
+reasonable in the case of highly parallel applications, where there is little or no communication between the individual processes.
 
 %The results from Experiments \#1 and \#2 (except the disk usage results from experiment \#1) were first presented in Sotomayor et al. \cite{overheadmatters}.
 
@@ -57,18 +57,18 @@ required to applications commonly run on the Open Science Grid (OSG),
 and includes (1) the descriptor of the image template to use, (2) the
 number of nodes, (3) the starting time of the workspace, and (4) its
 duration. The Xen VM image with OSG worker node support that we used in
-this experiment is 600 MB in size \cite{DBLP:conf/ccgrid/FosterFKSSZ06}. Nonetheless, we do not use any image reuse strategies in this experiment, as goal is to show that scheduling image transfers is, by itself, advantageous enough.
+this experiment is 600 MB in size \cite{DBLP:conf/ccgrid/FosterFKSSZ06}. Nonetheless, we do not use any image reuse strategies in this experiment, as goal is to show that scheduling image transfers is, by itself, advantageous.
 
-In this experiments we compare the EDF scheduling algorithm described in Section~\ref{cha:design} with non--scheduled file staging strategies. These strategies do not attempt to fit the image transfer in an optimal or near--optimal place in a schedule, but rather base the time of the image transfer directly on a fixed event, such as the submission time of a request or its starting time. The purpose of comparing against these strategies is to show that a scheduled approach not only guarantees accuracy, but it also better than easier--to--implement na\"ive strategies. In particular, we compare against the following (Figure~\ref{fig:filetransfer} summarizes these file staging strategies):
+In this experiments we compare the EDF scheduling algorithm described in Section~\ref{sec:reuse} with non--scheduled file staging strategies. These strategies do not attempt to fit the image transfer in an optimal or near--optimal place in a schedule, but rather base the time of the image transfer directly on a fixed event, such as the submission time of a request or its starting time. The purpose of comparing against these strategies is to show that a scheduled approach not only guarantees accuracy, but it also better than easier--to--implement na\"ive strategies. In particular, we compare against the following (Figure~\ref{fig:filetransfer} summarizes these file staging strategies):
 
 \begin{description}
-\item[Job--style:]. The image transfer begins at the same time as the virtual resources, effectively invading it.
+\item[Job--style:] The image transfer begins at the same time as the start time for the virtual resources.
 \item[Just In Time (JIT):] Assuming the network's full bandwidth is available for staging the necessary VM image for a workspace, the scheduler estimates the time required to transfer the image and starts the transfer before the start time, allocating just enough time to transfer the image.
 \item[Aggressive:] This strategy attempts to transfer images immediately after the request has been accepted, regardless of the
-starting time for the image transfer.
+starting time for the request.
 \end{description}
 
-
+To measure only the effect of image transfer scheduling on accuracy, VM images are not reused on the physical nodes.
 
 \begin{figure}
   \begin{center}
@@ -84,6 +84,7 @@ starting time for the image transfer.
 
 \begin{table}
 \begin{center}
+\caption{Traces used in experiments}
 \begin{tabular}{|M|MM|MM|}
 
 \cline{2-5}
@@ -140,8 +141,6 @@ starting time for the image transfer.
 
 \\\hline
 \end{tabular}
-
-\caption{Traces used in experiments}
 \label{tab:traces}
 \end{center}
 \end{table}
@@ -163,7 +162,7 @@ fashion.
 \end{figure}
 
 Figure~\ref{fig:clientsatisfactionI} shows the results of running Trace I with the different image scheduling
-strategies. We see that \emph{Scheduled} (EDF) and \emph{JIT} achieve 100\%
+strategies. We see that \emph{EDF} and \emph{JIT} achieve 100\%
 client satisfaction in most cases, followed by \emph{Aggressive} with
 most submissions in the 96\%{}-100\% range. Since this trace represents
 a best{}-case scenario, where the start times are uniformly distributed
@@ -183,15 +182,14 @@ enough time to transfer the image, regardless of what other VWs are
 scheduled, this strategy can result in multiple image transfers being
 scheduled during the same period of time (right before the ``window'').
 As those transfers share available bandwidth, they take longer than
-estimated. \emph{Scheduled} addressed this problem by prioritizing image
+estimated. \emph{EDF} addressed this problem by assigning priorities to image
 transfers and making use of network idle time, resulting in the best
 performance, with few non{}-100\% satisfaction instances (and always at
 the end of a ``window''). \emph{Aggressive}, on average, also has
 good performance, but the images with tighter deadlines suffer as the
 result of having to share bandwidth with other transfers.
 
-\emph{Scheduled} is the only approach that
-actually schedules a resource slot for the preparation overhead with
+\emph{EDF} is the only approach that schedules a resource slot for the preparation overhead with
 the goal of maximizing client satisfaction, while the other strategies
 na\"ively start the image transfers at fixed times. By scheduling
 overhead in the same way as virtual resources, instead of assuming that
@@ -221,10 +219,9 @@ We compare the EDF and EDF/JIT image staging algorithms, and measure the peak di
 
 \section{Efficiency in Best--effort deployments}
 
-Our second set of experiments investigate two things: (1) how much in
-terms of bandwidth usage the resource provider can save through
+Our second set of experiments investigate two things: (1) how much bandwidth the resource provider can save through
 judicious use of image reuse based on workspace metadata and (2) to
-what extent image reuse can improve deployment time (and thus also
+what extent can image reuse improve deployment time (and thus also
 client satisfaction) in situations where VM availability is requested
 to start as soon as possible.
 
@@ -232,20 +229,21 @@ Since this experiment focuses on best--effort submissions, the same type of
 submissions commonly found in batch systems, we were able to use a real
 workload. In particular, we used the San Diego Supercomputer Center
 (SDSC) DataStar log, available at the Parallel Workloads Archive \cite{BorjaCite21}.
-We chose this workload because it explicitly distinguished submissions
+We chose this workload because it explicitly distinguishes submissions
 for the DataStar's express queue (eight 8{}-CPU nodes, accepting jobs
 lasting at most 2 hr), which allows us to test a scenario in which
 minimizing deployment overhead is specially important: short{}-lasting
 jobs. Since the SDSC DataStar log spans several months, we selected an
 80 minute stretch of submissions (submissions \#21543 to \#21665 on
-queue \#1) which we could run on our testbed. This extract was selected
-because it represented a flurry of short{}-lasting jobs, which would
-allow us to test how our system copes with the bandwidth requirements
+queue \#1) for our experiments. We selected this section
+because it represents a flurry of short{}-lasting jobs, which
+allows us to test how our system copes with the bandwidth requirements
 of deploying a large amount of VM images.
 
 
 \begin{table}
 \begin{center}
+\caption{Distribution of images in traces III, IV}
 \begin{tabular}{|c|c|c|c|c|}
 \cline{2-5}
 \multicolumn{1}{c|}{} &
@@ -323,8 +321,6 @@ of deploying a large amount of VM images.
 
 \\\hline
 \end{tabular}
-
-\caption{Distribution of images in traces III, IV}
 \label{tab:imagedistro}
 \end{center}
 \end{table}
@@ -334,7 +330,7 @@ converted to a virtual cluster submission in which the number of nodes
 was the number of requested processors in the original trace, scaled
 down by four (the express queue has 64 processors; our testbed has 16),
 with submission times and VW duration left unaltered. Each submission
-was furnished with one of six 600 MB images. Two traces where produced,
+was assigned one of six 600 MB images. We produced two traces,
 with the only difference being the distribution of images assigned to
 each submission. The first trace (Trace III) has images uniformly
 distributed amongst the submissions, while in the second trace (Trace
@@ -368,11 +364,9 @@ submitted is shown in Figure~\ref{fig:providershape}.
 \end{figure}
 
 Since these experiments use our SGE--based implementation, we used a 1.8 GB
-LFU cache in each node (enough to cache three images) to minimize deployment time and increase throughput. The next set of experiments, run on our simulator, will present results using our image reuse algorithm.
+LFU cache in each node (enough to cache three images) to minimize deployment time and increase throughput.
 
-Figure~\ref{fig:providerIII} shows
-the cumulative number of MB transferred, overlaid with the VW
-submissions. We can observe how, after the 2000s mark, the rate at
+Figure~\ref{fig:providerIII} shows the cumulative number of MB deployed throughout the experiment. This number reflects how fast images are deployed, whether by an image transfer or reusing an image already cached. So, at a given time, higher values in the graph are better (i.e., more images have been deployed at that time). At any given number of MB (y axis), left--most values are better (i.e., that number of MB has been deployed earlier). We can observe how, after the 2000s mark, the rate at
 which images are deployed starts to increase, thanks to the reduced
 transfer time resulting from the use of a cache. The difference in
 effectively deployed MB is greatest at the 3550s mark, where the cached
@@ -382,7 +376,7 @@ the distribution of images favors a much larger number of cache hits.
 Throughput is slightly better, with a difference of 27.6 GB at that
 same 3550s mark.
 
-Deployment time (not shown in graphs) is also improved. The average
+Deployment time, or the time between when deployment starts and the VMs are ready to run, is also improved. The average
 deployment time for a single image, when not using a cache, is 440s for
 both traces. This time is reduced to 305s and 247s, in Trace III and IV
 respectively, when using an image cache.
@@ -396,16 +390,16 @@ workspaces.
 
 \section{Mixing Best--effort and AR workloads}
 
-Our third set of experiments measures the effect of using our virtual resource model on workloads that combine both AR and best--effort requests. In particular, we are interested in finding under what conditions using VMs, with the techniques described in previous sections, could provide better performance. In particular, we measure the time to complete all best--effort requests and the utilization of physical resources.
+Our third set of experiments measures the effect of using our virtual resource model on workloads that combine both AR and best--effort requests. In these experiments, we are interested in observing the time to complete all best--effort requests and the utilization of physical resources.
 
-We use several artificially--generated traces which mix best--effort requests and advance reservations. All these traces request enough resources such that, even with 100\% utilization throughout the experiment, each would require between 10h and 10.5h to complete. All ARs are known in advance by the scheduler (i.e., the requests are processed at the beginning of the trace), with starting times uniformly distributed throughout the experiment time. Best--effort requests arrive throughout the duration of the experiment, separated by uniformly separated intervals. 
+We use several artificially--generated traces that mix best--effort requests and advance reservations. These traces request enough resources such that, even with 100\% utilization throughout the experiment, each would require between 10h and 10.5h to complete. All ARs are known in advance by the scheduler (i.e., the requests are processed at the beginning of the trace), with starting times uniformly distributed throughout the experiment time. Best--effort requests arrive throughout the duration of the experiment, separated by uniformly separated intervals. 
 
 We generate 36 different traces where we vary three parameters:
 
 \begin{description}
 \item[Proportion of Best--effort/AR requests:] This proportion is measured in terms of total running time requested by each type of request if they were run in sequence. For example, a workload with 10 advance reservations, each requesting two virtual nodes with a duration each of 5 minutes (total duration = $10\cdot 2\cdot 5$ = 100 minutes), and five best--effort requests, each requiring 10 virtual nodes with a duration each of 12 minutes (total duration = $5\cdot 10\cdot 12$ = 300 minutes), would be a proportion of 25\% AR and 75\% Best--effort. 
 
-The purpose of this parameter is to observe what effect an increasing number of ARs can have on a Best--effort workload. We use the following proportions:
+The purpose of this parameter is to observe the effect an increasing number of ARs can have on a Best--effort workload. We use the following proportions:
 \begin{itemize}
 \item 25\% Best--effort, 75\% AR
 \item 50\% Best--effort, 50\% AR
@@ -427,7 +421,9 @@ It should be noted that, since we want the total duration of the workload to be 
 \end{itemize}
 \end{description}
 
-Each request is assigned a VM image out of 37 possible 600MB images (22.2GB total). The distribution is skewed in such a way that seven images account for 70\% of requests (10\% each), and the remaining images account for 30\% of requests (1\% each). Since disk usage is one of our concerns, this distribution of images allows us to verify that our file prefetching and reusage strategies avoid accumulating all 37 images on the nodes. Furthermore, this is a case where predeployment of all the images might not be an acceptable solution (e.g., if we were dealing with 5GB images, that would mean using 185GB on each physical node), 
+We currently choose one value from each parameter (e.g., choosing parameter \emph{short} results in all best--effort requests having a short duration). This will allow us to observe the behaviour of our scheduler in the limits of these parameters, and we leave more elaborate combinations of parameters (e.g.,traces with 25\% short requests, 25\% medium requests, and 50\% long requests) for future work.
+
+Each request in a trace is assigned a VM image out of 37 possible 600MB images (22.2GB total). The distribution is skewed in such a way that seven images account for 70\% of requests (10\% each), and the remaining images account for 30\% of requests (1\% each). Since disk usage is one of our concerns, this distribution of images allows us to verify that our file prefetching and reusage strategies avoid accumulating all 37 images on the nodes. Furthermore, this case is an example of when predeployment of all the images might not be an acceptable solution (e.g., if we were dealing with 5GB images, that would mean using 185GB on each physical node), 
 
 \subsection{Performance with predeployed VM images}
 
@@ -442,9 +438,12 @@ The purpose of comparing these two configurations is to observe what types of tr
 
 \begin{table}
 \begin{center}
+\caption{Effect of virtualization (assuming predeployed images) on time to complete best--effort requests}
+\textbf{(1)} No virtualization (time in seconds)
+\textbf{(2)} Virtualization, with predeployed images (time in seconds)
 \begin{tabular}{|c|c|c|c|c|c|}
 \hline
-\textbf{Duration} & \textbf{AR resources} & \textbf{Batch-AR} & \textbf{(1)} & \textbf{(2)} & \textbf{$\frac{(2)}{(1)}$}
+\textbf{Duration} & \textbf{AR resources} & \textbf{Batch-AR} & \textbf{(1)} & \textbf{(2)}& \textbf{$\frac{(2)}{(1)}$}
 \\\hline
 long & 000-025 & 25-75 & 38880 & 39000 & 0.309\%
 \\\hline
@@ -520,9 +519,6 @@ short & 075-100 & 75-25 & 41040 & 42840 & 4.386\%
 \\\hline
 \end{tabular}
 
-\textbf{(1)} No virtualization 
-\textbf{(2)} Virtualization, with predeployed images
-\caption{Effect of virtualization (assuming predeployed images) on time to complete best--effort requests}
 \label{tab:noVMvsPredeploy}
 \end{center}
 \end{table}
@@ -533,61 +529,16 @@ We can observe the following in the results:
 \item On the other hand, the presence of short best-effort requests allows the backfilling algorithm to achieve good enough performance in the non-VM case. In most cases, little is gained by using the suspend/resume capabilities of VMs (not enough to overcome the runtime overhead of VMs).
 \end{itemize}
 
-Table~\ref{tab:noVMvsPredeployUtil} compares both cases again, this time from the point of view of utilization. Utilization is measured as the percent of physical resources used (not idle) at a given time. In our case, since all requests require the same amount of CPU and memory, allowing for two VMs to run on the same machine, measuring CPU and memory would yield the same utilization percentage, so we simply record the percent of CPUs used at any given time. Table~\ref{tab:noVMvsPredeployUtil}, in particular, shows the average utilization at the end of the experiment. Since the 10\% runtime overhead results in higher utilization, the table makes a comparison assuming no runtime overhead. As in Table~\ref{tab:noVMvsPredeploy}
+We are also interested in utilization, which we define as the percent of physical resources used (not idle) at a given time. In our case, since all requests require the same amount of CPU and memory, allowing for two VMs to run on the same machine, measuring CPU and memory would yield the same utilization percentage, so we simply record the percent of CPUs used at any given time. Table~\ref{tab:noVMvsPredeployUtil} compares both configurations again, this time from the point of view of utilization. In particular, the value shown is the average utilization throughout the experiment. This value is computed by taking all the points during the experiment during which there was a change in utilization, and taking the average of the utilization at those points (each value has a weight proportional to the length of the interval during which that particular utilization was observed). Since the 10\% runtime overhead biases this result towards a higher average utilization (since resources are used for a longer time) the table makes a comparison assuming no runtime overhead.
 
 \begin{table}
 \begin{center}
+\caption{Effect of virtualization (assuming predeployed images) on utilization}
+\textbf{(1)} No virtualization 
+\textbf{(2)} Virtualization, with predeployed images
 \begin{tabular}{|c|c|c|c|c|c|}
 \hline
 \textbf{Duration} & \textbf{AR resources} & \textbf{Batch-AR} & \textbf{(1)} & \textbf{(2)} & \textbf{$\frac{(2)}{(1)}$}
-\\\hline
-short & 000-025 & 25-75 & 0.87 & 0.86 & -0.45\%
-\\\hline
-short & 000-025 & 50-50 & 0.89 & 0.9 & 1.34\%
-\\\hline
-short & 000-025 & 75-25 & 0.9 & 0.91 & 0.72\%
-\\\hline
-short & 025-050 & 25-75 & 0.75 & 0.75 & 0.16\%
-\\\hline
-short & 025-050 & 50-50 & 0.89 & 0.92 & 3.22\%
-\\\hline
-short & 025-050 & 75-25 & 0.89 & 0.91 & 1.93\%
-\\\hline
-short & 050-075 & 25-75 & 0.61 & 0.61 & 0.00\%
-\\\hline
-short & 050-075 & 50-50 & 0.79 & 0.8 & 0.82\%
-\\\hline
-short & 050-075 & 75-25 & 0.87 & 0.89 & 2.19\%
-\\\hline
-short & 075-100 & 25-75 & 0.65 & 0.65 & 0.00\%
-\\\hline
-short & 075-100 & 50-50 & 0.83 & 0.86 & 3.11\%
-\\\hline
-short & 075-100 & 75-25 & 0.87 & 0.91 & 4.58\%
-\\\hline
-medium & 000-025 & 25-75 & 0.88 & 0.88 & 0.62\%
-\\\hline
-medium & 000-025 & 50-50 & 0.9 & 0.92 & 3.03\%
-\\\hline
-medium & 000-025 & 75-25 & 0.93 & 0.94 & 1.98\%
-\\\hline
-medium & 025-050 & 25-75 & 0.77 & 0.77 & 0.00\%
-\\\hline
-medium & 025-050 & 50-50 & 0.86 & 0.87 & 0.73\%
-\\\hline
-medium & 025-050 & 75-25 & 0.88 & 0.93 & 5.20\%
-\\\hline
-medium & 050-075 & 25-75 & 0.62 & 0.62 & 0.00\%
-\\\hline
-medium & 050-075 & 50-50 & 0.78 & 0.8 & 2.98\%
-\\\hline
-medium & 050-075 & 75-25 & 0.87 & 0.93 & 7.25\%
-\\\hline
-medium & 075-100 & 25-75 & 0.66 & 0.68 & 3.18\%
-\\\hline
-medium & 075-100 & 50-50 & 0.77 & 0.81 & 4.71\%
-\\\hline
-medium & 075-100 & 75-25 & 0.83 & 0.88 & 5.42\%
 \\\hline
 long & 000-025 & 25-75 & 0.85 & 0.85 & -0.37\%
 \\\hline
@@ -613,11 +564,55 @@ long & 075-100 & 50-50 & 0.74 & 0.84 & 12.62\%
 \\\hline
 long & 075-100 & 75-25 & 0.78 & 0.92 & 18.29\%
 \\\hline
+medium & 000-025 & 25-75 & 0.88 & 0.88 & 0.62\%
+\\\hline
+medium & 000-025 & 50-50 & 0.9 & 0.92 & 3.03\%
+\\\hline
+medium & 000-025 & 75-25 & 0.93 & 0.94 & 1.98\%
+\\\hline
+medium & 025-050 & 25-75 & 0.77 & 0.77 & 0.00\%
+\\\hline
+medium & 025-050 & 50-50 & 0.86 & 0.87 & 0.73\%
+\\\hline
+medium & 025-050 & 75-25 & 0.88 & 0.93 & 5.20\%
+\\\hline
+medium & 050-075 & 25-75 & 0.62 & 0.62 & 0.00\%
+\\\hline
+medium & 050-075 & 50-50 & 0.78 & 0.8 & 2.98\%
+\\\hline
+medium & 050-075 & 75-25 & 0.87 & 0.93 & 7.25\%
+\\\hline
+medium & 075-100 & 25-75 & 0.66 & 0.68 & 3.18\%
+\\\hline
+medium & 075-100 & 50-50 & 0.77 & 0.81 & 4.71\%
+\\\hline
+medium & 075-100 & 75-25 & 0.83 & 0.88 & 5.42\%
+\\\hline
+short & 000-025 & 25-75 & 0.87 & 0.86 & -0.45\%
+\\\hline
+short & 000-025 & 50-50 & 0.89 & 0.9 & 1.34\%
+\\\hline
+short & 000-025 & 75-25 & 0.9 & 0.91 & 0.72\%
+\\\hline
+short & 025-050 & 25-75 & 0.75 & 0.75 & 0.16\%
+\\\hline
+short & 025-050 & 50-50 & 0.89 & 0.92 & 3.22\%
+\\\hline
+short & 025-050 & 75-25 & 0.89 & 0.91 & 1.93\%
+\\\hline
+short & 050-075 & 25-75 & 0.61 & 0.61 & 0.00\%
+\\\hline
+short & 050-075 & 50-50 & 0.79 & 0.8 & 0.82\%
+\\\hline
+short & 050-075 & 75-25 & 0.87 & 0.89 & 2.19\%
+\\\hline
+short & 075-100 & 25-75 & 0.65 & 0.65 & 0.00\%
+\\\hline
+short & 075-100 & 50-50 & 0.83 & 0.86 & 3.11\%
+\\\hline
+short & 075-100 & 75-25 & 0.87 & 0.91 & 4.58\%
+\\\hline
 \end{tabular}
-
-\textbf{(1)} No virtualization 
-\textbf{(2)} Virtualization, with predeployed images
-\caption{Effect of virtualization (assuming predeployed images) on utilization}
 \label{tab:noVMvsPredeployUtil}
 \end{center}
 \end{table}
@@ -629,14 +624,19 @@ The above predeployment results allow us to observe the effects of using suspend
 \begin{description}
 \item[No virtualization.] Same as above.
 \item[Virtualization, with predeployed images.] Same as above.
-\item[Virtualization, with prefetching but no reuse.] Before an AR, best--effort requests are suspended and resumed after the AR, images are deployed using EDF/JIT for ARs, and FIFO for best--effort requests (as described in Section~\ref{cha:design}, and we assume a 10\% runtime overhead.
+\item[Virtualization, with prefetching but no reuse.] Before an AR, best--effort requests are suspended and resumed after the AR, images are deployed using EDF/JIT for ARs, and FIFO for best--effort requests (as described in Section~\ref{sec:filestaging}), and we assume a 10\% runtime overhead.
 \item[Virtualization, with prefetching and reuse.] Same as previous, but using the image reuse algorithm described in Section~\ref{cha:design}
 \end{description}
 
-Table~\ref{tab:predeployVSfetch} shows the time to run all best--effort requests in the two virtualized configurations without predeployment, and compares them against the virtualized configuration with predeployment. This allows us to see what effect image prefetching and reuse have, and if they can achieve a performance as good as predeploying images. Values with an asterisk denote a case where image reuse results in a performance gain of more than 50\% compared to not using image reuse.
+Table~\ref{tab:predeployVSfetch} shows the time to run all best--effort requests in the two virtualized configurations without predeployment, and compares them against the virtualized configuration with predeployment. This experiment allows us to see the effect image prefetching and reuse have, and if they can achieve a performance as good as predeploying images. Values with an asterisk denote a case where image reuse results in a performance gain of more than 50\% compared to not using image reuse.
 
 \begin{table}
 \begin{center}
+\caption{Effect of image prefetching and reuse on time to complete best--effort requests (compared with image predeployment)}
+\textbf{(1)} Virtualization, with predeployed images (time in seconds)
+\textbf{(2)} Virtualization, with prefetching but no reuse (time in seconds)
+\textbf{(3)} Virtualization, with prefetching and reuse (time in seconds)
+
 \begin{tabular}{|c|c|c|c|c|c|c|c|}
 \hline
 \textbf{Duration} & \textbf{AR resources} & \textbf{Batch-AR} & \textbf{(1)} & \textbf{(2)} & \textbf{(3)} &  \textbf{$\frac{(2)}{(1)}$} & \textbf{$\frac{(3)}{(1)}$}
@@ -693,46 +693,43 @@ short & 000-025 & 25-75 & 38700 & 40740 & 38820 & 5.27\% & 0.31\%
 \\\hline
 short & 000-025 & 50-50 & 43260 & 62580 & 45420 & 44.66\% & 4.99\%
 \\\hline
-short & 000-025 & 75-25 & 45240 & 81720 & 47040 & 80.64\% & 3.98\% \textcolor{green}{*}
+short & 000-025 & 75-25 & 45240 & 81720 & 47040 & 80.64\% & 3.98\% *
 \\\hline
 short & 025-050 & 25-75 & 36540 & 38820 & 36840 & 6.24\% & 0.82\%
 \\\hline
-short & 025-050 & 50-50 & 41340 & 64320 & 42960 & 55.59\% & 3.92\% \textcolor{green}{*}
+short & 025-050 & 50-50 & 41340 & 64320 & 42960 & 55.59\% & 3.92\% *
 \\\hline
-short & 025-050 & 75-25 & 43140 & 78180 & 46320 & 81.22\% & 7.37\% \textcolor{green}{*}
+short & 025-050 & 75-25 & 43140 & 78180 & 46320 & 81.22\% & 7.37\% *
 \\\hline
 short & 050-075 & 25-75 & 31020 & 32220 & 32700 & 3.87\% & 5.42\%
 \\\hline
 short & 050-075 & 50-50 & 37200 & 57840 & 39900 & 55.48\% & 7.26\%
 \\\hline
-short & 050-075 & 75-25 & 40980 & 78600 & 43020 & 91.80\% & 4.98\% \textcolor{green}{*}
+short & 050-075 & 75-25 & 40980 & 78600 & 43020 & 91.80\% & 4.98\% *
 \\\hline
 short & 075-100 & 25-75 & 36600 & 43020 & 36840 & 17.54\% & 0.66\%
 \\\hline
-short & 075-100 & 50-50 & 37560 & 64800 & 38700 & 72.52\% & 3.04\% \textcolor{green}{*}
+short & 075-100 & 50-50 & 37560 & 64800 & 38700 & 72.52\% & 3.04\% *
 \\\hline
-short & 075-100 & 75-25 & 42840 & 84540 & 44940 & 97.34\% & 4.90\% \textcolor{green}{*}
+short & 075-100 & 75-25 & 42840 & 84540 & 44940 & 97.34\% & 4.90\% *
 \\\hline
 \end{tabular}
-
-\textbf{(1)} Virtualization, with predeployed images
-\textbf{(2)} Virtualization, with prefetching but no reuse
-\textbf{(3)} Virtualization, with prefetching and reuse
-\caption{Effect of image prefetching and reuse on time to complete best--effort requests (compared with image predeployment)}
 \label{tab:predeployVSfetch}
 \end{center}
 \end{table}
 
-We can observe that not reusing images can have a considerable impact on performance when the workload contains many small requests, nearly doubling running time in some cases. This is due to the large amounts of images that must be transferred as part of the workload. On the other hand, the impact on performance gets smaller as the number of images to deploy decreases (with long requests, the impact on performance is only slightly larger that 3\% in the worst case).
-
-Reusing images palliates, to a certain degree, the preparation overhead of the image transfers. While the improvement for long and medium requests is small, it is quite noticeable for short requests, where image reuse can bring performance considerably closer to that achieved when predeploying images. Considering that, without image reuse, performance is in some cases half as good as the predeployment case, it makes image reuse an appealing option for workloads where the number of image transfers require more than the available network bandwidth.
+We can observe that not reusing images can have a considerable impact on performance when the workload contains many small requests, nearly doubling the running time in some cases, due to the large number of images that must be transferred as part of the workload. In these cases, reusing images results in performance being considerably closer to that achieved when predeploying images. On the other hand, the effect of image reuse gets smaller as the number of images to deploy decreases (with long requests, the difference in performance is only slightly larger that 3\% in the worst case).
 
 Table~\ref{tab:predeployVSfetchUtil} is similar to Table~\ref{tab:predeployVSfetch}, but shows the effect on utilization. In this table, we can observe that utilization is affected in the same way as the running time of the best--effort requests. Table~\ref{tab:novmVSfetch} compares the virtualized configurations against the non-virtualized configuration.
 
-Finally, disk usage was measured in all these experiments. When using VMs, with images prefetched with EDF/JIT, disk usage on the physical nodes never exceeded 3.6GB (six images). When using the reuse algorithm, disk usage was slightly smaller, peaking at 3.0GB (five images). We also ran the experiments using the EDF image transfer algorithm and, similarly to the results in the `Accuracy of AR deployments' experiments, disk usage was much higher, peaking at 30GB (50 images).
+Finally, we measured disk usage in all these experiments. When using VMs, with images prefetched with EDF/JIT, disk usage on the physical nodes never exceeded 3.6GB (six images). When using the reuse algorithm, disk usage was slightly smaller, peaking at 3.0GB (five images). We also ran the experiments using the EDF image transfer algorithm and, similarly to the results in the `Accuracy of AR deployments' experiments, disk usage (without reuse) was much higher, peaking at 30GB (50 images).
 
 \begin{table}
 \begin{center}
+\caption{Effect of image prefetching and reuse on utilization (compared with image predeployment)}
+\textbf{(1)} Virtualization, with predeployed images
+\textbf{(2)} Virtualization, with prefetching but no reuse
+\textbf{(3)} Virtualization, with prefetching and reuse
 \begin{tabular}{|c|c|c|c|c|c|c|c|}
 \hline
 \textbf{Duration} & \textbf{AR resources} & \textbf{Batch-AR} & \textbf{(1)} & \textbf{(2)} & \textbf{(3)} &  \textbf{$\frac{(2)}{(1)}$} & \textbf{$\frac{(3)}{(1)}$}
@@ -810,11 +807,6 @@ short & 075-100 & 50-50 & 0.9 & 0.52 & 0.88 & -72.28\% & -2.90\%
 short & 075-100 & 75-25 & 0.91 & 0.46 & 0.87 & -97.32\% & -4.99\%
 \\\hline
 \end{tabular}
-
-\textbf{(1)} Virtualization, with predeployed images
-\textbf{(2)} Virtualization, with prefetching but no reuse
-\textbf{(3)} Virtualization, with prefetching and reuse
-\caption{Effect of image prefetching and reuse on utilization (compared with image predeployment)}
 \label{tab:predeployVSfetchUtil}
 \end{center}
 \end{table}
@@ -824,6 +816,11 @@ short & 075-100 & 75-25 & 0.91 & 0.46 & 0.87 & -97.32\% & -4.99\%
 \begin{table}
 
 \begin{center}
+\caption{Effect of image prefetching and reuse on time to complete best--effort requests (compared with no virtualization)}
+\textbf{(1)} No virtualization (time in seconds)
+\textbf{(2)} Virtualization, with prefetching but no reuse (time in seconds)
+\textbf{(3)} Virtualization, with prefetching and reuse (time in seconds)
+
 \begin{tabular}{|c|c|c|c|c|c|c|c|}
 \hline
 \textbf{Duration} & \textbf{AR resources} & \textbf{Batch-AR} & \textbf{(1)} & \textbf{(2)} & \textbf{(3)} &  \textbf{$\frac{(2)}{(1)}$} & \textbf{$\frac{(3)}{(1)}$}
@@ -902,10 +899,6 @@ short & 075-100 & 75-25 & 41040 & 84540 & 44940 & 105.99\% & 9.50\%
 \\\hline
 \end{tabular}
 
-\textbf{(1)} No virtualization
-\textbf{(2)} Virtualization, with prefetching but no reuse
-\textbf{(3)} Virtualization, with prefetching and reuse
-\caption{Effect of image prefetching and reuse on time to complete best--effort requests (compared with no virtualization)}
 \label{tab:novmVSfetch}
 \end{center}
 \end{table}

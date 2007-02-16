@@ -1,9 +1,8 @@
 We described a virtual resource model, and a set of scheduling
 strategies for that model, based on scenarios that, in our experience,
-frequently arise in the Grid. These scenarios combine batch job
-platforms as well as platforms whose deployment is
-deadline{}-sensitive, such as interactive platforms. VM deployment and
-management overhead can be both large and highly variable, factors that
+arise frequently in the Grid, and which can involve best--effort deployments as well as
+deadline{}-sensitive deployments. VM preparation and
+runtime overhead can be both large and highly variable, factors that
 conflict with the deadline{}-sensitive availability needs of
 interactive and time{}-critical platforms. Thus, our proposed model
 separates resource use devoted to the overhead of VM deployment from
@@ -16,8 +15,8 @@ Our results also show that leveraging VM resource management mechanisms, such as
 
 \section{Future work}
 
-Our further work on this subject will involve developing models that provide accurate and fine-grained use of other resources, such as CPU, memory, network bandwidth. Network bandwidth, in particular, presents interesting questions, since network traffic affects the CPU usage of Dom0, Xen's management domain. Therefore, running network-intensive VMs requires ensuring that Dom0 always has enough CPU share to provide all the VMs with the network bandwidth they require. Future models must be able to dynamically compute the CPU share required by Dom0, under varying loads, guaranteeing that bandwidth will be available for all the VMs, while Dom0 is not be strained for resources. Disk usage is another interesting dimension which we have touched upon in this work, but which requires further exploration to account for different deployment strategies, multi--partition VMs, and different storage backends.
+Our future work on this subject will involve developing models that provide accurate and fine-grained use of other resources, such as CPU, memory, network bandwidth. Network bandwidth, in particular, presents interesting questions, since network traffic affects the CPU usage of Dom0, Xen's management domain. Therefore, running network-intensive VMs requires ensuring that Dom0 always has enough CPU share to provide all the VMs with the network bandwidth they require. Future models must be able to  compute the CPU share required by Dom0 dynamically, under varying loads, guaranteeing that bandwidth will be available for all the VMs, while Dom0 is not be strained for resources. Disk usage is another interesting dimension which we have touched upon in this work, but which requires further exploration to account for different deployment strategies, multi--partition VMs, and different storage backends.
 
-We will also explore Open Advance Reservations, to support event--driven workloads. As described in Section~\ref{cha:scenarios}), this scenario requires that resources be available when an event arrives. Even though this event arrives during an agreed-upon period of time, the exact time of the event is unknown. Our model must allow for resource to be placed on standby (in preparation for that event) without affecting other virtual workspaces, or wasting resources that could be used before the event arrives.
+We will also explore Open Advance Reservations, to support event--driven workloads. As described in Section~\ref{cha:scenarios}, this scenario requires that resources be available when an event arrives. Even though this event arrives during an agreed-upon period of time, the exact time of the event is unknown. Our model must allow for resource to be placed on standby (in preparation for that event) without affecting other virtual workspaces, or wasting resources that could be used before the event arrives.
 
-On the implementation front, we plan to use real submission traces for our mixed workload (best--effort and advance reservation) experiments, and transition from a simulated backend to a real backend. We will also explore how to include parts of our scheduler into the Virtual Workspace Service, and evaluate existing scheduler where our improvements could be integrated.
+On the implementation front, we plan to use real submission traces for our mixed workload (best--effort and advance reservation) experiments, and transition from a simulated backend to a real backend. We will also explore how to include parts of our scheduler into the Virtual Workspace Service, and evaluate existing local resource managers where our scheduling techniques could be integrated.
