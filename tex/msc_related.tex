@@ -1,0 +1,57 @@
+Many projects tackle the problem of dynamically overlaying virtual
+resources on top of physical resources by using virtualization
+technologies, and do so with different resource models. These models
+generally consider overhead as part of the virtual resource allocated
+to the user, or do not manage or attempt to reduce it. A common
+assumption in related projects is that all necessary images are already
+deployed on the worker nodes. Our requirements for dynamic deployment
+of AR and ASAP workspaces make it impossible to make this assumption.
+
+The Shirako system \cite{BorjaCite12} developed within the Cluster{}-On{}-Demand
+project \cite{BorjaCite10, codweb} uses VMs to partition a physical cluster into several
+virtual clusters. Their interfaces focus on granting \emph{leases} on
+resources to users, which can be redeemed at some point in the future.
+However since their model focuses on batch cases the adopted overhead
+management model is to absorb it into resources used for VM deployment
+and management. As we have shown, this model is not sufficient for
+AR{}-style cases.
+
+The XGE project \cite{xge} extends SGE so it will use different VMs for serial batch requests and for parallel job requests. The motivation for their work is improving utilization of a university cluster shared by two user communities with different requirements. By using the suspend/resume capabilities of Xen virtual machines when combining serial and parallel jobs, the XGE project has achieved improved cluster utilization when compared against using backfilling and physical hardware. However, the XGE project assumes two fixed VM images predeployed on all cluster nodes.
+
+
+The VIOLIN and VioCluster projects \cite{BorjaCite13, viocluster, DBLP:journals/computer/RuthJXG05} allow users to overlay a
+virtual cluster over more than one physical cluster, leveraging VM live
+migration to perform load balancing between the different clusters. The
+VioCluster model assumes that VM images are already deployed on
+potential hosts, and only a ``binary diff'' file (implemented as a
+small Copy{}-On{}-Write file), expressing the particular configuration
+of each instance, is transferred at deploy{}-time. This is less
+flexible than using image metadata, as COWs can be invalidated by
+changes in the VM images. Furthermore, our work focuses on use cases
+where multiple image templates might be used in a physical cluster,
+which makes it impractical to prestage all the templates on all the
+nodes.
+
+The Maestro{}-VC system \cite{BorjaCite18} also explores the benefits of providing a
+scheduler with application{}-specific information that can optimize its
+decisions and, in fact, also leverages caches to reduce image
+transfers. However, Maestro{}-VC focuses on clusters with long
+lifetimes, and their model does not schedule image transfer overhead in
+a deadline{}-sensitive manner, and just assumes that any image staging
+overhead will be acceptable given the duration of the virtual cluster.
+Our work includes short{}-lived workspaces as a case that must perform
+efficiently under our model.
+
+The Virtuoso Project \cite{BorjaCite19} and, in particular, its VSched component \cite{BorjaCite17},
+is capable of co{}-scheduling both interactive and batch workloads on
+individual machines in a deadline{}-sensitive manner, but does not
+factor in the overhead of deploying the VMs to the nodes where they are
+needed.
+
+The In{}-VIGO project \cite{BorjaCite16} proposes adding three layers of
+virtualization over grid resources to enable the creation of virtual
+grids. Our work, which relates to their first layer (creating virtual
+resources over physical resources), is concerned with finer{}-grained
+allocations and enforcements than in the In{}-VIGO project. Although some exploration of cache-based deployment has also been done with VMPlant \cite{BorjaCite20}, this project focuses on batch as opposed to deadline-sensitive cases.
+
+

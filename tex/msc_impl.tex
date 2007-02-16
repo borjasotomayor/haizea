@@ -1,0 +1,13 @@
+We produced two implementations for our experiments:
+
+\begin{description}
+\item[SGE--based:] We add a layer of scripts on top of an existing local resource manager, Sun Grid Engine
+\cite{sgeweb}, or SGE. These scripts take the application--specific information of virtual workspaces (the metadata file), and use SGE to schedule not only the virtual resources, but also the preparation overhead. We chose SGE precisely because it is easily extensible, and we could add some of our extensions without having to modify the SGE source code itself.
+
+However, this is only a partial implementation of the techniques described in the previous section, since SGE does not support advance reservations or suspend/resume. In effect, we are limited to testing best--effort workloads. We can also experiment with AR workloads, but only to the point of finding a schedule for a set of image transfers which is already known to be feasible (since SGE cannot perform this kind of admission control). Furthermore, image reuse is accomplished through the use of a simple LFU cache, instead of the reuse algorithm described in the previous section.
+
+Nonetheless, this implementation is allows us to test our image prestaging and reuse techniques on physical hardware.
+\item[Simulator:] A scheduler developed by us which implements all the tecniques described in the previous section. Currently, this scheduler does not interact with a real testbed and runs in simulation. 
+
+The scheduler, and simulated backend, are implemented in Python. The scheduling information is stored in a relational database, implemented with SQLite. 
+\end{description}

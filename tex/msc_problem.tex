@@ -1,0 +1,76 @@
+As described in the previous sections, VM--based virtual workspaces provide several features resulting in better quality of service and life. However, dynamically deploying virtual machines involves a cost. Most notably, potentially large VM images have to be deployed before we can start a virtual workspace, and running inside a VM will not be as fast as running directly on physical hardware. On the other hand, VMs provide several resource management mechanisms, such as the ability to seamlessly suspend/resume and live--migrate VMs, which can result in better utilization of resources.
+
+In this section we advance some of our experimental results to explain what problems we are addressing in this work. (from Section~\ref{cha:experiments}). In particular, we are interested in observing what happens when we try to schedule virtual workspaces the same way as jobs, without making any attempt to manage the overhead of using VMs and without leveraging techniques like suspend/resume or live migration.
+
+First of all, we consider an artificially--generated trace of requests with the following characteristics:
+
+\begin{itemize}
+\item The duration of the trace is 10 hours. The workload is such that it is possible to complete all the work if we achieve 100\% utilization of resources.
+\item 75\% of the total time required by all the requests is devoted to serial batch requests. The remaining 25\% is used by advance reservations.
+\item The serial batch requests have an average duration of 15 minutes.
+\item The advance reservations requests between 75\% and 100\% of available processors.
+\item The VM images have a size of 600MB. The total number of images that would have to be deployed during the trace are 830.
+\item We assume that running inside a VM results in a 10\% runtime overhead \footnote{10\% is, in practice, a reasonable upper bound on the slowdown introduced by paravirtualized VMMs like Xen. This is supported by experiments in Barham et al. \cite{xen} and Clark et al. \cite{xenrepeated}, where slowdown does not generally exceed 10\% (and is considerably smaller in certain cases, like CPU--intensive applications).}(e.g., a 10 minute job would take 11 minutes to run inside a VM). 
+\end{itemize}
+
+This trace is processed by a scheduler using a simulated backend of eight nodes with two CPUs each, connected by a 100Mbps switched network. This simulator is described in more detail in Section~\ref{cha:design}. More details on the experimental setup will be provided in Section~\ref{cha:experiments}.
+
+We run this trace in three configurations:
+
+\begin{description}
+\item[Without VMs:] We do not use VMs to run the jobs. Therefore, there is no runtime overhead and no VM images to deploy before the images run.
+\item[With VMs (predeploy):] We use VMs to run the jobs, which results in a slowdown caused by running inside a VM. However, we assume that all necessary VMs are predeployed in the nodes where they are needed.
+\item[With VMs (no predeploy):] Same as the previous configuration, but removing the assumption that all images are predeployed.
+\end{description}
+
+In all configurations, we use backfilling (see Section~\ref{sec:scheduling}) to improve utilization before an advance reservation.
+
+Table~\ref{tab:longjoboverview} shows the time required to complete all the serial batch requests, and the slowdown compared to the non--virtualized configuration. We can observe that both virtualized configurations present a slowdown. In the predeployment case, this slowdown is arguably an acceptable one.
+
+\begin{table}
+\begin{center}
+ \begin{tabular}{|c|c|c|}
+\hline
+ \textbf{Configuration} & \textbf{Time} & \textbf{Slowdown} \\\hline\hline
+Without VMs & $45,780$ & --- \\\hline
+With VMs (predeploy) & $48,240$ & $+5.07\%$ \\\hline 
+With VMs (no predeploy) & $52,020$ & $+13.63\%$ \\\hline
+\end{tabular}
+\caption{Running times for trace with few long batch jobs and resource-hungry ARs (75\% Batch, 25\% AR).}
+\label{tab:longjoboverview}
+\end{center}
+\end{table}
+
+However, the previous trace requires the deployment of 830 600MB VM images (a total of 498GB). Since the trace has a duration of ten hours, this means that we would require, on average, a bandwidth of 13.8MB/s ($\frac{830\cdot 600}{10\textrm{hours}*3600\textrm{sec/hour}}$) to transfer all the images within the ten hour period. Since a 100Mbps switched network has a theoretical peak bandwidth of 12.5MB/s, this means that the overhead of transferring the images will have a small impact on performance, since we require only slightly more bandwidth than is available.
+
+So, in our next trace, we consider what happens when we have a large of images to stage. The trace has the same characteristics as the previous one, with the following differences:
+
+\begin{itemize}
+\item The serial batch requests have an average duration of 5 minutes. To maintain the proportion of 75\% of serial batch requests (in terms of total duration requested), the number of serial jobs is increased, which results in more images to deploy.
+\item The VM images have a size of 600MB. The total number of images that would have to be deployed during the trace is now 1876. 
+\end{itemize}
+
+\begin{table}
+\begin{center}
+ \begin{tabular}{|c|c|c|}
+\hline
+ \textbf{Configuration} & \textbf{Time} & \textbf{Slowdown} \\\hline\hline
+Without VMs & $41,040$ & --- \\\hline
+With VMs (predeploy) & $44,640$ & $+8.77\%$ \\\hline 
+With VMs (no predeploy) & $87,000$ & $+111.99\%$ \\\hline
+\end{tabular}
+\caption{Running times for trace with many short batch jobs and resource-hungry ARs (75\% Batch, 25\% AR).}
+\label{tab:shortjoboverview}
+\end{center}
+\end{table}
+
+
+So, in this case, we require an average bandwidth of 31.2MB/s to deploy all the images in ten hours. Since this exceeds our available bandwidth, the overhead of deploying the VM images will not allow us to complete all the requests in ten hours. Table~\ref{tab:longjoboverview} shows how, while the slowdown of using VMs with predeployed images is arguable an acceptable one, it becomes excessive when we have to deploy the images, more than doubling the time required to complete all the serial batch requests.
+
+In Section~\ref{cha:experiments} will provide a more exhaustive exploration of different trace parameters. However, these two examples already show how using VMs, without any attempt to adequately manage the overhead of using those VMs, we are faced with the problem that this overhead can affect performance considerably. In this work, we present a resource management model provides a solution to this problem by addressing the following questions:
+
+\begin{enumerate}
+\item VMs provide us with resource management techniques such as suspend/resume and live--migration. Can we use these techniques to increase utilization of physical resources? If so, what cases will benefit the most from them? Is this improvement enough to compensate for the different overheads resulting from using VMs?
+\item These examples focus on the time to complete the serial batch jobs. However, advance reservations can also be negatively affected by the overhead of deploying images (e.g., an advance reservation might be infeasible if the required VM image cannot be transfered on time). How can we guarantee the accuracy of ARs, by  making sure that VM images for ARs are available at the time when the AR is set to start?
+\item If predeployment of images is not acceptable, how can we improve efficiency of VM deployments by reducing the overhead of transferring VM images, and getting performance as close to what we achieve when images are predeployed?
+\end{enumerate}
