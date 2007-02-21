@@ -724,6 +724,11 @@ Table~\ref{tab:predeployVSfetchUtil} is similar to Table~\ref{tab:predeployVSfet
 
 Finally, we measured disk usage in all these experiments. When using VMs, with images prefetched with EDF/JIT, disk usage on the physical nodes never exceeded 3.6GB (six images). When using the reuse algorithm, disk usage was slightly smaller, peaking at 3.0GB (five images). We also ran the experiments using the EDF image transfer algorithm and, similarly to the results in the `Accuracy of AR deployments' experiments, disk usage (without reuse) was much higher, peaking at 30GB (50 images).
 
+\vspace{4ex}
+
+In these experimental results, we have shown that our resource model can improve both accuracy and efficiency of virtual workspace deployments. Our first set of experiments focused solely on advance reservations, and showed that scheduling VM image transfers separately from the virtual resources themselves allows the scheduler to have all necessary images deployed before the virtual workspace starts, instead of having the preparation overhead deducted from the user's allocation. Our second set of experiments dealt with best--effort requests, showing that image reuse strategies can reduce the number of image transfers required for these types of deployments, allowing requests to be processed sooner and reducing the amount of bandwidth dedicated to image staging. Our final set of experiments observed the effect of our resource management techniques on mixed workloads (advance reservations and best--effort requests), showing that virtualization can lead to increased performance if VM images are predeployed. We also showed that, even when predeployment is not possible,the overhead of deploying the images can be reduced if it is adequately managed.
+
+
 \begin{table}
 \begin{center}
 \caption{Effect of image prefetching and reuse on utilization (compared with image predeployment)}
