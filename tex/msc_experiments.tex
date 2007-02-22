@@ -32,9 +32,8 @@ For all our experiments, we assumed that all virtual workspace requests
 involved the same amount of CPU\% and memory for each virtual node. We
 allowed at most 2 VMs to be deployed to a single physical node. Since
 we focus on preparation overhead, the VW remains idle during its
-runtime, and we assume that the VM generates no network traffic that
-would share bandwidth with preparation overhead. This assumption is
-reasonable in the case of highly parallel applications, where there is little or no communication between the individual processes.
+runtime. As described in Section~\ref{cha:virtualresources}, we assume that the VM generates no network traffic that
+would share bandwidth with preparation overhead. 
 
 %The results from Experiments \#1 and \#2 (except the disk usage results from experiment \#1) were first presented in Sotomayor et al. \cite{overheadmatters}.
 

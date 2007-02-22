@@ -12,6 +12,12 @@ Our model assumes a set of physical resources providing a set of \emph{resource 
 
 Existing local resource managers, geared towards managing the execution of jobs, are not adequate for scheduling virtual resources because they would not take into account the overhead involved in deploying and managing those virtual resources. In particular, we encounter two types of overhead, which were alluded to in the previous section: \emph{preparation} and \emph{runtime}. The former refers to the cost of preparing the environment where the virtual workspace will run (most notably, deploying the VM images required by that workspace), while the latter refers to the memory, CPU and I/O overhead incurred by the VM hypervisor itself. Furthermore, these overheads are not necessarily constant, and may depend on the size of the requested virtual resources, the hypervisor used, and the quality of base resources.
 
+Our model focuses on guaranteeing accuracy and maximizing efficiency. 
+\begin{itemize}
+\item[---] We define \emph{accuracy} as a binary property: a virtual workspace is either deployed accurately or not, without any gradients. Given a request to start a virtual workspace at time $t_s$ for a duration $d$, with resources $R$, the deployment is accurate if those conditions can be met. To accomplish this, we must account for preparation and runtime overhead in such a way that a request is only accepted if it can be guaranteed to be provisioned accurately since, otherwise, we would violate the agreement with the user requesting the workspace. This is distinct from the concept of \emph{fidelity} used by Irwin et al.\cite{BorjaCite10}, defined as the percentage of $d$ where the user has access to the resources (allowing for the actual starting time to be later than $t_s$, since part of $d$ could be consumed by preparation overhead in Irwin et al.'s work). Our model is designed to provide 100\% fidelity, rejecting any requests where this cannot be guaranteed. 
+\item[---] We define \emph{efficiency} as a measure of how much we can reduce overhead, as opposed to making no attempt to manage it. Efficient processing of requests allows resources that would have otherwise been consumed by overhead to be used to process more requests. 
+\end{itemize}
+
 \begin{figure}
   \begin{center}
 (a)
