@@ -1,5 +1,5 @@
 import ConfigParser, sys
-from workspace.traces import files, cooker
+from workspace.traces import files, cooker, jazz
 from workspace.graphing import graph
 from workspace.util import stats, multirun
 from workspace.util.miscutil import *
@@ -252,6 +252,25 @@ class AdvanceAR(object):
         trace = files.TraceFile.fromFile(opt.trace, entryType=files.TraceEntryV2)
         trace = files.TraceFile.advanceAR(trace)
         trace.toFile(sys.stdout)
+
+class Jazz2Trace(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        p.add_option(Option("-f", "--jazzfile", action="store", type="string", dest="jazzfile", required=True))
+        
+        opt, args = p.parse_args(argv)
+        c = jazz.JazzConf(opt.conf)
+        raw = jazz.RawLogFile(opt.jazzfile)
+        
+        jazzproc = jazz.LogFile(raw, c)
+        
+        jazzproc.printRequests()
+
+ 
 
 if __name__ == "__main__":
     #tg = TraceGraph()
