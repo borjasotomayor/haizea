@@ -261,6 +261,8 @@ class Jazz2Trace(object):
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
         p.add_option(Option("-f", "--jazzfile", action="store", type="string", dest="jazzfile", required=True))
+        p.add_option(Option("-n", "--normalize", action="store_true", dest="normalize"))
+        p.add_option(Option("-d", "--debug", action="store_true", dest="debug"))
         
         opt, args = p.parse_args(argv)
         c = jazz.JazzConf(opt.conf)
@@ -268,7 +270,13 @@ class Jazz2Trace(object):
         
         jazzproc = jazz.LogFile(raw, c)
         
-        jazzproc.printRequests()
+        if opt.debug:
+            jazzproc.printRequests()
+        else:
+            trace = jazzproc.toTrace()
+            if opt.normalize:
+                trace.normalizeTimes()
+            trace.toFile(sys.stdout)
 
  
 
