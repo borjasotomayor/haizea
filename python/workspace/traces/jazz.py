@@ -1,6 +1,7 @@
 import ConfigParser, os
 from mx.DateTime import *
 from mx.DateTime import Parser
+from workspace.traces.files import TraceFile, TraceEntryV3
 
 class JazzConf(object):
     
@@ -17,7 +18,10 @@ class RawLogFileEntry(object):
         self.id_string = fields[2].split(".")[0]
         self.message_text = fields[3]
         
-        self.params = dict([v.split("=") for v in self.message_text.split(" ")])
+        if self.message_text != "":
+            self.params = dict([v.split("=") for v in self.message_text.split(" ")])
+        else:
+            self.params = {}
 
         
     def printFields(self):
@@ -38,6 +42,14 @@ class RawLogFile(object):
             e.printFields()
         
         
+JAZZ_BATCH = 0
+JAZZ_AR = 1       
+
+JAZZ_END_NORMAL = 0
+JAZZ_END_KILLED = 1
+JAZZ_END_DELETED = 2
+JAZZ_END_ABORT = 3
+        
 class JazzRequest(object):
     
     def __init__(self):
@@ -46,26 +58,83 @@ class JazzRequest(object):
         self.startTime = None
         self.endTime = None
         self.numnodes = None
+        self.type = None
+        self.endReason = None
     
     def printFields(self):
+        print "Type: %s" % self.type
         print "Requested: %s" % self.reqTime
         print "Resources: (ncpus:%s, walltime:%s)" % (self.numnodes, self.reqDuration)
-        print "Ran from %s to %s" % (self.startTime, self.endTime)
+        print "Ran from %s to %s (walltime: %s)" % (self.startTime, self.endTime, self.getRealDuration())
+        print "End reason: %s" % self.endReason
         print
         
+    def getRealDuration(self):
+        return self.endTime-self.startTime
+        
 class LogFile(object):
+    
+    def endRequest(self, id_string, time, endReason):
+        if not self.requests.has_key(id_string):
+            # This should not happen. Print an error message.
+            pass
+        else:
+            self.requests[id_string].endTime = time                
+            self.requests[id_string].endReason = endReason
     
     def __init__(self, raw, c):
         self.requests = {}
         self.sortedReq = []
+        rerun = []
         
         for e in raw.entries:
             if e.record_type == "A":
-                pass
+                # From PBS Pro docs:
+                # Job was aborted by the server.
+                self.endRequest(e.id_string, e.datetime, JAZZ_END_ABORT)                    
             elif e.record_type == "B":
-                pass
+                # From PBS Pro docs:
+                # owner=ownername --- Name of party who submitted the
+                # resources reservation request.
+                # name=reservation_name --- If submitter supplied a name string for the reservation.
+                # account=account_string --- If submitter supplied a to be recorded in accounting.
+                # queue=queue_name --- The name of the instantiated reservation
+                #                      queue if this is a general resources reservation.
+                #                      If the resources reservation is for a
+                #                      reservation job, this is the name of the
+                #                      queue to which the reservation-job belongs.
+                # ctime=creation_time --- Time at which the resources reservation
+                #                         got created, seconds since the epoch.
+                # start=period_start --- Time at which the reservation period is to
+                #                        start, in seconds since the epoch.
+                # end=period_end --- Time at which the reservation period is to
+                #                    end, seconds since the epoch.
+                # duration=reservation_duration --- The duration specified or computed for the
+                #                                   resources reservation, in seconds.
+                # nodes=reserved_nodes --- If nodes with specified properties are
+                #                          required, this string is the allocated set.
+                # authorized_users=users_list --- The list of acl_users on the queue that is
+                #                                 instantiated to service the reservation.
+                # authorized_groups=groups_list --- If specified, the list of acl_groups on the
+                #                                   queue that is instantiated to service the reservation.
+                # authorized_hosts=hosts_list --- If specified, the list of acl_hosts on the
+                #                                 queue that is instantiated to service the reservation.
+                # resource_list=resources_list --- List of resources requested by the reservation.
+                #                                  Resources are listed individually as,
+                #                                  for example: resource_list.ncpus=16
+                #                                  resource_list.mem=1048676.                
+                if not self.requests.has_key(e.id_string):
+                    # This should not happen. Print an error message.
+                    pass
+                else:
+                    self.requests[e.id_string].startTime = e.datetime
+                    self.requests[e.id_string].reqDuration = TimeFrom(e.params["Resource_List.walltime"])
+                    self.requests[e.id_string].numnodes = int(e.params["Resource_List.ncpus"])
             elif e.record_type == "D":
-                pass
+                # From PBS Pro docs:
+                # Job was deleted by request. The message_text will contain
+                # requestor=user@host to identify who deleted the job.
+                self.endRequest(e.id_string, e.datetime, JAZZ_END_DELETED)
             elif e.record_type == "E":
                 # From PBS Pro docs:
                 # Job ended (terminated execution). The message_text field
@@ -96,15 +165,20 @@ class LogFile(object):
                 #                       is given by subtracting 10000 from the exit
                 #                       value.
                 # Resources_used.resource=usage_amount Amount of specified resource used over the duration of the job.
-                if not self.requests.has_key(e.id_string):
-                    # This should not happen. Print an error message.
-                    pass
-                else:
-                    self.requests[e.id_string].endTime = e.datetime
+                self.endRequest(e.id_string, e.datetime, JAZZ_END_NORMAL)                    
             elif e.record_type == "k":
-                pass
+                # From PBS Pro docs:
+                # Scheduler or server requested removal of the reservation. The
+                # message_text field contains: requestor=user@host
+                # to identify who deleted the resources reservation.
+                self.endRequest(e.id_string, e.datetime, JAZZ_END_KILLED)                    
             elif e.record_type == "K":
-                pass
+                # From PBS Pro docs:
+                # Resources reservation terminated by ordinary client - e.g. an
+                # owner issuing a pbs_rdel command. The message_text
+                # field contains: requestor=user@host to identify who
+                # deleted the resources reservation.
+                self.endRequest(e.id_string, e.datetime, JAZZ_END_KILLED)                    
             elif e.record_type == "Q":
                 # From PBS Pro docs:
                 # Job entered a queue. The message_text contains queue=name
@@ -113,6 +187,7 @@ class LogFile(object):
                 # (or the same) queue.
                 if not self.requests.has_key(e.id_string):
                     r = JazzRequest()
+                    r.type = JAZZ_BATCH
                     r.reqTime = e.datetime
                     self.requests[e.id_string] = r
                     self.sortedReq.append(e.id_string)
@@ -120,7 +195,9 @@ class LogFile(object):
                     # Just moving to a different queue. Not of interest to us.
                     pass
             elif e.record_type == "R":
-                pass
+                # From PBS Pro docs:
+                # Job was rerun.
+                rerun.apped(e.id_string)
             elif e.record_type == "S":
                 # From PBS Pro docs:
                 # Job execution started. The message_text field contains:
@@ -139,18 +216,81 @@ class LogFile(object):
                     # This should not happen. Print an error message.
                     pass
                 else:
-                    self.requests[e.id_string].startTime = e.datetime
-                    self.requests[e.id_string].reqDuration = TimeFrom(e.params["Resource_List.walltime"])
-                    self.requests[e.id_string].numnodes = int(e.params["Resource_List.ncpus"])
+                    # Ignore jobs submitted to reservations
+                    if e.params["queue"][0]!='R':
+                        self.requests[e.id_string].startTime = e.datetime
+                        self.requests[e.id_string].numnodes = int(e.params["Resource_List.ncpus"])
+                        if e.params.has_key("Resource_List.walltime"):
+                            self.requests[e.id_string].reqDuration = TimeFrom(e.params["Resource_List.walltime"])
+                        else:
+                            self.requests[e.id_string].reqDuration = TimeFrom("15:00:00.00")
             elif e.record_type == "U":
-                pass
+                # From PBS Pro docs:
+                # Created unconfirmed resources reservation on Server. The
+                # message_text field contains requestor=user@host to
+                # identify who requested the resources reservation.
+                if not self.requests.has_key(e.id_string):
+                    r = JazzRequest()
+                    r.type = JAZZ_AR
+                    r.reqTime = e.datetime
+                    self.requests[e.id_string] = r
+                    self.sortedReq.append(e.id_string)
+                else:
+                    # This should not happen. Print an error message.
+                    pass
             elif e.record_type == "Y":
-                pass
+                # From PBS Pro docs:
+                # Resources reservation confirmed by the Scheduler. The
+                # message_text field contains the same item (items) as in a U
+                # record type.
+                if not self.requests.has_key(e.id_string):
+                    # This should not happen. Print error.
+                    pass
+                
+        # Remove rerun jobs
+        for r in rerun:
+            del self.requests[r]
+            self.sortedReq.remove(r)
+            
+        # Find incompletely specified jobs
+        incomplete = []
+        for r in self.sortedReq:
+            if self.requests[r].startTime == None or self.requests[r].endTime == None:
+                incomplete.append(r)
+        
+        # Remove incompletely specified jobs
+        for i in incomplete:
+            del self.requests[i]
+            self.sortedReq.remove(i)
         
         
     def printRequests(self):
         for r in self.sortedReq:
+            print r
             self.requests[r].printFields()
         
-        
+    def toTrace(self):
+        tEntries = []
+        for r in self.sortedReq:
+            numNodes = self.requests[r].numnodes
+            duration = self.requests[r].reqDuration.seconds
+            fields = {}
+            fields["time"] = `int(self.requests[r].reqTime.ticks())`
+            fields["uri"] = "NONE"
+            fields["size"] = "0"
+            fields["numNodes"] = str(numNodes) 
+            fields["mode"] = "RW"
+            if self.requests[r].type == JAZZ_BATCH:
+                fields["deadline"] = "NULL"
+                fields["tag"]="BATCH"
+            else:
+                fields["deadline"] = `int(self.requests[r].startTime)`
+                fields["tag"]="AR"
+            fields["realduration"] = `int(self.requests[r].getRealDuration().seconds)`
+            fields["realstart"] = `int(self.requests[r].startTime.ticks())`
+            fields["duration"] = `int(duration)`
+            fields["cpu"] = "100"
+            fields["memory"] = "100"
+            tEntries.append(TraceEntryV3(fields))
+        return TraceFile(tEntries)        
         
