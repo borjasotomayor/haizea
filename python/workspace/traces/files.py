@@ -57,6 +57,25 @@ class TraceEntryV2(TraceEntry):
     def __init__(self, fields={}):
         TraceEntry.__init__(self,fields)
         
+class TraceEntryV3(TraceEntry):
+    pos = {
+                     0:"time",
+                     1:"realstart",
+                     2:"uri",
+                     3:"size",
+                     4:"numNodes",
+                     5:"memory",
+                     6:"cpu",
+                     7:"mode",
+                     8:"deadline",
+                     9:"duration",
+                     10:"realduration",
+                     11:"tag"
+                     }
+    numFields = len(pos)
+    
+    def __init__(self, fields={}):
+        TraceEntry.__init__(self,fields)
 
 class TraceFile(object):
     def __init__(self, entries=[]):
@@ -91,6 +110,22 @@ class TraceFile(object):
         for entry in self.entries:
             print >>file, entry.toLine()
             
+    # Only TraceEntryV3
+    def normalizeTimes(self):
+        def normalize(field, startTime):
+            return `int(entry.fields[field]) - startTime`
+        
+        startTime = int(self.entries[0].fields["time"])
+        for entry in self.entries:
+            time = normalize("time",startTime)
+            entry.fields["time"] = time
+            entry.fields["realstart"] = normalize("realstart",startTime)
+            if entry.fields["deadline"] != "NULL":
+                deadline = normalize("deadline",startTime)
+                entry.fields["deadline"] = `int(deadline) - int(time)`
+                
+            
+    
     def toScheduleGraph(self, bandwidth=1.0):
         #TODO: Hardcoding is bad
         data = [[],[],[]]
@@ -230,7 +265,6 @@ class SWFFile(object):
                     fields["duration"] = duration                    
                 tEntries.append(TraceEntry(fields))
         return TraceFile(tEntries)
-
 
         
 if __name__ == "__main__":
