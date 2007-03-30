@@ -1,6 +1,6 @@
 import ConfigParser, os
 from workspace.ears import db
-from workspace.traces.files import TraceFile, TraceEntryV2
+from workspace.traces.files import TraceFile, TraceEntryV2, TraceEntryV3
 from sets import Set
 from mx.DateTime import *
 from mx.DateTime import ISO
@@ -49,6 +49,8 @@ MAXDEPLOYED_OPT="maxdeployedimages"
 JITBUFFER_OPT="jitbuffer"
 FORCETRANSFER_OPT="forcetransfertime"
 DISABLEAR_OPT="disableAR"
+PARALLELBATCH_OPT="parallelbatch"
+TRACEFORMAT_OPT="traceformat"
 
 TRANSFER_REQUIRED=0
 TRANSFER_REUSE=1
@@ -76,15 +78,26 @@ def createEARS(config, tracefile):
             dbfile=config.get(SIMULATION_SEC, DB_OPT)
             resDB = db.SQLiteReservationDB.fromFile(dbfile)
             
+        if config.has_option(GENERAL_SEC,TRACEFORMAT_OPT):
+            tracef = config.get(GENERAL_SEC,TRACEFORMAT_OPT)
+        else:
+            tracef = "V2"
             
-        trace = TraceFile.fromFile(tracefile, entryType=TraceEntryV2)
+        if tracef == "V2":
+            trace = TraceFile.fromFile(tracefile, entryType=TraceEntryV2)
+        elif tracef == "V3":
+            trace = TraceFile.fromFile(tracefile, entryType=TraceEntryV3)            
         
         # Adjust duration if necessary
         if config.has_option(SIMULATION_SEC, DURADJUST_OPT):
             adjust = config.getfloat(SIMULATION_SEC, DURADJUST_OPT)
             for i,v in enumerate(trace.entries):
                 duration = int(int(v.fields["duration"]) * adjust)
-                trace.entries[i].fields["duration"] = duration.__str__()
+                trace.entries[i].fields["duration"] = `duration`
+                
+                if tracef == "V3":
+                    realduration = int(int(v.fields["realduration"]) * adjust)
+                    trace.entries[i].fields["realduration"] = `realduration`
     
         return SimulatingServer(config, resDB, trace, commit=True)
     elif config.get(GENERAL_SEC,TYPE_OPT) == "real":
@@ -186,6 +199,37 @@ class BaseServer(object):
             if self.isReservationDone(res["RES_ID"]):
                 self.stopReservation(res["RES_ID"], row=res)
 
+        # Check for reservations which REALLY must end
+        rescur = self.resDB.getReservationsWithRealEndingAllocationsInInterval(time, td, allocstatus=STATUS_RUNNING)
+        reservations = rescur.fetchall()
+
+        for res in reservations:          
+            # Get reservation parts that have to end
+            rspcur = self.resDB.getResPartsWithRealEndingAllocationsInInterval(time,td, allocstatus=STATUS_RUNNING, res=res["RES_ID"])
+            resparts = rspcur.fetchall()
+            
+            for respart in resparts:
+                if respart["RSP_STATUS"] == STATUS_RUNNING:
+                    # Are we done with *all* the allocations for this resource part?
+                    if self.isReservationPartEnd(respart["RSP_ID"], time, td):
+                        self.stopReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
+                    else:
+                        srvlog.warning("Resource allocation resizing not supported yet")
+                    # All allocations are flagged as done.
+                    self.stopAllocations(respart["RSP_ID"], time, td)
+                    self.resDB.setEndtimeToRealend(respart["RSP_ID"], (time, time+td))
+                    
+            # Remove pending post-suspend/resume allocations
+            rspcur = self.resDB.getResPartsWithFutureAllocations(time, allocstatus=STATUS_PENDING, res=res["RES_ID"])
+            resparts = rspcur.fetchall()
+            for respart in resparts:
+                self.resDB.removeReservationPart(respart["RSP_ID"])
+
+                    
+             # Check to see if this ends the reservation
+            if self.isReservationDone(res["RES_ID"]):
+                self.stopReservation(res["RES_ID"], row=res)
+
 
     def processStartingReservations(self, time, td):
         # Check for reservations which must start
@@ -239,6 +283,9 @@ class BaseServer(object):
         
         for r in reqToProcess:
             self.distinctimages.add((r.fields["uri"],int(r.fields["size"])))
+            # TODO
+            # if forcing start time:
+            #    do AR regardless of request type
             if r.fields["deadline"] == "NULL":
                 self.processBatchRequest(r)
                 self.reqnum+=1
@@ -357,6 +404,9 @@ class BaseServer(object):
     def processBatchRequest(self, r):
         reqTime = self.getTime() #Should be starttime + second
         duration = TimeDelta(seconds=int(r.fields["duration"]))
+        realDuration = None
+        if self.getTraceFormat()=="V3":
+            realDuration = TimeDelta(seconds=int(r.fields["realduration"]))
         numNodes = int(r.fields["numNodes"])
         imgURI = r.fields["uri"]
         imgSize = int(r.fields["size"])
@@ -373,17 +423,18 @@ class BaseServer(object):
         res_id = self.resDB.addReservation("Test (Batch) Reservation #%i" % self.reqnum)
         node = 1
         for vwnode in range(numNodes):
-            nodeName = (vwnode+1).__str__()
-            self.queueBatchRequest(res_id, duration, resources, nodeName, imgURI, imgSize)
-        self.batchreservations[res_id] = [duration, resources, imgURI, imgSize, 0]
+            nodeName = `(vwnode+1)`
+            self.queueBatchRequest(res_id, duration, realDuration, resources, nodeName, imgURI, imgSize)
+        self.batchreservations[res_id] = [duration, resources, imgURI, imgSize, 0, realDuration]
         #print "Add %i (%s)" % (res_id, self.batchreservations.keys())
 
         if self.commit: self.resDB.commit()
 
-    def queueBatchRequest(self,res_id, duration, resources, nodeName, imgURI, imgSize):
+    def queueBatchRequest(self,res_id, duration, realDuration, resources, nodeName, imgURI, imgSize):
         vw = {}
         vw["res_id"]=res_id
         vw["duration"]=duration
+        vw["realduration"]=realDuration
         vw["resources"]=resources
         vw["node"] = nodeName
         vw["imgURI"] = imgURI
@@ -426,6 +477,7 @@ class BaseServer(object):
         for i,vm in enumerate(self.batchqueue):
             res_id = vm["res_id"]
             duration = vm["duration"]
+            realDuration = vm["realduration"]
             resources = vm["resources"]
             nodename = "VM " + vm["node"]
             imgURI = vm["imgURI"]
@@ -504,7 +556,7 @@ class BaseServer(object):
                 if len(lookAheadStart)==0:
                     lookAheadStart=None
                     
-                (node,VMrsp_id,endTime, startTime) = self.scheduleSingleVM(res_id, startTimes, lookAheadStart, duration, imgURI, resources=resources, preemptible=preemptible, suspendable=suspendable, forceName=nodename)
+                (node,VMrsp_id,endTime, startTime) = self.scheduleSingleVM(res_id, startTimes, lookAheadStart, duration, imgURI, realDuration=realDuration, resources=resources, preemptible=preemptible, suspendable=suspendable, forceName=nodename)
 
                 if not isFull.has_key(startTime):
                     isFull[startTime] = self.resDB.isFull(startTime, SLOTTYPE_CPU)
@@ -785,7 +837,7 @@ class BaseServer(object):
             raise SchedException
 
     # Schedules a single VM on a best-effort basis
-    def scheduleSingleVM(self, res_id, startTimes, lookaheadStart, duration, imguri, resources, preemptible, suspendable, forceName=False):
+    def scheduleSingleVM(self, res_id, startTimes, lookaheadStart, duration, imguri, realDuration, resources, preemptible, suspendable, forceName=False):
         slottypes = resources.keys()
         
         # This variable stores the candidate slots. It is a dictionary, where the key
@@ -886,7 +938,14 @@ class BaseServer(object):
             amount = resources[slottype]
             sl_id = candidatenodes[optimalNode][slottype][0]
             endTime = startTime + duration
-            self.resDB.addAllocation(rsp_id, sl_id, startTime, endTime, amount)
+            if realDuration == None:
+                realEndTime == None
+                realDurationSeconds == None
+            else:
+                realEndTime = startTime + realDuration
+                realDurationSeconds = int(realDuration.seconds)
+
+            self.resDB.addAllocation(rsp_id, sl_id, startTime, endTime, amount, realDuration=realDurationSeconds, realEndTime=realEndTime)
 
         if needsSuspension:
             srvlog.info("This VM will require suspension.")
@@ -1572,6 +1631,13 @@ class BaseServer(object):
     def resizeAllocation(self, respart_id, row=None):
         srvlog.error( "An allocation has to be resized here. This should not be happening!")
 
+    def getTraceFormat(self):
+        if self.config.has_option(GENERAL_SEC, TRACEFORMAT_OPT):
+            tracef = self.config.get(GENERAL_SEC, TRACEFORMAT_OPT)
+        else:
+            tracef = "V2"
+        return tracef
+            
 
 class SimulatingServer(BaseServer):
     def __init__(self, config, resDB, trace, commit):
@@ -1730,8 +1796,8 @@ class RealServer(BaseServer):
 
 
 if __name__ == "__main__":
-    configfile="examples/ears.conf"
-    tracefile="examples/test_stress.trace"
+    configfile="examples/jazz.conf"
+    tracefile="examples/test_earlyend.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    

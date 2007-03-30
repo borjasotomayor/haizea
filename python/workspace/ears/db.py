@@ -224,12 +224,27 @@ class ReservationDB(object):
         distinctfields=("RES_ID","RES_NAME","RES_STATUS")
         return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", distinct=distinctfields, **kwargs)
 
+    def getReservationsWithRealEndingAllocationsInInterval(self, time, td, **kwargs):
+        distinctfields=("RES_ID","RES_NAME","RES_STATUS")
+        return self.getAllocationsInInterval(time,td=td,eventfield="all_realend", distinct=distinctfields, **kwargs)
+
     def getResPartsWithEndingAllocationsInInterval(self, time, td, **kwargs):
         distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS", "RES_ID")
         return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", distinct=distinctfields, **kwargs)
 
+    def getResPartsWithFutureAllocations(self, time, **kwargs):
+        distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS", "RES_ID")
+        return self.getAllocationsInInterval(time,eventfield="all_schedstart", distinct=distinctfields, **kwargs)
+
+    def getResPartsWithRealEndingAllocationsInInterval(self, time, td, **kwargs):
+        distinctfields=("RSP_ID","RSP_NAME","RSP_STATUS", "RES_ID")
+        return self.getAllocationsInInterval(time,td=td,eventfield="all_realend", distinct=distinctfields, **kwargs)
+
     def getEndingAllocationsInInterval(self, time, td, rsp_id, **kwargs):
         return self.getAllocationsInInterval(time,td=td,eventfield="all_schedend", rsp_id=rsp_id, **kwargs)
+
+    def getRealEndingAllocationsInInterval(self, time, td, rsp_id, **kwargs):
+        return self.getAllocationsInInterval(time,td=td,eventfield="all_realend", rsp_id=rsp_id, **kwargs)
 
     def getFutureAllocationsInSlot(self, time, sl_id, **kwargs):
         return self.getAllocationsInInterval(time, td=None, eventfield="all_schedstart",sl_id=sl_id,**kwargs)
@@ -286,6 +301,14 @@ class ReservationDB(object):
         cur = self.getConn().cursor()
         cur.execute(sql, (status,) + interval)
 
+    def setEndtimeToRealend(self, respart, end):
+        sql = "UPDATE TB_ALLOC SET ALL_SCHEDEND = ALL_REALEND WHERE "
+        sql += " RSP_ID=%i" % respart
+        sql += " AND all_realend >= ? AND all_realend < ?"
+                
+        cur = self.getConn().cursor()
+        cur.execute(sql, end)
+
     def updateAllocation(self, sl_id, rsp_id, all_schedstart, newstart=None, end=None):
         srvlog.info( "Updating allocation %i,%i beginning at %s with start time %s and end time %s" % (sl_id, rsp_id, all_schedstart, newstart, end))
         sql = """UPDATE tb_alloc 
@@ -316,11 +339,13 @@ class ReservationDB(object):
         rsp_id=cur.lastrowid
         return rsp_id
     
-    def addAllocation(self, rsp_id, sl_id, startTime, endTime, amount, moveable=False, deadline=None, duration=None, nextstart=None):
+    def addAllocation(self, rsp_id, sl_id, startTime, endTime, amount, realEndTime=None, realDuration=None, moveable=False, deadline=None, duration=None, nextstart=None):
         srvlog.info( "Reserving %f in slot %i from %s to %s (rsp_id: %i) [with nextstart=%s]" % (amount, sl_id, startTime, endTime, rsp_id, nextstart))
-        sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_amount,all_moveable,all_deadline,all_duration,all_nextstart,all_status) values (?,?,?,?,?,?,?,?,?,0)"
+        sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_realend,all_amount,all_moveable,all_deadline,all_duration,all_realduration,all_nextstart,all_status) values (?,?,?,?,?,?,?,?,?,?,?,0)"
         cur = self.getConn().cursor()
-        cur.execute(sql, (rsp_id, sl_id, startTime, endTime, amount, moveable, deadline, duration, nextstart))            
+        print type(endTime), endTime
+        print type(realEndTime), realEndTime
+        cur.execute(sql, (rsp_id, sl_id, startTime, endTime, realEndTime, amount, moveable, deadline, duration, realDuration, nextstart))            
 
     def addNode(self, nod_hostname, nod_enabled=True):
         sql = "INSERT INTO tb_node(nod_hostname, nod_enabled) VALUES (?,?)"
