@@ -1823,7 +1823,6 @@ class SimulatingServer(BaseServer):
             prevTime = time
             prevUtilization = utilization
         
-        print stats
         return stats
         #print "Average utilization (1): %f" % (accumUtil/seconds)
         #print "Average utilization (2): %f" % (accumUtil/(seconds-startVM))
