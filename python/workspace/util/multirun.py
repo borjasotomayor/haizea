@@ -7,6 +7,7 @@ from pickle import Pickler, Unpickler
 
 MULTIRUN_SEC="multirun"
 PROFILES_OPT="profiles"
+FORCERUN_OPT="forcerun"
 
 GRAPHS_SEC="graphs"
 UTILINDIV_OPT="utilization-individual"
@@ -91,7 +92,7 @@ class EARS(object):
             queuesizefilename = profilename + "-queuesize.dat"
             print "Running profile '%s'" % profilename
             
-            forceRun = False
+            forceRun = self.config.getboolean(MULTIRUN_SEC, FORCERUN_OPT)
             mustRun = True
             stats = None
             accepted = None
@@ -285,7 +286,7 @@ class EARS(object):
                 
         if utilcombined:
             utilization = [[(w[0],w[1]) for w in v] for v in utilstats.values()]
-            g1 = PointGraph(utilization, "Time (s)", "Utilization")
+            g1 = StepGraph(utilization, "Time (s)", "Utilization")
             g1.plot()
             pylab.ylim(0, 1.05)
             pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
@@ -336,7 +337,7 @@ class EARS(object):
     
 if __name__ == "__main__":
     configfile="../ears/examples/ears-multirun.conf"
-    tracefile="../ears/examples/test_predeploy1.trace"
+    tracefile="../ears/examples/test_realstart.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)        
