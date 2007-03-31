@@ -51,6 +51,12 @@ FORCETRANSFER_OPT="forcetransfertime"
 DISABLEAR_OPT="disableAR"
 PARALLELBATCH_OPT="parallelbatch"
 TRACEFORMAT_OPT="traceformat"
+REALEND_OPT="realendtime"
+REALSTART_OPT="realstarttime"
+
+REALSTART_ALL="all"
+REALSTART_NONE="none"
+REALSTART_PARALLEL="parallel"
 
 TRANSFER_REQUIRED=0
 TRANSFER_REUSE=1
@@ -95,7 +101,7 @@ def createEARS(config, tracefile):
                 duration = int(int(v.fields["duration"]) * adjust)
                 trace.entries[i].fields["duration"] = `duration`
                 
-                if tracef == "V3":
+                if self.usingRealEndTimes():
                     realduration = int(int(v.fields["realduration"]) * adjust)
                     trace.entries[i].fields["realduration"] = `realduration`
     
@@ -154,6 +160,37 @@ class BaseServer(object):
         srvlog.setLevel(loglevel[log])
         
         
+    def processRealEndingReservations(self, time, td):
+        # Check for reservations which REALLY must end
+        rescur = self.resDB.getReservationsWithRealEndingAllocationsInInterval(time, td, allocstatus=STATUS_RUNNING)
+        reservations = rescur.fetchall()
+        
+        for res in reservations:          
+            # Get reservation parts that have to end
+            rspcur = self.resDB.getResPartsWithRealEndingAllocationsInInterval(time,td, allocstatus=STATUS_RUNNING, res=res["RES_ID"])
+            resparts = rspcur.fetchall()
+            for respart in resparts:
+                if respart["RSP_STATUS"] == STATUS_RUNNING:
+                    # Are we done with *all* the allocations for this resource part?
+                    if self.isReservationPartEnd(respart["RSP_ID"], time, td):
+                        self.stopReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
+                    else:
+                        srvlog.warning("Resource allocation resizing not supported yet")
+                    # All allocations are flagged as done.
+                    self.resDB.setEndtimeToRealend(respart["RSP_ID"], (time, time+td))
+                    self.stopAllocations(respart["RSP_ID"], time, td)
+                    
+            # Remove pending post-suspend/resume allocations
+            rspcur = self.resDB.getResPartsWithFutureAllocations(time, allocstatus=STATUS_PENDING, res=res["RES_ID"])
+            resparts = rspcur.fetchall()
+            for respart in resparts:
+                self.resDB.removeReservationPart(respart["RSP_ID"])
+
+                    
+             # Check to see if this ends the reservation
+            if self.isReservationDone(res["RES_ID"]):
+                self.stopReservation(res["RES_ID"], row=res)
+
     def processEndingReservations(self, time, td):
         # Check for reservations which must end
         rescur = self.resDB.getReservationsWithEndingAllocationsInInterval(time, td, allocstatus=STATUS_RUNNING)
@@ -199,36 +236,6 @@ class BaseServer(object):
             if self.isReservationDone(res["RES_ID"]):
                 self.stopReservation(res["RES_ID"], row=res)
 
-        # Check for reservations which REALLY must end
-        rescur = self.resDB.getReservationsWithRealEndingAllocationsInInterval(time, td, allocstatus=STATUS_RUNNING)
-        reservations = rescur.fetchall()
-
-        for res in reservations:          
-            # Get reservation parts that have to end
-            rspcur = self.resDB.getResPartsWithRealEndingAllocationsInInterval(time,td, allocstatus=STATUS_RUNNING, res=res["RES_ID"])
-            resparts = rspcur.fetchall()
-            
-            for respart in resparts:
-                if respart["RSP_STATUS"] == STATUS_RUNNING:
-                    # Are we done with *all* the allocations for this resource part?
-                    if self.isReservationPartEnd(respart["RSP_ID"], time, td):
-                        self.stopReservationPart(respart["RSP_ID"], row=respart, resname=res["RES_NAME"])
-                    else:
-                        srvlog.warning("Resource allocation resizing not supported yet")
-                    # All allocations are flagged as done.
-                    self.stopAllocations(respart["RSP_ID"], time, td)
-                    self.resDB.setEndtimeToRealend(respart["RSP_ID"], (time, time+td))
-                    
-            # Remove pending post-suspend/resume allocations
-            rspcur = self.resDB.getResPartsWithFutureAllocations(time, allocstatus=STATUS_PENDING, res=res["RES_ID"])
-            resparts = rspcur.fetchall()
-            for respart in resparts:
-                self.resDB.removeReservationPart(respart["RSP_ID"])
-
-                    
-             # Check to see if this ends the reservation
-            if self.isReservationDone(res["RES_ID"]):
-                self.stopReservation(res["RES_ID"], row=res)
 
 
     def processStartingReservations(self, time, td):
@@ -268,6 +275,7 @@ class BaseServer(object):
         # The starting reservations we just processed might end inside
         # the same scheduling quantum, so we have to check for ending
         # reservations again.
+        self.processRealEndingReservations(time, td)
         self.processEndingReservations(time, td)
 
         # TODO: This is still not an ideal solution for reservations
@@ -281,13 +289,30 @@ class BaseServer(object):
         reqToProcess = [r for r in self.trace.entries if int(r.fields["time"]) <= seconds]
         newtrace = [r for r in self.trace.entries if int(r.fields["time"]) > seconds]
         
+        if self.config.has_option(GENERAL_SEC, REALSTART_OPT):
+            realstart=self.config.get(GENERAL_SEC, REALSTART_OPT)
+        else:
+            realstart="none"
+            
+                                  
         for r in reqToProcess:
             self.distinctimages.add((r.fields["uri"],int(r.fields["size"])))
-            # TODO
-            # if forcing start time:
-            #    do AR regardless of request type
+            numnodes = int(r.fields["numNodes"])
             if r.fields["deadline"] == "NULL":
-                self.processBatchRequest(r)
+                reqtime = int(r.fields["time"])
+                realstarttime = int(r.fields["realstart"])
+                deadline = realstarttime - reqtime
+                if realstart=="parallel":
+                    if numnodes > 1:
+                        r.fields["deadline"] = `deadline`
+                        self.processARRequest(r)
+                    else:
+                        self.processBatchRequest(r)
+                elif realstart=="all":
+                    r.fields["deadline"] = `deadline`
+                    self.processARRequest(r)
+                else:
+                    self.processBatchRequest(r)
                 self.reqnum+=1
             else:
                 AR = True
@@ -303,6 +328,12 @@ class BaseServer(object):
         reqTime = self.getTime() #Should be starttime + seconds
         startTime = reqTime + TimeDelta(seconds=int(r.fields["deadline"]))
         endTime = startTime + TimeDelta(seconds=int(r.fields["duration"]))
+        realEndTime = None
+        realDuration = None
+        if self.usingRealEndTimes():
+            realDuration = TimeDelta(seconds=int(r.fields["realduration"]))
+            realEndTime = startTime + realDuration
+            
         numNodes = int(r.fields["numNodes"])
         imgURI = r.fields["uri"]
         imgSize = int(r.fields["size"])
@@ -315,6 +346,7 @@ class BaseServer(object):
         srvlog.info("%s: Received request for VW %i" % (reqTime, self.reqnum))
         srvlog.info("\tStart time: %s" % startTime)
         srvlog.info("\tEnd time: %s" % endTime)
+        srvlog.info("\tReal end time: %s" % realEndTime)
         srvlog.info("\tNodes: %i" % numNodes)
         
         resources = {SLOTTYPE_CPU: float(r.fields["cpu"]), SLOTTYPE_MEM: float(r.fields["memory"])}
@@ -325,7 +357,7 @@ class BaseServer(object):
         piggyback_rsp_ids = {}
         cowreuse_rsp_ids = []
         try:
-            (mustpreempt, transfers) = self.scheduleMultipleVMs(res_id, startTime, endTime, imgURI, numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
+            (mustpreempt, transfers) = self.scheduleMultipleVMs(res_id, startTime, endTime, imgURI, realEndTime=realEndTime, numnodes=numNodes, resources=resources, preemptible=False, canpreempt=True)
             if len(mustpreempt) > 0:
                 srvlog.info("Must preempt the following: %s", mustpreempt)
                 self.preemptResources(mustpreempt, startTime, endTime)
@@ -405,7 +437,7 @@ class BaseServer(object):
         reqTime = self.getTime() #Should be starttime + second
         duration = TimeDelta(seconds=int(r.fields["duration"]))
         realDuration = None
-        if self.getTraceFormat()=="V3":
+        if self.usingRealEndTimes():
             realDuration = TimeDelta(seconds=int(r.fields["realduration"]))
         numNodes = int(r.fields["numNodes"])
         imgURI = r.fields["uri"]
@@ -600,7 +632,7 @@ class BaseServer(object):
     # end. scheduleSinglePreemptibleVM can schedule a VM that is not able to run from
     # beginning to end  by prescheduling suspend/resume points (of course, this is only
     # acceptable in preemptible VMs)
-    def scheduleMultipleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources, preemptible=False, canpreempt=True, forceName=None):
+    def scheduleMultipleVMs(self, res_id, startTime, endTime, imguri, numnodes, resources, realEndTime=None, preemptible=False, canpreempt=True, forceName=None):
         
         slottypes = resources.keys()
         
@@ -831,7 +863,7 @@ class BaseServer(object):
                 for slottype in slottypes:
                     amount = resources[slottype]
                     sl_id = assignment[vwnode][slottype]
-                    self.resDB.addAllocation(rsp_id, sl_id, startTime, endTime, amount)
+                    self.resDB.addAllocation(rsp_id, sl_id, startTime, endTime, amount, realEndTime = realEndTime)
             return mustpreempt, transfers
         else:
             raise SchedException
@@ -939,8 +971,8 @@ class BaseServer(object):
             sl_id = candidatenodes[optimalNode][slottype][0]
             endTime = startTime + duration
             if realDuration == None:
-                realEndTime == None
-                realDurationSeconds == None
+                realEndTime = None
+                realDurationSeconds = None
             else:
                 realEndTime = startTime + realDuration
                 realDurationSeconds = int(realDuration.seconds)
@@ -1631,12 +1663,16 @@ class BaseServer(object):
     def resizeAllocation(self, respart_id, row=None):
         srvlog.error( "An allocation has to be resized here. This should not be happening!")
 
-    def getTraceFormat(self):
+    def usingRealEndTimes(self):
         if self.config.has_option(GENERAL_SEC, TRACEFORMAT_OPT):
             tracef = self.config.get(GENERAL_SEC, TRACEFORMAT_OPT)
         else:
             tracef = "V2"
-        return tracef
+        if self.config.has_option(GENERAL_SEC, REALEND_OPT):
+            realend = self.config.getboolean(GENERAL_SEC, REALEND_OPT)
+        else:
+            realend = False
+        return (tracef=="V3" and realend)
             
 
 class SimulatingServer(BaseServer):
@@ -1709,7 +1745,7 @@ class SimulatingServer(BaseServer):
         self.startTime = self.time
         
         srvlog.info("Starting")          
-        td = TimeDelta(minutes=1)
+        td = TimeDelta(minutes=15)
         self.accepted.append((self.startTime, self.acceptednum))
         self.rejected.append((self.startTime, self.rejectednum))
         self.batchcompleted.append((self.startTime, self.batchcompletednum))
@@ -1730,6 +1766,7 @@ class SimulatingServer(BaseServer):
                 self.processTraceRequests(delta)
             if self.time.minute % 15 == 0:
                 print "\tNumber of VMs in queue: %i" % len(self.batchqueue)
+            self.processRealEndingReservations(self.time, td)
             if len(self.batchqueue) > 0 and self.time.second == 0:
                 self.processQueue()
             self.processReservations(self.time, td)
@@ -1770,7 +1807,7 @@ class SimulatingServer(BaseServer):
             for row in cur:
                 totalcapacity += row["sl_capacity"]
                 totalused += row["used"]
-            utilization = totalused / totalcapacity
+            utilization = float(totalused) / totalcapacity
             time = ISO.ParseDateTime(point["time"])
             seconds = (time-start).seconds
             if startVM == None and utilization > 0:
@@ -1786,6 +1823,7 @@ class SimulatingServer(BaseServer):
             prevTime = time
             prevUtilization = utilization
         
+        print stats
         return stats
         #print "Average utilization (1): %f" % (accumUtil/seconds)
         #print "Average utilization (2): %f" % (accumUtil/(seconds-startVM))
@@ -1797,7 +1835,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/jazz.conf"
-    tracefile="examples/test_earlyend.trace"
+    tracefile="examples/test_realstart.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
