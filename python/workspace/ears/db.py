@@ -10,7 +10,8 @@ sqlite.register_adapter(DateTimeType, adapt_datetime)
 
 class ReservationDB(object):
     def __init__(self):
-        pass
+        self.changePointCacheDirty = True
+        self.nextChangePoints = []
     
     def printReservations(self):
         conn = self.getConn()
@@ -128,7 +129,7 @@ class ReservationDB(object):
         
         return cur          
 
-    def findChangePoints(self, start, end=None, slot=None, closed=True):
+    def findChangePoints(self, start, end=None, slot=None, closed=True, includeReal=False, withSlots=False):
         if closed:
             gt = ">="
             lt = "<="
@@ -141,21 +142,60 @@ class ReservationDB(object):
         else:
             filter = ""
         
-        sql = """select distinct all_schedstart as time from tb_alloc where
-        all_schedstart %s '%s'""" % (gt,start)
+        field = "all_schedstart as time"
+        if withSlots:
+            field += ", sl_id"        
+        sql = """select distinct %s from tb_alloc where
+        all_schedstart %s '%s'""" % (field,gt,start)
         if end != None:
             sql+=" and all_schedstart %s '%s'" % (lt,end)
         sql += filter
-        sql += """ union select distinct all_schedend as time from tb_alloc where
-        all_schedend %s '%s'""" % (gt,start)
+
+        field = "all_schedend"
+        if withSlots:
+            field += ", sl_id"        
+        sql += """ union select distinct %s from tb_alloc where
+        all_schedend %s '%s'""" % (field,gt,start)
         if end != None:
             sql +=" and all_schedend %s '%s'" % (lt,end) 
         sql+=filter
+        if includeReal:
+            field = "all_realend as time"
+            if withSlots:
+                field += ", sl_id"        
+            sql += """ union select distinct %s from tb_alloc where
+            all_realend %s '%s'""" % (field,gt,start)
+            if end != None:
+                sql +=" and all_schedend %s '%s'" % (lt,end) 
+            sql+=filter
         sql += " order by time"
         cur = self.getConn().cursor()
         cur.execute(sql)
         
         return cur
+    
+    def popNextChangePoint(self, time):
+        next = self.peekNextChangePoint(time)
+        if next != None:
+            self.nextChangePoints.pop()
+        return next
+            
+    def peekNextChangePoint(self, time):
+        if not self.changePointCacheDirty:
+            if len(self.nextChangePoints)>0:
+                return ISO.ParseDateTime(self.nextChangePoints[-1])
+            else:
+                return None
+        else:
+            changePoints = [p["time"] for p in self.findChangePoints(time,includeReal=True,closed=False).fetchall()]
+            changePoints.reverse()
+            if len(changePoints)>0:
+                next = ISO.ParseDateTime(changePoints[-1])
+            else:
+                next = None
+            self.nextChangePoints = changePoints
+            self.changePointCacheDirty = False
+            return next
 
     def getUtilization(self, time, type=None, slots=None):
         # Select slots which are partially occupied at that time
@@ -308,6 +348,7 @@ class ReservationDB(object):
                 
         cur = self.getConn().cursor()
         cur.execute(sql, end)
+        self.changePointCacheDirty = True
 
     def updateAllocation(self, sl_id, rsp_id, all_schedstart, newstart=None, end=None):
         srvlog.info( "Updating allocation %i,%i beginning at %s with start time %s and end time %s" % (sl_id, rsp_id, all_schedstart, newstart, end))
@@ -316,6 +357,8 @@ class ReservationDB(object):
         WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
         cur = self.getConn().cursor()
         cur.execute(sql, (newstart,end,sl_id,rsp_id,all_schedstart))
+        self.changePointCacheDirty = True
+
 
     def suspendAllocation(self, sl_id, rsp_id, all_schedstart, newend=None, nextstart=None):
         srvlog.info( "Updating allocation (sl_id: %i, rsp_id: %i) beginning at %s with end time %s and next start time %s" % (sl_id, rsp_id, all_schedstart, newend, nextstart))
@@ -324,6 +367,7 @@ class ReservationDB(object):
         WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
         cur = self.getConn().cursor()
         cur.execute(sql, (newend,nextstart,sl_id,rsp_id,all_schedstart))
+        self.changePointCacheDirty = True
 
     def addReservation(self, name):
         sql = "INSERT INTO tb_reservation(res_name,res_status) values (?,0)"
@@ -344,6 +388,7 @@ class ReservationDB(object):
         sql = "INSERT INTO tb_alloc(rsp_id,sl_id,all_schedstart,all_schedend,all_realend,all_amount,all_moveable,all_deadline,all_duration,all_realduration,all_nextstart,all_status) values (?,?,?,?,?,?,?,?,?,?,?,0)"
         cur = self.getConn().cursor()
         cur.execute(sql, (rsp_id, sl_id, startTime, endTime, realEndTime, amount, moveable, deadline, duration, realDuration, nextstart))            
+        self.changePointCacheDirty = True
 
     def addNode(self, nod_hostname, nod_enabled=True):
         sql = "INSERT INTO tb_node(nod_hostname, nod_enabled) VALUES (?,?)"
@@ -401,6 +446,7 @@ class SQLiteReservationDB(ReservationDB):
     def __init__(self, conn):
         self.conn = conn
         self.conn.row_factory = sqlite.Row
+        ReservationDB.__init__(self)
         
     def getConn(self):
         return self.conn
@@ -430,6 +476,16 @@ class SQLiteReservationDB(ReservationDB):
             except:
                 pass
             cur.execute(view[1])
+
+        cur.execute("select name,sql from __templatedb.sqlite_master where type='index'")
+        indices = cur.fetchall()
+        for index in indices:
+            if index[1] != None:
+                try:
+                    cur.execute("drop index main.%s" % index[0])
+                except:
+                    pass
+                cur.execute(index[1])
 
         cur.execute("detach __templatedb")
         conn.commit()

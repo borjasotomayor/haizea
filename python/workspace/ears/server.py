@@ -718,10 +718,12 @@ class BaseServer(object):
             # Final sieve: Determine "resource change points" and make sure that 
             # there is enough resources at each point too (and determine maximum
             # available)
+            cur = self.resDB.findChangePoints(startTime, endTime, closed=False, withSlots=True)
+            changepointsslots = cur.fetchall()
             for slot in slots:
                 slot_id=slot[1]
-                changepoints = self.resDB.findChangePoints(startTime, endTime, slot_id, closed=False)
-
+                             
+                changepoints = [r for r in changepointsslots if r["sl_id"] == slot_id]
                 for point in changepoints:
                     time = point["time"]
 
@@ -1743,9 +1745,10 @@ class SimulatingServer(BaseServer):
         
     def start(self):
         self.startTime = self.time
-        
+        nextTime = self.time
+        prevTime = self.time
         srvlog.info("Starting")          
-        td = TimeDelta(minutes=15)
+        td = TimeDelta(minutes=1)
         self.accepted.append((self.startTime, self.acceptednum))
         self.rejected.append((self.startTime, self.rejectednum))
         self.batchcompleted.append((self.startTime, self.batchcompletednum))
@@ -1755,22 +1758,45 @@ class SimulatingServer(BaseServer):
                 self.diskusage.append((self.startTime, i+1, 0))
         
         while self.resDB.existsRemainingReservations(self.time) or len(self.trace.entries) > 0 or len(self.batchqueue) > 0:
-            if self.time.minute % 15 == 0:
+            delta = self.time - self.startTime
+            delta_s = delta.seconds
+            #print self.resDB.nextChangePoints
+            if (self.time - prevTime).minutes >= 15:
                 print "Simulation time: %s" % self.time 
                 print "\tBatch VMs completed: %i" % self.batchvmcompletednum
                 print "\tBatch VWs completed: %i" % self.batchcompletednum
                 print "\tAccepted ARs: %i" % self.acceptednum
                 print "\tRejected ARs: %i" % self.rejectednum
-            if len(self.trace.entries) > 0:
-                delta = self.time - self.startTime
+                
+            if len(self.trace.entries) > 0 and int(self.trace.entries[0].fields["time"]) <= delta_s:
                 self.processTraceRequests(delta)
-            if self.time.minute % 15 == 0:
+            if (self.time - prevTime).minutes >= 15:
                 print "\tNumber of VMs in queue: %i" % len(self.batchqueue)
+                prevTime = self.time
             self.processRealEndingReservations(self.time, td)
             if len(self.batchqueue) > 0 and self.time.second == 0:
                 self.processQueue()
             self.processReservations(self.time, td)
-            self.time = self.time + td
+            if self.time == nextTime:
+                nextChangePoint = self.resDB.popNextChangePoint(self.time)
+                if len(self.trace.entries) > 0:
+                    nextTraceReq = int(self.trace.entries[0].fields["time"])
+                else:
+                    nextTraceReq = None
+                if nextChangePoint==None and nextTraceReq == None:
+                    nextTime = self.time + td
+                else:
+                    if nextChangePoint == None:
+                        next = nextTraceReq
+                    else:
+                        changepoint_s = (nextChangePoint - self.startTime).seconds
+                        if nextTraceReq == None:
+                            next = changepoint_s
+                        else:
+                            next = min(changepoint_s, nextTraceReq)
+                    nextTime = self.startTime + TimeDelta(seconds=next)
+                    #print "Time is %s, next time is %s" % (self.time, nextTime)
+            self.time = nextTime
             
         finaltime = self.time - td
         self.accepted.append((finaltime, self.acceptednum))
@@ -1834,7 +1860,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/jazz.conf"
-    tracefile="examples/test_realstart.trace"
+    tracefile="examples/test_earlyend.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
