@@ -301,15 +301,18 @@ class BaseServer(object):
             if r.fields["deadline"] == "NULL":
                 reqtime = int(r.fields["time"])
                 realstarttime = int(r.fields["realstart"])
+                realduration = int(r.fields["realduration"])
                 deadline = realstarttime - reqtime
                 if realstart=="parallel":
                     if numnodes > 1:
                         r.fields["deadline"] = `deadline`
+                        r.fields["duration"] = `realduration`
                         self.processARRequest(r)
                     else:
                         self.processBatchRequest(r)
                 elif realstart=="all":
                     r.fields["deadline"] = `deadline`
+                    r.fields["duration"] = `realduration`
                     self.processARRequest(r)
                 else:
                     self.processBatchRequest(r)
@@ -1291,9 +1294,10 @@ class BaseServer(object):
                 resources = self.batchreservations[res_id][1]
                 imgURI = self.batchreservations[res_id][2]
                 imgSize = self.batchreservations[res_id][3]
+                realduration = self.batchreservations[res_id][5]
                 self.batchreservations[res_id][4] += 1
                 nodeName = "VM R%i" % self.batchreservations[res_id][4]
-                self.queueBatchRequest(res_id, duration, resources, nodeName, imgURI, imgSize)
+                self.queueBatchRequest(res_id, duration, realduration, resources, nodeName, imgURI, imgSize)
             elif rsp_status == STATUS_DONE:
                 srvlog.error("Preempting a VW that is already done. This should not be happening.")
 
