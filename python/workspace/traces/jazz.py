@@ -3,10 +3,24 @@ from mx.DateTime import *
 from mx.DateTime import Parser
 from workspace.traces.files import TraceFile, TraceEntryV3
 
+GENERAL_SEC = "general"
+
+IGNOREQUEUE_OPT = "ignore-queue"
+
 class JazzConf(object):
     
     def __init__(self, filename):
-        pass
+        file = open (filename, "r")
+        config = ConfigParser.ConfigParser()
+        config.readfp(file)
+        
+        self.ignorequeue = []
+        
+        if config.has_option(GENERAL_SEC, IGNOREQUEUE_OPT):
+            queues = config.get(GENERAL_SEC, IGNOREQUEUE_OPT)
+            queues = [v.strip() for v in queues.split(",")]
+            self.ignorequeue=queues
+
 
 class RawLogFileEntry(object):
 
@@ -19,7 +33,7 @@ class RawLogFileEntry(object):
         self.message_text = fields[3]
         
         if self.message_text != "":
-            self.params = dict([v.split("=") for v in self.message_text.split(" ")])
+            self.params = dict([v.split("=",1) for v in self.message_text.split(" ")])
         else:
             self.params = {}
 
@@ -85,7 +99,8 @@ class LogFile(object):
     def __init__(self, raw, c):
         self.requests = {}
         self.sortedReq = []
-        rerun = []
+        ignore = []
+        
         
         for e in raw.entries:
             if e.record_type == "A":
@@ -191,13 +206,16 @@ class LogFile(object):
                     r.reqTime = e.datetime
                     self.requests[e.id_string] = r
                     self.sortedReq.append(e.id_string)
+                    if e.params["queue"] in c.ignorequeue:
+                        ignore.append(e.id_string)
                 else:
                     # Just moving to a different queue. Not of interest to us.
                     pass
             elif e.record_type == "R":
                 # From PBS Pro docs:
                 # Job was rerun.
-                rerun.apped(e.id_string)
+                if not e.id_string in ignore:
+                    ignore.append(e.id_string)
             elif e.record_type == "S":
                 # From PBS Pro docs:
                 # Job execution started. The message_text field contains:
@@ -248,9 +266,9 @@ class LogFile(object):
                     pass
                 
         # Remove rerun jobs
-        for r in rerun:
-            del self.requests[r]
-            self.sortedReq.remove(r)
+        for j in ignore:
+            del self.requests[j]
+            self.sortedReq.remove(j)
             
         # Find incompletely specified jobs
         incomplete = []
