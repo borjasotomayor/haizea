@@ -53,6 +53,7 @@ PARALLELBATCH_OPT="parallelbatch"
 TRACEFORMAT_OPT="traceformat"
 REALEND_OPT="realendtime"
 REALSTART_OPT="realstarttime"
+ADVANCEAR_OPT="advanceAR"
 
 REALSTART_ALL="all"
 REALSTART_NONE="none"
@@ -159,6 +160,28 @@ class BaseServer(object):
         log = self.config.get(GENERAL_SEC, LOGLEVEL_OPT)
         srvlog.setLevel(loglevel[log])
         
+        if self.config.has_option(GENERAL_SEC, ADVANCEAR_OPT):
+            if self.config.getboolean(GENERAL_SEC, ADVANCEAR_OPT):
+                # First, check if we need to turn the batch requests into
+                # ARs.
+                if self.config.has_option(GENERAL_SEC, REALSTART_OPT):
+                    realstart=self.config.get(GENERAL_SEC, REALSTART_OPT)
+                else:
+                    realstart="none"
+                if realstart in ("parallel", "all"):
+                    for entry in self.trace.entries:
+                        numnodes = int(entry.fields["numNodes"])
+                        if entry.fields["deadline"] == "NULL":
+                            reqtime = int(entry.fields["time"])
+                            realstarttime = int(entry.fields["realstart"])
+                            realduration = int(entry.fields["realduration"])
+                            deadline = realstarttime - reqtime
+                            if realstart=="all" or (realstart=="parallel" and numnodes > 1):
+                                entry.fields["deadline"] = `deadline`
+                                entry.fields["duration"] = `realduration`
+
+                self.trace = TraceFile.advanceAR(self.trace)
+        
         
     def processRealEndingReservations(self, time, td):
         # Check for reservations which REALLY must end
@@ -180,12 +203,11 @@ class BaseServer(object):
                     self.resDB.setEndtimeToRealend(respart["RSP_ID"], (time, time+td))
                     self.stopAllocations(respart["RSP_ID"], time, td)
                     
-            # Remove pending post-suspend/resume allocations
-            rspcur = self.resDB.getResPartsWithFutureAllocations(time, allocstatus=STATUS_PENDING, res=res["RES_ID"])
-            resparts = rspcur.fetchall()
-            for respart in resparts:
-                self.resDB.removeReservationPart(respart["RSP_ID"])
-
+                    # Remove pending post-suspend/resume allocations
+                    alloccur = self.resDB.getFutureAllocationsInResPart(time, respart["RSP_ID"])
+                    allocs = alloccur.fetchall()
+                    for alloc in allocs:
+                        self.resDB.removeAllocation(alloc["RSP_ID"],alloc["SL_ID"],alloc["ALL_SCHEDSTART"])
                     
              # Check to see if this ends the reservation
             if self.isReservationDone(res["RES_ID"]):
@@ -944,10 +966,10 @@ class BaseServer(object):
             sl_id = candidatenodes[node][SLOTTYPE_CPU][0]
             res_needed = resources[SLOTTYPE_CPU]
             startTime = startTimes[node][0]
-            suspendpoints = self.findSuspendPoints(startTime, sl_id, res_needed, duration, suspensiontime=None)
+            suspendpoints = self.findSuspendPoints(startTime, sl_id, res_needed, duration, realtime_needed=realDuration, suspensiontime=None)
             srvlog.info("Suspend points:")
             for point in suspendpoints:
-                srvlog.info("\t%s  -->  %s  (Next: %s)" % (point[0],point[1],point[2]))
+                srvlog.info("\t%s  -->  %s  (Real: %s) (Next: %s)" % (point[0],point[1],point[3],point[2]))
             nodeSuspendTime=suspendpoints[0][1]
             nodeEndTime=suspendpoints[-1][1]
             if suspendable or len(suspendpoints)==1:
@@ -1464,9 +1486,15 @@ class BaseServer(object):
             all_schedstart = ISO.ParseDateTime(alloc["ALL_SCHEDSTART"])
             res_needed = alloc["ALL_AMOUNT"]
             time_needed = ISO.ParseDateTime(alloc["ALL_SCHEDEND"]) - time
+            
+            realend = alloc["ALL_REALEND"]
+            if realend != None:
+                realtime_needed = ISO.ParseDateTime(realend) - time
+            else:
+                realtime_needed = None
 
             self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, time, None)
-            suspendpoints = self.findSuspendPoints(all_schedstart,sl_id,res_needed,time_needed,suspensiontime=time)
+            suspendpoints = self.findSuspendPoints(all_schedstart,sl_id,res_needed,time_needed,realtime_needed=realtime_needed,suspensiontime=time)
             current = suspendpoints.pop(0)
             if current[0] == current[1]:
                 # If the rescheduling results in the suspension time of the first allocation
@@ -1475,9 +1503,9 @@ class BaseServer(object):
                 # as it is pointless.
                 self.resDB.removeAllocation(rsp_id, sl_id, all_schedstart)
             else:
-                self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, current[1], current[2])
+                self.resDB.suspendAllocation(sl_id, rsp_id, all_schedstart, current[1], current[2], realend=current[3])
             for point in suspendpoints:
-                self.resDB.addAllocation(rsp_id, sl_id, point[0], point[1], res_needed, nextstart=point[2])
+                self.resDB.addAllocation(rsp_id, sl_id, point[0], point[1], res_needed, nextstart=point[2],realEndTime=point[3])
                 endTime = point[1]
 
         return (endTime,)
@@ -1488,14 +1516,15 @@ class BaseServer(object):
         # Nonetheless, it should simply be a matter of merging the "suspendpoints" of each 
         # slot
 
-    def findSuspendPoints(self,starttime,sl_id,res_needed,time_needed,suspensiontime=None):
-        suspendpoints = [[starttime,suspensiontime,None]] # We don't know the next start time yet
+    def findSuspendPoints(self,starttime,sl_id,res_needed,time_needed,realtime_needed=None,suspensiontime=None):
+        suspendpoints = [[starttime,suspensiontime,None,None]] # We don't know the next start time yet
         suspended = (suspensiontime != None)
         if suspended:
             changepoints = self.resDB.findChangePoints(suspensiontime, slot=sl_id, closed=False)
         else:
             changepoints = self.resDB.findChangePoints(starttime, slot=sl_id, closed=False)
         for point in changepoints:
+            #print suspendpoints
             changetime = ISO.ParseDateTime(point["time"])
             cur = self.resDB.findAvailableSlots(time=changetime, slots=[sl_id])
             avail = cur.fetchone()["available"]
@@ -1503,13 +1532,26 @@ class BaseServer(object):
                 # We have reached a point with enough resources. We can resume the VM.
                 suspendpoints[-1][2] = changetime
                 # We don't know when we will suspend/resume again
-                suspendpoints.append([changetime, None, None])
+                suspendpoints.append([changetime, None, None, None])
                 suspended = False
             elif not suspended and avail < res_needed:
                 # We have reached a point where we might have to suspend.
                 # Check if we can fit all remaning time here, or if we'll 
                 # need to suspend/resume once more
                 timediff = changetime - suspendpoints[-1][0]
+                
+                # Update the real end time
+                if realtime_needed != None:
+                    #print "FOO!!!!"
+                    #print realtime_needed, timediff
+                    if realtime_needed - timediff > 0:
+                        # Not done yet
+                        realtime_needed -= timediff
+                    else:
+                        # Record real end time only on this change point
+                        suspendpoints[-1][3] = suspendpoints[-1][0] + realtime_needed
+                        realtime_needed = None
+                    
                 if time_needed - timediff > 0:
                     # We'll need to partitions more. Try to fit as much as possible.
                     suspendpoints[-1][1] = changetime
@@ -1528,6 +1570,11 @@ class BaseServer(object):
             laststart = suspendpoints[-1][0]
             end = laststart + time_needed
             suspendpoints[-1][1]=end
+        if realtime_needed > 0:
+            laststart = suspendpoints[-1][0]
+            end = laststart + realtime_needed
+            suspendpoints[-1][3]=end
+                        
         return suspendpoints
 
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
@@ -1864,7 +1911,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/jazz.conf"
-    tracefile="examples/test_earlyend.trace"
+    tracefile="examples/test_earlyend5.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
