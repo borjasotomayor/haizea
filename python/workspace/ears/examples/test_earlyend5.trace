@@ -1,0 +1,6 @@
+# A batch job ends early after two suspend/resumes
+# If it uses its maximum time, it should end at t=7200 (2h)
+# If it ends early correctly, it should end at t=6300 (1h45m)
+0;1800;NONE;0;8;100;100;RW;1800;900;900;AR
+0;4500;NONE;0;8;100;100;RW;4500;900;900;AR
+900;900;NONE;0;1;100;100;RW;NULL;4500;3600;BATCH
