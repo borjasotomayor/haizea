@@ -289,6 +289,9 @@ class ReservationDB(object):
     def getFutureAllocationsInSlot(self, time, sl_id, **kwargs):
         return self.getAllocationsInInterval(time, td=None, eventfield="all_schedstart",sl_id=sl_id,**kwargs)
 
+    def getFutureAllocationsInResPart(self, time, rsp_id, **kwargs):
+        return self.getAllocationsInInterval(time, td=None, eventfield="all_schedstart",rsp_id=rsp_id,**kwargs)
+
     def getCurrentAllocationsInSlot(self, time, sl_id, **kwargs):
         return self.getAllocationsInInterval(time, td=None, eventfield="all_schedend",sl_id=sl_id,**kwargs)
 
@@ -350,23 +353,23 @@ class ReservationDB(object):
         cur.execute(sql, end)
         self.changePointCacheDirty = True
 
-    def updateAllocation(self, sl_id, rsp_id, all_schedstart, newstart=None, end=None):
+    def updateAllocation(self, sl_id, rsp_id, all_schedstart, newstart=None, end=None, realend=None):
         srvlog.info( "Updating allocation %i,%i beginning at %s with start time %s and end time %s" % (sl_id, rsp_id, all_schedstart, newstart, end))
         sql = """UPDATE tb_alloc 
-        SET all_schedstart=?, all_schedend=?
+        SET all_schedstart=?, all_schedend=?, all_realend=?
         WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
         cur = self.getConn().cursor()
-        cur.execute(sql, (newstart,end,sl_id,rsp_id,all_schedstart))
+        cur.execute(sql, (newstart,end,realend,sl_id,rsp_id,all_schedstart))
         self.changePointCacheDirty = True
 
 
-    def suspendAllocation(self, sl_id, rsp_id, all_schedstart, newend=None, nextstart=None):
+    def suspendAllocation(self, sl_id, rsp_id, all_schedstart, newend=None, nextstart=None, realend=None):
         srvlog.info( "Updating allocation (sl_id: %i, rsp_id: %i) beginning at %s with end time %s and next start time %s" % (sl_id, rsp_id, all_schedstart, newend, nextstart))
         sql = """UPDATE tb_alloc 
-        SET all_schedend=?, all_nextstart=?
+        SET all_schedend=?, all_nextstart=?, all_realend=?
         WHERE sl_id = ? AND rsp_id = ? AND all_schedstart = ?"""
         cur = self.getConn().cursor()
-        cur.execute(sql, (newend,nextstart,sl_id,rsp_id,all_schedstart))
+        cur.execute(sql, (newend,nextstart,realend,sl_id,rsp_id,all_schedstart))
         self.changePointCacheDirty = True
 
     def addReservation(self, name):
