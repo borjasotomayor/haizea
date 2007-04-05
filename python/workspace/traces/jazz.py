@@ -6,6 +6,8 @@ from workspace.traces.files import TraceFile, TraceEntryV3
 GENERAL_SEC = "general"
 
 IGNOREQUEUE_OPT = "ignore-queue"
+START_OPT = "start"
+END_OPT = "end"
 
 class JazzConf(object):
     
@@ -20,6 +22,15 @@ class JazzConf(object):
             queues = config.get(GENERAL_SEC, IGNOREQUEUE_OPT)
             queues = [v.strip() for v in queues.split(",")]
             self.ignorequeue=queues
+            
+        self.start = self.end = None
+        if config.has_option(GENERAL_SEC, START_OPT):
+            start = config.get(GENERAL_SEC, START_OPT)
+            self.start = Parser.DateTimeFromString(start, ["us"])
+        
+        if config.has_option(GENERAL_SEC, END_OPT):
+            end = config.get(GENERAL_SEC, END_OPT)
+            self.end = Parser.DateTimeFromString(end, ["us"])
 
 
 class RawLogFileEntry(object):
@@ -58,6 +69,10 @@ class RawLogFile(object):
         
 JAZZ_BATCH = 0
 JAZZ_AR = 1       
+JAZZ_INCOMPLETE = 2       
+JAZZ_NOQUEUE = 3
+JAZZ_NOSTART = 4
+JAZZ_NOEND = 5
 
 JAZZ_END_NORMAL = 0
 JAZZ_END_KILLED = 1
@@ -73,6 +88,7 @@ class JazzRequest(object):
         self.endTime = None
         self.numnodes = None
         self.type = None
+        self.incomplete = None
         self.endReason = None
     
     def printFields(self):
@@ -93,14 +109,23 @@ class LogFile(object):
             # This should not happen. Print an error message.
             pass
         else:
-            self.requests[id_string].endTime = time                
-            self.requests[id_string].endReason = endReason
+            if self.requests[id_string].reqTime != None and self.requests[id_string].startTime==None:
+                # This is a queued request that never started running.
+                # We can ignore it.
+                pass
+            else:
+                self.requests[id_string].endTime = time                
+                self.requests[id_string].endReason = endReason
     
     def __init__(self, raw, c):
         self.requests = {}
         self.sortedReq = []
+        self.c = c
         ignore = []
         
+
+        start = c.start
+        end = c.end
         
         for e in raw.entries:
             if e.record_type == "A":
@@ -180,6 +205,16 @@ class LogFile(object):
                 #                       is given by subtracting 10000 from the exit
                 #                       value.
                 # Resources_used.resource=usage_amount Amount of specified resource used over the duration of the job.
+                if not self.requests.has_key(e.id_string):
+                    # Incompletely specified. Started before start of trace.
+                    r = JazzRequest()
+                    r.type = JAZZ_INCOMPLETE
+                    r.reqTime = None
+                    self.requests[e.id_string] = r
+                    self.requests[e.id_string].numnodes = int(e.params["Resource_List.ncpus"])
+                    self.sortedReq.append(e.id_string)
+                if (e.params["queue"] in c.ignorequeue or e.params["queue"][0]=='R') and not e.id_string in ignore:
+                    ignore.append(e.id_string)
                 self.endRequest(e.id_string, e.datetime, JAZZ_END_NORMAL)                    
             elif e.record_type == "k":
                 # From PBS Pro docs:
@@ -230,18 +265,23 @@ class LogFile(object):
                 # exec_host=host --- Name of host on which the job is being executed.
                 # Resource_List.resource=limit --- List of the specified resource limits.
                 # session=sessionID --- Session number of job.
-                if not self.requests.has_key(e.id_string):
-                    # This should not happen. Print an error message.
-                    pass
-                else:
-                    # Ignore jobs submitted to reservations
-                    if e.params["queue"][0]!='R':
-                        self.requests[e.id_string].startTime = e.datetime
-                        self.requests[e.id_string].numnodes = int(e.params["Resource_List.ncpus"])
-                        if e.params.has_key("Resource_List.walltime"):
-                            self.requests[e.id_string].reqDuration = TimeFrom(e.params["Resource_List.walltime"])
-                        else:
-                            self.requests[e.id_string].reqDuration = TimeFrom("15:00:00.00")
+                if e.params["queue"][0]!='R':
+                    if not self.requests.has_key(e.id_string):
+                        # Incompletely specified. Queued before start of trace.
+                        r = JazzRequest()
+                        r.type = JAZZ_INCOMPLETE
+                        r.incomplete = JAZZ_NOQUEUE
+                        r.reqTime = None
+                        self.requests[e.id_string] = r
+                        self.sortedReq.append(e.id_string)
+                    self.requests[e.id_string].startTime = e.datetime
+                    self.requests[e.id_string].numnodes = int(e.params["Resource_List.ncpus"])
+                    if e.params.has_key("Resource_List.walltime"):
+                        self.requests[e.id_string].reqDuration = TimeFrom(e.params["Resource_List.walltime"])
+                    else:
+                        self.requests[e.id_string].reqDuration = TimeFrom("15:00:00.00")
+                if e.params["queue"] in c.ignorequeue and not e.id_string in ignore:
+                    ignore.append(e.id_string)
             elif e.record_type == "U":
                 # From PBS Pro docs:
                 # Created unconfirmed resources reservation on Server. The
@@ -273,8 +313,23 @@ class LogFile(object):
         # Find incompletely specified jobs
         incomplete = []
         for r in self.sortedReq:
-            if self.requests[r].startTime == None or self.requests[r].endTime == None:
+            if self.requests[r].startTime == None and self.requests[r].endTime == None:
                 incomplete.append(r)
+            elif self.requests[r].startTime == None:
+                if start != None:
+                    self.requests[r].startTime = start
+                    self.requests[r].type = JAZZ_INCOMPLETE
+                    self.requests[r].incomplete = JAZZ_NOSTART
+                else:
+                    incomplete.append(r)
+            elif self.requests[r].endTime == None:
+                if end != None:
+                    self.requests[r].endTime = end
+                    self.requests[r].type = JAZZ_INCOMPLETE
+                    self.requests[r].incomplete = JAZZ_NOEND
+                else:
+                    incomplete.append(r)
+                
         
         # Remove incompletely specified jobs
         for i in incomplete:
@@ -289,11 +344,18 @@ class LogFile(object):
         
     def toTrace(self):
         tEntries = []
+        startTime = self.c.start
         for r in self.sortedReq:
             numNodes = self.requests[r].numnodes
-            duration = self.requests[r].reqDuration.seconds
+            if self.requests[r].reqDuration == None:
+                duration = None
+            else:
+                duration = self.requests[r].reqDuration.seconds
             fields = {}
-            fields["time"] = `int(self.requests[r].reqTime.ticks())`
+            if self.requests[r].type == JAZZ_INCOMPLETE:
+                fields["time"] = `int(startTime.ticks())`
+            else:
+                fields["time"] = `int(self.requests[r].reqTime.ticks())`                
             fields["uri"] = "NONE"
             fields["size"] = "0"
             fields["numNodes"] = str(numNodes) 
@@ -301,14 +363,28 @@ class LogFile(object):
             if self.requests[r].type == JAZZ_BATCH:
                 fields["deadline"] = "NULL"
                 fields["tag"]="BATCH"
-            else:
+            elif self.requests[r].type == JAZZ_AR:
                 fields["deadline"] = `int(self.requests[r].startTime)`
                 fields["tag"]="AR"
+            elif self.requests[r].type == JAZZ_INCOMPLETE:
+                fields["deadline"] = `int(self.requests[r].startTime)`
+                if self.requests[r].incomplete == JAZZ_NOSTART:
+                    fields["tag"]="INCOMPLETE_NOSTART"            
+                elif self.requests[r].incomplete == JAZZ_NOEND:
+                    fields["tag"]="INCOMPLETE_NOEND"
+                elif self.requests[r].incomplete == JAZZ_NOQUEUE:
+                    fields["tag"]="INCOMPLETE_NOQUEUE"
+                else:            
+                    fields["tag"]="INCOMPLETE"
             fields["realduration"] = `int(self.requests[r].getRealDuration().seconds)`
             fields["realstart"] = `int(self.requests[r].startTime.ticks())`
-            fields["duration"] = `int(duration)`
+            if self.requests[r].type == JAZZ_INCOMPLETE:
+                fields["duration"] = fields["realduration"]
+            else:
+                fields["duration"] = `int(duration)`
             fields["cpu"] = "100"
             fields["memory"] = "100"
             tEntries.append(TraceEntryV3(fields))
+        tEntries.sort(key=lambda x: int(x.fields["time"]))
         return TraceFile(tEntries)        
         
