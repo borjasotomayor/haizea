@@ -29,7 +29,7 @@ SIMULATION_SEC="simulation"
 
 TYPE_OPT="type"
 BATCHALG_OPT="batchalgorithm"
-BATCHLOOKAHEAD_OPT="batchlookahead"
+LOOKAHEAD_OPT="lookahead"
 TEMPLATEDB_OPT="templatedb"
 TARGETDB_OPT="targetdb"
 DB_OPT="db"
@@ -64,6 +64,9 @@ TRANSFER_REUSE=1
 TRANSFER_CACHED=2
 TRANSFER_NO=3
 TRANSFER_COW=4
+
+LOOKAHEAD_BATCH="batch"
+LOOKAHEAD_AR="ar"
 
 BETTER = -1
 EQUAL = 0
@@ -501,7 +504,7 @@ class BaseServer(object):
         self.queuesize.append((self.getTime(), self.queuesizenum))
 
     def processQueue(self):
-        def findLookahead(earliestStartingTimes):
+        def findLookahead(earliestStartingTimes, type = LOOKAHEAD_BATCH):
             lookaheadStart={}
             for node in earliestStartingTimes.keys():
                 earliestStartTime = earliestStartingTimes[node][0]
@@ -513,7 +516,8 @@ class BaseServer(object):
                     # to be preempted right after the allocation ends.
                     if alloc["ALL_NEXTSTART"] == None:
                         allocres = self.resDB.getResID(alloc["RSP_ID"])
-                        if self.batchreservations.has_key(allocres):
+                        isBatch = self.batchreservations.has_key(allocres)
+                        if (isBatch and type==LOOKAHEAD_BATCH) or (not isBatch and type==LOOKAHEAD_AR):
                             endtime = ISO.ParseDateTime(alloc["ALL_SCHEDEND"])
                             if (startTimeLA == None or startTimeLA > endtime) and endtime > earliestStartTime:
                                 startTimeLA = endtime
@@ -526,7 +530,12 @@ class BaseServer(object):
         
         mustremove = []
         dotransfer = self.config.getboolean(GENERAL_SEC, IMAGETRANSFERS_OPT)
-        lookahead = self.config.has_option(GENERAL_SEC,BATCHLOOKAHEAD_OPT)
+        if self.config.has_option(GENERAL_SEC,LOOKAHEAD_OPT):
+            lookahead = True
+            lookaheadtype = self.config.get(GENERAL_SEC,LOOKAHEAD_OPT)
+        else:
+            lookahead = False
+        print lookahead, lookaheadtype
         srvlog.info("%s PROCESSING QUEUE" % self.getTime())
         isFull = {}
         infeasibleRes = []
@@ -561,7 +570,7 @@ class BaseServer(object):
                     srvlog.info("0% resources available at possible starting times. Skipping this request.")
                     continue
                 elif lookahead:
-                    lookAheadStart = findLookahead(startTimes)
+                    lookAheadStart = findLookahead(startTimes, lookaheadtype)
                     someAvailableLookAhead = False
                     for node in lookAheadStart.keys():
                         if lookAheadStart[node] != None:
@@ -581,7 +590,7 @@ class BaseServer(object):
                     break  # Ugh!
                 startTimes = dict([(node+1, [self.getTime(),TRANSFER_NO,None]) for node in range(self.getNumNodes()) ])
                 if lookahead:
-                    lookAheadStart = findLookahead(startTimes)
+                    lookAheadStart = findLookahead(startTimes, lookaheadtype)
                     for node in lookAheadStart.keys():
                         if lookAheadStart[node] != None:
                             time = lookAheadStart[node][0]
@@ -1912,7 +1921,7 @@ class RealServer(BaseServer):
 
 if __name__ == "__main__":
     configfile="examples/jazz.conf"
-    tracefile="examples/test_earlyend5.trace"
+    tracefile="examples/test_preemption10.trace"
     file = open (configfile, "r")
     config = ConfigParser.ConfigParser()
     config.readfp(file)    
