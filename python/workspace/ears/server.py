@@ -539,6 +539,7 @@ class BaseServer(object):
             nodename = "VM " + vm["node"]
             imgURI = vm["imgURI"]
             imgSize = vm["imgSize"]
+
             lookAheadStart={}
             
             if res_id in infeasibleRes:
@@ -1825,7 +1826,7 @@ class SimulatingServer(BaseServer):
                 print "\tNumber of VMs in queue: %i" % len(self.batchqueue)
                 prevTime = self.time
             self.processRealEndingReservations(self.time, td)
-            if len(self.batchqueue) > 0 and self.time.second == 0:
+            if len(self.batchqueue) > 0:
                 self.processQueue()
             self.processReservations(self.time, td)
             if self.time == nextTime:
