@@ -535,7 +535,7 @@ class BaseServer(object):
             lookaheadtype = self.config.get(GENERAL_SEC,LOOKAHEAD_OPT)
         else:
             lookahead = False
-        print lookahead, lookaheadtype
+
         srvlog.info("%s PROCESSING QUEUE" % self.getTime())
         isFull = {}
         infeasibleRes = []
