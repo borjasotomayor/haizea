@@ -917,17 +917,26 @@ class BaseServer(object):
         #    2. Maximum available resources in that slot (without preemption)
         #    3. Earlies start time
         candidatenodes = {}
+        availCache = {}
+        nodes = set(startTimes.keys())
+        if lookaheadStart != None:
+            nodes = nodes.union(set(lookaheadStart.keys()))
 
         def getAvail(startTime, needed, slottype, node):
-            slots = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, node=node, canpreempt=False)            
-            slots = slots.fetchall()
-            if len(slots) == 0:
-                return None
-            else:
-                slot = slots[0]
-                sl_id = slot["SL_ID"]
-                available = slot["available"]
-                return (sl_id, available, startTime)
+            key = (startTime, needed, slottype, node)
+            if not availCache.has_key(key):
+                slots = self.resDB.findAvailableSlots(time=startTime, amount=needed, type=slottype, canpreempt=False)            
+                slots = slots.fetchall()
+                for n in nodes:
+                    key1 = (startTime, needed, slottype, n)
+                    availCache[key1] = None
+                for slot in slots:
+                    key1 = (startTime, needed, slottype, slot["NOD_ID"])
+                    sl_id = slot["SL_ID"]
+                    available = slot["available"]
+                    availCache[key1] = (sl_id, available, startTime)
+            return availCache[key]
+
 
         for node in startTimes.keys():
             enoughInAllSlots = True
