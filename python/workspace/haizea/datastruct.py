@@ -1,7 +1,14 @@
+leaseID = 1
+
+def getLeaseID():
+    global leaseID
+    l = leaseID
+    leaseID += 1
+    return l
 
 class LeaseBase(object):
     def __init__(self, tSubmit, vmimage, vmimagesize, resreq):
-        self.leaseID = None
+        self.leaseID = getLeaseID()
         self.tSubmit = tSubmit
         self.state = None
         self.vmimage = vmimage
@@ -11,17 +18,54 @@ class LeaseBase(object):
         self.memimagemap = {}
         self.rr = []
         
+    def printContents(self):
+        print "Lease ID       : %i" % self.leaseID
+        print "Submission time: %s" % self.tSubmit
+        print "State          : %s" % self.state
+        print "VM image       : %s" % self.vmimage
+        print "VM image size  : %s" % self.vmimagesize
+        print "Resource req   : %s" % self.resreq
+        print "VM image map   : %s" % self.vmimagemap
+        print "Mem image map  : %s" % self.memimagemap
+
+    def printRR(self):
+        print "RESOURCE RESERVATIONS"
+        print "~~~~~~~~~~~~~~~~~~~~~"
+        for r in rr:
+            print r
+
+        
 class ExactLease(LeaseBase):
-    def __init__(self, tSubmit, start, end, vmimage, vmimagesize, resreq):
+    def __init__(self, tSubmit, start, end, vmimage, vmimagesize, resreq, prematureend = None):
         LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, resreq)
         self.start = start
         self.end = end
+        self.prematureend = prematureend
+        
+    def printContents(self):
+        print "__________________________________________________"
+        LeaseBase.printContents(self)
+        print "Type           : EXACT"
+        print "Start time     : %s" % self.start
+        print "End time       : %s" % self.end
+        print "Early end time : %s" % self.prematureend
+        print "--------------------------------------------------"
         
 class BestEffortLease(LeaseBase):
-    def __init__(self, tSubmit, maxdur, vmimage, vmimagesize, resreq):
+    def __init__(self, tSubmit, maxdur, vmimage, vmimagesize, resreq, realdur = None):
         LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, resreq)
         self.maxdur = maxdur
         self.remdur = maxdur
+        self.realdur = realdur
+
+    def printContents(self):
+        print "__________________________________________________"
+        LeaseBase.printContents(self)
+        print "Type           : BEST-EFFORT"
+        print "Max duration   : %s" % self.maxdur
+        print "Rem duration   : %s" % self.remdur
+        print "Real duration  : %s" % self.realdur
+        print "--------------------------------------------------"
         
 class ResourceReservationBase(object):
     def __init__(self, start, end):

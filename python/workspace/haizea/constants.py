@@ -32,3 +32,10 @@ LEASE_STATE_DONE = 6
 RES_STATE_SCHEDULED = 0
 RES_STATE_ACTIVE = 1
 RES_STATE_DONE = 2
+
+
+# Configfile sections and options
+GENERAL_SEC="general"
+SIMULATION_SEC="simulation"
+
+STARTTIME_OPT="starttime"
