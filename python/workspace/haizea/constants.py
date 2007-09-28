@@ -7,9 +7,11 @@ LEASE_BESTEFFORT = 0
 LEASE_EXACT = 1
 
 # Types of resources
-RES_CPU = 0
-RES_MEM = 1
-RES_DISK = 2
+RES_CPU = 1
+RES_MEM = 2
+RES_NETIN = 3
+RES_NETOUT = 4
+RES_DISK = 5
 
 # Types of file transfers
 TRANSFER_DEPLOY = 0
@@ -39,3 +41,21 @@ GENERAL_SEC="general"
 SIMULATION_SEC="simulation"
 
 STARTTIME_OPT="starttime"
+LOGLEVEL_OPT="loglevel"
+TEMPLATEDB_OPT="templatedb"
+TARGETDB_OPT="targetdb"
+NODES_OPT="nodes"
+BANDWIDTH_OPT="bandwidth"
+RESOURCES_OPT="resources"
+
+# Component names
+RM="RM"
+SCHED="SCHED"
+ST="SLOT"
+DB="DB"
+
+
+# Misc
+BETTER = -1
+EQUAL = 0
+WORSE = 1
