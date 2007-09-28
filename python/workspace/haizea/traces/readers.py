@@ -28,11 +28,11 @@ def CSV(tracefile, config):
                 #     9:"tag"
                 tSubmit = inittime + TimeDelta(seconds=int(fields[0])) # 0: time
                 vmimage = fields[1] # 1: uri
-                vmimagesize = fields[2] # 2: size
+                vmimagesize = int(fields[2]) # 2: size
                 resreq = {}
                 resreq[constants.RES_CPU] = int(fields[3]) # 3: numNodes
                 resreq[constants.RES_MEM] = int(fields[4]) # 4: memory
-                resreq[constants.RES_DISK] = 0 # TODO: Make this a config param
+                resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
                 if fields[7] != "NULL": # 7: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[7])) # 7: deadline
                     end = start + TimeDelta(seconds=int(fields[8])) # 8: duration
@@ -56,11 +56,11 @@ def CSV(tracefile, config):
                 #     11:"tag"
                 tSubmit = inittime + TimeDelta(seconds=int(fields[0])) # 0: time
                 vmimage = fields[2] # 2: uri
-                vmimagesize = fields[3] # 3: size
+                vmimagesize = int(fields[3]) # 3: size
                 resreq = {}
                 resreq[constants.RES_CPU] = int(fields[4]) # 4: numNodes
                 resreq[constants.RES_MEM] = int(fields[5]) # 5: memory
-                resreq[constants.RES_DISK] = 0 # TODO: Make this a config param
+                resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
                 if fields[7] != "NULL": # 7: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[8])) # 8: deadline
                     end = start + TimeDelta(seconds=int(fields[9])) # 9: duration
