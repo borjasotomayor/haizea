@@ -29,19 +29,20 @@ def CSV(tracefile, config):
                 tSubmit = inittime + TimeDelta(seconds=int(fields[0])) # 0: time
                 vmimage = fields[1] # 1: uri
                 vmimagesize = int(fields[2]) # 2: size
+                numnodes = int(fields[3]) # 3: numNodes
                 resreq = {}
-                resreq[constants.RES_CPU] = int(fields[3]) # 3: numNodes
+                resreq[constants.RES_CPU] = 1 # One CPU per VM
                 resreq[constants.RES_MEM] = int(fields[4]) # 4: memory
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
                 if fields[7] != "NULL": # 7: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[7])) # 7: deadline
                     end = start + TimeDelta(seconds=int(fields[8])) # 8: duration
-                    req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, resreq)
+                    req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq)
                 else:
                     maxdur = TimeDelta(seconds=int(fields[8])) # 8: duration
                     req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, resreq)
             elif len(fields) == 12:
-                # In thid format, the fields have the following meaning:
+                # In this format, the fields have the following meaning:
                 #     0:"time",
                 #     1:"realstart",
                 #     2:"uri",
@@ -57,19 +58,20 @@ def CSV(tracefile, config):
                 tSubmit = inittime + TimeDelta(seconds=int(fields[0])) # 0: time
                 vmimage = fields[2] # 2: uri
                 vmimagesize = int(fields[3]) # 3: size
+                numnodes = int(fields[4]) # 4: numNodes
                 resreq = {}
-                resreq[constants.RES_CPU] = int(fields[4]) # 4: numNodes
+                resreq[constants.RES_CPU] = 1 # One CPU per VM
                 resreq[constants.RES_MEM] = int(fields[5]) # 5: memory
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
                 if fields[7] != "NULL": # 7: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[8])) # 8: deadline
                     end = start + TimeDelta(seconds=int(fields[9])) # 9: duration
                     prematureend = start + TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, resreq, prematureend)
+                    req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend)
                 else:
                     maxdur = TimeDelta(seconds=int(fields[8])) # 8: duration
                     realdur = TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, resreq, realdur)
+                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
             req.state = constants.LEASE_STATE_PENDING
             requests.append(req)
     return requests

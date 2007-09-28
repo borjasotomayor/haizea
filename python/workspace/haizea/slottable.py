@@ -4,6 +4,9 @@ import workspace.haizea.constants as constants
 import workspace.haizea.db as db
 from workspace.haizea.log import info, debug, warning
 
+class SlotFittingException(Exception):
+    pass
+
 class SlotTable(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
@@ -58,15 +61,9 @@ class SlotTable(object):
     def getNextChangePoint(self, time):
         return self.db.popNextChangePoint(time)
     
-    def fitExact(self, leaseID, start, end, vmimage, resreq, prematureend=None, preemptible=False, canpreempt=True):
-        numnodes = resreq[constants.RES_CPU]
+    def fitExact(self, leaseID, start, end, vmimage, numnodes, resreq, prematureend=None, preemptible=False, canpreempt=True):
         slottypes = resreq.keys()
-        
-        # One CPU per virtual machine
-        # TODO: Add a numnodes field to the lease descriptor, and have
-        #       the CPU resource refer to the CPU per physical node
-        resreq[constants.RES_CPU] = 1
-        
+                
         candidatenodes = self.candidateNodesInRange(start,end,resreq,canpreempt)
 
         # Decide if we can actually fit the entire VW
@@ -88,7 +85,7 @@ class SlotTable(object):
         mustpreempt={}
         info("Node ordering: %s" % orderednodes, constants.ST, self.rm.time)
 
-        for vwnode in range(0,numnodes):
+        for vwnode in range(1,numnodes+1):
             assignment[vwnode] = {}
             # Without preemption
             for physnode in orderednodes:
@@ -108,7 +105,7 @@ class SlotTable(object):
                     break # Ouch
             else:
                 if not canpreempt:
-                    raise SchedException, "Could not fit node %i in any physical node (w/o preemption)" % vwnode
+                    raise SlotFittingException, "Could not fit node %i in any physical node (w/o preemption)" % vwnode
                 # Try preemption
                 for physnode in orderednodes:
                     fits = True
@@ -135,14 +132,14 @@ class SlotTable(object):
                                 mustpreempt[physnode][slottype]+=res                                
                         break # Ouch
                 else:
-                    raise SchedException, "Could not fit node %i in any physical node (w/preemption)" % vwnode
+                    raise SlotFittingException, "Could not fit node %i in any physical node (w/preemption)" % vwnode
 
         if allfits:
             transfers = []
             info("The VM reservations for this lease are feasible", constants.ST, self.rm.time)
             self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
-            for vwnode in range(0,numnodes):
-                rsp_name = "VM %i" % (vwnode+1)
+            for vwnode in range(1,numnodes+1):
+                rsp_name = "VM %i" % (vwnode)
                 rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible)
                 transfers.append((nodeassignment[vwnode], rsp_id))
                 for slottype in slottypes:
@@ -151,7 +148,7 @@ class SlotTable(object):
                     self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = prematureend)
             return nodeassignment, mustpreempt, transfers
         else:
-            raise SchedException
+            raise SlotFittingException
         
     def candidateNodesInRange(self, start, end, resreq, canpreempt):
         slottypes = resreq.keys()
@@ -285,7 +282,7 @@ class SlotTable(object):
             nodeset &= nodes
                 
         if len(nodeset) == 0:
-            raise SchedException, "No physical node has enough available resources for this request"
+            raise SlotFittingException, "No physical node has enough available resources for this request"
         
         # This variable contains essentially the same information as candidateslots, except
         # access is done by node id and slottype (i.e. provides an easy way of asking
