@@ -11,3 +11,21 @@ class Config(object):
     def getInitialTime(self):
         timeopt = self.config.get(constants.SIMULATION_SEC,constants.STARTTIME_OPT)
         return ISO.ParseDateTime(timeopt)
+    
+    def getLogLevel(self):
+        return self.config.get(constants.GENERAL_SEC, constants.LOGLEVEL_OPT)
+    
+    def getDBTemplate(self):
+        return self.config.get(constants.SIMULATION_SEC, constants.TEMPLATEDB_OPT)
+    
+    def getTargetDB(self):
+        return self.config.get(constants.SIMULATION_SEC, constants.TARGETDB_OPT)
+    
+    def getNumPhysicalNodes(self):
+        return self.config.getint(constants.SIMULATION_SEC, constants.NODES_OPT)
+    
+    def getResourcesPerPhysNode(self):
+        return self.config.get(constants.SIMULATION_SEC, constants.RESOURCES_OPT).split(";")
+    
+    def getBandwidth(self):
+        return self.config.getint(constants.SIMULATION_SEC, constants.BANDWIDTH_OPT)
