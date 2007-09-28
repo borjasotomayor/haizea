@@ -2,19 +2,21 @@ import workspace.haizea.rm as rm
 import workspace.haizea.traces.readers as tracereaders
 import workspace.haizea.constants as constants
 from workspace.haizea.config import Config
-
+from workspace.haizea.log import log, loglevel
 
 def simulate(configfile, tracefile, tracetype, injectedfile):
     # Create config file
     config = Config(configfile)
+    
+    level = config.getLogLevel()
+    log.setLevel(loglevel[level])
+
     
     # Read trace file
     # Requests is a list of lease requests
     requests = None
     if tracetype == constants.TRACE_CSV:
         requests = tracereaders.CSV(tracefile, config)
-        for r in requests:
-            r.printContents()
     elif tracetype == constants.TRACE_GWF:
         requests = tracereaders.GWF(tracefile, config)
         

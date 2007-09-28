@@ -33,7 +33,21 @@ class LeaseBase(object):
         print "~~~~~~~~~~~~~~~~~~~~~"
         for r in rr:
             print r
+            
+    def appendRR(self, rr):
+        self.rr.append(rr)
+        
+    def hasStartingReservations(self, time):
+        return len(self.getStartingReservations(time)) > 0
 
+    def hasEndingReservations(self, time):
+        return len(self.getEndingReservations(time)) > 0
+
+    def getStartingReservations(self, time):
+        return [r for r in self.rr if r.start == time]
+
+    def getEndingReservations(self, time):
+        return [r for r in self.rr if r.end == time]
         
 class ExactLease(LeaseBase):
     def __init__(self, tSubmit, start, end, vmimage, vmimagesize, resreq, prematureend = None):
@@ -97,6 +111,11 @@ class ResumptionResourceReservation(ResourceReservationBase):
 class Queue(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
+        self.q = []
+        
+    def isEmpty(self):
+        return len(self.q)==0
+    
         
 class LeaseTable(object):
     def __init__(self, scheduler):
@@ -106,10 +125,14 @@ class LeaseTable(object):
     def getLease(self, leaseID):
         return entries[leaseID]
     
-class SlotTable(object):
-    def __init__(self, scheduler):
-        # self.db = ...
-        self.scheduler = scheduler
+    def isEmpty(self):
+        return len(self.entries)==0
+    
+    def remove(self, lease):
+        del self.entries[lease.leaseID]
         
-    def getNextChangePoint(self, time):
-        pass
+    def add(self, lease):
+        self.entries[lease.leaseID] = lease
+    
+    
+
