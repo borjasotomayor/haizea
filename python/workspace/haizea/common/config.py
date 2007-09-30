@@ -1,6 +1,6 @@
 import ConfigParser
 from mx.DateTime import ISO
-import workspace.haizea.constants as constants
+import workspace.haizea.common.constants as constants
 
 class Config(object):
     def __init__(self, configfile):
@@ -15,6 +15,9 @@ class Config(object):
     def getLogLevel(self):
         return self.config.get(constants.GENERAL_SEC, constants.LOGLEVEL_OPT)
     
+    def getProfile(self):
+        return self.config.get(constants.GENERAL_SEC, constants.PROFILE_OPT)
+
     def getDBTemplate(self):
         return self.config.get(constants.SIMULATION_SEC, constants.TEMPLATEDB_OPT)
     
@@ -29,3 +32,5 @@ class Config(object):
     
     def getBandwidth(self):
         return self.config.getint(constants.SIMULATION_SEC, constants.BANDWIDTH_OPT)
+    
+        

@@ -1,5 +1,5 @@
-from workspace.haizea.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE
-from workspace.haizea.log import edebug
+from workspace.haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE
+from workspace.haizea.common.log import edebug
 leaseID = 1
 
 def getLeaseID():

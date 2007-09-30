@@ -1,7 +1,7 @@
-import workspace.haizea.datastruct as ds
-from workspace.haizea.slottable import SlotTable, SlotFittingException
-from workspace.haizea.log import info, debug, warning
-import workspace.haizea.constants as constants
+import workspace.haizea.resourcemanager.datastruct as ds
+from workspace.haizea.resourcemanager.slottable import SlotTable, SlotFittingException
+from workspace.haizea.common.log import info, debug, warning
+import workspace.haizea.common.constants as constants
 
 class SchedException(Exception):
     pass

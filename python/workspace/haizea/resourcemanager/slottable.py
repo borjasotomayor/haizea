@@ -1,8 +1,8 @@
 from sets import Set
 from mx.DateTime import ISO
-import workspace.haizea.constants as constants
-import workspace.haizea.db as db
-from workspace.haizea.log import info, debug, warning
+import workspace.haizea.common.constants as constants
+import workspace.haizea.resourcemanager.db as db
+from workspace.haizea.common.log import info, debug, warning
 
 class SlotFittingException(Exception):
     pass

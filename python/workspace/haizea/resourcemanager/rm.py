@@ -1,10 +1,10 @@
-import workspace.haizea.interface as interface
-import workspace.haizea.scheduler as scheduler
-import workspace.haizea.enactment as enactment
-import workspace.haizea.stats as stats
-import workspace.haizea.constants as constants
-from workspace.haizea.datastruct import ExactLease, BestEffortLease 
-from workspace.haizea.log import info, debug
+import workspace.haizea.resourcemanager.interface as interface
+import workspace.haizea.resourcemanager.scheduler as scheduler
+import workspace.haizea.resourcemanager.enactment as enactment
+import workspace.haizea.resourcemanager.stats as stats
+import workspace.haizea.common.constants as constants
+from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
+from workspace.haizea.common.log import info, debug
 
 class ResourceManager(object):
     def __init__(self, requests, config):
@@ -63,6 +63,7 @@ class ResourceManager(object):
         info("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()
+            
         
                 
             

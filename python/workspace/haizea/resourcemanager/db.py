@@ -1,8 +1,8 @@
 from pysqlite2 import dbapi2 as sqlite
 from mx.DateTime import *
 from mx.DateTime import ISO
-import workspace.haizea.constants as constants
-from workspace.haizea.log import info, debug, warning
+import workspace.haizea.common.constants as constants
+from workspace.haizea.common.log import info, debug, warning
 
 def adapt_datetime(datetime):
     return str(datetime)

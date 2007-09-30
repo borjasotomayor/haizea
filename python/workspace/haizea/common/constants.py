@@ -74,10 +74,12 @@ def rstate_str(s):
 
 # Configfile sections and options
 GENERAL_SEC="general"
+LOGLEVEL_OPT="loglevel"
+PROFILE_OPT="profile"
+
 SIMULATION_SEC="simulation"
 
 STARTTIME_OPT="starttime"
-LOGLEVEL_OPT="loglevel"
 TEMPLATEDB_OPT="templatedb"
 TARGETDB_OPT="targetdb"
 NODES_OPT="nodes"
