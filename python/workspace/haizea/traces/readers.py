@@ -40,7 +40,7 @@ def CSV(tracefile, config):
                     req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq)
                 else:
                     maxdur = TimeDelta(seconds=int(fields[8])) # 8: duration
-                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, resreq)
+                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq)
             elif len(fields) == 12:
                 # In this format, the fields have the following meaning:
                 #     0:"time",
