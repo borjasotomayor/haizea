@@ -1,5 +1,5 @@
 from sets import Set
-
+from mx.DateTime import ISO
 import workspace.haizea.constants as constants
 import workspace.haizea.db as db
 from workspace.haizea.log import info, debug, warning
@@ -60,6 +60,9 @@ class SlotTable(object):
     
     def getNextChangePoint(self, time):
         return self.db.popNextChangePoint(time)
+
+    def peekNextChangePoint(self, time):
+        return self.db.peekNextChangePoint(time)
     
     def fitExact(self, leaseID, start, end, vmimage, numnodes, resreq, prematureend=None, preemptible=False, canpreempt=True):
         slottypes = resreq.keys()
@@ -244,10 +247,10 @@ class SlotTable(object):
                 for point in changepoints:
                     time = point["time"]
 
-                    cur = self.resDB.findAvailableSlots(time=time, slots=[slot_id], canpreempt=False)
+                    cur = self.db.findAvailableSlots(time=time, slots=[slot_id], canpreempt=False)
                     avail = cur.fetchone()["available"]
                     if canpreempt:
-                        cur = self.resDB.findAvailableSlots(time=time, slots=[slot_id], canpreempt=True)
+                        cur = self.db.findAvailableSlots(time=time, slots=[slot_id], canpreempt=True)
                         availpreempt = cur.fetchone()["available"]
                     else:
                         availpreempt = 0
@@ -301,6 +304,167 @@ class SlotTable(object):
             info("Node %i has final candidates %s" % (node,candidatenodes[node]), constants.ST, self.rm.time)
             
         return candidatenodes
+
+    def fitBestEffort(self, leaseID, earliest, remdur, vmimage, numnodes, resreq, canreserve, realdur):
+        slottypes = resreq.keys()
+        start = None
+        end = None
+        changepoints = list(set([x[0] for x in earliest.values()]))
+        changepoints.sort()
+        
+        # If we can make reservations for best-effort leases,
+        # we also consider future changepoints
+        # (otherwise, we only allow the VMs to start "now", accounting
+        #  for the fact that vm images will have to be deployed)
+        if canreserve:
+            pass # TODO
+        
+        for p in changepoints:
+            candidatenodes = self.candidateNodesInInstant(p, resreq)
+
+            # We check if we can fit the lease at this changepoint
+            # We don't worry about optimality. We just want to know
+            # if we at least have enough resources.
+            allfits = True
+            for vwnode in range(1,numnodes+1):
+                for physnode in candidatenodes.keys():
+                    fits = True
+                    for slottype in slottypes:
+                        res = resreq[slottype]
+                        if res > candidatenodes[physnode][slottype][2][0][1]:
+                            fits = False
+                    if fits:
+                        for slottype in slottypes:
+                            res = resreq[slottype]        
+                            candidatenodes[physnode][slottype][2][0][1] -= res
+                        break # Ouch
+                else:
+                    allfits = False
+                    break
+            
+            if allfits:
+                start = p
+                break
+
+        if start == None:
+            # We did not find a suitable starting time. This can happen
+            # if we're unable to make future reservations
+            raise SlotFittingException, "Could not find enough resources for this request"
+        
+        end = start + remdur
+
+        mappings = {}
+        vmnode = 1
+
+        while vmnode <= numnodes:
+            endtimes = {}
+            physNode = None
+            for pnode in candidatenodes.keys():
+                maxend = end
+                for slottype in candidatenodes[pnode].keys():
+                    if candidatenodes[pnode][slottype][2][-1][1] == 0:
+                        maxend = candidatenodes[pnode][slottype][2][-1][0] 
+                endtimes[pnode] = maxend
+                if maxend == end:
+                    physNode = pnode  # Arbitrary. Must do ordering.
+                
+            if physNode == None:
+                end = max(endtimes.values())
+            else:
+                mappings[vmnode] = physNode
+                vmnode += 1
+
+        info("The VM reservations for this lease are feasible", constants.ST, self.rm.time)
+        self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
+        for vwnode in range(1,numnodes+1):
+            rsp_name = "VM %i" % (vwnode)
+            rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, False)
+            for slottype in slottypes:
+                amount = resreq[slottype]
+                sl_id = candidatenodes[mappings[vwnode]][slottype][1]
+                self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = None)
+
+        
+        if end < start + remdur:
+            mustsuspend = True
+        else:
+            mustsuspend = False
+            
+        return mappings, start, end, mustsuspend
+        
+    
+        
+    def candidateNodesInInstant(self, start, resreq):
+        # TODO All this is very similar to candidateNodesInRange.
+        #      Factor out common code.
+        slottypes = resreq.keys()
+        
+        # Access is by node id and slottype
+        # Each item is a list containing:
+        #    1. Node id
+        #    2. Slot id
+        #    3. List of (time,avail)
+        candidatenodes = {}
+        
+        # TODO Create a "CandidateNode" class
+        
+        # Get information on available resources at time start
+        # We filter out slots that don't have enough resources
+        for slottype in slottypes:
+            needed = resreq[slottype]
+            
+            slots = self.db.findAvailableSlots(time=start, amount=needed, type=slottype, canpreempt=False)
+            for slot in slots:
+                nod_id = slot["NOD_ID"]
+                slot_id = slot["SL_ID"]
+                avail = slot["available"]
+                if not candidatenodes.has_key(nod_id):
+                    candidatenodes[nod_id] = {}
+                candidatenodes[nod_id][slottype] = (nod_id, slot_id, [[start,avail]])
+
+        end = None
+            
+        for physnode in candidatenodes.keys():
+            # Check that the node has enough resources for at least one VM
+            enough = True
+            for slottype in slottypes:
+                if not candidatenodes[physnode].has_key(slottype):
+                    enough = False
+                elif candidatenodes[physnode][slottype][2][0][1] < resreq[slottype]:
+                    enough = False
+                    
+            if enough:
+                changepoints = self.db.findChangePointsInNode(start, physnode, end=end)
+                cp = [ISO.ParseDateTime(p["time"]) for p in changepoints.fetchall()]
+                for p in cp:
+                    slots = self.db.findAvailableSlots(time=start, node=physnode, canpreempt=False)
+                    avail = {}
+                    for slot in slots:
+                        slottype = slot["SLT_ID"]
+                        avail[slottype] = slot["available"]
+                    # Check the node has enough resources for at least one VM
+                    enough2 = True
+                    for slottype in slottypes:
+                        if avail[slottype] < resreq[slottype]:
+                            enough2 = False
+                        elif avail[slottype] < candidatenodes[physnode][slottype][2][-1][1]:
+                            candidatenodes[physnode][slottype][2].append([p,avail[slottype]])
+                            
+                    if not enough2:
+                        for slottype in slottypes:
+                            # The same as having 0 resources at this changepoint
+                            candidatenodes[physnode][slottype][2].append((p,0)) 
+                        break # No need to check more changepoints
+            else:
+                del candidatenodes[physnode]
+                
+        return candidatenodes
+                    
+            
+            
+            
+            
+
 
     def prioritizenodes(self,candidatenodes,vmimage,start,resreq, canpreempt):
         # TODO2: Choose appropriate prioritizing function based on a

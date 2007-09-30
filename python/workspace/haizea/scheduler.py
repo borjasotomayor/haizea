@@ -14,13 +14,15 @@ class Scheduler(object):
         self.scheduledleases = ds.LeaseTable(self)
         self.completedleases = ds.LeaseTable(self)
         self.rejectedleases = ds.LeaseTable(self)
+        self.maxres = 0
+        self.numbesteffortres = 0
         
     def schedule(self, requests):
         self.processReservations()
         
         # Process exact requests
         for r in requests:
-            info("LEASE-%i Processing request" % r.leaseID, constants.SCHED, self.rm.time)
+            info("LEASE-%i Processing request (EXACT)" % r.leaseID, constants.SCHED, self.rm.time)
             info("LEASE-%i Start   %s" % (r.leaseID, r.start), constants.SCHED, self.rm.time)
             info("LEASE-%i End     %s" % (r.leaseID, r.end), constants.SCHED, self.rm.time)
             info("LEASE-%i RealEnd %s" % (r.leaseID, r.prematureend), constants.SCHED, self.rm.time)
@@ -34,8 +36,25 @@ class Scheduler(object):
                 warning("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
                
                 
-        # TODO Process queue
-        
+        newqueue = []
+        while not self.isQueueEmpty():
+            r = self.queue.dequeue()
+            try:
+                info("LEASE-%i Processing request (BEST-EFFORT)" % r.leaseID, constants.SCHED, self.rm.time)
+                info("LEASE-%i Maxdur  %s" % (r.leaseID, r.maxdur), constants.SCHED, self.rm.time)
+                info("LEASE-%i Remdur  %s" % (r.leaseID, r.remdur), constants.SCHED, self.rm.time)
+                info("LEASE-%i Realdur %s" % (r.leaseID, r.realdur), constants.SCHED, self.rm.time)
+                info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED, self.rm.time)
+                self.scheduleBestEffortLease(r)
+                self.scheduledleases.add(r)
+                self.rm.stats.decrQueueSize()
+            except SchedException, msg:
+                # Put back on queue
+                newqueue.append(r)
+        self.queue.q = newqueue
+
+
+        self.processReservations()        
     
     def processReservations(self):
         starting = [l for l in self.scheduledleases.entries.values() if l.hasStartingReservations(self.rm.time)]
@@ -118,9 +137,45 @@ class Scheduler(object):
             self.slottable.rollback()
             raise SchedException, "The requested exact lease is infeasible"
 
+    def scheduleBestEffortLease(self, req):
+        # Determine earliest start time in each node
+        # This depends on image transfer schedule. For now, the earliest
+        # start time is now (no image transfers)
+        
+        numnodes = self.rm.config.getNumPhysicalNodes()
+        earliest = dict([(node+1, [self.rm.time,constants.TRANSFER_NO]) for node in range(numnodes)])
+        try:
+            canreserve = self.canReserveBestEffort()
+            (mappings, start, end, mustsuspend) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realdur)
+            # Schedule image transfers
+            dotransfer = False
+            
+            if dotransfer:
+                req.state = constants.LEASE_STATE_SCHEDULED
+            else:
+                req.state = constants.LEASE_STATE_DEPLOYED            
+
+            # Add resource reservations
+            vmrr = ds.VMResourceReservation(start, end, mappings, constants.ONCOMPLETE_ENDLEASE)
+            vmrr.state = constants.RES_STATE_SCHEDULED
+            req.appendRR(vmrr)
+            
+            self.slottable.commit()        
+        except SlotFittingException, msg:
+            self.slottable.rollback()
+            raise SchedException, "The requested exact lease is infeasible"
+        
+    def findEarliestStartingTimes(self, imageURI, imageSize, time):
+        pass
     
     def existsScheduledLeases(self):
         return not self.scheduledleases.isEmpty()
     
     def isQueueEmpty(self):
         return self.queue.isEmpty()
+    
+    def enqueue(self, req):
+        self.queue.enqueue(req)
+        
+    def canReserveBestEffort(self):
+        return self.numbesteffortres < self.maxres

@@ -1,4 +1,4 @@
-from workspace.haizea.constants import res_str, state_str, rstate_str, DS
+from workspace.haizea.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE
 from workspace.haizea.log import edebug
 leaseID = 1
 
@@ -56,10 +56,10 @@ class LeaseBase(object):
         return len(self.getEndingReservations(time)) > 0
 
     def getStartingReservations(self, time):
-        return [r for r in self.rr if r.start == time]
+        return [r for r in self.rr if r.start == time and r.state == RES_STATE_SCHEDULED]
 
     def getEndingReservations(self, time):
-        return [r for r in self.rr if r.end == time]
+        return [r for r in self.rr if r.end == time and r.state == RES_STATE_ACTIVE]
         
 class ExactLease(LeaseBase):
     def __init__(self, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
@@ -157,6 +157,11 @@ class Queue(object):
     def isEmpty(self):
         return len(self.q)==0
     
+    def enqueue(self, r):
+        self.q.append(r)
+    
+    def dequeue(self):
+        return self.q.pop(0)
         
 class LeaseTable(object):
     def __init__(self, scheduler):

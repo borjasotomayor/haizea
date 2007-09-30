@@ -86,7 +86,7 @@ class SlotTableDB(object):
             lt = "<"
             
         # Select slots which are partially occupied at that time
-        sql = """select nod_id, sl_id, sl_capacity - sum(all_amount) as available  
+        sql = """select nod_id, sl_id, slt_id, sl_capacity - sum(all_amount) as available  
         from v_allocslot 
         where ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND""" % (gt)
 
@@ -94,6 +94,8 @@ class SlotTableDB(object):
             filter = "slt_id = %i" % type
             if node != None:
                 filter += " and nod_id = %i" % node
+        elif node != None:
+            filter = "nod_id = %i" % node
         if slots != None:
             filter = "sl_id in (%s)" % slots.__str__().strip('[]') 
 
@@ -117,7 +119,7 @@ class SlotTableDB(object):
             sql += " having available >= %f" % amount
 
         # And add slots which are completely free
-        sql += " union select nod_id as nod_id, sl_id as sl_id, sl_capacity as available from v_allocslot va"
+        sql += " union select nod_id as nod_id, sl_id as sl_id, slt_id as slt_id, sl_capacity as available from v_allocslot va"
         sql += " where %s" % filter
         sql += """ and not exists 
         (select * from v_allocslot a 
@@ -174,6 +176,42 @@ class SlotTableDB(object):
         cur.execute(sql)
         
         return cur
+
+    def findChangePointsInNode(self, start, node, end=None, closed=True, includeReal=False):
+        if closed:
+            gt = ">="
+            lt = "<="
+        else:
+            gt = ">"
+            lt = "<"
+        
+        filter = " and nod_id = %i" % node 
+        
+        field = ""
+        sql = """select distinct all_schedstart as time from v_allocslot where
+        all_schedstart %s '%s'""" % (gt,start)
+        if end != None:
+            sql+=" and all_schedstart %s '%s'" % (lt,end)
+        sql += filter
+    
+        sql += """ union select distinct all_schedend from v_allocslot where
+        all_schedend %s '%s'""" % (gt,start)
+        if end != None:
+            sql +=" and all_schedend %s '%s'" % (lt,end) 
+        sql+=filter
+        
+        if includeReal:     
+            sql += """ union select distinct all_realend from v_allocslot where
+            all_realend %s '%s'""" % (gt,start)
+            if end != None:
+                sql +=" and all_schedend %s '%s'" % (lt,end) 
+            sql+=filter
+        sql += " order by time"
+        cur = self.getConn().cursor()
+        cur.execute(sql)
+        
+        return cur
+
     
     def popNextChangePoint(self, time):
         next = self.peekNextChangePoint(time)
@@ -183,11 +221,13 @@ class SlotTableDB(object):
             
     def peekNextChangePoint(self, time):
         if not self.changePointCacheDirty:
+            info("Not Dirty", constants.DB, None)
             if len(self.nextChangePoints)>0:
                 return ISO.ParseDateTime(self.nextChangePoints[-1])
             else:
                 return None
         else:
+            info("Dirty", constants.DB, None)
             changePoints = [p["time"] for p in self.findChangePoints(time,includeReal=True,closed=False).fetchall()]
             changePoints.reverse()
             if len(changePoints)>0:

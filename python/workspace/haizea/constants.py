@@ -91,7 +91,11 @@ ST="SLOT"
 DB="DB"
 DS="STRUCT"
 
+# Transfer required in deployment
+TRANSFER_NO = 0
+
 # Misc
 BETTER = -1
 EQUAL = 0
 WORSE = 1
+

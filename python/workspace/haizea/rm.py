@@ -40,13 +40,15 @@ class ResourceManager(object):
             exact = [r for r in nowreq if isinstance(r,ExactLease)]
             besteffort = [r for r in nowreq if isinstance(r,BestEffortLease)]
             
-            # TODO: Update queue with new best effort requests
+            for r in besteffort:
+                self.scheduler.enqueue(r)
+                self.stats.incrQueueSize()
             
             self.scheduler.schedule(exact)
             debug("Ending iteration", constants.RM, self.time)
         
-            nextchangepoint = self.scheduler.slottable.getNextChangePoint(self.time)
-            debug("Next change point: %s" % nextchangepoint,constants.RM, self.time)
+            nextchangepoint = self.scheduler.slottable.peekNextChangePoint(self.time)
+            debug("Next change point (in slot table): %s" % nextchangepoint,constants.RM, self.time)
             nextreqtime = self.getNextReqTime()
             if nextchangepoint != None and nextreqtime == None:
                 self.time = nextchangepoint
@@ -54,14 +56,14 @@ class ResourceManager(object):
                 self.time = nextreqtime
             elif nextchangepoint != None and nextreqtime != None:
                 self.time = min(nextchangepoint, nextreqtime)
+            if nextchangepoint == self.time:
+                self.time = self.scheduler.slottable.getNextChangePoint(self.time)
 
         self.stats.addMarker()
         info("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()
-            
-        print self.stats.exactaccepted
-        print self.stats.exactrejected
+        
                 
             
             
