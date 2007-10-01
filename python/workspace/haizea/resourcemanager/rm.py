@@ -16,7 +16,8 @@ class ResourceManager(object):
         self.enactment = enactment.Enactment(self)
         self.stats = stats.Stats(self)
                 
-        self.time = config.getInitialTime()
+        self.starttime = config.getInitialTime()
+        self.time = self.starttime
         
 
     def existsPendingReq(self):
@@ -30,7 +31,7 @@ class ResourceManager(object):
         
     def run(self):
         info("Starting resource manager", constants.RM, self.time)
-        self.stats.addMarker()
+        self.stats.addInitialMarker()
 
         while self.scheduler.existsScheduledLeases() or self.existsPendingReq() or not self.scheduler.isQueueEmpty():
             debug("Starting iteration", constants.RM, self.time)
@@ -59,7 +60,15 @@ class ResourceManager(object):
             if nextchangepoint == self.time:
                 self.time = self.scheduler.slottable.getNextChangePoint(self.time)
 
-        self.stats.addMarker()
+        self.stats.addFinalMarker()
+        
+        # Get utilization stats
+        util = self.scheduler.slottable.genUtilizationStats(self.starttime)
+        cpuutilization = [(v[0],v[1]) for v in util]
+        cpuutilizationavg = [(v[0],v[2]) for v in util]
+        self.stats.utilization[constants.RES_CPU] = cpuutilization
+        self.stats.utilizationavg[constants.RES_CPU] = cpuutilizationavg
+        print self.stats.queuesize
         info("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()

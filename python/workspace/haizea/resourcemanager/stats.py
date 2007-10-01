@@ -12,13 +12,22 @@ class Stats(object):
         self.exactrejectedcount = 0
         self.besteffortcompletedcount = 0
         self.queuesizecount = 0
+        
+        self.utilization = {}
+        self.utilizationavg = {}
  
         
-    def addMarker(self):
+    def addInitialMarker(self):
+        time = self.rm.time
+        self.exactaccepted.append((time,0))
+        self.exactrejected.append((time,0))
+        self.besteffortcompleted.append((time,0))
+        self.queuesize.append((time,0))
+
+    def addFinalMarker(self):
         time = self.rm.time
         self.exactaccepted.append((time,self.exactacceptedcount))
         self.exactrejected.append((time,self.exactrejectedcount))
-        self.besteffortcompleted.append((time,self.besteffortcompletedcount))
         self.queuesize.append((time,self.queuesizecount))
 
     def incrAccepted(self):
@@ -39,13 +48,41 @@ class Stats(object):
     def incrQueueSize(self):
         time = self.rm.time
         self.queuesizecount += 1
+        if self.queuesize[-1][0] == time:
+            self.queuesize.pop()        
         self.queuesize.append((time,self.queuesizecount))
 
     def decrQueueSize(self):
         time = self.rm.time
         self.queuesizecount -= 1
+        if self.queuesize[-1][0] == time:
+            self.queuesize.pop()
         self.queuesize.append((time,self.queuesizecount))
         
     def addQueueWait(self, wait):
         time = self.rm.time
         self.queuewait.append((time,wait))
+        
+    def normalizeTimes(self, data):
+        return [((v[0] - self.rm.starttime).seconds,v[1]) for v in data]
+        
+    def getExactAccepted(self):
+        return self.normalizeTimes(self.exactaccepted)
+    
+    def getExactRejected(self):
+        return self.normalizeTimes(self.exactrejected)
+    
+    def getBestEffortCompleted(self):
+        return self.normalizeTimes(self.besteffortcompleted)
+    
+    def getQueueSize(self):
+        return self.normalizeTimes(self.queuesize)
+    
+    def getQueueWait(self):
+        return self.normalizeTimes(self.queuewait)
+    
+    def getUtilization(self, slottype):
+        return self.utilization[slottype]
+
+    def getUtilizationAvg(self, slottype):
+        return self.utilizationavg[slottype]
