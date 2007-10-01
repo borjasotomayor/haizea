@@ -73,12 +73,17 @@ def rstate_str(s):
         return "Done"
 
 # Configfile sections and options
+PROFILES_SEC="profiles"
+NAMES_OPT="names"
+
 GENERAL_SEC="general"
 LOGLEVEL_OPT="loglevel"
 PROFILE_OPT="profile"
 
-SIMULATION_SEC="simulation"
+REPORTING_SEC="reporting"
+CSS_OPT="css"
 
+SIMULATION_SEC="simulation"
 STARTTIME_OPT="starttime"
 TEMPLATEDB_OPT="templatedb"
 TARGETDB_OPT="targetdb"
@@ -101,3 +106,19 @@ BETTER = -1
 EQUAL = 0
 WORSE = 1
 
+
+# Data filenames
+CPUUTILFILE="cpuutil.dat"
+CPUUTILAVGFILE="cpuutilavg.dat"
+MEMUTILFILE="memutil.dat"
+MEMUTILAVGFILE="memutilavg.dat"
+ACCEPTEDFILE="accepted.dat"
+REJECTEDFILE="rejected.dat"
+COMPLETEDFILE="besteffort-completed.dat"
+QUEUESIZEFILE="queuesize.dat"
+QUEUEWAITFILE="queuewait.dat"
+
+
+# Types of final tables in report generation
+TABLE_FINALVALUE=0
+TABLE_FINALTIME=1
