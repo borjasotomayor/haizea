@@ -539,3 +539,34 @@ class SlotTable(object):
         nodes.sort(comparenodes)
         return nodes
 
+
+    def genUtilizationStats(self, start, slottype=constants.RES_CPU, end=None):
+        changepoints = self.db.findChangePoints(start, end)
+        accumUtil=0
+        prevTime = None
+        startVM = None
+        stats = []
+        for point in changepoints:
+            cur = self.db.getUtilization(point["time"], type=slottype)
+            totalcapacity = 0
+            totalused =0
+            for row in cur:
+                totalcapacity += row["sl_capacity"]
+                totalused += row["used"]
+            utilization = float(totalused) / totalcapacity
+            time = ISO.ParseDateTime(point["time"])
+            seconds = (time-start).seconds
+            if startVM == None and utilization > 0:
+                startVM = seconds
+            if prevTime != None:
+                timediff = time - prevTime
+                weightedUtilization = prevUtilization*timediff.seconds 
+                accumUtil += weightedUtilization
+                average = accumUtil/seconds
+            else:
+                average = utilization
+            stats.append((seconds, utilization, average))
+            prevTime = time
+            prevUtilization = utilization
+        
+        return stats
