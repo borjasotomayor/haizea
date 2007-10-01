@@ -104,6 +104,8 @@ class Scheduler(object):
             rr.state = constants.RES_STATE_DONE
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
+            if isinstance(l,ds.BestEffortLease):
+                self.rm.stats.incrBestEffortCompleted()
             
         elif rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
             pass
