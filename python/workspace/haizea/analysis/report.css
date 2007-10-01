@@ -1,0 +1,195 @@
+html
+{
+	font-family : Verdana, Geneva, Arial, Helvetica, sans-serif;
+	font-size: 10pt;
+}
+
+a  
+{
+	color : #0000AA;
+}	
+
+.bold
+{
+	text-decoration: none;
+	font-weight: bold;
+}
+
+.image
+{
+	text-align: center;
+	border: none;
+}
+
+h1
+{
+	font-family : Verdana, Geneva, Arial, Helvetica, sans-serif;
+}
+
+h2
+{
+	font-family : Verdana, Geneva, Arial, Helvetica, sans-serif;
+}
+
+hr
+{
+	border : 2px solid #A9A9A9;
+}
+
+table
+{
+	font-family : Verdana, Geneva, Arial, Helvetica, sans-serif;
+	font-size: 10pt;
+}
+
+.small
+{
+	font-size: 8pt;
+}
+
+pre.programlisting
+{
+	border : thin solid #696969;
+	background-color : #F0FFFF;
+	padding : 10px 10px 10px 10px;
+	font-family : monospace;
+	font-size: 9pt;
+	margin-left : 50px;
+	margin-right : 50px;
+}
+
+.defaultconfig
+{
+	border : thin solid #CCCCCC;
+	background-color : #F5F5F5;
+	font-size: 10pt;
+	padding : 5px 10px 10px 10px;
+	margin-left : 50px;
+	width: 250px;
+}
+
+.tip
+{
+	border : thin solid #CCCCCC;
+	background-color : #DDDDDD;
+	font-size: 10pt;
+	padding : 10px 10px 10px 10px;
+	margin-left : 75px;
+	margin-right : 75px;
+}
+
+.caution
+{
+	border : thin solid #CCCCCC;
+	background-color : #FFFFCC;
+	font-size: 10pt;
+	padding : 10px 10px 10px 10px;
+	margin-left : 100px;
+	margin-right : 100px;
+}
+
+
+.warning
+{
+	border : thin solid #696969;
+	background-color : #FFFFCC;
+	font-size: 10pt;
+	padding : 10px 10px 10px 10px;
+	margin-left : 100px;
+	margin-right : 100px;
+}
+
+p.todo
+{
+	border : thin solid #696969;
+	background-color : #FFCCCC;
+	font-size: 10pt;
+	padding : 10px 10px 10px 10px;
+	margin-left : 100px;
+	margin-right : 100px;
+}
+
+
+.informalexample p
+{
+	font-size: 8pt;
+	margin-left : 50px;
+	margin-right : 50px;
+}
+
+
+pre.screen
+{
+	padding : 10px 10px 10px 10px;
+	font-family : monospace;
+	font-weight: bold;
+	margin-left : 50px;
+	margin-right : 50px;
+}
+
+
+.toc ul
+{
+	list-style-type : square;
+	font-size : 17px;
+	font-weight : bold;
+	margin-bottom : 10px;
+}
+
+.toc ul a
+{
+	text-decoration: none;
+	color : Navy;
+}
+
+.toc ul a:hover
+{
+	text-decoration: underline;
+	color : Blue;
+}
+
+
+.toc ul ul
+{
+	list-style-type : circle;
+	font-size : 14px;
+	font-weight : normal;
+}
+
+.toc ul ul li
+{
+	margin-bottom: 3px;
+}
+
+.toc ul ul a
+{
+	text-decoration: underline;
+	color : #0000AA;
+}
+
+.center
+{
+	text-align: center;
+}
+
+.informalfigure
+{
+	text-align: center;
+}
+
+.figure
+{
+	text-align: center;
+}
+
+.noborder
+{
+	border: none;
+}
+
+.literal {
+        font-family : monospace;
+        font-weight: bold;
+        color : #006600;
+}
+
