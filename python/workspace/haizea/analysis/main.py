@@ -2,10 +2,10 @@ from workspace.haizea.common.config import MultiConfig
 from workspace.haizea.analysis.report import MultiProfileReport
 from workspace.haizea.common.utils import genDataDirName
 
-def report(configfile, tracefile, injectedfile, statsdir, outdir):
-    config = MultiConfig(configfile)
-    profiles = config.getProfiles()
-    css = config.getCSS()
+def report(multiconfig, tracefile, injectedfile, statsdir, outdir):
+
+    profiles = multiconfig.getProfiles()
+    css = multiconfig.getCSS()
     
     profilesdirs = dict([(p, statsdir + "/" + genDataDirName(p,tracefile,injectedfile)) for p in profiles])
     
@@ -15,9 +15,10 @@ def report(configfile, tracefile, injectedfile, statsdir, outdir):
 
 
 if __name__ == "__main__":
-    configfile="../configfiles/test_multiple.conf"
+    multiconfigfile="../configfiles/test_multiple.conf"
+    multiconfig = MultiConfig(multiconfigfile)
     tracefile="../traces/examples/test_besteffort.csv"
     injectedfile=None
     statsdir="/home/borja/docs/uchicago/research/ipdps/results"
     reportdir="/home/borja/docs/uchicago/research/ipdps/results/report"
-    report(configfile, tracefile, injectedfile, statsdir, reportdir)
+    report(multiconfig, tracefile, injectedfile, statsdir, reportdir)

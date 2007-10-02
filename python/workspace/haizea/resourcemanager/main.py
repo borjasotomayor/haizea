@@ -8,10 +8,7 @@ from workspace.haizea.common.config import Config
 from workspace.haizea.common.log import log, loglevel
 from pickle import Pickler, Unpickler
 
-def simulate(configfile, tracefile, tracetype, injectedfile, statsdir):
-    # Create config file
-    config = Config(configfile)
-    
+def simulate(config, tracefile, tracetype, injectedfile, statsdir):
     level = config.getLogLevel()
     log.setLevel(loglevel[level])
 
@@ -72,7 +69,8 @@ def pickle(data, dir, file):
 
 if __name__ == "__main__":
     configfile="../configfiles/test.conf"
-    tracefile="../traces/examples/test_besteffort.csv"
+    config = Config(configfile)
+    tracefile="../traces/examples/test_beres.csv"
     injectedfile=None
     statsdir="/home/borja/docs/uchicago/research/ipdps/results"
-    simulate(configfile, tracefile, constants.TRACE_CSV, injectedfile, statsdir)
+    simulate(config, tracefile, constants.TRACE_CSV, injectedfile, statsdir)
