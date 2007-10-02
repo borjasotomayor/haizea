@@ -79,6 +79,8 @@ NAMES_OPT="names"
 GENERAL_SEC="general"
 LOGLEVEL_OPT="loglevel"
 PROFILE_OPT="profile"
+SUSPENSION_OPT="suspension"
+RESERVATIONS_OPT="besteffort-reservations"
 
 REPORTING_SEC="reporting"
 CSS_OPT="css"
