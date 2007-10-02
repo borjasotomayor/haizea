@@ -15,9 +15,9 @@ def multirun(multiconfig, tracefile, tracetype, injectedfile, statsdir, reportdi
     report(multiconfig, tracefile, injectedfile, statsdir, reportdir)
 
 if __name__ == "__main__":
-    configfile="../configfiles/test_multiple.conf"
+    configfile="../configfiles/test_jazz.conf"
     multiconfig = MultiConfig(configfile)
-    tracefile="../traces/examples/test_beres2.csv"
+    tracefile="../traces/examples/test_jazz_short.csv"
     injectedfile=None
     statsdir="/home/borja/docs/uchicago/research/ipdps/results"
     reportdir="/home/borja/docs/uchicago/research/ipdps/results/report"    

@@ -68,8 +68,9 @@ def pickle(data, dir, file):
 
 if __name__ == "__main__":
     configfile="../configfiles/test.conf"
-    config = Config(configfile)
-    tracefile="../traces/examples/test_beres.csv"
+    config = Config()
+    config.loadFile(configfile)
+    tracefile="../traces/examples/test_earlyend2.csv"
     injectedfile=None
     statsdir="/home/borja/docs/uchicago/research/ipdps/results"
     simulate(config, tracefile, constants.TRACE_CSV, injectedfile, statsdir)

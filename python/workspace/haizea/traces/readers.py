@@ -63,13 +63,13 @@ def CSV(tracefile, config):
                 resreq[constants.RES_CPU] = 1 # One CPU per VM
                 resreq[constants.RES_MEM] = int(fields[5]) # 5: memory
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
-                if fields[7] != "NULL": # 7: deadline
+                if fields[8] != "NULL": # 8: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[8])) # 8: deadline
                     end = start + TimeDelta(seconds=int(fields[9])) # 9: duration
                     prematureend = start + TimeDelta(seconds=int(fields[10])) # 10: realduration
                     req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend)
                 else:
-                    maxdur = TimeDelta(seconds=int(fields[8])) # 8: duration
+                    maxdur = TimeDelta(seconds=int(fields[9])) # 9: duration
                     realdur = TimeDelta(seconds=int(fields[10])) # 10: realduration
                     req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
             req.state = constants.LEASE_STATE_PENDING
