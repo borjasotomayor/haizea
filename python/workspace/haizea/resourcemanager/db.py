@@ -221,13 +221,13 @@ class SlotTableDB(object):
             
     def peekNextChangePoint(self, time):
         if not self.changePointCacheDirty:
-            info("Not Dirty", constants.DB, None)
+            #info("Not Dirty", constants.DB, None)
             if len(self.nextChangePoints)>0:
                 return ISO.ParseDateTime(self.nextChangePoints[-1])
             else:
                 return None
         else:
-            info("Dirty", constants.DB, None)
+            #info("Dirty", constants.DB, None)
             changePoints = [p["time"] for p in self.findChangePoints(time,includeReal=True,closed=False).fetchall()]
             changePoints.reverse()
             if len(changePoints)>0:
@@ -388,10 +388,10 @@ class SlotTableDB(object):
     def setEndtimeToRealend(self, respart, end):
         sql = "UPDATE TB_ALLOC SET ALL_SCHEDEND = ALL_REALEND WHERE "
         sql += " RSP_ID=%i" % respart
-        sql += " AND all_realend >= ? AND all_realend < ?"
+        sql += " AND all_realend = ?"
                 
         cur = self.getConn().cursor()
-        cur.execute(sql, end)
+        cur.execute(sql, (end,))
         self.changePointCacheDirty = True
 
     def updateAllocation(self, sl_id, rsp_id, all_schedstart, newstart=None, end=None, realend=None):

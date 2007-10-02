@@ -4,7 +4,7 @@ import workspace.haizea.resourcemanager.enactment as enactment
 import workspace.haizea.resourcemanager.stats as stats
 import workspace.haizea.common.constants as constants
 from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
-from workspace.haizea.common.log import info, debug
+from workspace.haizea.common.log import info, debug, status
 
 class ResourceManager(object):
     def __init__(self, requests, config):
@@ -32,7 +32,7 @@ class ResourceManager(object):
     def run(self):
         info("Starting resource manager", constants.RM, self.time)
         self.stats.addInitialMarker()
-
+        prevstatustime = self.time
         while self.scheduler.existsScheduledLeases() or self.existsPendingReq() or not self.scheduler.isQueueEmpty():
             debug("Starting iteration", constants.RM, self.time)
             nowreq = [r for r in self.requests if r.tSubmit == self.time]
@@ -48,7 +48,14 @@ class ResourceManager(object):
             
             self.scheduler.schedule(exact)
             debug("Ending iteration", constants.RM, self.time)
-        
+            if (self.time - prevstatustime).minutes >= 15:
+                status("STATUS ---Begin---", constants.RM, self.time)
+                status("STATUS Completed best-effort leases: %i" % self.stats.besteffortcompletedcount, constants.RM, self.time)
+                status("STATUS Queue size: %i" % self.stats.queuesizecount, constants.RM, self.time)
+                status("STATUS Accepted exact leases: %i" % self.stats.exactacceptedcount, constants.RM, self.time)
+                status("STATUS Rejected exact leases: %i" % self.stats.exactrejectedcount, constants.RM, self.time)
+                status("STATUS ----End----", constants.RM, self.time)
+                prevstatustime = self.time
             nextchangepoint = self.scheduler.slottable.peekNextChangePoint(self.time)
             debug("Next change point (in slot table): %s" % nextchangepoint,constants.RM, self.time)
             nextreqtime = self.getNextReqTime()

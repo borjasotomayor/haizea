@@ -138,6 +138,7 @@ class SlotTable(object):
                 else:
                     raise SlotFittingException, "Could not fit node %i in any physical node (w/preemption)" % vwnode
 
+        db_rsp_ids = []
         if allfits:
             transfers = []
             info("The VM reservations for this lease are feasible", constants.ST, self.rm.time)
@@ -145,12 +146,13 @@ class SlotTable(object):
             for vwnode in range(1,numnodes+1):
                 rsp_name = "VM %i" % (vwnode)
                 rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible)
+                db_rsp_ids.append(rsp_id)
                 transfers.append((nodeassignment[vwnode], rsp_id))
                 for slottype in slottypes:
                     amount = resreq[slottype]
                     sl_id = assignment[vwnode][slottype]
                     self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = prematureend)
-            return nodeassignment, mustpreempt, transfers
+            return nodeassignment, mustpreempt, transfers, db_rsp_ids
         else:
             raise SlotFittingException
         
@@ -332,6 +334,7 @@ class SlotTable(object):
             if availabilitywindow.fitAtStart() >= numnodes:
                 start=p
                 maxend = start + remdur
+                realend = start + realdur
                 end, canfit = availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
         
                 info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.time)
@@ -370,6 +373,7 @@ class SlotTable(object):
                 if availabilitywindow.fitAtStart() >= numnodes:
                     start=p
                     maxend = start + remdur
+                    realend = start + realdur
                     end, canfit = availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
             
                     info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.time)
@@ -393,6 +397,9 @@ class SlotTable(object):
         else:
             reservation = False
 
+        if realend > end:
+            realend = end
+
         physnodes = canfit.keys()
         physnodes.sort() # Arbitrary, prioritize nodes, as in exact
         
@@ -401,7 +408,7 @@ class SlotTable(object):
 
         mappings = {}
         vmnode = 1
-
+        db_rsp_ids = []
         while vmnode <= numnodes:
             for n in physnodes:
                 if canfit[n]>0:
@@ -409,14 +416,15 @@ class SlotTable(object):
                     mappings[vmnode] = n
                     rsp_name = "VM %i" % (vmnode)
                     rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, False)
+                    db_rsp_ids.append(rsp_id)
                     for slottype in slottypes:
                         amount = resreq[slottype]
                         sl_id = availabilitywindow.slot_ids[n][slottype]
-                        self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = None)
+                        self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = realend)
                     vmnode += 1
                     break
             
-        return mappings, start, end, mustsuspend, reservation
+        return mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids
 
 
     def prioritizenodes(self,candidatenodes,vmimage,start,resreq, canpreempt):
@@ -523,6 +531,10 @@ class SlotTable(object):
             prevUtilization = utilization
         
         return stats
+    
+    def updateEndTimes(self, db_rsp_ids, realend):
+        for rsp_id in db_rsp_ids:
+            self.db.setEndtimeToRealend(rsp_id, realend)
 
 class AvailEntry(object):
     def __init__(self, time, avail, availpreempt = None):

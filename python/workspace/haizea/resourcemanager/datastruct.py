@@ -63,7 +63,7 @@ class LeaseBase(object):
         return [r for r in self.rr if r.start == time and r.state == RES_STATE_SCHEDULED]
 
     def getEndingReservations(self, time):
-        return [r for r in self.rr if r.end == time and r.state == RES_STATE_ACTIVE]
+        return [r for r in self.rr if (r.end == time or r.realend == time) and r.state == RES_STATE_ACTIVE]
         
 class ExactLease(LeaseBase):
     def __init__(self, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
@@ -87,7 +87,7 @@ class BestEffortLease(LeaseBase):
         LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq)
         self.maxdur = maxdur
         self.remdur = maxdur
-        self.realdur = realdur
+        self.realremdur = realdur
 
     def printContents(self):
         edebug("__________________________________________________", DS, None)
@@ -95,19 +95,22 @@ class BestEffortLease(LeaseBase):
         edebug("Type           : BEST-EFFORT", DS, None)
         edebug("Max duration   : %s" % self.maxdur, DS, None)
         edebug("Rem duration   : %s" % self.remdur, DS, None)
-        edebug("Real duration  : %s" % self.realdur, DS, None)
+        edebug("Real duration  : %s" % self.realremdur, DS, None)
         self.printRR()
         edebug("--------------------------------------------------", DS, None)
         
 class ResourceReservationBase(object):
-    def __init__(self, start, end):
+    def __init__(self, start, end, db_rsp_ids, realend = None):
         self.start = start
         self.end = end
+        self.realend = realend
         self.state = None
+        self.db_rsp_ids = db_rsp_ids
         
     def printContents(self):
         edebug("Start          : %s" % self.start, DS, None)
         edebug("End            : %s" % self.end, DS, None)
+        edebug("Real End       : %s" % self.realend, DS, None)
         edebug("State          : %s" % rstate_str(self.state), DS, None)
         
 class FileTransferResourceReservation(ResourceReservationBase):
@@ -122,8 +125,8 @@ class FileTransferResourceReservation(ResourceReservationBase):
 
                 
 class VMResourceReservation(ResourceReservationBase):
-    def __init__(self, start, end, nodes, oncomplete, backfillres):
-        ResourceReservationBase.__init__(self, start, end)
+    def __init__(self, start, end, realend, nodes, oncomplete, backfillres, db_rsp_ids):
+        ResourceReservationBase.__init__(self, start, end, db_rsp_ids, realend=realend)
         self.nodes = nodes
         self.oncomplete = oncomplete
         self.backfillres = backfillres
