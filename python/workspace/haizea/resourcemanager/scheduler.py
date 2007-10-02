@@ -14,7 +14,7 @@ class Scheduler(object):
         self.scheduledleases = ds.LeaseTable(self)
         self.completedleases = ds.LeaseTable(self)
         self.rejectedleases = ds.LeaseTable(self)
-        self.maxres = 0
+        self.maxres = self.rm.config.getMaxReservations()
         self.numbesteffortres = 0
         
     def schedule(self, requests):
@@ -35,9 +35,8 @@ class Scheduler(object):
                 self.rm.stats.incrRejected()
                 warning("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
                
-                
-        newqueue = []
-        while not self.isQueueEmpty():
+        done = False
+        while not done and not self.isQueueEmpty():
             r = self.queue.dequeue()
             try:
                 info("LEASE-%i Processing request (BEST-EFFORT)" % r.leaseID, constants.SCHED, self.rm.time)
@@ -50,16 +49,15 @@ class Scheduler(object):
                 self.rm.stats.decrQueueSize()
             except SchedException, msg:
                 # Put back on queue
-                newqueue.append(r)
-        self.queue.q = newqueue
-
+                self.queue.q = [r] + self.queue.q
+                warning("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
+                done = True
 
         self.processReservations()        
     
     def processReservations(self):
         starting = [l for l in self.scheduledleases.entries.values() if l.hasStartingReservations(self.rm.time)]
         ending = [l for l in self.scheduledleases.entries.values() if l.hasEndingReservations(self.rm.time)]
-        
         for l in ending:
             rrs = l.getEndingReservations(self.rm.time)
             for rr in rrs:
@@ -105,10 +103,12 @@ class Scheduler(object):
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
             if isinstance(l,ds.BestEffortLease):
-                self.rm.stats.incrBestEffortCompleted()
-            
+                self.rm.stats.incrBestEffortCompleted()            
         elif rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
             pass
+        if isinstance(l,ds.BestEffortLease):
+            if rr.backfillres == True:
+                self.numbesteffortres -= 1
         l.printContents()
         debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED, self.rm.time)
         
@@ -130,7 +130,7 @@ class Scheduler(object):
             
             
             # Add resource reservations
-            vmrr = ds.VMResourceReservation(req.start, req.end, mappings, constants.ONCOMPLETE_ENDLEASE)
+            vmrr = ds.VMResourceReservation(req.start, req.end, mappings, constants.ONCOMPLETE_ENDLEASE, False)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
             
@@ -148,7 +148,7 @@ class Scheduler(object):
         earliest = dict([(node+1, [self.rm.time,constants.TRANSFER_NO]) for node in range(numnodes)])
         try:
             canreserve = self.canReserveBestEffort()
-            (mappings, start, end, mustsuspend) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realdur)
+            (mappings, start, end, mustsuspend, reservation) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realdur, preemptible=False)
             # Schedule image transfers
             dotransfer = False
             
@@ -158,14 +158,17 @@ class Scheduler(object):
                 req.state = constants.LEASE_STATE_DEPLOYED            
 
             # Add resource reservations
-            vmrr = ds.VMResourceReservation(start, end, mappings, constants.ONCOMPLETE_ENDLEASE)
+            vmrr = ds.VMResourceReservation(start, end, mappings, constants.ONCOMPLETE_ENDLEASE, reservation)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
+            
+            if reservation:
+                self.numbesteffortres += 1
             
             self.slottable.commit()        
         except SlotFittingException, msg:
             self.slottable.rollback()
-            raise SchedException, "The requested exact lease is infeasible"
+            raise SchedException, "The requested best-effort lease is infeasible. Reason: %s" % msg
         
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
         pass

@@ -318,38 +318,80 @@ class SlotTable(object):
         # (otherwise, we only allow the VMs to start "now", accounting
         #  for the fact that vm images will have to be deployed)
         if canreserve:
-            pass # TODO
+            futurecp = self.db.findChangePoints(changepoints[-1], closed=False)
+            futurecp = [ISO.ParseDateTime(p["time"]) for p in futurecp.fetchall()]
+        else:
+            futurecp = []
+
         
         availabilitywindow = None
         for p in changepoints:
             availabilitywindow = AvailabilityWindow(p, resreq, self.db)
             availabilitywindow.printContents()
             
-            # We check if we can fit the lease at this changepoint
-            # We don't worry about optimality. We just want to know
-            # if we at least have enough resources.
-            print availabilitywindow.fitAtStart()
             if availabilitywindow.fitAtStart() >= numnodes:
                 start=p
-                break
-
-        if start == None:
-            # We did not find a suitable starting time. This can happen
-            # if we're unable to make future reservations
-            raise SlotFittingException, "Could not find enough resources for this request"
+                maxend = start + remdur
+                end, canfit = availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
         
-        maxend = start + remdur
-        end, canfit = availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
+                info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.time)
+                
+                if end < maxend:
+                    mustsuspend=True
+                    info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
+                    if preemptible:
+                        # It the lease is preemptible, just keep the current selection
+                        break
+                    else:
+                        # Keep looking
+                        pass
+                else:
+                    mustsuspend=False
+                    # We've found a satisfactory starting time
+                    break
 
-        info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.time)
-        
-        if end < maxend:
-            mustsuspend=True
-            info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
-            if not preemptible:
+        if not canreserve:
+            if start == None:
+                # We did not find a suitable starting time. This can happen
+                # if we're unable to make future reservations
+                raise SlotFittingException, "Could not find enough resources for this request"
+            elif mustsuspend and not preemptible:
                 raise SlotFittingException, "Scheduling this lease would require preempting it, which is not allowed"
+
+        # TODO Factor out common code in the above loop and the following one
+        # TODO Better logging
+        
+        if start == None and canreserve:
+            # Check future points
+            for p in futurecp:
+                availabilitywindow = AvailabilityWindow(p, resreq, self.db)
+                availabilitywindow.printContents()
+                
+                if availabilitywindow.fitAtStart() >= numnodes:
+                    start=p
+                    maxend = start + remdur
+                    end, canfit = availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
+            
+                    info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.time)
+                    
+                    if end < maxend:
+                        mustsuspend=True
+                        info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
+                        if preemptible:
+                            # It the lease is preemptible, just keep the current selection
+                            break
+                        else:
+                            # Keep looking
+                            pass
+                    else:
+                        mustsuspend=False
+                        # We've found a satisfactory starting time
+                        break        
+
+        if start in futurecp:
+            reservation = True
         else:
-            mustsuspend=False
+            reservation = False
 
         physnodes = canfit.keys()
         physnodes.sort() # Arbitrary, prioritize nodes, as in exact
@@ -374,7 +416,7 @@ class SlotTable(object):
                     vmnode += 1
                     break
             
-        return mappings, start, end, mustsuspend
+        return mappings, start, end, mustsuspend, reservation
 
 
     def prioritizenodes(self,candidatenodes,vmimage,start,resreq, canpreempt):
@@ -491,6 +533,8 @@ class AvailEntry(object):
         self.canfitpreempt = None
 
 # Does not support preemption just yet
+# TODO: Constrain window to only specific nodes (to take into account
+# earliest start times)
 class AvailabilityWindow(object):
     def __init__(self, time, resreq, db):
         self.time = time
@@ -525,7 +569,6 @@ class AvailabilityWindow(object):
                 avail_aux[nod_id][slottype] = [AvailEntry(self.time,avail)]
                 self.slot_ids[nod_id][slottype] = slot_id
 
-        print avail_aux.keys()
         # Filter out nodes that don't have enough resources for at
         # least one VM (the previous step may have selected nodes that,
         # for example, have enough CPU but not enough memory)

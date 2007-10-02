@@ -68,7 +68,6 @@ class ResourceManager(object):
         cpuutilizationavg = [(v[0],v[2]) for v in util]
         self.stats.utilization[constants.RES_CPU] = cpuutilization
         self.stats.utilizationavg[constants.RES_CPU] = cpuutilizationavg
-        print self.stats.queuesize
         info("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()

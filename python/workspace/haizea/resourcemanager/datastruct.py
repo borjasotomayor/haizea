@@ -8,6 +8,10 @@ def getLeaseID():
     leaseID += 1
     return l
 
+def resetLeaseID():
+    global leaseID
+    leaseID = 1
+
 def prettyNodemap(nodes):
     pnodes = list(set(nodes.values()))
     normmap = [([y[0] for y in nodes.items() if y[1]==x], x) for x in pnodes]
@@ -118,10 +122,11 @@ class FileTransferResourceReservation(ResourceReservationBase):
 
                 
 class VMResourceReservation(ResourceReservationBase):
-    def __init__(self, start, end, nodes, oncomplete):
+    def __init__(self, start, end, nodes, oncomplete, backfillres):
         ResourceReservationBase.__init__(self, start, end)
         self.nodes = nodes
         self.oncomplete = oncomplete
+        self.backfillres = backfillres
 
     def printContents(self):
         ResourceReservationBase.printContents(self)
