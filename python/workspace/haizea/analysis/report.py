@@ -164,9 +164,7 @@ class MultiProfileReport(object):
             shutil.copy(self.css, self.outdir)
         
     def generateHTMLHeader(self):
-        header = """
-<?xml version="1.0"?>
-<html>
+        header = """<html>
 <head>
     <title>Experiment results</title>
     <meta http-equiv="Content-Type" content="text/html" />
