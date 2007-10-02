@@ -44,6 +44,7 @@ class ResourceManager(object):
             for r in besteffort:
                 self.scheduler.enqueue(r)
                 self.stats.incrQueueSize()
+                self.stats.startQueueWait(r.leaseID)
             
             self.scheduler.schedule(exact)
             debug("Ending iteration", constants.RM, self.time)
@@ -64,10 +65,7 @@ class ResourceManager(object):
         
         # Get utilization stats
         util = self.scheduler.slottable.genUtilizationStats(self.starttime)
-        cpuutilization = [(v[0],v[1]) for v in util]
-        cpuutilizationavg = [(v[0],v[2]) for v in util]
-        self.stats.utilization[constants.RES_CPU] = cpuutilization
-        self.stats.utilizationavg[constants.RES_CPU] = cpuutilizationavg
+        self.stats.utilization[constants.RES_CPU] = util
         info("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()

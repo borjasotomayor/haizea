@@ -6,12 +6,12 @@ from mx.DateTime import now
 import shutil
 
 class Section(object):
-    def __init__(self, title, filename, graph, profilesdirs, tablefinal = None, maxmin = False):
+    def __init__(self, title, filename, graphtype, profilesdirs, tablefinal = None, maxmin = False):
         self.title = title
         self.filename = filename
-        self.graph = graph
-        self.graphfile = self.filename + ".png"
-        self.thumbfile = self.filename + "-thumb.png"
+        self.graphtype = graphtype
+        self.graphfile = self.filename + "_" + str(graphtype) + ".png"
+        self.thumbfile = self.filename + "_" + str(graphtype) + "-thumb.png"
         self.profilesdirs = profilesdirs
         self.profiles = profilesdirs.keys()
         self.profiles.sort()
@@ -37,10 +37,33 @@ class Section(object):
             for p in self.profiles:
                 final = self.data[p][-1][1]
                 self.final[p] = final
+        if self.tablefinal == constants.TABLE_FINALAVG:
+            for p in self.profiles:
+                final = self.data[p][-1][2]
+                self.final[p] = final
         
     def generateGraph(self, outdir):
-        values = [self.data[p] for p in self.profiles]
-        g = self.graph(values, "Time (s)", self.title, self.profiles)
+        if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_STEP_VALUE, constants.GRAPH_POINT_VALUE]:
+            values = [[(v[0],v[1]) for v in self.data[p]] for p in self.profiles]
+        elif self.graphtype in [constants.GRAPH_LINE_AVG]:
+            values = [[(v[0],v[2]) for v in self.data[p]] for p in self.profiles]
+        elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
+            values = [[(v[0],v[1],v[2]) for v in self.data[p]] for p in self.profiles]
+
+        if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_LINE_AVG]:
+            graph = graphs.LineGraph
+            legends = self.profiles
+        elif self.graphtype in [constants.GRAPH_STEP_VALUE]:
+            graph = graphs.StepGraph
+            legends = self.profiles
+        elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
+            graph = graphs.PointAndLineGraph
+            legends = []
+            for l in self.profiles:
+                legends.append(l)
+                legends.append(l + " (avg)")
+            
+        g = graph(values, "Time (s)", self.title, legends)
         graphfile = outdir + "/" + self.graphfile
         thumbfile = outdir + "/" + self.thumbfile
         g.plotToFile(graphfile, thumbfile)
@@ -59,6 +82,9 @@ class Section(object):
             if self.tablefinal == constants.TABLE_FINALVALUE:
                 title = "Final Values"
                 col = "Value"
+            if self.tablefinal == constants.TABLE_FINALAVG:
+                title = "Final Values"
+                col = "Average"
             html += "<th colspan='2'>%s</th>" % title
             html += "</tr>"
             html += "<tr><th>Profile</th><th>%s</th></tr>" % col
@@ -79,10 +105,12 @@ class MultiProfileReport(object):
         
         # TODO Factor the following out to a configuration file
         self.sections = [
-                         Section("CPU Utilization", constants.CPUUTILFILE, graphs.StepGraph, profilesdirs),
-                         Section("CPU Utilization (avg)", constants.CPUUTILAVGFILE, graphs.PointGraph, profilesdirs, tablefinal = constants.TABLE_FINALVALUE, maxmin = True),
-                         Section("Best-effort Leases Completed", constants.COMPLETEDFILE, graphs.StepGraph, profilesdirs, tablefinal = constants.TABLE_FINALTIME),
-                         Section("Queue Size", constants.QUEUESIZEFILE, graphs.StepGraph, profilesdirs)
+                         Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, profilesdirs),
+                         Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
+                         Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, profilesdirs, tablefinal = constants.TABLE_FINALTIME),
+                         Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE, profilesdirs),
+                         Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
+                         Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
                          ]
         
     def generate(self):

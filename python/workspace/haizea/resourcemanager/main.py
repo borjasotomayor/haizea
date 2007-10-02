@@ -40,17 +40,15 @@ def writeDataToDisk(resourcemanager, dir):
         os.makedirs(dir)
         
     cpuutilization = resourcemanager.stats.getUtilization(constants.RES_CPU)
-    cpuutilizationavg = resourcemanager.stats.getUtilizationAvg(constants.RES_CPU)
     #memutilization = resourcemanager.stats.getUtilization(constants.RES_MEM)
-    #memutilizationavg = resourcemanager.stats.getUtilizationAvg(constants.RES_MEM)
     exactaccepted = resourcemanager.stats.getExactAccepted()
     exactrejected = resourcemanager.stats.getExactRejected()
     besteffortcompleted = resourcemanager.stats.getBestEffortCompleted()
     queuesize = resourcemanager.stats.getQueueSize()
     queuewait = resourcemanager.stats.getQueueWait()
+    execwait = resourcemanager.stats.getExecWait()
     
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
-    pickle(cpuutilizationavg, dir, constants.CPUUTILAVGFILE)
     #pickle(memutilization, dir, constants.MEMUTILFILE)
     #pickle(memutilizationavg, dir, constants.MEMUTILAVGFILE)
     pickle(exactaccepted, dir, constants.ACCEPTEDFILE)
@@ -58,6 +56,7 @@ def writeDataToDisk(resourcemanager, dir):
     pickle(besteffortcompleted, dir, constants.COMPLETEDFILE)
     pickle(queuesize, dir, constants.QUEUESIZEFILE)
     pickle(queuewait, dir, constants.QUEUEWAITFILE)
+    pickle(execwait, dir, constants.EXECWAITFILE)
     
         
 def pickle(data, dir, file):

@@ -111,16 +111,23 @@ WORSE = 1
 
 # Data filenames
 CPUUTILFILE="cpuutil.dat"
-CPUUTILAVGFILE="cpuutilavg.dat"
 MEMUTILFILE="memutil.dat"
-MEMUTILAVGFILE="memutilavg.dat"
 ACCEPTEDFILE="accepted.dat"
 REJECTEDFILE="rejected.dat"
 COMPLETEDFILE="besteffort-completed.dat"
 QUEUESIZEFILE="queuesize.dat"
 QUEUEWAITFILE="queuewait.dat"
+EXECWAITFILE="execwait.dat"
 
 
 # Types of final tables in report generation
 TABLE_FINALVALUE=0
 TABLE_FINALTIME=1
+TABLE_FINALAVG=2
+
+# Types of graphs
+GRAPH_LINE_VALUE=0
+GRAPH_LINE_AVG=1
+GRAPH_STEP_VALUE=2
+GRAPH_POINT_VALUE=3
+GRAPH_POINTLINE_VALUEAVG=4

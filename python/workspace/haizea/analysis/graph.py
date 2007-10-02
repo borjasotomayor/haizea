@@ -14,7 +14,7 @@ class Graph(object):
     def show(self):
         pass
     
-class PointGraph(Graph):
+class LineGraph(Graph):
     def __init__(self, data, xlabel="", ylabel="", legends=[]):
         Graph.__init__(self,xlabel,ylabel)
         self.data = data
@@ -41,8 +41,6 @@ class PointGraph(Graph):
             im = Image.open(graphfile)
             im.thumbnail((640, 480), Image.ANTIALIAS)
             im.save(thumbfile)
-            
-
     
     def show(self):
         pylab.show()
@@ -77,3 +75,39 @@ class StepGraph(Graph):
     
     def show(self):
         pylab.show()
+        
+        
+class PointAndLineGraph(Graph):
+    def __init__(self, data, xlabel="", ylabel="", legends=[]):
+        Graph.__init__(self,xlabel,ylabel)
+        self.data = data
+        self.legends = legends
+
+    def plotToFile(self, graphfile, thumbfile=None):
+        Graph.plot(self)        
+        largestY = None
+        colors = iter("bgrcmy")
+        for dataset in self.data:
+            x = [p[0] for p in dataset]
+            y1 = [p[1] for p in dataset]
+            y2 = [p[2] for p in dataset]
+            largestY = max(largestY,max(y1),max(y2))
+            color = colors.next()
+            pylab.plot(x,y1, color + 'o')
+            pylab.plot(x,y2, color)
+        
+        pylab.ylim(0, largestY * 1.05)            
+        pylab.gca().xaxis.set_major_formatter(FormatStrFormatter('%d'))
+        pylab.legend(self.legends, loc='lower right')
+        
+        pylab.savefig(graphfile)
+        pylab.gcf().clear()
+        
+        if thumbfile != None:
+            im = Image.open(graphfile)
+            im.thumbnail((640, 480), Image.ANTIALIAS)
+            im.save(thumbfile)
+    
+    def show(self):
+        pylab.show()
+        

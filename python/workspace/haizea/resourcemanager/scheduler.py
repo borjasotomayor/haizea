@@ -47,6 +47,7 @@ class Scheduler(object):
                 self.scheduleBestEffortLease(r)
                 self.scheduledleases.add(r)
                 self.rm.stats.decrQueueSize()
+                self.rm.stats.stopQueueWait(r.leaseID)
             except SchedException, msg:
                 # Put back on queue
                 self.queue.q = [r] + self.queue.q
@@ -88,6 +89,8 @@ class Scheduler(object):
         if l.state == constants.LEASE_STATE_DEPLOYED:
             l.state = constants.LEASE_STATE_ACTIVE
             rr.state = constants.RES_STATE_ACTIVE
+            if isinstance(l,ds.BestEffortLease):
+                self.rm.stats.startExec(l.leaseID)            
             # TODO: Enactment
         elif l.state == constants.LEASE_STATE_SUSPENDED:
             pass

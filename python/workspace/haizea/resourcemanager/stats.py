@@ -7,6 +7,7 @@ class Stats(object):
         self.besteffortcompleted = []
         self.queuesize = []
         self.queuewait = []
+        self.execwait = []
 
         self.exactacceptedcount = 0
         self.exactrejectedcount = 0
@@ -15,6 +16,8 @@ class Stats(object):
         
         self.utilization = {}
         self.utilizationavg = {}
+
+        self.queuewaittimes = {}
  
         
     def addInitialMarker(self):
@@ -59,27 +62,91 @@ class Stats(object):
             self.queuesize.pop()
         self.queuesize.append((time,self.queuesizecount))
         
-    def addQueueWait(self, wait):
+    def startQueueWait(self, leaseID):
         time = self.rm.time
+        self.queuewaittimes[leaseID] = [time, None, None]
+
+    def stopQueueWait(self, leaseID):
+        time = self.rm.time
+        self.queuewaittimes[leaseID][1] = time
+        start = self.queuewaittimes[leaseID][0]
+        end = self.queuewaittimes[leaseID][1]
+        wait = (end - start).seconds
         self.queuewait.append((time,wait))
+
+    def startExec(self, leaseID):
+        time = self.rm.time
+        self.queuewaittimes[leaseID][2] = time
+        start = self.queuewaittimes[leaseID][0]
+        end = self.queuewaittimes[leaseID][2]
+        wait = (end - start).seconds
+        self.execwait.append((time,wait))
+
         
     def normalizeTimes(self, data):
         return [((v[0] - self.rm.starttime).seconds,v[1]) for v in data]
         
+    def addNoAverage(self, data):
+        return [(v[0],v[1],None) for v in data]
+    
+    def addTimeWeightedAverage(self, data):
+        accum=0
+        prevTime = None
+        startVM = None
+        stats = []
+        for v in data:
+            time = v[0]
+            value = v[1]
+            if prevTime != None:
+                timediff = time - prevTime
+                weightedValue = prevValue*timediff
+                accum += weightedValue
+                average = accum/time
+            else:
+                avg = value
+            stats.append((time, value, avg))
+            prevTime = time
+            prevValue = value
+        
+        return stats        
+    
+    def addAverage(self, data):
+        accum=0
+        count=0
+        startVM = None
+        stats = []
+        for v in data:
+            value = v[1]
+            accum += value
+            count += 1
+            avg = accum/count
+            stats.append((v[0], value, avg))
+        
+        return stats          
+        
     def getExactAccepted(self):
-        return self.normalizeTimes(self.exactaccepted)
+        l = self.normalizeTimes(self.exactaccepted)
+        return self.addNoAverage(l)
     
     def getExactRejected(self):
-        return self.normalizeTimes(self.exactrejected)
+        l = self.normalizeTimes(self.exactrejected)
+        return self.addNoAverage(l)
     
     def getBestEffortCompleted(self):
-        return self.normalizeTimes(self.besteffortcompleted)
+        l = self.normalizeTimes(self.besteffortcompleted)
+        return self.addNoAverage(l)
     
     def getQueueSize(self):
-        return self.normalizeTimes(self.queuesize)
+        l = self.normalizeTimes(self.queuesize)
+        return self.addTimeWeightedAverage(l)
     
     def getQueueWait(self):
-        return self.normalizeTimes(self.queuewait)
+        l = self.normalizeTimes(self.queuewait)
+        return self.addAverage(l)
+
+    def getExecWait(self):
+        l = self.normalizeTimes(self.execwait)
+        return self.addAverage(l)
     
     def getUtilization(self, slottype):
         return self.utilization[slottype]
