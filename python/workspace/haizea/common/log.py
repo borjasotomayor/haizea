@@ -10,6 +10,7 @@ log.addHandler(handler)
 loglevel = {"CRITICAL": 50,
             "ERROR": 40,
             "WARNING": 30,
+            "STATUS": 25,
             "INFO": 20,
             "DEBUG": 10,
             "SQL": 9,
@@ -31,6 +32,10 @@ def edebug(msg, comp, time):
         time = "                      "
     log.log(loglevel["EXTREMEDEBUG"],"[%s] %s %s" % (time,comp.ljust(7),msg))
 
+def status(msg, comp, time):
+    if time == None:
+        time = "                      "
+    log.log(loglevel["STATUS"],"[%s] %s %s" % (time,comp.ljust(7),msg))
     
 def warning(msg, comp, time):
     if time == None:
