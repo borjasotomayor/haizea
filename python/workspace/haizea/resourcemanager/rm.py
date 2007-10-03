@@ -52,6 +52,7 @@ class ResourceManager(object):
                 status("STATUS ---Begin---", constants.RM, self.time)
                 status("STATUS Completed best-effort leases: %i" % self.stats.besteffortcompletedcount, constants.RM, self.time)
                 status("STATUS Queue size: %i" % self.stats.queuesizecount, constants.RM, self.time)
+                status("STATUS Best-effort reservations: %i" % self.scheduler.numbesteffortres, constants.RM, self.time)
                 status("STATUS Accepted exact leases: %i" % self.stats.exactacceptedcount, constants.RM, self.time)
                 status("STATUS Rejected exact leases: %i" % self.stats.exactrejectedcount, constants.RM, self.time)
                 status("STATUS ----End----", constants.RM, self.time)

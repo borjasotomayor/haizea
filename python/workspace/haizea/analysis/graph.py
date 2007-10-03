@@ -21,6 +21,7 @@ class LineGraph(Graph):
         self.legends = legends
 
     def plotToFile(self, graphfile, thumbfile=None):
+        print "Generating graph %s" % graphfile
         Graph.plot(self)        
         largestY = None
         for dataset in self.data:
@@ -38,6 +39,7 @@ class LineGraph(Graph):
         pylab.gcf().clear()
         
         if thumbfile != None:
+            print "Generating thumbnail %s" % thumbfile
             im = Image.open(graphfile)
             im.thumbnail((640, 480), Image.ANTIALIAS)
             im.save(thumbfile)
