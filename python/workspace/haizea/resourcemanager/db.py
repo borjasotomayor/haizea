@@ -90,6 +90,7 @@ class SlotTableDB(object):
         from v_allocslot 
         where ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND""" % (gt)
 
+        filter = ""
         if type != None:
             filter = "slt_id = %i" % type
             if node != None:
@@ -99,8 +100,8 @@ class SlotTableDB(object):
         if slots != None:
             filter = "sl_id in (%s)" % slots.__str__().strip('[]') 
 
-              
-        sql += " AND %s" % filter
+        if filter != "":
+            sql += " AND %s" % filter
         
        # If we can preempt slots, then we're only interested in finding out
        # the available resource when ONLY counting the non-preemptible slots
@@ -120,8 +121,10 @@ class SlotTableDB(object):
 
         # And add slots which are completely free
         sql += " union select nod_id as nod_id, sl_id as sl_id, slt_id as slt_id, sl_capacity as available from v_allocslot va"
-        sql += " where %s" % filter
-        sql += """ and not exists 
+        sql += " where"
+        if filter != "":
+            sql += " %s and " % filter
+        sql += """ not exists 
         (select * from v_allocslot a 
          where a.sl_id=va.sl_id %s and  
          ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND)""" % (preemptfilter, gt)
@@ -132,7 +135,47 @@ class SlotTableDB(object):
         
         return cur          
 
-    def findChangePoints(self, start, end=None, slot=None, closed=True, includeReal=False, withSlots=False):
+    def quickFindAvailableSlots(self, time, closed=True, canpreempt=False):
+        if closed:
+            gt = ">="
+            lt = "<="
+        else:
+            gt = ">"
+            lt = "<"
+            
+        # Select slots which are partially occupied at that time
+        sql = """select nod_id, sl_id, slt_id, sl_capacity - sum(all_amount) as available  
+        from v_allocslot2
+        where ? %s ALL_SCHEDSTART AND ? < ALL_SCHEDEND""" % (gt)
+        
+       # If we can preempt slots, then we're only interested in finding out
+       # the available resource when ONLY counting the non-preemptible slots
+       # (as we will be able to preempt all others if necessary)
+       
+        if canpreempt:
+            preemptfilter = " and rsp_preemptible = 0"
+        else:
+            preemptfilter = ""
+
+        sql += preemptfilter
+        
+        sql += " group by sl_id" 
+
+        #print sql
+        # print time
+        cur = self.getConn().cursor()
+        cur.execute(sql, (time, time))
+        
+        return cur          
+
+    def getSlots(self):
+        sql = "select nod_id, sl_id, slt_id, sl_capacity as available from tb_slot"
+        cur = self.getConn().cursor()
+        cur.execute(sql)
+        
+        return cur
+
+    def findChangePoints(self, start, end=None, slot=None, slots=None, closed=True, includeReal=False, withSlots=False):
         if closed:
             gt = ">="
             lt = "<="
@@ -142,6 +185,8 @@ class SlotTableDB(object):
         
         if slot != None:
             filter = " and sl_id = %i" % slot 
+        elif slots!= None:
+            filter = " and sl_id in (%s)" % slots.__str__().strip('[]') 
         else:
             filter = ""
         

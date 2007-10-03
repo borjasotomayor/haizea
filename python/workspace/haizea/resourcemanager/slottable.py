@@ -21,6 +21,8 @@ class SlotTable(object):
             self.db = db.SQLiteSlotTableDB.toFileFromFile(templatedb, targetdb)
             
         self.createDatabase()
+        
+        self.availabilitywindow = AvailabilityWindow(self.db)
 
         
     def createDatabase(self):
@@ -140,6 +142,7 @@ class SlotTable(object):
 
         db_rsp_ids = []
         if allfits:
+            self.availabilitywindow.flushCache()
             transfers = []
             info("The VM reservations for this lease are feasible", constants.ST, self.rm.time)
             self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
@@ -325,17 +328,17 @@ class SlotTable(object):
         else:
             futurecp = []
 
+        first = changepoints[0]
         
-        availabilitywindow = None
         for p in changepoints:
-            availabilitywindow = AvailabilityWindow(p, resreq, self.db)
-            availabilitywindow.printContents()
+            self.availabilitywindow.initWindow(p, resreq)
+            self.availabilitywindow.printContents()
             
-            if availabilitywindow.fitAtStart() >= numnodes:
+            if self.availabilitywindow.fitAtStart() >= numnodes:
                 start=p
                 maxend = start + remdur
                 realend = start + realdur
-                end, canfit = availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
+                end, canfit = self.availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
         
                 info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.time)
                 
@@ -367,14 +370,14 @@ class SlotTable(object):
         if start == None and canreserve:
             # Check future points
             for p in futurecp:
-                availabilitywindow = AvailabilityWindow(p, resreq, self.db)
-                availabilitywindow.printContents()
+                self.availabilitywindow.initWindow(p, resreq)
+                self.availabilitywindow.printContents()
                 
-                if availabilitywindow.fitAtStart() >= numnodes:
+                if self.availabilitywindow.fitAtStart() >= numnodes:
                     start=p
                     maxend = start + remdur
                     realend = start + realdur
-                    end, canfit = availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
+                    end, canfit = self.availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
             
                     info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.time)
                     
@@ -403,6 +406,8 @@ class SlotTable(object):
         physnodes = canfit.keys()
         physnodes.sort() # Arbitrary, prioritize nodes, as in exact
         
+        self.availabilitywindow.flushCache()
+
         # Make the reservation
         self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
 
@@ -419,7 +424,7 @@ class SlotTable(object):
                     db_rsp_ids.append(rsp_id)
                     for slottype in slottypes:
                         amount = resreq[slottype]
-                        sl_id = availabilitywindow.slot_ids[n][slottype]
+                        sl_id = self.availabilitywindow.slot_ids[n][slottype]
                         self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = realend)
                     vmnode += 1
                     break
@@ -548,16 +553,42 @@ class AvailEntry(object):
 # TODO: Constrain window to only specific nodes (to take into account
 # earliest start times)
 class AvailabilityWindow(object):
-    def __init__(self, time, resreq, db):
-        self.time = time
-        self.resreq = resreq
+    def __init__(self, db):
+        self.time = None
+        self.resreq = None
         self.db = db
+        self.avail = None
+        self.availcache = {}
+        self.slot_ids = None
+
+    def findAvailableSlots(self, time, amount=None, type=None, canpreempt=False, slotfilter=None):
+        if not self.availcache.has_key(time):
+            # Cache miss
+            self.availcache[time] = []
+            availslots = self.db.quickFindAvailableSlots(time, canpreempt=canpreempt)
+            slots = self.db.getSlots()
+            slot_ids = set()
+            for slot in availslots:
+                slot_ids.add(slot["SL_ID"])
+                self.availcache[time].append(slot)
+            
+            for slot in slots:
+                if not slot["SL_ID"] in slot_ids:
+                    self.availcache[time].append(slot)
+        
+        slots = self.availcache[time]
+        if slotfilter != None:
+            slotfilter = set(slotfilter)
+            slots = [s for s in slots if s["SL_ID"] in slotfilter]
+        if type != None and amount != None:
+            slots = [s for s in slots if s["SLT_ID"] == type and s["available"] >= amount]
+         
+        return slots
+        
+    # Generate raw availability at change points
+    def genAvail(self):
         self.avail = {}
         self.slot_ids = {}
-        
-        self.genAvail()
-        
-    def genAvail(self):
         slottypes = self.resreq.keys()
         
         # Initially, this will be a dictionary (key: physnode) of
@@ -570,7 +601,7 @@ class AvailabilityWindow(object):
         for slottype in slottypes:
             needed = self.resreq[slottype]
             
-            slots = self.db.findAvailableSlots(time=self.time, amount=needed, type=slottype, canpreempt=False)
+            slots = self.findAvailableSlots(time=self.time, amount=needed, type=slottype, canpreempt=False)
             for slot in slots:
                 nod_id = slot["NOD_ID"]
                 slot_id = slot["SL_ID"]
@@ -598,13 +629,13 @@ class AvailabilityWindow(object):
                 
 
         # Determine the availability at the subsequent change points
-        changepoints = self.db.findChangePoints(self.time, closed=False)
-        cp = [ISO.ParseDateTime(p["time"]) for p in changepoints.fetchall()]
         slot_ids = [v.values() for v in self.slot_ids.values()]
         slot_ids = [x for y in slot_ids for x in y] # Flatten
         slot_ids = set(slot_ids)
+        changepoints = self.db.findChangePoints(self.time, slots=list(slot_ids), closed=False)
+        cp = [ISO.ParseDateTime(p["time"]) for p in changepoints.fetchall()]
         for p in cp:
-            slots = self.db.findAvailableSlots(time=p, slots=list(slot_ids), canpreempt=False)
+            slots = self.findAvailableSlots(time=p, slotfilter=list(slot_ids), canpreempt=False)
             for slot in slots:
                 nod_id = slot["NOD_ID"]
                 slot_id = slot["sl_id"]
@@ -675,6 +706,14 @@ class AvailabilityWindow(object):
                         canfit.append(int(avail / needed))
                     e.canfit = min(canfit)
                 
+    # Create avail structure
+    def initWindow(self, time, resreq):
+        self.time = time
+        self.resreq = resreq
+        self.genAvail()
+        
+    def flushCache(self):
+        self.availcache = {}
     
     def fitAtStart(self):
         return sum([e[0].canfit for e in self.avail.values()])
