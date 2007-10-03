@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+from workspace.haizea import clients
+import sys
+
+c = clients.Report()
+c.run(sys.argv)
