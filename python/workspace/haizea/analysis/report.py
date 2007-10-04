@@ -1,29 +1,30 @@
 import os
 import workspace.haizea.common.constants as constants
 import workspace.haizea.analysis.graph as graphs
+from workspace.haizea.common.utils import genDataDirName, genTraceInjName
 from pickle import Unpickler
 from mx.DateTime import now
 import shutil
 
 class Section(object):
-    def __init__(self, title, filename, graphtype, profilesdirs, tablefinal = None, maxmin = False):
+    def __init__(self, title, filename, graphtype, tablefinal = None, maxmin = False):
         self.title = title
         self.filename = filename
         self.graphtype = graphtype
         self.graphfile = self.filename + "_" + str(graphtype) + ".png"
         self.thumbfile = self.filename + "_" + str(graphtype) + "-thumb.png"
-        self.profilesdirs = profilesdirs
-        self.profiles = profilesdirs.keys()
-        self.profiles.sort()
         self.tablefinal = tablefinal
+        self.profiles = None
         self.final = {}
         self.maxmin = maxmin
         self.data = {}
         
-    def loadData(self):
+    def loadData(self, dirs):
+        self.profiles = dirs.keys()
+        self.profiles.sort()
         for p in self.profiles:
-            profiledir = self.profilesdirs[p]
-            file = open (profiledir + "/" + self.filename, "r")
+            dir = dirs[p]
+            file = open (dir + "/" + self.filename, "r")
             u = Unpickler(file)
             self.data[p] = u.load()
             file.close()
@@ -95,40 +96,94 @@ class Section(object):
         
         return html
 
- 
+class Report(object):
+    def __init__(self, profiles, tracefiles, injectfiles, statsdir, outdir, css):
+        self.profiles = profiles
 
-class MultiProfileReport(object):
-    def __init__(self, profilesdirs, outdir, css = None):
-        self.profilesdirs = profilesdirs
+        self.statsdir = statsdir
         self.outdir = outdir
         self.css = css
-        
-        # TODO Factor the following out to a configuration file
+    
+        self.traces = []
+        for t in tracefiles:
+            for i in injectfiles:
+                self.traces.append((t,i,genTraceInjName(t,i)))        
+                
         self.sections = [
-                         Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, profilesdirs),
-                         Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
-                         Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, profilesdirs, tablefinal = constants.TABLE_FINALTIME),
-                         Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE, profilesdirs),
-                         Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
-                         Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
-                         ]
+                 Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE),
+                 #Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
+                 Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME)
+                 #Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE, profilesdirs),
+                 #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
+                 #Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
+                 ]
         
-    def generate(self):
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
+
+    def generate(self):
+        self.generateIndex()
+        for t in self.traces:
+            profilesdirs = dict([(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles])
+            self.generateReport(t[2],profilesdirs)
+        
+        for p in self.profiles:
+            tracesdirs = dict([(t[2], self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces])
+            self.generateReport(p, tracesdirs)
+
+    def generateIndex(self):
+        indexfile = open(self.outdir + "/index.html", "w")
+        header = self.generateHTMLHeader()
+        heading = self.generateHeading("Experiment Results")
+        indexfile.write(header + heading)
+        indexfile.write("<hr/>")
+        
+        html  = "<h3>Profile reports</h3>"
+        html += "<ul>"
+        for p in self.profiles:
+            html += "<li>"
+            html += "<a href='%s/index.html'>%s</a>" % (p,p)
+            html += "</li>"
+        html += "</ul>"
+        indexfile.write(html)
+        indexfile.write("<hr/>")
+
+        html  = "<h3>Trace reports</h3>"
+        html += "<ul>"
+        for t in self.traces:
+            html += "<li>"
+            html += "<a href='%s/index.html'>%s</a>" % (t[2],t[2])
+            html += "</li>"
+        html += "</ul>"
+        indexfile.write(html)
+        indexfile.write("<hr/>")
+
+        footer = self.generateHTMLFooter()
+        indexfile.write(footer)
+        
+        indexfile.close()
+        
+        if self.css != None:
+            shutil.copy(self.css, self.outdir)
+        
+    def generateReport(self, name, dirs):
+        outdir = self.outdir + "/" + name
+        if not os.path.exists(outdir):
+            os.makedirs(outdir)
             
         # Load data
         for s in self.sections:
-            s.loadData()
+            s.loadData(dirs)
             
         # Generate graphs
         for s in self.sections:
-            s.generateGraph(self.outdir)
+            s.generateGraph(outdir)
             
-        reportfile = open(self.outdir + "/index.html", "w")
+        reportfile = open(outdir + "/index.html", "w")
         
         header = self.generateHTMLHeader()
-        reportfile.write(header)
+        heading = self.generateHeading(name)
+        reportfile.write(header + heading)
         reportfile.write("<hr/>")
         
         toc = self.generateTOC()
@@ -161,7 +216,7 @@ class MultiProfileReport(object):
         reportfile.close()
         
         if self.css != None:
-            shutil.copy(self.css, self.outdir)
+            shutil.copy(self.css, outdir)
         
     def generateHTMLHeader(self):
         header = """<html>
@@ -171,15 +226,19 @@ class MultiProfileReport(object):
     <meta http-equiv="Content-Language" content="en"/>
     <link rel="stylesheet" type="text/css" href="report.css" media="screen" />
 </head>
-
+"""
+        return header
+    
+    def generateHeading(self, title):
+        heading = """
 <body>
-<h1>Experiment results</h1>
+<h1>%s</h1>
 <hr/>
 <p>
 <strong>Report generation date:</strong> %s
 </p>
-""" % now()
-        return header
+""" % (title, now())
+        return heading
     
     def generateTOC(self):
         toc = "<h5>Table of contents</h5>"
@@ -192,7 +251,7 @@ class MultiProfileReport(object):
         return toc
     
     def generateTableSummary(self):   
-        profiles = self.profilesdirs.keys()
+        profiles = self.profiles
         profiles.sort()
         sections = [s for s in self.sections if s.tablefinal!=None] 
 
@@ -213,7 +272,7 @@ class MultiProfileReport(object):
         return html
     
     def generateCSVSummary(self, csvfile):  
-        profiles = self.profilesdirs.keys()
+        profiles = self.profiles
         profiles.sort()
         sections = [s for s in self.sections if s.tablefinal!=None] 
         
