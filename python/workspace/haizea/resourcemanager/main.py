@@ -18,9 +18,12 @@ def simulate(config, tracefile, tracetype, injectedfile, statsdir):
     requests = None
     if tracetype == constants.TRACE_CSV:
         requests = tracereaders.CSV(tracefile, config)
+    elif tracetype == constants.TRACE_SWF:
+        requests = tracereaders.SWF(tracefile, config)
     elif tracetype == constants.TRACE_GWF:
         requests = tracereaders.GWF(tracefile, config)
-        
+    print len(requests)
+
     if injectedfile != None:
         injectedleases = tracereaders.LWF(injectedfile)
         # TODO: Merge requests and injectedLeases
@@ -67,10 +70,10 @@ def pickle(data, dir, file):
 
 
 if __name__ == "__main__":
-    configfile="../configfiles/test.conf"
+    configfile="../configfiles/das2.conf"
     config = Config()
     config.loadFile(configfile)
-    tracefile="../traces/examples/test_earlyend2.csv"
+    tracefile="../traces/examples/DAS2/das200lines.gwf"
     injectedfile=None
     statsdir="/home/borja/docs/uchicago/research/ipdps/results"
-    simulate(config, tracefile, constants.TRACE_CSV, injectedfile, statsdir)
+    simulate(config, tracefile, constants.TRACE_GWF, injectedfile, statsdir)

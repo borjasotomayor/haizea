@@ -57,8 +57,10 @@ class Simulate(object):
         tracefile=opt.tracefile
         if opt.traceformat == "csv":
             tracetype = constants.TRACE_CSV
+        elif opt.traceformat == "swf":
+            tracetype = constants.TRACE_SWF
         elif opt.traceformat == "gwf":
-            tracetype = constants.TRACE_GSW
+            tracetype = constants.TRACE_GWF
         injectedfile=opt.injectfile
         
         statsdir = opt.statsdir

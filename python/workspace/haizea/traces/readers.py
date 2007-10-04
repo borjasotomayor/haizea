@@ -77,4 +77,61 @@ def CSV(tracefile, config):
     return requests
 
 def GWF(tracefile, config):
-    return None
+    file = open (tracefile, "r")
+    requests = []
+    inittime = config.getInitialTime()
+    traceinittime = None
+    for line in file:
+        if line[0]!='#':
+            req = None
+            fields = line.split()
+            reqtime = float(fields[8])
+            
+            if reqtime > 0 and fields[18] == "UNITARY":
+                tSubmit = int(fields[1]) # 1: Submission time
+                if traceinittime == None:
+                    traceinittime = tSubmit
+                relTSubmit = tSubmit - traceinittime
+                tSubmit = inittime + TimeDelta(seconds=relTSubmit) 
+                vmimage = "NOIMAGE"
+                vmimagesize = 600 # Arbitrary
+                numnodes = int(fields[7]) # 7: reqNProcs
+                resreq = {}
+                resreq[constants.RES_CPU] = 1 # One CPU per VM
+                resreq[constants.RES_MEM] = 512 # Arbitrary (2 VMs per node)
+                resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
+                maxdur = TimeDelta(seconds=reqtime)
+                realdur = TimeDelta(seconds=int(fields[3])) # 3: RunTime
+                req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
+                req.state = constants.LEASE_STATE_PENDING
+                requests.append(req)
+    return requests
+
+def SWF(tracefile, config):
+    file = open (tracefile, "r")
+    requests = []
+    inittime = config.getInitialTime()
+    for line in file:
+        if line[0]!=';':
+            req = None
+            fields = line.split()
+            reqtime = float(fields[8])
+            
+            if reqtime > 0:
+                tSubmit = int(fields[1]) # 1: Submission time
+                tSubmit = inittime + TimeDelta(seconds=tSubmit) 
+                vmimage = "NOIMAGE"
+                vmimagesize = 600 # Arbitrary
+                numnodes = int(fields[7]) # 7: reqNProcs
+                resreq = {}
+                resreq[constants.RES_CPU] = 1 # One CPU per VM
+                resreq[constants.RES_MEM] = 512 # Arbitrary (2 VMs per node)
+                resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
+                maxdur = TimeDelta(seconds=reqtime)
+                realdur = TimeDelta(seconds=int(fields[3])) # 3: RunTime
+                if realdur > maxdur:
+                    realdur = maxdur
+                req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
+                req.state = constants.LEASE_STATE_PENDING
+                requests.append(req)
+    return requests

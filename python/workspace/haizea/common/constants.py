@@ -1,6 +1,7 @@
 # Types of tracefiles
 TRACE_CSV=0
-TRACE_GWF=1
+TRACE_SWF=1
+TRACE_GWF=2
 
 # Types of leases
 LEASE_BESTEFFORT = 0
