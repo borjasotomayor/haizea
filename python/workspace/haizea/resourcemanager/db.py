@@ -448,6 +448,14 @@ class SlotTableDB(object):
         cur.execute(sql, (newstart,end,realend,sl_id,rsp_id,all_schedstart))
         self.changePointCacheDirty = True
 
+    def endReservationPart(self, rsp_id, newend):
+        info( "Updating reservation part %i with new end time %s" % (rsp_id, newend), constants.DB, None)
+        sql = """UPDATE tb_alloc 
+        SET all_schedend=?
+        WHERE rsp_id = ?"""
+        cur = self.getConn().cursor()
+        cur.execute(sql, (rsp_id,newend))
+        self.changePointCacheDirty = True
 
     def suspendAllocation(self, sl_id, rsp_id, all_schedstart, newend=None, nextstart=None, realend=None):
         srvlog.info( "Updating allocation (sl_id: %i, rsp_id: %i) beginning at %s with end time %s and next start time %s" % (sl_id, rsp_id, all_schedstart, newend, nextstart))

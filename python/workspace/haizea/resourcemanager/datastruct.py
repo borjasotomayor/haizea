@@ -1,5 +1,6 @@
 from workspace.haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE
 from workspace.haizea.common.log import edebug
+from operator import attrgetter
 leaseID = 1
 
 def getLeaseID():
@@ -170,6 +171,10 @@ class Queue(object):
     
     def dequeue(self):
         return self.q.pop(0)
+    
+    def enqueueInOrder(self, r):
+        self.q.append(r)
+        self.q.sort(key=attrgetter("tSubmit"))
         
 class LeaseTable(object):
     def __init__(self, scheduler):
@@ -177,7 +182,7 @@ class LeaseTable(object):
         self.entries = {}
         
     def getLease(self, leaseID):
-        return entries[leaseID]
+        return self.entries[leaseID]
     
     def isEmpty(self):
         return len(self.entries)==0
@@ -187,6 +192,16 @@ class LeaseTable(object):
         
     def add(self, lease):
         self.entries[lease.leaseID] = lease
+        
+    def getLeaseFromRSPIDs(self, rsp_ids):
+        ids = set(rsp_ids)
+        leases = []
+        for l in self.entries.values():
+            for rr in l.rr:
+                if len(ids & set(rr.db_rsp_ids)) > 0:
+                    leases.append(l)
+                    break
+        return leases
     
     
 

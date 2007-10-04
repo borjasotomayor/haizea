@@ -4,6 +4,7 @@ from operator import attrgetter
 import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.db as db
 from workspace.haizea.common.log import info, debug, warning, edebug
+from pysqlite2.dbapi2 import IntegrityError
 
 class SlotFittingException(Exception):
     pass
@@ -125,17 +126,20 @@ class SlotTable(object):
                             assignment[vwnode][slottype] = candidatenodes[physnode][slottype][1]
                             nodeassignment[vwnode] = physnode
                             # See how much we have to preempt
-                            # Precond: res > candidatenodes[physnode][slottype][2]
                             if candidatenodes[physnode][slottype][2] > 0:
-                                res -= candidatenodes[physnode][slottype][2]
-                                candidatenodes[physnode][slottype][2] = 0
+                                if res > candidatenodes[physnode][slottype][2]:
+                                    res -= candidatenodes[physnode][slottype][2]
+                                    candidatenodes[physnode][slottype][2] = 0
+                                else:
+                                    res = 0
+                                    candidatenodes[physnode][slottype][2] -= res
                             candidatenodes[physnode][slottype][3] -= res
                             if not mustpreempt.has_key(physnode):
                                 mustpreempt[physnode] = {}
                             if not mustpreempt[physnode].has_key(slottype):
                                 mustpreempt[physnode][slottype]=res                                
                             else:
-                                mustpreempt[physnode][slottype]+=res                                
+                                mustpreempt[physnode][slottype]+=res                              
                         break # Ouch
                 else:
                     raise SlotFittingException, "Could not fit node %i in any physical node (w/preemption)" % vwnode
@@ -157,7 +161,7 @@ class SlotTable(object):
                     self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = prematureend)
             return nodeassignment, mustpreempt, transfers, db_rsp_ids
         else:
-            raise SlotFittingException
+            raise SlotFittingException        
         
     def candidateNodesInRange(self, start, end, resreq, canpreempt):
         slottypes = resreq.keys()
@@ -311,6 +315,134 @@ class SlotTable(object):
             
         return candidatenodes
 
+    def findLeasesToPreempt(self, mustpreempt, startTime, endTime):
+        def comparepreemptability(x,y):
+            leaseIDX = x["RES_ID"]
+            leaseIDY = y["RES_ID"]
+            
+            leaseX = self.scheduler.scheduledleases.getLease(leaseIDX)
+            leaseY = self.scheduler.scheduledleases.getLease(leaseIDY)
+            if leaseX.tSubmit > leaseY.tSubmit:
+                return constants.BETTER
+            elif leaseX.tSubmit < leaseY.tSubmit:
+                return constants.WORSE
+            else:
+                return constants.EQUAL        
+        
+        # Get allocations at the specified time
+        for node in mustpreempt.keys():
+            preemptibleAtStart = {}
+            preemptibleAtMiddle = {}
+            cur = self.db.getCurrentAllocationsInNode(startTime, node, rsp_preemptible=True)
+            cur = cur.fetchall()
+            for alloc in cur:
+                restype=alloc["slt_id"]
+                # Make sure this allocation falls within the preemptible period
+                start = ISO.ParseDateTime(alloc["all_schedstart"])
+                end = ISO.ParseDateTime(alloc["all_schedend"])
+                if start < startTime and end > startTime:
+                    if not preemptibleAtStart.has_key(restype):
+                        preemptibleAtStart[restype] = []
+                    preemptibleAtStart[restype].append(alloc)
+                elif start < endTime and end > startTime:
+                    if not preemptibleAtMiddle.has_key(restype):
+                        preemptibleAtMiddle[restype] = []
+                    preemptibleAtMiddle[restype].append(alloc)
+
+            # Reservation parts we will be preempting
+            resparts = set()
+            leasesStart = set()
+            leasesMiddle = set()
+            respartsinfo = {}
+
+            # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
+            # These can potentially be already running, so we want to choose
+            # the ones which will be least impacted by being preempted
+            
+            if len(preemptibleAtStart) > 0:
+                # Order preemptible resources
+                for restype in preemptibleAtStart.keys():
+                    preemptibleAtStart[restype].sort(comparepreemptability)
+
+                # Start marking resources for preemption, until we've preempted
+                # all the resources db need.
+                for restype in mustpreempt[node].keys():
+                    amountToPreempt = mustpreempt[node][restype]
+                    for alloc in preemptibleAtStart[restype]:
+                        amount = alloc["all_amount"]
+                        amountToPreempt -= amount
+                        rsp_key = alloc["rsp_id"]
+                        resparts.add(rsp_key)
+                        leasesStart.add(alloc["res_id"])
+                        respartsinfo[rsp_key] = alloc
+                        if amountToPreempt <= 0:
+                            break # Ugh
+            
+            # Second step: CHOOSE RESOURCES TO PREEMPT DURING RESERVATION
+            # These cannot be running, so we greedily choose the largest resources
+            # first, to minimize the number of preempted resources. This algorithm
+            # could potentially also take into account the scheduled starting time
+            # of the preempted resource (later is better)
+            
+            if len(preemptibleAtMiddle) > 0:
+                # Find changepoints
+                changepoints = Set()
+                for restype in mustpreempt[node].keys():
+                    for alloc in preemptibleAtMiddle[restype]:
+                        start = ISO.ParseDateTime(alloc["all_schedstart"])
+                        end = ISO.ParseDateTime(alloc["all_schedend"])
+                        if start < endTime:
+                            changepoints.add(start)
+                        if end < endTime:
+                            changepoints.add(end)
+                        
+                changepoints = list(changepoints)
+                changepoints.sort()
+                
+                #print resparts
+                
+                # Go through changepoints and, at each point, make sure we have enough
+                # resources
+                for changepoint in changepoints:
+                    #print changepoint
+                    for restype in mustpreempt[node].keys():
+                        # Find allocations in that changepoint
+                        allocs = []
+                        amountToPreempt = mustpreempt[node][restype]
+                        preemptallocs = preemptibleAtMiddle[restype]
+                        if len(preemptibleAtStart) > 0:
+                            preemptallocs += preemptibleAtStart[restype]
+                        for alloc in preemptallocs:
+                            start = ISO.ParseDateTime(alloc["all_schedstart"])
+                            end = ISO.ParseDateTime(alloc["all_schedend"])
+                            rsp_id = alloc["rsp_id"]
+                            # Only choose it if we have not already decided to preempt it
+                            if start <= changepoint and changepoint < end:
+                                #print rsp_id
+                                if not rsp_id in resparts:
+                                    allocs.append(alloc)
+                                else:
+                                    amountToPreempt -= alloc["all_amount"]
+                        allocs.sort(comparepreemptability)
+                        #print [v["rsp_id"] for v in allocs]
+                        for alloc in allocs:
+                            if amountToPreempt <= 0:
+                                break # Ugh
+                            amount = alloc["all_amount"]
+                            amountToPreempt -= amount
+                            rsp_key = alloc["rsp_id"]
+                            #print rsp_key, amountToPreempt
+                            resparts.add(rsp_key)
+                            leasesMiddle.add(alloc["res_id"])
+                            respartsinfo[rsp_key] = alloc
+
+            info("Preempting leases (at start of reservation): %s" % leasesStart, constants.ST, None)
+            info("Preempting leases (in middle of reservation): %s" % leasesMiddle, constants.ST, None)
+            leases = list(leasesStart | leasesMiddle)
+            
+            return leases
+
+
     def fitBestEffort(self, leaseID, earliest, remdur, vmimage, numnodes, resreq, canreserve, realdur, preemptible = True):
         slottypes = resreq.keys()
         start = None
@@ -345,6 +477,7 @@ class SlotTable(object):
                 if end < maxend:
                     mustsuspend=True
                     info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
+                    
                     if preemptible:
                         # It the lease is preemptible, just keep the current selection
                         break
@@ -364,6 +497,9 @@ class SlotTable(object):
             elif mustsuspend and not preemptible:
                 raise SlotFittingException, "Scheduling this lease would require preempting it, which is not allowed"
 
+        if start != None and mustsuspend and not preemptible:
+            start = None # No satisfactory start time
+            
         # TODO Factor out common code in the above loop and the following one
         # TODO Better logging
         
@@ -393,7 +529,10 @@ class SlotTable(object):
                     else:
                         mustsuspend=False
                         # We've found a satisfactory starting time
-                        break        
+                        break   
+
+        if mustsuspend and not preemptible:
+            raise SlotFittingException, "Scheduling this lease would require preempting it, which is not allowed"
 
         if start in futurecp:
             reservation = True
@@ -409,7 +548,10 @@ class SlotTable(object):
         self.availabilitywindow.flushCache()
 
         # Make the reservation
-        self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
+        try:
+            self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
+        except IntegrityError, msg:
+            pass # Ignore these for now. TODO: Redesign DB to remove TB_RESERVATION
 
         mappings = {}
         vmnode = 1
@@ -420,7 +562,7 @@ class SlotTable(object):
                     canfit[n] -= 1
                     mappings[vmnode] = n
                     rsp_name = "VM %i" % (vmnode)
-                    rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, False)
+                    rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible)
                     db_rsp_ids.append(rsp_id)
                     for slottype in slottypes:
                         amount = resreq[slottype]
@@ -428,7 +570,7 @@ class SlotTable(object):
                         self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = realend)
                     vmnode += 1
                     break
-            
+
         return mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids
 
 
@@ -540,6 +682,9 @@ class SlotTable(object):
     def updateEndTimes(self, db_rsp_ids, realend):
         for rsp_id in db_rsp_ids:
             self.db.setEndtimeToRealend(rsp_id, realend)
+            
+    def updateLeaseEnd(self, rsp_id, newend):
+        self.db.endReservationPart(rsp_id, newend)
 
 class AvailEntry(object):
     def __init__(self, time, avail, availpreempt = None):
@@ -770,7 +915,7 @@ class AvailabilityWindow(object):
                 contents += "} (Fits: %i) ]  " % x.canfit
             edebug(contents, constants.ST, None)
                 
-            
+
                 
                           
                           

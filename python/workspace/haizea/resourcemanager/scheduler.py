@@ -103,6 +103,9 @@ class Scheduler(object):
         prematureend = (rr.realend != None and rr.realend < rr.end)
         if prematureend:
             info("LEASE-%i This is a premature end." % l.leaseID, constants.SCHED, self.rm.time)
+        if isinstance(l,ds.BestEffortLease):
+            l.remdur -= self.rm.time - rr.start
+            l.realremdur -= self.rm.time - rr.start
         if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE:
             l.state = constants.LEASE_STATE_DONE
             rr.state = constants.RES_STATE_DONE
@@ -115,12 +118,22 @@ class Scheduler(object):
             if isinstance(l,ds.BestEffortLease):
                 self.rm.stats.incrBestEffortCompleted()            
         elif rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
-            pass
-            #if not prematureend:
-            #    rr.realend = rr.end
-            #else:
-            #    self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
-            #    # TODO: Clean up next reservations
+            if isinstance(l,ds.BestEffortLease):
+                if not prematureend:
+                    rr.realend = rr.end
+                    l.state = constants.LEASE_STATE_SUSPENDED
+                    rr.state = constants.RES_STATE_DONE
+                    self.scheduledleases.remove(l)
+                    self.queue.enqueueInOrder(l)
+                    self.rm.stats.incrQueueSize()
+                else:
+                    l.state = constants.LEASE_STATE_DONE
+                    rr.state = constants.RES_STATE_DONE
+                    self.completedleases.add(l)
+                    self.scheduledleases.remove(l)
+                    self.rm.stats.incrBestEffortCompleted()            
+                    self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
+                    # TODO: Clean up next reservations
         
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
@@ -134,7 +147,9 @@ class Scheduler(object):
             (mappings, preemptions, transfers, db_rsp_ids) = self.slottable.fitExact(req.leaseID, req.start, req.end, req.vmimage, req.numnodes, req.resreq, prematureend=req.prematureend, preemptible=False, canpreempt=True)
             if len(preemptions) > 0:
                 info("Must preempt the following: %s" % preemptions, constants.SCHED, self.rm.time)
-                self.preemptResources(mustpreempt, startTime, endTime)
+                leases = self.slottable.findLeasesToPreempt(preemptions, req.start, req.end)
+                for l in leases:
+                    self.scheduleSuspension(self.scheduledleases.getLease(l), time=req.start)
             
             # Schedule image transfers
             dotransfer = False
@@ -164,7 +179,8 @@ class Scheduler(object):
         earliest = dict([(node+1, [self.rm.time,constants.TRANSFER_NO]) for node in range(numnodes)])
         try:
             canreserve = self.canReserveBestEffort()
-            (mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realremdur, preemptible=False)
+            preemptible = self.rm.config.isSuspensionAllowed()
+            (mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realremdur, preemptible=preemptible)
             # Schedule image transfers
             dotransfer = False
             
@@ -174,9 +190,16 @@ class Scheduler(object):
                 req.state = constants.LEASE_STATE_DEPLOYED            
 
             # Add resource reservations
-            vmrr = ds.VMResourceReservation(start, end, realend, mappings, constants.ONCOMPLETE_ENDLEASE, reservation, db_rsp_ids)
+            if mustsuspend:
+                oncomplete = constants.ONCOMPLETE_SUSPEND
+            else:
+                oncomplete = constants.ONCOMPLETE_ENDLEASE
+            vmrr = ds.VMResourceReservation(start, end, realend, mappings, oncomplete, reservation, db_rsp_ids)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
+            
+            if mustsuspend:
+                self.scheduleSuspension(req)
             
             if reservation:
                 self.numbesteffortres += 1
@@ -185,6 +208,23 @@ class Scheduler(object):
         except SlotFittingException, msg:
             self.slottable.rollback()
             raise SchedException, "The requested best-effort lease is infeasible. Reason: %s" % msg
+        
+    def scheduleSuspension(self, req, time = None):
+        rr = req.rr[-1]
+        rr.oncomplete = constants.ONCOMPLETE_SUSPEND
+        if time != None:
+            if req.state in (constants.LEASE_STATE_SCHEDULED, constants.LEASE_STATE_DEPLOYED):
+                if rr.backfillres == True:
+                    self.numbesteffortres -= 1
+                del req.rr[-1]
+                self.scheduledleases.remove(req)
+                self.queue.enqueueInOrder(req)
+                self.rm.stats.incrQueueSize()
+            else:
+                rr.end = time
+                for rsp_id in rr.db_rsp_ids:
+                    self.slottable.updateLeaseEnd(rsp_id, time)
+        # Schedule suspensions RRs
         
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
         pass
