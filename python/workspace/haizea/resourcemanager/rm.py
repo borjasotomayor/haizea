@@ -30,7 +30,7 @@ class ResourceManager(object):
             return None
         
     def run(self):
-        info("Starting resource manager", constants.RM, self.time)
+        status("Starting resource manager", constants.RM, self.time)
         self.stats.addInitialMarker()
         prevstatustime = self.time
         while self.scheduler.existsScheduledLeases() or self.existsPendingReq() or not self.scheduler.isQueueEmpty():
@@ -69,12 +69,13 @@ class ResourceManager(object):
             if nextchangepoint == self.time:
                 self.time = self.scheduler.slottable.getNextChangePoint(self.time)
 
+        status("Simulation done, generating stats...", constants.RM, self.time)
         self.stats.addFinalMarker()
         
         # Get utilization stats
         util = self.scheduler.slottable.genUtilizationStats(self.starttime)
         self.stats.utilization[constants.RES_CPU] = util
-        info("Stopping resource manager", constants.RM, self.time)
+        status("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()
             
