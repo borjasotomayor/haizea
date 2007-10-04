@@ -77,14 +77,30 @@ def rstate_str(s):
 PROFILES_SEC="profiles"
 NAMES_OPT="names"
 
+TRACES_SEC="traces"
+TRACEDIR_OPT="tracedir"
+TRACEFILES_OPT="tracefiles"
+
+INJECTIONS_SEC="leaseinjections"
+INJDIR_OPT="injectiondir"
+INJFILES_OPT="injectionfiles"
+
+RUN_SEC="run"
+PROFILES_OPT="profiles"
+TRACES_OPT="traces"
+INJS_OPT="injections"
+
 GENERAL_SEC="general"
 LOGLEVEL_OPT="loglevel"
 PROFILE_OPT="profile"
 SUSPENSION_OPT="suspension"
 RESERVATIONS_OPT="besteffort-reservations"
+TRACEFILE_OPT="tracefile"
+INJFILE_OPT="injectionfile"
 
 REPORTING_SEC="reporting"
 CSS_OPT="css"
+REPORTDIR_OPT="reportdir"
 
 SIMULATION_SEC="simulation"
 STARTTIME_OPT="starttime"

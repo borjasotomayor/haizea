@@ -8,23 +8,25 @@ from workspace.haizea.common.config import Config
 from workspace.haizea.common.log import log, loglevel
 from pickle import Pickler, Unpickler
 
-def simulate(config, tracefile, tracetype, injectedfile, statsdir):
+def simulate(config, statsdir):
     level = config.getLogLevel()
     log.setLevel(loglevel[level])
 
+    tracefile = config.getTracefile()
+    injectfile = config.getInjectfile()
     
     # Read trace file
     # Requests is a list of lease requests
     requests = None
-    if tracetype == constants.TRACE_CSV:
+    if tracefile.endswith(".csv"):
         requests = tracereaders.CSV(tracefile, config)
-    elif tracetype == constants.TRACE_SWF:
+    elif tracefile.endswith(".swf"):
         requests = tracereaders.SWF(tracefile, config)
-    elif tracetype == constants.TRACE_GWF:
+    elif tracefile.endswith(".gwf"):
         requests = tracereaders.GWF(tracefile, config)
     print len(requests)
 
-    if injectedfile != None:
+    if injectfile != None:
         injectedleases = tracereaders.LWF(injectedfile)
         # TODO: Merge requests and injectedLeases
         
@@ -34,7 +36,7 @@ def simulate(config, tracefile, tracetype, injectedfile, statsdir):
     
     # Write data to disk
     profile = config.getProfile()
-    dir = statsdir + "/" + utils.genDataDirName(profile, tracefile, injectedfile)
+    dir = statsdir + "/" + utils.genDataDirName(profile, tracefile, injectfile)
     
     writeDataToDisk(resourceManager, dir)
     
