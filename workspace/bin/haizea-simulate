@@ -1,7 +1,12 @@
 #!/usr/bin/python
 
 from workspace.haizea import clients
+import workspace.haizea.resourcemanager.slottable as st
 import sys
+#import psyco
+
+#psyco.log()
+#psyco.full()
 
 c = clients.Simulate()
 c.run(sys.argv)
