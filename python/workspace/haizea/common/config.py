@@ -1,18 +1,82 @@
 import ConfigParser
 from mx.DateTime import ISO
 import workspace.haizea.common.constants as constants
+import workspace.haizea.common.stats as stats
+import os.path
 
 class Config(object):
-    def __init__(self):
-        self.config = None
-        
-    def loadFile(self, configfile):
-        file = open (configfile, "r")
-        self.config = ConfigParser.ConfigParser()
-        self.config.readfp(file)
-        
-    def loadFromConfig(self, config):
+    def __init__(self, config):
         self.config = config
+        
+    @classmethod
+    def fromFile(cls, configfile):
+        file = open (configfile, "r")
+        c = ConfigParser.ConfigParser()
+        c.readfp(file)
+        return cls(c)
+       
+    def createDiscreteDistributionFromSection(self, section):
+        distType = self.config.get(section, constants.DISTRIBUTION_OPT)
+        probs = None
+        if self.config.has_option(section, constants.MIN_OPT) and self.config.has_option(section, constants.MAX_OPT):
+            min = self.config.getint(section, constants.MIN_OPT)
+            max = self.config.getint(section, constants.MAX_OPT)
+            values = range(min,max+1)
+        elif self.config.has_option(section, constants.ITEMS_OPT):
+            pass
+        elif self.config.has_option(section, constants.ITEMSPROBS_OPT):
+            pass
+        elif self.config.has_option(section, constants.ITEMSFILE_OPT):
+            filename = config.get(section, constants.ITEMSFILE_OPT)
+            file = open (filename, "r")
+            values = []
+            for line in file:
+                value = line.strip().split(";")[0]
+                values.append(value)
+        elif self.config.has_option(section, constants.ITEMSPROBSFILE_OPT):
+            itemsprobsOpt = self.config.get(section, constants.ITEMSPROBSFILE_OPT).split(",")
+            itemsFile = open(itemsprobsOpt[0], "r")
+            probsField = int(itemsprobsOpt[1])
+            values = []
+            probs = []
+            for line in itemsFile:
+                fields = line.split(";")
+                itemname = fields[0]
+                itemprob = float(fields[probsField])/100
+                values.append(itemname)
+                probs.append(itemprob)
+        dist = None
+        if distType == constants.DIST_UNIFORM:
+            dist = stats.DiscreteUniformDistribution(values)
+        elif distType == constants.DIST_EXPLICIT:
+            if probs == None:
+                raise Exception, "No probabilities specified"
+            dist = stats.DiscreteDistribution(values, probs) 
+            
+        return dist
+        
+    def createContinuousDistributionFromSection(self, section):
+        distType = self.config.get(section, DISTRIBUTION_OPT)
+        min = self.config.getfloat(section, MIN_OPT)
+        max = self.config.get(section, MAX_OPT)
+        if max == "unbounded":
+            max = float("inf")
+        if distType == "uniform":
+            dist = stats.ContinuousUniformDistribution(min, max)
+        elif distType == "normal":
+            mu = self.config.getfloat(section, MEAN_OPT)
+            sigma = self.config.getfloat(section, STDEV_OPT)
+            dist = stats.ContinuousNormalDistribution(min,max,mu,sigma)
+        elif distType == "pareto":
+            pass 
+        
+        return dist
+        
+
+        
+class RMConfig(Config):
+    def __init__(self, config):
+        Config.__init__(self, config)
         
     def getInitialTime(self):
         timeopt = self.config.get(constants.SIMULATION_SEC,constants.STARTTIME_OPT)
@@ -60,11 +124,9 @@ class Config(object):
             return injfile
 
     
-class MultiConfig(object):
-    def __init__(self, configfile):
-        file = open (configfile, "r")
-        self.config = ConfigParser.ConfigParser()
-        self.config.readfp(file)  
+class RMMultiConfig(Config):
+    def __init__(self, config):
+        Config.__init__(self, config)
         
     def getProfiles(self):
         names = self.config.get(constants.PROFILES_SEC, constants.NAMES_OPT).split(",")
@@ -84,6 +146,7 @@ class MultiConfig(object):
             traces = self.getTracefiles()
         else:
             traces = traces.split()
+
         return traces
 
     def getInjSubset(self, sec):
@@ -139,8 +202,7 @@ class MultiConfig(object):
                     else:
                         inj = injectfile
                     profileconfig.set(constants.GENERAL_SEC, constants.INJFILE_OPT, inj)
-                    c = Config()
-                    c.loadFromConfig(profileconfig)
+                    c = RMConfig(profileconfig)
                     configs.append(c)
         
         return configs
@@ -157,8 +219,10 @@ class MultiConfig(object):
         confs = []
         for c in configs:
             p = c.getProfile()
-            t = c.getTracefile()
+            t = os.path.basename(c.getTracefile())
             i = c.getInjectfile()
+            if i != None: 
+                i = os.path.basename(i)
             
             if p in profiles and t in traces and i in injs:
                 confs.append(c)
@@ -174,11 +238,29 @@ class MultiConfig(object):
         confs = []
         for c in configs:
             p = c.getProfile()
-            t = c.getTracefile()
+            t = os.path.basename(c.getTracefile())
             i = c.getInjectfile()
+            if i != None: 
+                i = os.path.basename(i)
             
             if p in profiles and t in traces and i in injs:
                 confs.append(c)
                 
         return confs
+        
+        
+class TraceConfig(Config):
+    def __init__(self, c):
+        Config.__init__(self, c)
+        self.intervaldist = self.createDiscreteDistributionFromSection(constants.INTERVAL_SEC)
+        self.numnodesdist = self.createDiscreteDistributionFromSection(constants.NUMNODES_SEC)
+        self.deadlinedist = self.createDiscreteDistributionFromSection(constants.DEADLINE_SEC)
+        self.durationdist = self.createDiscreteDistributionFromSection(constants.DURATION_SEC)
+        self.imagesdist = self.createDiscreteDistributionFromSection(constants.IMAGES_SEC)
+        
+    def getTraceDuration(self):
+        return self.config.getint(constants.GENERAL_SEC, constants.DURATION_OPT)
+        
+    def getDuration(self):
+        return self.durationdist.get()
         

@@ -1,4 +1,4 @@
-from workspace.haizea.common.config import MultiConfig
+from workspace.haizea.common.config import RMMultiConfig
 from workspace.haizea.analysis.report import Report
 from workspace.haizea.common.utils import genDataDirName, genTraceInjName
 
