@@ -1,7 +1,8 @@
 import workspace.haizea.common.constants as constants
 from workspace.haizea.resourcemanager.main import simulate
+from workspace.haizea.traces.generators import generateTrace
 from workspace.haizea.common.utils import Option, OptionParser, generateScripts
-from workspace.haizea.common.config import Config, MultiConfig
+from workspace.haizea.common.config import RMConfig, RMMultiConfig, TraceConfig
         
 class Report(object):
     def __init__(self):
@@ -17,7 +18,7 @@ class Report(object):
         opt, args = p.parse_args(argv)
         
         configfile=opt.conf
-        multiconfig = MultiConfig(configfile)
+        multiconfig = RMMultiConfig.fromFile(configfile)
             
         statsdir = opt.statsdir
 
@@ -35,12 +36,29 @@ class Simulate(object):
         opt, args = p.parse_args(argv)
         
         configfile=opt.conf
-        config = Config()
-        config.loadFile(configfile)
+        config = RMConfig.fromFile(configfile)
       
         statsdir = opt.statsdir
         
         simulate(config, statsdir)
+     
+class TraceGenerator(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        p.add_option(Option("-f", "--tracefile", action="store", type="string", dest="tracefile", required=True))
+
+        opt, args = p.parse_args(argv)
+        
+        configfile=opt.conf
+        config = TraceConfig.fromFile(configfile)
+        
+        tracefile = opt.tracefile
+
+        generateTrace(config, tracefile)     
         
 class GenScripts(object):
     def __init__(self):
@@ -54,7 +72,7 @@ class GenScripts(object):
         opt, args = p.parse_args(argv)
         
         configfile=opt.conf
-        multiconfig = MultiConfig(configfile)
+        multiconfig = RMMultiConfig.fromFile(configfile)
         
         dir = opt.dir
 

@@ -148,3 +148,27 @@ GRAPH_LINE_AVG=1
 GRAPH_STEP_VALUE=2
 GRAPH_POINT_VALUE=3
 GRAPH_POINTLINE_VALUEAVG=4
+
+
+# Trace config file secs and opts
+INTERVAL_SEC = "interval"
+NUMNODES_SEC = "numnodes"
+DURATION_SEC = "duration"
+DEADLINE_SEC = "deadline"
+IMAGES_SEC = "images"
+
+BANDWIDTH_OPT = "bandwidth"
+DURATION_OPT = "duration"
+
+DISTRIBUTION_OPT = "distribution"
+MIN_OPT = "min"
+MAX_OPT = "max"
+ITEMS_OPT = "items"
+ITEMSPROBS_OPT = "itemswithprobs"
+MEAN_OPT = "mean"
+STDEV_OPT = "stdev"
+
+
+
+DIST_UNIFORM = "uniform"
+DIST_EXPLICIT = "explicit"
