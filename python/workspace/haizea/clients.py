@@ -1,6 +1,5 @@
 import workspace.haizea.common.constants as constants
 from workspace.haizea.resourcemanager.main import simulate
-from workspace.haizea.analysis.main import report
 from workspace.haizea.common.utils import Option, OptionParser, generateScripts
 from workspace.haizea.common.config import Config, MultiConfig
         
@@ -9,6 +8,8 @@ class Report(object):
         pass
     
     def run(self, argv):
+        from workspace.haizea.analysis.main import report
+
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
         p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))

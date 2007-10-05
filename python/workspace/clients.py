@@ -67,6 +67,7 @@ class Cooker(object):
         p.add_option(Option("-a", "--admission-control", action="store_true", dest="admission"))
         p.add_option(Option("-g", "--ratio-guarantee", action="store_true", dest="ratio"))
         p.add_option(Option("-m", "--max-attempts", action="store", type="int", dest="attempts", default=10))
+        p.add_option(Option("-n", "--nodes", action="store", type="int", dest="nodes", default=-1))
         p.set_defaults(admission=False)
 
         opt, args = p.parse_args(argv)
@@ -79,13 +80,22 @@ class Cooker(object):
             trace = result[0]
             totalDurationAR = result[1]
             totalDurationBatch = result[2]
-            totalDuration = totalDurationAR + totalDurationBatch
 
-            maxDuration = c.conf.traceDuration
-            if  totalDuration <= maxDuration:
-                sys.stderr.write("ATTEMPT #%i: Insufficient duration. Expected >= %i   Real: %i\n" % (attempt, maxDuration, totalDuration))
-                attempt += 1
-                continue
+            if opt.nodes>0:
+                totalDuration = totalDurationAR + totalDurationBatch
+                totalDuration = totalDuration / opt.nodes
+
+                maxDuration = c.conf.traceDuration
+                if totalDuration < maxDuration:
+                    sys.stderr.write("ATTEMPT #%i: Insufficient duration. Expected >= %i   Real: %i\n" % (attempt, maxDuration, totalDuration))
+                    attempt += 1
+                    continue
+
+                excessiveDuration = maxDuration * 1.05
+                if totalDuration > excessiveDuration:
+                    sys.stderr.write("ATTEMPT #%i: Excessive duration. Expected <= %.2f   Real: %i\n" % (attempt, excessiveDuration, totalDuration))
+                    attempt += 1
+                    continue
             
             arPercent = float(c.conf.config.get(cooker.GENERAL_SEC, cooker.AR_OPT))/100
             batchPercent = float(c.conf.config.get(cooker.GENERAL_SEC, cooker.BATCH_OPT))/100

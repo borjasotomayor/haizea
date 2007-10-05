@@ -1,4 +1,5 @@
 import optparse
+import os.path
 
 class Option (optparse.Option):
     ATTRS = optparse.Option.ATTRS + ['required']
@@ -48,19 +49,19 @@ def genDataDirName(profile, tracefile, injectedfile):
 
 def generateScripts(multiconfigfilename, multiconfig, dir):
     configs = multiconfig.getConfigsToRun()
-    
+    dir = os.path.abspath(dir)    
     condor = open(dir + "/condor_submit", "w")
     sh = open(dir + "/run.sh", "w")
     reportsh = open(dir + "/report.sh", "w")
     
     condor.write("Universe   = vanilla\n")
-    condor.write("Executable = /opt/python2.5/bin/python2.5\n")
+    condor.write("Executable = /opt/python/python-2.5/bin/python2.5\n")
     condor.write("transfer_executable = false\n")
     condor.write("getenv = true\n")
     condor.write("requirements = Mips >= 2000 && Machine != \"sox.cs.uchicago.edu\" && Machine != \"nefarious.cs.uchicago.edu\"\n")
     condor.write("Log        = experiment-indiv.log\n")
-    condor.write("Output     = experiment-indiv.\$(Process).out\n")
-    condor.write("Error      = experiment-indiv.\$(Process).error\n\n")
+    condor.write("Output     = experiment-indiv.$(Process).out\n")
+    condor.write("Error      = experiment-indiv.$(Process).error\n\n")
     
     sh.write("#!/bin/bash\n\n")
     
@@ -80,9 +81,9 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
         condor.write("Arguments  = %s\n" % command)
         condor.write("Queue\n\n")
         
-        sh.write("%s\n" % command)
+        sh.write("python2.5 %s\n" % command)
     
-    reportsh.write("/home/borja/bin/vw/haizea-report -c %s -s /home/borja/docs/uchicago/research/experiments/haizea/data\n" % multiconfigfilename)
+    reportsh.write("python2.5 /home/borja/bin/vw/haizea-report -c %s -s /home/borja/docs/uchicago/research/experiments/haizea/data\n" % multiconfigfilename)
     
     condor.close()
     sh.close()

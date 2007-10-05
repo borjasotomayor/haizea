@@ -199,7 +199,7 @@ class SlotTableDB(object):
             sql+=" and all_schedstart %s '%s'" % (lt,end)
         sql += filter
 
-        field = "all_schedend"
+        field = "all_schedend as time"
         if withSlots:
             field += ", sl_id"        
         sql += """ union select distinct %s from tb_alloc where
@@ -219,7 +219,7 @@ class SlotTableDB(object):
         sql += " order by time"
         cur = self.getConn().cursor()
         cur.execute(sql)
-        
+
         return cur
 
     def findChangePointsInNode(self, start, node, end=None, closed=True, includeReal=False):

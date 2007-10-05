@@ -316,9 +316,10 @@ class EARS(object):
 
         if diskusagecombined:
             values = [diskusagestats[profile] for profile in self.profilenames]
-            g1 = StepGraph(values, "Time (s)", "Max disk used")
+            g1 = StepGraph(values, "Time (s)", "Peak disk usage (MB)")
             g1.plot()
             pylab.gca().xaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
+            pylab.gca().yaxis.set_major_formatter(matplotlib.ticker.FormatStrFormatter('%d'))
             lengths = [len(l) for l in diskusagestats.values()]
             #pylab.ylim(0, max(lengths)+1)
             pylab.legend(self.profilenames, loc='upper right')
