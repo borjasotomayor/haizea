@@ -4,9 +4,10 @@ import workspace.haizea.resourcemanager.rm as rm
 import workspace.haizea.traces.readers as tracereaders
 import workspace.haizea.common.constants as constants
 import workspace.haizea.common.utils as utils
-from workspace.haizea.common.config import Config
+from workspace.haizea.common.config import RMConfig
 from workspace.haizea.common.log import log, loglevel
 from pickle import Pickler, Unpickler
+import operator
 
 def simulate(config, statsdir):
     level = config.getLogLevel()
@@ -27,9 +28,10 @@ def simulate(config, statsdir):
     print len(requests)
 
     if injectfile != None:
-        injectedleases = tracereaders.LWF(injectedfile)
-        # TODO: Merge requests and injectedLeases
-        
+        injectedleases = tracereaders.LWF(injectfile, config)
+        requests += injectedleases
+        requests.sort(key=operator.attrgetter("tSubmit"))
+    
     resourceManager = rm.ResourceManager(requests, config)
     
     resourceManager.run()
@@ -72,10 +74,13 @@ def pickle(data, dir, file):
 
 
 if __name__ == "__main__":
-    configfile="../configfiles/das2.conf"
-    config = Config()
-    config.loadFile(configfile)
-    tracefile="../traces/examples/DAS2/das200lines.gwf"
-    injectedfile=None
+    configfile="../configfiles/test.conf"
+    tracefile="../traces/examples/test_inject.csv"
+    injectedfile="../traces/examples/test_inject.lwf"
     statsdir="/home/borja/docs/uchicago/research/ipdps/results"
-    simulate(config, tracefile, constants.TRACE_GWF, injectedfile, statsdir)
+
+    config = RMConfig.fromFile(configfile)
+    config.config.set(constants.GENERAL_SEC, constants.TRACEFILE_OPT, tracefile)
+    config.config.set(constants.GENERAL_SEC, constants.INJFILE_OPT, injectedfile)
+
+    simulate(config, statsdir)

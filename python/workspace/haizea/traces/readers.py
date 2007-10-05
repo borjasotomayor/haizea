@@ -2,6 +2,7 @@ from mx.DateTime import TimeDelta
 from mx.DateTime import ISO
 from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
 import workspace.haizea.common.constants as constants
+import workspace.haizea.traces.formats as formats
 
 def CSV(tracefile, config):
     file = open (tracefile, "r")
@@ -134,4 +135,25 @@ def SWF(tracefile, config):
                 req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
                 req.state = constants.LEASE_STATE_PENDING
                 requests.append(req)
+    return requests
+
+def LWF(tracefile, config):
+    file = formats.LWF.fromFile(tracefile)
+    inittime = config.getInitialTime()
+    requests = []
+    for entry in file.entries:
+        tSubmit = inittime + TimeDelta(seconds=entry.reqTime) 
+        tStart = inittime + TimeDelta(seconds=entry.startTime)
+        tEnd = tStart + TimeDelta(seconds=entry.duration)
+        tRealEnd = tStart + TimeDelta(seconds=entry.realDuration)
+        vmimage = entry.vmImage
+        vmimagesize = entry.vmImageSize
+        numnodes = entry.numNodes
+        resreq = {}
+        resreq[constants.RES_CPU] = entry.CPU
+        resreq[constants.RES_MEM] = entry.mem
+        resreq[constants.RES_DISK] = vmimagesize + entry.disk
+        req = ExactLease(tSubmit, tStart, tEnd, vmimage, vmimagesize, numnodes, resreq, tRealEnd)
+        req.state = constants.LEASE_STATE_PENDING
+        requests.append(req)
     return requests
