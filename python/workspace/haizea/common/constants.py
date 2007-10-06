@@ -109,6 +109,8 @@ TARGETDB_OPT="targetdb"
 NODES_OPT="nodes"
 BANDWIDTH_OPT="bandwidth"
 RESOURCES_OPT="resources"
+CLIPSTART_OPT="clipstart"
+CLIPEND_OPT="clipend"
 
 # Component names
 RM="RM"
@@ -135,6 +137,7 @@ COMPLETEDFILE="besteffort-completed.dat"
 QUEUESIZEFILE="queuesize.dat"
 QUEUEWAITFILE="queuewait.dat"
 EXECWAITFILE="execwait.dat"
+CLIPTIMESFILE="cliptimes.dat"
 
 
 # Types of final tables in report generation

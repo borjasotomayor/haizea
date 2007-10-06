@@ -36,20 +36,20 @@ class Section(object):
                 self.final[p] = final
         if self.tablefinal == constants.TABLE_FINALVALUE:
             for p in self.profiles:
-                final = self.data[p][-1][1]
+                final = self.data[p][-1][2]
                 self.final[p] = final
         if self.tablefinal == constants.TABLE_FINALAVG:
             for p in self.profiles:
-                final = self.data[p][-1][2]
+                final = self.data[p][-1][3]
                 self.final[p] = final
         
     def generateGraph(self, outdir):
         if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_STEP_VALUE, constants.GRAPH_POINT_VALUE]:
-            values = [[(v[0],v[1]) for v in self.data[p]] for p in self.profiles]
-        elif self.graphtype in [constants.GRAPH_LINE_AVG]:
             values = [[(v[0],v[2]) for v in self.data[p]] for p in self.profiles]
+        elif self.graphtype in [constants.GRAPH_LINE_AVG]:
+            values = [[(v[0],v[3]) for v in self.data[p]] for p in self.profiles]
         elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
-            values = [[(v[0],v[1],v[2]) for v in self.data[p]] for p in self.profiles]
+            values = [[(v[0],v[2],v[3]) for v in self.data[p]] for p in self.profiles]
 
         if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_LINE_AVG]:
             graph = graphs.LineGraph
@@ -95,6 +95,19 @@ class Section(object):
             html += "</table>"
         
         return html
+    
+#    def clip(self):
+#        if self.config.isClipping():
+#            start, end = self.config.getClips()
+#            besteffort = [r for r in self.requests if isinstance(r,BestEffortLease)]
+#            numreq = len(besteffort)
+#            startclip = int( (start / 100.0) * numreq)
+#            endclip = int(numreq - ((end/100.0) * numreq))
+#            
+#            self.startcliplease = besteffort[startclip].leaseID
+#            self.endcliplease = besteffort[endclip].leaseID
+#            
+#            self.scheduler.endcliplease = self.endcliplease
 
 class Report(object):
     def __init__(self, profiles, tracefiles, injectfiles, statsdir, outdir, css):
@@ -115,11 +128,15 @@ class Report(object):
                  Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME)
                  #Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE, profilesdirs),
                  #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
-                 #Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
+                 #Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
                  ]
         
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
+
+        
+        
+
 
     def generate(self):
         self.generateIndex()

@@ -143,16 +143,17 @@ class RMMultiConfig(Config):
     def getTracesSubset(self, sec):
         traces = self.config.get(sec, constants.TRACES_OPT)
         if traces == "ALL":
-            traces = self.getTracefiles()
+            traces = [os.path.basename(t) for t in self.getTracefiles()]
         else:
             traces = traces.split()
-
+            
         return traces
 
     def getInjSubset(self, sec):
         injs = self.config.get(sec, constants.INJS_OPT)
         if injs == "ALL":
-            injs = self.getInjectfiles()
+            injs = [os.path.basename(t) for t in self.getInjectfiles() if t!=None]
+            injs.append(None)
         elif injs == "NONE":
             injs = [None]
         else:
@@ -223,10 +224,10 @@ class RMMultiConfig(Config):
             i = c.getInjectfile()
             if i != None: 
                 i = os.path.basename(i)
-            
+
             if p in profiles and t in traces and i in injs:
                 confs.append(c)
-                
+
         return confs
         
     def getConfigsToReport(self):
@@ -234,7 +235,7 @@ class RMMultiConfig(Config):
         profiles = self.getProfilesSubset(constants.REPORTING_SEC)
         traces = self.getTracesSubset(constants.REPORTING_SEC)
         injs = self.getInjSubset(constants.REPORTING_SEC)
-        
+
         confs = []
         for c in configs:
             p = c.getProfile()
@@ -248,6 +249,20 @@ class RMMultiConfig(Config):
                 
         return confs
         
+    def isClipping(self):
+        clips = self.getClips()
+        if clips == None:
+            return False
+        else:
+            return True
+        
+    def getClips(self):
+        if self.config.has_option(constants.REPORTING_SEC, constants.CLIPSTART_OPT):
+            start = self.config.getint(constants.REPORTING_SEC, constants.CLIPSTART_OPT)
+            end = self.config.getint(constants.REPORTING_SEC, constants.CLIPEND_OPT)
+            return start, end
+        else:
+            return None
         
 class TraceConfig(Config):
     def __init__(self, c):

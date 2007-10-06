@@ -9,10 +9,14 @@ class Stats(object):
         self.queuewait = []
         self.execwait = []
 
+        self.besteffortstartID = []
+        self.besteffortendID = []
+
         self.exactacceptedcount = 0
         self.exactrejectedcount = 0
         self.besteffortcompletedcount = 0
         self.queuesizecount = 0
+        
         
         self.utilization = {}
         self.utilizationavg = {}
@@ -22,45 +26,44 @@ class Stats(object):
         
     def addInitialMarker(self):
         time = self.rm.time
-        self.exactaccepted.append((time,0))
-        self.exactrejected.append((time,0))
-        self.besteffortcompleted.append((time,0))
-        self.queuesize.append((time,0))
+        self.exactaccepted.append((time,None,0))
+        self.exactrejected.append((time,None,0))
+        self.queuesize.append((time,None,0))
 
     def addFinalMarker(self):
         time = self.rm.time
-        self.exactaccepted.append((time,self.exactacceptedcount))
-        self.exactrejected.append((time,self.exactrejectedcount))
-        self.queuesize.append((time,self.queuesizecount))
+        self.exactaccepted.append((time,None,self.exactacceptedcount))
+        self.exactrejected.append((time,None,self.exactrejectedcount))
+        self.queuesize.append((time,None,self.queuesizecount))
 
-    def incrAccepted(self):
+    def incrAccepted(self, leaseID):
         time = self.rm.time
         self.exactacceptedcount += 1
-        self.exactaccepted.append((time,self.exactacceptedcount))
+        self.exactaccepted.append((time, leaseID, self.exactacceptedcount))
 
-    def incrRejected(self):
+    def incrRejected(self, leaseID):
         time = self.rm.time
         self.exactrejectedcount += 1
-        self.exactrejected.append((time,self.exactrejectedcount))
+        self.exactrejected.append((time, leaseID, self.exactrejectedcount))
 
-    def incrBestEffortCompleted(self):
+    def incrBestEffortCompleted(self, leaseID):
         time = self.rm.time
         self.besteffortcompletedcount += 1
-        self.besteffortcompleted.append((time,self.besteffortcompletedcount))
+        self.besteffortcompleted.append((time,leaseID,self.besteffortcompletedcount))
 
-    def incrQueueSize(self):
+    def incrQueueSize(self, leaseID):
         time = self.rm.time
         self.queuesizecount += 1
         if self.queuesize[-1][0] == time:
             self.queuesize.pop()        
-        self.queuesize.append((time,self.queuesizecount))
+        self.queuesize.append((time,leaseID,self.queuesizecount))
 
-    def decrQueueSize(self):
+    def decrQueueSize(self, leaseID):
         time = self.rm.time
         self.queuesizecount -= 1
         if self.queuesize[-1][0] == time:
             self.queuesize.pop()
-        self.queuesize.append((time,self.queuesizecount))
+        self.queuesize.append((time, leaseID, self.queuesizecount))
         
     def startQueueWait(self, leaseID):
         time = self.rm.time
@@ -72,7 +75,7 @@ class Stats(object):
         start = self.queuewaittimes[leaseID][0]
         end = self.queuewaittimes[leaseID][1]
         wait = (end - start).seconds
-        self.queuewait.append((time,wait))
+        self.queuewait.append((time,leaseID,wait))
 
     def startExec(self, leaseID):
         time = self.rm.time
@@ -80,14 +83,14 @@ class Stats(object):
         start = self.queuewaittimes[leaseID][0]
         end = self.queuewaittimes[leaseID][2]
         wait = (end - start).seconds
-        self.execwait.append((time,wait))
+        self.execwait.append((time,leaseID,wait))
 
         
     def normalizeTimes(self, data):
-        return [((v[0] - self.rm.starttime).seconds,v[1]) for v in data]
+        return [((v[0] - self.rm.starttime).seconds,v[1],v[2]) for v in data]
         
     def addNoAverage(self, data):
-        return [(v[0],v[1],None) for v in data]
+        return [(v[0],v[1],v[2],None) for v in data]
     
     def addTimeWeightedAverage(self, data):
         accum=0
@@ -96,7 +99,8 @@ class Stats(object):
         stats = []
         for v in data:
             time = v[0]
-            value = v[1]
+            leaseID = v[1]
+            value = v[2]
             if prevTime != None:
                 timediff = time - prevTime
                 weightedValue = prevValue*timediff
@@ -104,7 +108,7 @@ class Stats(object):
                 average = accum/time
             else:
                 avg = value
-            stats.append((time, value, avg))
+            stats.append((time, leaseID, value, avg))
             prevTime = time
             prevValue = value
         
@@ -116,11 +120,11 @@ class Stats(object):
         startVM = None
         stats = []
         for v in data:
-            value = v[1]
+            value = v[2]
             accum += value
             count += 1
             avg = accum/count
-            stats.append((v[0], value, avg))
+            stats.append((v[0], v[1], value, avg))
         
         return stats          
         

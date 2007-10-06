@@ -678,7 +678,7 @@ class SlotTable(object):
                 average = accumUtil/seconds
             else:
                 average = utilization
-            stats.append((seconds, utilization, average))
+            stats.append((seconds, None, utilization, average))
             prevTime = time
             prevUtilization = utilization
         

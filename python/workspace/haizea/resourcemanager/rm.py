@@ -20,6 +20,8 @@ class ResourceManager(object):
         self.time = self.starttime
         
 
+
+
     def existsPendingReq(self):
         return len(self.requests) != 0
 
@@ -43,7 +45,7 @@ class ResourceManager(object):
             
             for r in besteffort:
                 self.scheduler.enqueue(r)
-                self.stats.incrQueueSize()
+                self.stats.incrQueueSize(r.leaseID)
                 self.stats.startQueueWait(r.leaseID)
             
             self.scheduler.schedule(exact)

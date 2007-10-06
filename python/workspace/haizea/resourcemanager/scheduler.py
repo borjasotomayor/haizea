@@ -31,9 +31,9 @@ class Scheduler(object):
             try:
                 self.scheduleExactLease(r)
                 self.scheduledleases.add(r)
-                self.rm.stats.incrAccepted()
+                self.rm.stats.incrAccepted(r.leaseID)
             except SchedException, msg:
-                self.rm.stats.incrRejected()
+                self.rm.stats.incrRejected(r.leaseID)
                 info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
                
         done = False
@@ -47,7 +47,7 @@ class Scheduler(object):
                 info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED, self.rm.time)
                 self.scheduleBestEffortLease(r)
                 self.scheduledleases.add(r)
-                self.rm.stats.decrQueueSize()
+                self.rm.stats.decrQueueSize(r.leaseID)
                 self.rm.stats.stopQueueWait(r.leaseID)
             except SchedException, msg:
                 # Put back on queue
@@ -117,7 +117,7 @@ class Scheduler(object):
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
             if isinstance(l,ds.BestEffortLease):
-                self.rm.stats.incrBestEffortCompleted()            
+                self.rm.stats.incrBestEffortCompleted(l.leaseID)            
         elif rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
             if isinstance(l,ds.BestEffortLease):
                 if not prematureend:
@@ -126,13 +126,13 @@ class Scheduler(object):
                     rr.state = constants.RES_STATE_DONE
                     self.scheduledleases.remove(l)
                     self.queue.enqueueInOrder(l)
-                    self.rm.stats.incrQueueSize()
+                    self.rm.stats.incrQueueSize(l.leaseID)
                 else:
                     l.state = constants.LEASE_STATE_DONE
                     rr.state = constants.RES_STATE_DONE
                     self.completedleases.add(l)
                     self.scheduledleases.remove(l)
-                    self.rm.stats.incrBestEffortCompleted()            
+                    self.rm.stats.incrBestEffortCompleted(l.leaseID)            
                     self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
                     # TODO: Clean up next reservations
         
@@ -221,7 +221,7 @@ class Scheduler(object):
             del req.rr[-1]
             self.scheduledleases.remove(req)
             self.queue.enqueueInOrder(req)
-            self.rm.stats.incrQueueSize()
+            self.rm.stats.incrQueueSize(req.leaseID)
         else:
             if self.rm.config.isSuspensionAllowed():
                 debug("The lease will be suspended while running.", constants.SCHED, self.rm.time)
@@ -239,7 +239,7 @@ class Scheduler(object):
                 del req.rr[-1]
                 self.scheduledleases.remove(req)
                 self.queue.enqueueInOrder(req)
-                self.rm.stats.incrQueueSize()
+                self.rm.stats.incrQueueSize(req.leaseID)
         edebug("Lease after preemption:", constants.SCHED, self.rm.time)
         req.printContents()
         
