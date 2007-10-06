@@ -454,7 +454,7 @@ class SlotTableDB(object):
         SET all_schedend=?
         WHERE rsp_id = ?"""
         cur = self.getConn().cursor()
-        cur.execute(sql, (rsp_id,newend))
+        cur.execute(sql, (newend,rsp_id))
         self.changePointCacheDirty = True
 
     def suspendAllocation(self, sl_id, rsp_id, all_schedstart, newend=None, nextstart=None, realend=None):

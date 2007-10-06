@@ -1,6 +1,6 @@
 import workspace.haizea.resourcemanager.datastruct as ds
 from workspace.haizea.resourcemanager.slottable import SlotTable, SlotFittingException
-from workspace.haizea.common.log import info, debug, warning
+from workspace.haizea.common.log import info, debug, warning, edebug
 import workspace.haizea.common.constants as constants
 
 class SchedException(Exception):
@@ -16,6 +16,7 @@ class Scheduler(object):
         self.rejectedleases = ds.LeaseTable(self)
         self.maxres = self.rm.config.getMaxReservations()
         self.numbesteffortres = 0
+        self.endcliplease = None
         
     def schedule(self, requests):
         self.processReservations()
@@ -149,7 +150,7 @@ class Scheduler(object):
                 info("Must preempt the following: %s" % preemptions, constants.SCHED, self.rm.time)
                 leases = self.slottable.findLeasesToPreempt(preemptions, req.start, req.end)
                 for l in leases:
-                    self.scheduleSuspension(self.scheduledleases.getLease(l), time=req.start)
+                    self.preempt(self.scheduledleases.getLease(l), time=req.start)
             
             # Schedule image transfers
             dotransfer = False
@@ -168,7 +169,7 @@ class Scheduler(object):
             self.slottable.commit()
         except SlotFittingException, msg:
             self.slottable.rollback()
-            raise SchedException, "The requested exact lease is infeasible"
+            raise SchedException, "The requested exact lease is infeasible. Reason: %s" % msg
 
     def scheduleBestEffortLease(self, req):
         # Determine earliest start time in each node
@@ -177,10 +178,10 @@ class Scheduler(object):
         
         numnodes = self.rm.config.getNumPhysicalNodes()
         earliest = dict([(node+1, [self.rm.time,constants.TRANSFER_NO]) for node in range(numnodes)])
+        suspendable = self.rm.config.isSuspensionAllowed()
         try:
             canreserve = self.canReserveBestEffort()
-            preemptible = self.rm.config.isSuspensionAllowed()
-            (mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realremdur, preemptible=preemptible)
+            (mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realremdur, suspendable=suspendable)
             # Schedule image transfers
             dotransfer = False
             
@@ -198,9 +199,6 @@ class Scheduler(object):
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
             
-            if mustsuspend:
-                self.scheduleSuspension(req)
-            
             if reservation:
                 self.numbesteffortres += 1
             
@@ -209,22 +207,42 @@ class Scheduler(object):
             self.slottable.rollback()
             raise SchedException, "The requested best-effort lease is infeasible. Reason: %s" % msg
         
-    def scheduleSuspension(self, req, time = None):
+    def preempt(self, req, time):
+        info("Preempting lease %i at time %s." % (req.leaseID, time), constants.SCHED, self.rm.time)
+        edebug("Lease before preemption:", constants.SCHED, self.rm.time)
+        req.printContents()
         rr = req.rr[-1]
-        rr.oncomplete = constants.ONCOMPLETE_SUSPEND
-        if time != None:
-            if req.state in (constants.LEASE_STATE_SCHEDULED, constants.LEASE_STATE_DEPLOYED):
+        if rr.state == constants.RES_STATE_SCHEDULED and rr.start >= time:
+            debug("The lease has not yet started. Removing reservation and resubmitting to queue.", constants.SCHED, self.rm.time)
+            for rsp_id in rr.db_rsp_ids:
+                self.slottable.db.removeReservationPart(rsp_id)            
+            if rr.backfillres == True:
+                self.numbesteffortres -= 1
+            del req.rr[-1]
+            self.scheduledleases.remove(req)
+            self.queue.enqueueInOrder(req)
+            self.rm.stats.incrQueueSize()
+        else:
+            if self.rm.config.isSuspensionAllowed():
+                debug("The lease will be suspended while running.", constants.SCHED, self.rm.time)
+                rr.oncomplete = constants.ONCOMPLETE_SUSPEND
+                rr.end = time
+                for rsp_id in rr.db_rsp_ids:
+                    self.slottable.updateLeaseEnd(rsp_id, time)
+                # Schedule suspensions RRs
+            else:
+                debug("The lease has to be cancelled and resubmitted.", constants.SCHED, self.rm.time)
+                for rsp_id in rr.db_rsp_ids:
+                    self.slottable.db.removeReservationPart(rsp_id)            
                 if rr.backfillres == True:
                     self.numbesteffortres -= 1
                 del req.rr[-1]
                 self.scheduledleases.remove(req)
                 self.queue.enqueueInOrder(req)
                 self.rm.stats.incrQueueSize()
-            else:
-                rr.end = time
-                for rsp_id in rr.db_rsp_ids:
-                    self.slottable.updateLeaseEnd(rsp_id, time)
-        # Schedule suspensions RRs
+        edebug("Lease after preemption:", constants.SCHED, self.rm.time)
+        req.printContents()
+        
         
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
         pass

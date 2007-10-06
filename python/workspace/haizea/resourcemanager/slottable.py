@@ -330,6 +330,9 @@ class SlotTable(object):
                 return constants.EQUAL        
         
         # Get allocations at the specified time
+        atstart = set()
+        atmiddle = set()
+
         for node in mustpreempt.keys():
             preemptibleAtStart = {}
             preemptibleAtMiddle = {}
@@ -436,14 +439,16 @@ class SlotTable(object):
                             leasesMiddle.add(alloc["res_id"])
                             respartsinfo[rsp_key] = alloc
 
-            info("Preempting leases (at start of reservation): %s" % leasesStart, constants.ST, None)
-            info("Preempting leases (in middle of reservation): %s" % leasesMiddle, constants.ST, None)
-            leases = list(leasesStart | leasesMiddle)
+            atstart.update(leasesStart)
+            atmiddle.update(leasesMiddle)
             
-            return leases
+        info("Preempting leases (at start of reservation): %s" % atstart, constants.ST, None)
+        info("Preempting leases (in middle of reservation): %s" % atmiddle, constants.ST, None)
+        
+        return list(atstart | atmiddle)
 
 
-    def fitBestEffort(self, leaseID, earliest, remdur, vmimage, numnodes, resreq, canreserve, realdur, preemptible = True):
+    def fitBestEffort(self, leaseID, earliest, remdur, vmimage, numnodes, resreq, canreserve, realdur, suspendable):
         slottypes = resreq.keys()
         start = None
         end = None
@@ -478,8 +483,8 @@ class SlotTable(object):
                     mustsuspend=True
                     info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
                     
-                    if preemptible:
-                        # It the lease is preemptible, just keep the current selection
+                    if suspendable:
+                        # It the lease is suspendable, just keep the current selection
                         break
                     else:
                         # Keep looking
@@ -494,10 +499,10 @@ class SlotTable(object):
                 # We did not find a suitable starting time. This can happen
                 # if we're unable to make future reservations
                 raise SlotFittingException, "Could not find enough resources for this request"
-            elif mustsuspend and not preemptible:
+            elif mustsuspend and not suspendable:
                 raise SlotFittingException, "Scheduling this lease would require preempting it, which is not allowed"
 
-        if start != None and mustsuspend and not preemptible:
+        if start != None and mustsuspend and not suspendable:
             start = None # No satisfactory start time
             
         # TODO Factor out common code in the above loop and the following one
@@ -520,8 +525,8 @@ class SlotTable(object):
                     if end < maxend:
                         mustsuspend=True
                         info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
-                        if preemptible:
-                            # It the lease is preemptible, just keep the current selection
+                        if suspendable:
+                            # It the lease is suspendable, just keep the current selection
                             break
                         else:
                             # Keep looking
@@ -531,7 +536,7 @@ class SlotTable(object):
                         # We've found a satisfactory starting time
                         break   
 
-        if mustsuspend and not preemptible:
+        if mustsuspend and not suspendable:
             raise SlotFittingException, "Scheduling this lease would require preempting it, which is not allowed"
 
         if start in futurecp:
@@ -562,7 +567,7 @@ class SlotTable(object):
                     canfit[n] -= 1
                     mappings[vmnode] = n
                     rsp_name = "VM %i" % (vmnode)
-                    rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible)
+                    rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible=True)
                     db_rsp_ids.append(rsp_id)
                     for slottype in slottypes:
                         amount = resreq[slottype]
