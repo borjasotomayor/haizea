@@ -4,10 +4,11 @@ import workspace.haizea.analysis.graph as graphs
 from workspace.haizea.common.utils import genDataDirName, genTraceInjName
 from pickle import Unpickler
 from mx.DateTime import now
+from operator import itemgetter
 import shutil
 
 class Section(object):
-    def __init__(self, title, filename, graphtype, tablefinal = None, maxmin = False):
+    def __init__(self, title, filename, graphtype, tablefinal = None, maxmin = False, clip = None, cliptype = None):
         self.title = title
         self.filename = filename
         self.graphtype = graphtype
@@ -18,6 +19,38 @@ class Section(object):
         self.final = {}
         self.maxmin = maxmin
         self.data = {}
+        self.clip = clip
+        self.cliptimes = None
+        self.clipIDs = None
+        self.cliptype = cliptype
+        
+    def findClips(self, dir):
+        file = open (dir + "/" + constants.COMPLETEDFILE, "r")
+        u = Unpickler(file)
+        besteffortcompleted = u.load()
+        file.close()
+        numreq = len(besteffortcompleted)
+        startclip = int( (self.clip[0] / 100.0) * numreq)
+        endclip = int(numreq - ((self.clip[1]/100.0) * numreq))
+
+        # Find what the top and bottom 5% leases are
+        besteffortcompleted.sort(key=itemgetter(1))
+        startID = besteffortcompleted[startclip][1]
+        endID = besteffortcompleted[endclip][1]
+        endTime = besteffortcompleted[endclip][0]
+        
+        # Find when the bottom 5% lease was submitted
+        file = open (dir + "/" + constants.QUEUESIZEFILE, "r")
+        u = Unpickler(file)
+        queuesize = u.load()
+        file.close()
+        queuesize = [e for e in queuesize if e[1] == startID]
+        startTime = queuesize[0][0]
+        
+        self.clipIDs = (startID, endID)
+        self.cliptimes = (startTime, endTime)
+        
+        
         
     def loadData(self, dirs):
         self.profiles = dirs.keys()
@@ -26,7 +59,14 @@ class Section(object):
             dir = dirs[p]
             file = open (dir + "/" + self.filename, "r")
             u = Unpickler(file)
-            self.data[p] = u.load()
+            data = u.load()
+            if self.clip != None:
+                self.findClips(dir)  
+                if self.cliptype == constants.CLIP_BYTIME:
+                    data = [e for e in data if e[0] >= self.cliptimes[0] and e[0] <= self.cliptimes[1]]
+                elif self.cliptype == constants.CLIP_BYLEASE:
+                    data = [e for e in data if e[1] >= self.clipIDs[0] and e[1] <= self.clipIDs[1]]
+            self.data[p] = data
             file.close()
             
         # If we are going to produce a table, create it now
@@ -95,40 +135,41 @@ class Section(object):
             html += "</table>"
         
         return html
-    
-#    def clip(self):
-#        if self.config.isClipping():
-#            start, end = self.config.getClips()
-#            besteffort = [r for r in self.requests if isinstance(r,BestEffortLease)]
-#            numreq = len(besteffort)
-#            startclip = int( (start / 100.0) * numreq)
-#            endclip = int(numreq - ((end/100.0) * numreq))
-#            
-#            self.startcliplease = besteffort[startclip].leaseID
-#            self.endcliplease = besteffort[endclip].leaseID
-#            
-#            self.scheduler.endcliplease = self.endcliplease
 
 class Report(object):
-    def __init__(self, profiles, tracefiles, injectfiles, statsdir, outdir, css):
-        self.profiles = profiles
-
+    def __init__(self, config, statsdir):
+        self.config = config
         self.statsdir = statsdir
-        self.outdir = outdir
-        self.css = css
-    
+
+        confs = self.config.getConfigsToReport()
+
+        profiles = set([c.getProfile() for c in confs])
+        self.profiles = list(profiles)
+
+        tracefiles = set([c.getTracefile() for c in confs])
+        injectfiles = set([c.getInjectfile() for c in confs])
         self.traces = []
         for t in tracefiles:
             for i in injectfiles:
                 self.traces.append((t,i,genTraceInjName(t,i)))        
+        
+        
+        self.css = self.config.getCSS()
+        self.outdir = self.config.getReportDir()
+  
+        if self.config.isClipping():
+            self.clip = self.config.getClips()
+        else:
+            self.clip = None
                 
         self.sections = [
-                 Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE),
-                 #Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
-                 Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME)
+                 Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
+                 Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
+                 Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
                  #Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE, profilesdirs),
                  #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
-                 #Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
+                 Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
+                 Section("Best-Effort Wait Time (from submission to lease start) [NOCLIP]", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
                  ]
         
         if not os.path.exists(self.outdir):

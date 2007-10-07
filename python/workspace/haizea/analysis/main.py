@@ -3,15 +3,7 @@ from workspace.haizea.analysis.report import Report
 from workspace.haizea.common.utils import genDataDirName, genTraceInjName
 
 def report(multiconfig, statsdir):
-    confs = multiconfig.getConfigsToReport()
-    profiles = set([c.getProfile() for c in confs])
-    tracefiles = set([c.getTracefile() for c in confs])
-    injectfiles = set([c.getInjectfile() for c in confs])
-
-    css = multiconfig.getCSS()
-    outdir = multiconfig.getReportDir()
-    
-    r = Report(list(profiles), list(tracefiles), list(injectfiles), statsdir, outdir, css)
+    r = Report(multiconfig, statsdir)
     r.generate()
 
 

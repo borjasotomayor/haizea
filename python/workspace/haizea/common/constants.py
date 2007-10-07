@@ -101,6 +101,8 @@ INJFILE_OPT="injectionfile"
 REPORTING_SEC="reporting"
 CSS_OPT="css"
 REPORTDIR_OPT="reportdir"
+CLIPSTART_OPT="clip-start"
+CLIPEND_OPT="clip-end"
 
 SIMULATION_SEC="simulation"
 STARTTIME_OPT="starttime"
@@ -109,8 +111,6 @@ TARGETDB_OPT="targetdb"
 NODES_OPT="nodes"
 BANDWIDTH_OPT="bandwidth"
 RESOURCES_OPT="resources"
-CLIPSTART_OPT="clipstart"
-CLIPEND_OPT="clipend"
 
 # Component names
 RM="RM"
@@ -171,7 +171,8 @@ ITEMSPROBS_OPT = "itemswithprobs"
 MEAN_OPT = "mean"
 STDEV_OPT = "stdev"
 
-
-
 DIST_UNIFORM = "uniform"
 DIST_EXPLICIT = "explicit"
+
+CLIP_BYTIME = 0
+CLIP_BYLEASE = 1
