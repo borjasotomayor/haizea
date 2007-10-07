@@ -114,6 +114,7 @@ class Scheduler(object):
                 rr.realend = rr.end
             else:
                 self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
+                self.slottable.commit()
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
             if isinstance(l,ds.BestEffortLease):
@@ -134,6 +135,7 @@ class Scheduler(object):
                     self.scheduledleases.remove(l)
                     self.rm.stats.incrBestEffortCompleted(l.leaseID)            
                     self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
+                    self.slottable.commit()
                     # TODO: Clean up next reservations
         
         if isinstance(l,ds.BestEffortLease):
