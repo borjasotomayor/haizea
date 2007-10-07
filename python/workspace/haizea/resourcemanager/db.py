@@ -430,10 +430,9 @@ class SlotTableDB(object):
         cur = self.getConn().cursor()
         cur.execute(sql, (status,) + interval)
 
-    def setEndtimeToRealend(self, respart, end):
-        sql = "UPDATE TB_ALLOC SET ALL_SCHEDEND = ALL_REALEND WHERE "
+    def updateEndTimes(self, respart, end):
+        sql = "UPDATE TB_ALLOC SET ALL_SCHEDEND = ? WHERE "
         sql += " RSP_ID=%i" % respart
-        sql += " AND all_realend = ?"
                 
         cur = self.getConn().cursor()
         cur.execute(sql, (end,))

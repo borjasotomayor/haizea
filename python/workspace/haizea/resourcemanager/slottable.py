@@ -686,7 +686,7 @@ class SlotTable(object):
     
     def updateEndTimes(self, db_rsp_ids, realend):
         for rsp_id in db_rsp_ids:
-            self.db.setEndtimeToRealend(rsp_id, realend)
+            self.db.updateEndTimes(rsp_id, realend)
             
     def updateLeaseEnd(self, rsp_id, newend):
         self.db.endReservationPart(rsp_id, newend)
