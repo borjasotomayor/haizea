@@ -19,9 +19,6 @@ class ResourceManager(object):
         self.starttime = config.getInitialTime()
         self.time = self.starttime
         
-
-
-
     def existsPendingReq(self):
         return len(self.requests) != 0
 
@@ -35,7 +32,8 @@ class ResourceManager(object):
         status("Starting resource manager", constants.RM, self.time)
         self.stats.addInitialMarker()
         prevstatustime = self.time
-        while self.scheduler.existsScheduledLeases() or self.existsPendingReq() or not self.scheduler.isQueueEmpty():
+        done = False
+        while not done:
             debug("Starting iteration", constants.RM, self.time)
             nowreq = [r for r in self.requests if r.tSubmit == self.time]
             self.requests = [r for r in self.requests if r.tSubmit > self.time]
@@ -70,6 +68,16 @@ class ResourceManager(object):
                 self.time = min(nextchangepoint, nextreqtime)
             if nextchangepoint == self.time:
                 self.time = self.scheduler.slottable.getNextChangePoint(self.time)
+                
+            if not self.scheduler.existsScheduledLeases():
+                if not self.existsPendingReq():
+                    if self.scheduler.isQueueEmpty():
+                        done = True
+            if self.config.stopWhenBestEffortDone():
+                scheduledbesteffort = self.scheduler.scheduledleases.getLeases(type=BestEffortLease)
+                pendingbesteffort = [r for r in self.requests if isinstance(r,BestEffortLease)]
+                if self.scheduler.isQueueEmpty() and len(scheduledbesteffort) + len(pendingbesteffort) == 0:
+                    done = True
 
         status("Simulation done, generating stats...", constants.RM, self.time)
         self.stats.addFinalMarker()

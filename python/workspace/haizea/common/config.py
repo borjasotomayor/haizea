@@ -135,6 +135,9 @@ class RMConfig(Config):
         
     def getBackfillingType(self):
         return self.config.get(constants.GENERAL_SEC, constants.BACKFILLING_OPT)
+    
+    def stopWhenBestEffortDone(self):
+        return self.config.getboolean(constants.SIMULATION_SEC, constants.STOPBESTEFFORTDONE_OPT)
 
     
 class RMMultiConfig(Config):
