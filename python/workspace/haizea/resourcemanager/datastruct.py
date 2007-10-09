@@ -89,6 +89,7 @@ class BestEffortLease(LeaseBase):
         self.maxdur = maxdur
         self.remdur = maxdur
         self.realremdur = realdur
+        self.realdur = realdur
 
     def printContents(self):
         edebug("__________________________________________________", DS, None)
@@ -192,6 +193,12 @@ class LeaseTable(object):
         
     def add(self, lease):
         self.entries[lease.leaseID] = lease
+        
+    def getLeases(self, type=None):
+        if type==None:
+            return self.entries.values()
+        else:
+            return [e for e in self.entries.values() if isinstance(e,type)]
         
     def getLeaseFromRSPIDs(self, rsp_ids):
         ids = set(rsp_ids)

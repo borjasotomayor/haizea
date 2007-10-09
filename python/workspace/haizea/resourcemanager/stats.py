@@ -8,6 +8,7 @@ class Stats(object):
         self.queuesize = []
         self.queuewait = []
         self.execwait = []
+        self.utilratio = []
 
         self.besteffortstartID = []
         self.besteffortendID = []
@@ -22,6 +23,7 @@ class Stats(object):
         self.utilizationavg = {}
 
         self.queuewaittimes = {}
+        self.startendtimes = {}
  
         
     def addInitialMarker(self):
@@ -50,6 +52,15 @@ class Stats(object):
         time = self.rm.time
         self.besteffortcompletedcount += 1
         self.besteffortcompleted.append((time,leaseID,self.besteffortcompletedcount))
+        
+        self.startendtimes[leaseID][1] = time
+        start = self.startendtimes[leaseID][0]
+        end = self.startendtimes[leaseID][1]
+        dur = self.rm.scheduler.completedleases.getLease(leaseID).realdur
+        
+        ratio = dur / (end - start)
+        self.utilratio.append((time, leaseID, ratio))
+        
 
     def incrQueueSize(self, leaseID):
         time = self.rm.time
@@ -67,23 +78,28 @@ class Stats(object):
         
     def startQueueWait(self, leaseID):
         time = self.rm.time
-        self.queuewaittimes[leaseID] = [time, None, None]
+        if not self.queuewaittimes.has_key(leaseID):
+            self.queuewaittimes[leaseID] = [time, None, None]
 
     def stopQueueWait(self, leaseID):
         time = self.rm.time
-        self.queuewaittimes[leaseID][1] = time
-        start = self.queuewaittimes[leaseID][0]
-        end = self.queuewaittimes[leaseID][1]
-        wait = (end - start).seconds
-        self.queuewait.append((time,leaseID,wait))
+        if self.queuewaittimes[leaseID][1] == None:
+            self.queuewaittimes[leaseID][1] = time
+            start = self.queuewaittimes[leaseID][0]
+            end = self.queuewaittimes[leaseID][1]
+            wait = (end - start).seconds
+            self.queuewait.append((time,leaseID,wait))
 
     def startExec(self, leaseID):
         time = self.rm.time
-        self.queuewaittimes[leaseID][2] = time
-        start = self.queuewaittimes[leaseID][0]
-        end = self.queuewaittimes[leaseID][2]
-        wait = (end - start).seconds
-        self.execwait.append((time,leaseID,wait))
+        if not self.startendtimes.has_key(leaseID):
+            self.startendtimes[leaseID] = [time, None]
+        if self.queuewaittimes[leaseID][2] == None:
+            self.queuewaittimes[leaseID][2] = time
+            start = self.queuewaittimes[leaseID][0]
+            end = self.queuewaittimes[leaseID][2]
+            wait = (end - start).seconds
+            self.execwait.append((time,leaseID,wait))
 
         
     def normalizeTimes(self, data):
@@ -157,3 +173,8 @@ class Stats(object):
 
     def getUtilizationAvg(self, slottype):
         return self.utilizationavg[slottype]
+    
+    def getUtilizationRatio(self):
+        l = self.normalizeTimes(self.utilratio)
+        return self.addAverage(l)
+        

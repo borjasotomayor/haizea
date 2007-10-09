@@ -112,7 +112,7 @@ TARGETDB_OPT="targetdb"
 NODES_OPT="nodes"
 BANDWIDTH_OPT="bandwidth"
 RESOURCES_OPT="resources"
-
+STOPBESTEFFORTDONE_OPT="stopwhenbesteffortdone"
 
 BACKFILLING_OFF="off"
 BACKFILLING_AGGRESSIVE="aggressive"
@@ -144,6 +144,7 @@ COMPLETEDFILE="besteffort-completed.dat"
 QUEUESIZEFILE="queuesize.dat"
 QUEUEWAITFILE="queuewait.dat"
 EXECWAITFILE="execwait.dat"
+UTILRATIOFILE="utilratio.dat"
 CLIPTIMESFILE="cliptimes.dat"
 
 
