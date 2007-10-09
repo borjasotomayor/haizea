@@ -166,10 +166,11 @@ class Report(object):
                  Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
                  Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
                  Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
-                 #Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE, profilesdirs),
+                 Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE),
                  #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
-                 Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
-                 Section("Best-Effort Wait Time (from submission to lease start) [NOCLIP]", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
+                 Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE)
+                 #Section("'Client happiness' ratio", constants.UTILRATIOFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
+                 #Section("Best-Effort Wait Time (from submission to lease start) [NOCLIP]", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
                  ]
         
         if not os.path.exists(self.outdir):
