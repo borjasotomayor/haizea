@@ -100,6 +100,7 @@ class RMConfig(Config):
             return 1000000
         elif self.getBackfillingType() == constants.BACKFILLING_INTERMEDIATE:
             r = self.config.getint(constants.GENERAL_SEC, constants.RESERVATIONS_OPT)
+            return r
 
     def getDBTemplate(self):
         return self.config.get(constants.SIMULATION_SEC, constants.TEMPLATEDB_OPT)

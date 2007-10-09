@@ -146,7 +146,7 @@ class Scheduler(object):
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
                 self.numbesteffortres -= 1
-        if prematureend:
+        if prematureend and self.rm.config.isBackfilling():
             self.reevaluateSchedule(l)
         l.printContents()
         debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED, self.rm.time)
@@ -265,6 +265,7 @@ class Scheduler(object):
         if len(leases)>0:
             first = leases[0]
             self.slottable.slideback(first, realend)
+            self.reevaluateSchedule(first)
             
         
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
