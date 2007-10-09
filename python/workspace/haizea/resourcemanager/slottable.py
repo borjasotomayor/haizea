@@ -578,6 +578,36 @@ class SlotTable(object):
 
         return mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids
 
+    def slideback(self, lease, earliest):
+        nodes = lease.rr[-1].nodes.values()
+        originalstart = lease.rr[-1].start
+        cp = self.db.findChangePointsInNode(start=earliest, end=originalstart, nodes=nodes, closed=False)
+        cp = [ISO.ParseDateTime(p["time"]) for p in cp.fetchall()]
+        cp = [earliest] + cp
+        newstart = None
+        for p in cp:
+            self.availabilitywindow.initWindow(p, lease.resreq)
+            self.availabilitywindow.printContents()
+            if self.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
+                (end, canfit) = self.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
+                if end == originalstart and set(nodes) <= set(canfit.keys()):
+                    info("Can slide back to %s" % p, constants.ST, self.rm.time)
+                    newstart = p
+                    break
+        if newstart == None:
+            # Can't slide back. Leave as is.
+            pass
+        else:
+            diff = originalstart - newstart
+            rr = lease.rr[-1]
+            rr.start -= diff
+            rr.end -= diff
+            rr.realend -= diff
+            self.db.updateReservationPartTimes(rr.db_rsp_ids, rr.start, rr.end, rr.realend)
+            self.db.commit()
+            self.availabilitywindow.flushCache()
+            edebug("New lease descriptor (after slideback):", constants.ST, self.rm.time)
+            lease.printContents()
 
     def prioritizenodes(self,candidatenodes,vmimage,start,resreq, canpreempt):
         # TODO2: Choose appropriate prioritizing function based on a
@@ -687,9 +717,15 @@ class SlotTable(object):
     def updateEndTimes(self, db_rsp_ids, realend):
         for rsp_id in db_rsp_ids:
             self.db.updateEndTimes(rsp_id, realend)
+        self.availabilitywindow.flushCache()
             
     def updateLeaseEnd(self, rsp_id, newend):
         self.db.endReservationPart(rsp_id, newend)
+        self.availabilitywindow.flushCache()
+        
+    def removeReservationPart(self, rsp_id):
+        self.db.removeReservationPart(rsp_id)
+        self.availabilitywindow.flushCache()
 
 class AvailEntry(object):
     def __init__(self, time, avail, availpreempt = None):
@@ -865,8 +901,12 @@ class AvailabilityWindow(object):
     def flushCache(self):
         self.availcache = {}
     
-    def fitAtStart(self):
-        return sum([e[0].canfit for e in self.avail.values()])
+    def fitAtStart(self, nodes = None):
+        if nodes != None:
+            avail = [v for (k,v) in self.avail.items() if k in nodes]
+        else:
+            avail = self.avail.values()
+        return sum([e[0].canfit for e in avail])
     
     def findPhysNodesForVMs(self, numnodes, maxend):
         # Returns the physical nodes that can run all VMs, and the
@@ -877,13 +917,12 @@ class AvailabilityWindow(object):
             entries += [(n,e) for e in self.avail[n][1:]]
         getTime = lambda x: x[1].time
         entries.sort(key=getTime)
-        
         end = maxend
         for e in entries:
             physnode = e[0]
             entry = e[1]
        
-            if entry.time > maxend:
+            if entry.time >= maxend:
                 # Can run to its maximum duration
                 break
             else:
@@ -896,17 +935,20 @@ class AvailabilityWindow(object):
                 else:
                     # Update canfit
                     canfit[physnode] = entry.canfit
-       
+
         # Filter out nodes where we can't fit any vms
         canfit = dict([(n,v) for (n,v) in canfit.items() if v > 0])
         
         return end, canfit
             
                     
-    def printContents(self):
-        physnodes = self.avail.keys()
+    def printContents(self, nodes = None):
+        if nodes == None:
+            physnodes = self.avail.keys()
+        else:
+            physnodes = [k for k in self.avail.keys() if k in nodes]
         physnodes.sort()
-        edebug("AVAILABILITY WINDOW (time=%s)"%self.time, constants.ST, None)
+        edebug("AVAILABILITY WINDOW (time=%s, nodes=%s)"%(self.time,nodes), constants.ST, None)
         for n in physnodes:
             contents = "Node %i --- " % n
             for x in self.avail[n]:

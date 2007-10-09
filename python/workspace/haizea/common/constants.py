@@ -94,7 +94,8 @@ GENERAL_SEC="general"
 LOGLEVEL_OPT="loglevel"
 PROFILE_OPT="profile"
 SUSPENSION_OPT="suspension"
-RESERVATIONS_OPT="besteffort-reservations"
+BACKFILLING_OPT="backfilling"
+RESERVATIONS_OPT="backfilling-reservations"
 TRACEFILE_OPT="tracefile"
 INJFILE_OPT="injectionfile"
 
@@ -111,6 +112,12 @@ TARGETDB_OPT="targetdb"
 NODES_OPT="nodes"
 BANDWIDTH_OPT="bandwidth"
 RESOURCES_OPT="resources"
+
+
+BACKFILLING_OFF="off"
+BACKFILLING_AGGRESSIVE="aggressive"
+BACKFILLING_CONSERVATIVE="conservative"
+BACKFILLING_INTERMEDIATE="intermediate"
 
 # Component names
 RM="RM"

@@ -37,6 +37,7 @@ class Scheduler(object):
                 info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
                
         done = False
+        newqueue = ds.Queue(self)
         while not done and not self.isQueueEmpty():
             r = self.queue.dequeue()
             try:
@@ -51,9 +52,13 @@ class Scheduler(object):
                 self.rm.stats.stopQueueWait(r.leaseID)
             except SchedException, msg:
                 # Put back on queue
-                self.queue.q = [r] + self.queue.q
+                newqueue.enqueue(r)
                 info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
-                done = True
+                if not self.rm.config.isBackfilling():
+                    done = True
+                    
+        newqueue.q += self.queue.q 
+        self.queue = newqueue
 
         self.processReservations()        
     
@@ -141,6 +146,8 @@ class Scheduler(object):
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
                 self.numbesteffortres -= 1
+        if prematureend:
+            self.reevaluateSchedule(l)
         l.printContents()
         debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED, self.rm.time)
         
@@ -217,7 +224,7 @@ class Scheduler(object):
         if rr.state == constants.RES_STATE_SCHEDULED and rr.start >= time:
             debug("The lease has not yet started. Removing reservation and resubmitting to queue.", constants.SCHED, self.rm.time)
             for rsp_id in rr.db_rsp_ids:
-                self.slottable.db.removeReservationPart(rsp_id)            
+                self.slottable.removeReservationPart(rsp_id)            
             if rr.backfillres == True:
                 self.numbesteffortres -= 1
             del req.rr[-1]
@@ -235,7 +242,7 @@ class Scheduler(object):
             else:
                 debug("The lease has to be cancelled and resubmitted.", constants.SCHED, self.rm.time)
                 for rsp_id in rr.db_rsp_ids:
-                    self.slottable.db.removeReservationPart(rsp_id)            
+                    self.slottable.removeReservationPart(rsp_id)            
                 if rr.backfillres == True:
                     self.numbesteffortres -= 1
                 del req.rr[-1]
@@ -245,6 +252,20 @@ class Scheduler(object):
         edebug("Lease after preemption:", constants.SCHED, self.rm.time)
         req.printContents()
         
+    def reevaluateSchedule(self, endinglease):
+        rr = endinglease.rr[-1]
+        realend = rr.realend
+        nodes = rr.nodes.values()
+        debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,realend), constants.SCHED, self.rm.time)
+        leases = self.scheduledleases.getLeasesScheduledInNodes(realend, nodes)
+        leases = [l for l in leases if isinstance(l,ds.BestEffortLease)]
+        for l in leases:
+            debug("Found lease %i" % l.leaseID, constants.SCHED, self.rm.time)
+            l.printContents()
+        if len(leases)>0:
+            first = leases[0]
+            self.slottable.slideback(first, realend)
+            
         
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
         pass

@@ -222,7 +222,7 @@ class SlotTableDB(object):
 
         return cur
 
-    def findChangePointsInNode(self, start, node, end=None, closed=True, includeReal=False):
+    def findChangePointsInNode(self, start, nodes, end=None, closed=True, includeReal=False):
         if closed:
             gt = ">="
             lt = "<="
@@ -230,23 +230,24 @@ class SlotTableDB(object):
             gt = ">"
             lt = "<"
         
-        filter = " and nod_id = %i" % node 
+        filter = " and nod_id in (%s)" % ",".join([`n` for n in nodes])
+        
         
         field = ""
-        sql = """select distinct all_schedstart as time from v_allocslot where
+        sql = """select distinct all_schedstart as time from v_allocslot2 where
         all_schedstart %s '%s'""" % (gt,start)
         if end != None:
             sql+=" and all_schedstart %s '%s'" % (lt,end)
         sql += filter
     
-        sql += """ union select distinct all_schedend from v_allocslot where
+        sql += """ union select distinct all_schedend from v_allocslot2 where
         all_schedend %s '%s'""" % (gt,start)
         if end != None:
             sql +=" and all_schedend %s '%s'" % (lt,end) 
         sql+=filter
         
         if includeReal:     
-            sql += """ union select distinct all_realend from v_allocslot where
+            sql += """ union select distinct all_realend from v_allocslot2 where
             all_realend %s '%s'""" % (gt,start)
             if end != None:
                 sql +=" and all_schedend %s '%s'" % (lt,end) 
@@ -409,6 +410,12 @@ class SlotTableDB(object):
         cur = self.getConn().cursor()
         cur.execute(sql, (status,res_id))
 
+    def updateReservationPartTimes(self, rsp_ids, start, end, realend):
+        sql = "UPDATE TB_ALLOC SET all_schedstart = ?, all_schedend = ?, all_realend = ?"
+        sql += " WHERE RSP_ID in (%s)" % ",".join([`r` for r in rsp_ids])
+        cur = self.getConn().cursor()
+        cur.execute(sql, (start,end,realend))    
+        self.changePointCacheDirty = True
     
     def updateReservationPartStatus(self, respart_id, status):
         sql = "UPDATE TB_RESPART SET RSP_STATUS = ? WHERE RSP_ID = ?"

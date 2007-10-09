@@ -203,5 +203,13 @@ class LeaseTable(object):
                     break
         return leases
     
-    
+    def getLeasesScheduledInNodes(self, time, nodes):
+        nodes = set(nodes)
+        leases = []
+        for l in self.entries.values():
+            start = l.rr[-1].start
+            nodes2 = set(l.rr[-1].nodes.values())
+            if len(nodes & nodes2) > 0 and start > time:
+                leases.append(l)
+        return leases
 

@@ -92,11 +92,14 @@ class RMConfig(Config):
         return self.config.getboolean(constants.GENERAL_SEC, constants.SUSPENSION_OPT)
 
     def getMaxReservations(self):
-        r = self.config.get(constants.GENERAL_SEC, constants.RESERVATIONS_OPT)
-        if r == "unlimited":
-            return None
-        else:
-            return int(r)
+        if self.getBackfillingType() == constants.BACKFILLING_OFF:
+            return 0
+        elif self.getBackfillingType() == constants.BACKFILLING_AGGRESSIVE:
+            return 1
+        elif self.getBackfillingType() == constants.BACKFILLING_CONSERVATIVE:
+            return 1000000
+        elif self.getBackfillingType() == constants.BACKFILLING_INTERMEDIATE:
+            r = self.config.getint(constants.GENERAL_SEC, constants.RESERVATIONS_OPT)
 
     def getDBTemplate(self):
         return self.config.get(constants.SIMULATION_SEC, constants.TEMPLATEDB_OPT)
@@ -122,6 +125,15 @@ class RMConfig(Config):
             return None
         else:
             return injfile
+        
+    def isBackfilling(self):
+        if self.getBackfillingType() == constants.BACKFILLING_OFF:
+            return False
+        else:
+            return True
+        
+    def getBackfillingType(self):
+        return self.config.get(constants.GENERAL_SEC, constants.BACKFILLING_OPT)
 
     
 class RMMultiConfig(Config):
