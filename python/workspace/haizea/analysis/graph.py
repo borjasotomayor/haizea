@@ -91,15 +91,27 @@ class PointAndLineGraph(Graph):
         print "Generating graph %s" % graphfile
         Graph.plot(self)        
         largestY = None
-        colors = iter("bgrcmy")
+        colors = ['blue', 'green', 'red','cyan', 'magenta','yellow', 
+                  'indigo', 'gold', 'firebrick', 'indianred', 'darkolivegreen', 
+                  'darkseagreen', 'mediumvioletred', 'mediumorchid', 'chartreuse', 
+                  'mediumslateblue', 'springgreen', 'crimson', 'lightsalmon', 
+                  'brown', 'turquoise', 'olivedrab', 'skyblue', 
+                  'darkturquoise', 'goldenrod', 'darkgreen', 'darkviolet', 
+                  'darkgray', 'lightpink', 'teal', 'darkmagenta', 
+                  'lightgoldenrodyellow', 'lavender', 'yellowgreen', 'thistle', 
+                  'violet', 'navy', 'orchid', 'blue', 'ghostwhite', 'honeydew', 
+                  'cornflowerblue', 'darkblue', 'darkkhaki', 'mediumpurple', 
+                  'cornsilk', 'red', 'bisque', 'slategray', 'darkcyan', 'khaki', 
+                  'wheat', 'deepskyblue', 'darkred', 'steelblue', 'aliceblue']
+        colors = iter(colors)
         for dataset in self.data:
             x = [p[0] for p in dataset]
             y1 = [p[1] for p in dataset]
             y2 = [p[2] for p in dataset]
             largestY = max(largestY,max(y1),max(y2))
             color = colors.next()
-            pylab.plot(x,y1, color + 'o')
-            pylab.plot(x,y2, color)
+            pylab.plot(x,y1, 'o', color=color)
+            pylab.plot(x,y2, color=color)
         
         pylab.ylim(0, largestY * 1.05)            
         pylab.gca().xaxis.set_major_formatter(FormatStrFormatter('%d'))
