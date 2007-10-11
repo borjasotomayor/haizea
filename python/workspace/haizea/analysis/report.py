@@ -4,7 +4,7 @@ import workspace.haizea.analysis.graph as graphs
 from workspace.haizea.common.utils import genDataDirName, genTraceInjName
 from pickle import Unpickler
 from mx.DateTime import now
-from operator import itemgetter
+from operator import itemgetter, or_
 import shutil
 
 class Section(object):
@@ -163,13 +163,13 @@ class Report(object):
             self.clip = None
                 
         self.sections = [
-                 Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
-                 Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
+                 #Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
+                 #Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
                  Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
-                 Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE),
+                 #Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE),
                  #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
                  Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE)
-                 #Section("'Client happiness' ratio", constants.UTILRATIOFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
+                 #Section("'Client happiness' ratio", constants.UTILRATIOFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE)
                  #Section("Best-Effort Wait Time (from submission to lease start) [NOCLIP]", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
                  ]
         
@@ -183,12 +183,15 @@ class Report(object):
     def generate(self):
         self.generateIndex()
         for t in self.traces:
-            profilesdirs = dict([(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles])
-            self.generateReport(t[2],profilesdirs)
-        
+            profilesdirs = [(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
+            profilesdirs = dict([(p,d) for p,d in profilesdirs if os.path.exists(d)])
+            if len(profilesdirs) > 0:
+                self.generateReport(t[2],profilesdirs)
         for p in self.profiles:
-            tracesdirs = dict([(t[2], self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces])
-            self.generateReport(p, tracesdirs)
+            tracesdirs = [(t[2], self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces]
+            tracesdirs = dict([(t,d) for t,d in tracesdirs if os.path.exists(d)])
+            if len(tracesdirs) > 0:
+                self.generateReport(p, tracesdirs)
 
     def generateIndex(self):
         indexfile = open(self.outdir + "/index.html", "w")
@@ -197,11 +200,21 @@ class Report(object):
         indexfile.write(header + heading)
         indexfile.write("<hr/>")
         
+        traces = self.traces
+        traces.sort()
+        profiles = self.profiles
+        profiles.sort()
+        
         html  = "<h3>Profile reports</h3>"
         html += "<ul>"
-        for p in self.profiles:
+        for p in profiles:
             html += "<li>"
-            html += "<a href='%s/index.html'>%s</a>" % (p,p)
+            tracesdirsexist = [os.path.exists(self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces]
+            exists = reduce(or_, tracesdirsexist)
+            if exists:                    
+                html += "<a href='%s/index.html'>%s</a>" % (p,p)
+            else:
+                html += p
             html += "</li>"
         html += "</ul>"
         indexfile.write(html)
@@ -209,13 +222,32 @@ class Report(object):
 
         html  = "<h3>Trace reports</h3>"
         html += "<ul>"
-        for t in self.traces:
+        for t in traces:
             html += "<li>"
-            html += "<a href='%s/index.html'>%s</a>" % (t[2],t[2])
+            profilesdirsexists = [os.path.exists(self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
+            exists = reduce(or_, profilesdirsexists)
+            if exists:                    
+                html += "<a href='%s/index.html'>%s</a>" % (t[2],t[2])
+            else:
+                html += t[2]
+            html += "</li>"
             html += "</li>"
         html += "</ul>"
         indexfile.write(html)
         indexfile.write("<hr/>")
+        listitems = ""
+        for p in profiles:
+            for t in traces:
+                name = genDataDirName(p,t[0],t[1])
+                dir = self.statsdir + "/" + name
+                if not os.path.exists(dir):
+                    listitems += "<li>%s</li>" % name
+        if listitems != "":
+            html  = "<h3>Simulations that haven't completed yet</h3>"
+            html += "<ul>" + listitems + "</ul>"
+            indexfile.write(html)
+            indexfile.write("<hr/>")
+        
 
         footer = self.generateHTMLFooter()
         indexfile.write(footer)
