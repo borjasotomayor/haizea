@@ -726,6 +726,9 @@ class SlotTable(object):
     def removeReservationPart(self, rsp_id):
         self.db.removeReservationPart(rsp_id)
         self.availabilitywindow.flushCache()
+        
+    def isFull(self, time):
+        return self.db.isFull(time, constants.RES_CPU)
 
 class AvailEntry(object):
     def __init__(self, time, avail, availpreempt = None):

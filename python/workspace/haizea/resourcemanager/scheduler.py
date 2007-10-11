@@ -39,23 +39,27 @@ class Scheduler(object):
         done = False
         newqueue = ds.Queue(self)
         while not done and not self.isQueueEmpty():
-            r = self.queue.dequeue()
-            try:
-                info("LEASE-%i Processing request (BEST-EFFORT)" % r.leaseID, constants.SCHED, self.rm.time)
-                info("LEASE-%i Maxdur  %s" % (r.leaseID, r.maxdur), constants.SCHED, self.rm.time)
-                info("LEASE-%i Remdur  %s" % (r.leaseID, r.remdur), constants.SCHED, self.rm.time)
-                info("LEASE-%i Realdur %s" % (r.leaseID, r.realremdur), constants.SCHED, self.rm.time)
-                info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED, self.rm.time)
-                self.scheduleBestEffortLease(r)
-                self.scheduledleases.add(r)
-                self.rm.stats.decrQueueSize(r.leaseID)
-                self.rm.stats.stopQueueWait(r.leaseID)
-            except SchedException, msg:
-                # Put back on queue
-                newqueue.enqueue(r)
-                info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
-                if not self.rm.config.isBackfilling():
-                    done = True
+            if self.numbesteffortres == self.maxres and self.slottable.isFull(self.rm.time):
+                info("Used up all reservations and slot table is full. Skipping rest of queue.", constants.SCHED, self.rm.time)
+                done = True
+            else:
+                r = self.queue.dequeue()
+                try:
+                    info("LEASE-%i Processing request (BEST-EFFORT)" % r.leaseID, constants.SCHED, self.rm.time)
+                    info("LEASE-%i Maxdur  %s" % (r.leaseID, r.maxdur), constants.SCHED, self.rm.time)
+                    info("LEASE-%i Remdur  %s" % (r.leaseID, r.remdur), constants.SCHED, self.rm.time)
+                    info("LEASE-%i Realdur %s" % (r.leaseID, r.realremdur), constants.SCHED, self.rm.time)
+                    info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED, self.rm.time)
+                    self.scheduleBestEffortLease(r)
+                    self.scheduledleases.add(r)
+                    self.rm.stats.decrQueueSize(r.leaseID)
+                    self.rm.stats.stopQueueWait(r.leaseID)
+                except SchedException, msg:
+                    # Put back on queue
+                    newqueue.enqueue(r)
+                    info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
+                    if not self.rm.config.isBackfilling():
+                        done = True
                     
         newqueue.q += self.queue.q 
         self.queue = newqueue
@@ -257,15 +261,14 @@ class Scheduler(object):
         realend = rr.realend
         nodes = rr.nodes.values()
         debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,realend), constants.SCHED, self.rm.time)
-        leases = self.scheduledleases.getLeasesScheduledInNodes(realend, nodes)
+        leases = self.scheduledleases.getNextLeasesScheduledInNodes(realend, nodes)
         leases = [l for l in leases if isinstance(l,ds.BestEffortLease)]
         for l in leases:
             debug("Found lease %i" % l.leaseID, constants.SCHED, self.rm.time)
             l.printContents()
-        if len(leases)>0:
-            first = leases[0]
-            self.slottable.slideback(first, realend)
-            self.reevaluateSchedule(first)
+            self.slottable.slideback(l, realend)
+        for l in leases:
+            self.reevaluateSchedule(l)
             
         
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
