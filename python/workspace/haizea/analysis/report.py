@@ -163,13 +163,13 @@ class Report(object):
             self.clip = None
                 
         self.sections = [
-                 #Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
-                 #Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
+                 Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
+                 Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
                  Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
-                 #Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE),
+                 Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE),
                  #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
-                 Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE)
-                 #Section("'Client happiness' ratio", constants.UTILRATIOFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE)
+                 Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
+                 Section("'Client happiness' ratio", constants.UTILRATIOFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE)
                  #Section("Best-Effort Wait Time (from submission to lease start) [NOCLIP]", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
                  ]
         
@@ -210,9 +210,9 @@ class Report(object):
         for p in profiles:
             html += "<li>"
             tracesdirsexist = [os.path.exists(self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces]
-            exists = reduce(or_, tracesdirsexist)
-            if exists:                    
-                html += "<a href='%s/index.html'>%s</a>" % (p,p)
+            tracesdirsexist = [e for e in tracesdirsexist if e == True]
+            if len(tracesdirsexist) > 0:                    
+                html += "<a href='%s/index.html'>%s</a> (%i)" % (p,p,len(tracesdirsexist))
             else:
                 html += p
             html += "</li>"
@@ -225,9 +225,9 @@ class Report(object):
         for t in traces:
             html += "<li>"
             profilesdirsexists = [os.path.exists(self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
-            exists = reduce(or_, profilesdirsexists)
-            if exists:                    
-                html += "<a href='%s/index.html'>%s</a>" % (t[2],t[2])
+            profilesdirsexists = [e for e in profilesdirsexists if e == True]
+            if len(profilesdirsexists) > 0:                    
+                html += "<a href='%s/index.html'>%s</a> (%i)" % (t[2],t[2], len(profilesdirsexists))
             else:
                 html += t[2]
             html += "</li>"
