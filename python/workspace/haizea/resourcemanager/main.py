@@ -54,6 +54,7 @@ def writeDataToDisk(resourcemanager, dir):
     queuesize = resourcemanager.stats.getQueueSize()
     queuewait = resourcemanager.stats.getQueueWait()
     execwait = resourcemanager.stats.getExecWait()
+    utilratio = resourcemanager.stats.getUtilizationRatio()
     
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     #pickle(memutilization, dir, constants.MEMUTILFILE)
@@ -64,7 +65,7 @@ def writeDataToDisk(resourcemanager, dir):
     pickle(queuesize, dir, constants.QUEUESIZEFILE)
     pickle(queuewait, dir, constants.QUEUEWAITFILE)
     pickle(execwait, dir, constants.EXECWAITFILE)
-    
+    pickle(utilratio, dir, constants.UTILRATIOFILE)
         
 def pickle(data, dir, file):
     f = open (dir + "/" + file, "w")
@@ -75,8 +76,10 @@ def pickle(data, dir, file):
 
 if __name__ == "__main__":
     configfile="../configfiles/test.conf"
-    tracefile="../traces/examples/test_inject.csv"
-    injectedfile="../traces/examples/test_inject.lwf"
+    tracefile="../traces/examples/test_earlystop.csv"
+    injectedfile="None"
+    #tracefile="../traces/examples/test_inject.csv"
+    #injectedfile="../traces/examples/test_inject.lwf"
     statsdir="/home/borja/docs/uchicago/research/ipdps/results"
 
     config = RMConfig.fromFile(configfile)
