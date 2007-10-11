@@ -137,7 +137,10 @@ class RMConfig(Config):
         return self.config.get(constants.GENERAL_SEC, constants.BACKFILLING_OPT)
     
     def stopWhenBestEffortDone(self):
-        return self.config.getboolean(constants.SIMULATION_SEC, constants.STOPBESTEFFORTDONE_OPT)
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.STOPBESTEFFORTDONE_OPT):
+            return False
+        else:
+            return self.config.getboolean(constants.SIMULATION_SEC, constants.STOPBESTEFFORTDONE_OPT)
 
     
 class RMMultiConfig(Config):
