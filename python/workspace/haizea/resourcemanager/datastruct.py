@@ -86,10 +86,10 @@ class ExactLease(LeaseBase):
         
     def addRuntimeOverhead(self, percent):
         factor = 1 + float(percent)/100
-        duration = roundDateTimeDelta(self.end - self.start)
-        realduration = roundDateTimeDelta(self.prematureend - self.start)
-        self.end = self.start + (duration * factor)
-        self.prematureend = self.start + (realduration * factor)
+        duration = self.end - self.start
+        realduration = self.prematureend - self.start
+        self.end = self.start + roundDateTimeDelta(duration * factor)
+        self.prematureend = self.start + roundDateTimeDelta(realduration * factor)
         
 class BestEffortLease(LeaseBase):
     def __init__(self, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None):
