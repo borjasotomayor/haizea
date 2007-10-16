@@ -113,6 +113,7 @@ NODES_OPT="nodes"
 BANDWIDTH_OPT="bandwidth"
 RESOURCES_OPT="resources"
 STOPBESTEFFORTDONE_OPT="stopwhenbesteffortdone"
+RUNOVERHEAD_OPT="runtime-overhead"
 
 BACKFILLING_OFF="off"
 BACKFILLING_AGGRESSIVE="aggressive"

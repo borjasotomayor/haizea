@@ -19,6 +19,13 @@ class ResourceManager(object):
         self.starttime = config.getInitialTime()
         self.time = self.starttime
         
+        # Add runtime overhead, if necessary
+        overhead = self.config.getRuntimeOverhead()
+        if overhead != None:
+            for r in self.requests:
+                r.addRuntimeOverhead(overhead)
+            
+        
     def existsPendingReq(self):
         return len(self.requests) != 0
 

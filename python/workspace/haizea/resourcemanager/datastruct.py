@@ -83,6 +83,13 @@ class ExactLease(LeaseBase):
         self.printRR()
         edebug("--------------------------------------------------", DS, None)
         
+    def addRuntimeOverhead(self, percent):
+        factor = 1 + float(percent)/100
+        duration = self.end - self.start
+        realduration = self.prematureend - self.start
+        self.end = self.start + (duration * factor)
+        self.prematureend = self.start + (realduration * factor)
+        
 class BestEffortLease(LeaseBase):
     def __init__(self, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None):
         LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq)
@@ -100,6 +107,13 @@ class BestEffortLease(LeaseBase):
         edebug("Real duration  : %s" % self.realremdur, DS, None)
         self.printRR()
         edebug("--------------------------------------------------", DS, None)
+
+    def addRuntimeOverhead(self, percent):
+        factor = 1 + float(percent)/100
+        self.maxdur *= factor
+        self.remdur *= factor
+        self.realremdur *= factor
+        self.realdur *= factor
         
 class ResourceReservationBase(object):
     def __init__(self, start, end, db_rsp_ids, realend = None):

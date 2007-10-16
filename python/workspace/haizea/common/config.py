@@ -142,6 +142,11 @@ class RMConfig(Config):
         else:
             return self.config.getboolean(constants.SIMULATION_SEC, constants.STOPBESTEFFORTDONE_OPT)
 
+    def getRuntimeOverhead(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.RUNOVERHEAD_OPT):
+            return None
+        else:
+            return self.config.getint(constants.SIMULATION_SEC, constants.RUNOVERHEAD_OPT)
     
 class RMMultiConfig(Config):
     def __init__(self, config):
