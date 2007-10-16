@@ -14,6 +14,7 @@ class Report(object):
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
         p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
+        p.add_option(Option("-t", "--html-only", action="store_true", dest="htmlonly"))
 
         opt, args = p.parse_args(argv)
         
@@ -22,7 +23,7 @@ class Report(object):
             
         statsdir = opt.statsdir
 
-        report(multiconfig, statsdir)
+        report(multiconfig, statsdir, opt.htmlonly)
 
 class Simulate(object):
     def __init__(self):

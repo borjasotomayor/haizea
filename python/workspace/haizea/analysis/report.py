@@ -137,9 +137,10 @@ class Section(object):
         return html
 
 class Report(object):
-    def __init__(self, config, statsdir):
+    def __init__(self, config, statsdir, htmlonly):
         self.config = config
         self.statsdir = statsdir
+        self.htmlonly = htmlonly
 
         confs = self.config.getConfigsToReport()
 
@@ -182,16 +183,18 @@ class Report(object):
 
     def generate(self):
         self.generateIndex()
-        for t in self.traces:
-            profilesdirs = [(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
-            profilesdirs = dict([(p,d) for p,d in profilesdirs if os.path.exists(d)])
-            if len(profilesdirs) > 0:
-                self.generateReport(t[2],profilesdirs)
         for p in self.profiles:
+            print "Generating report for profile %s" % p
             tracesdirs = [(t[2], self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces]
             tracesdirs = dict([(t,d) for t,d in tracesdirs if os.path.exists(d)])
             if len(tracesdirs) > 0:
                 self.generateReport(p, tracesdirs)
+        for t in self.traces:
+            print "Generating report for trace %s" % t[2]
+            profilesdirs = [(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
+            profilesdirs = dict([(p,d) for p,d in profilesdirs if os.path.exists(d)])
+            if len(profilesdirs) > 0:
+                self.generateReport(t[2],profilesdirs)
 
     def generateIndex(self):
         indexfile = open(self.outdir + "/index.html", "w")
@@ -267,8 +270,9 @@ class Report(object):
             s.loadData(dirs)
             
         # Generate graphs
-        for s in self.sections:
-            s.generateGraph(outdir)
+        if not self.htmlonly:
+            for s in self.sections:
+                s.generateGraph(outdir)
             
         reportfile = open(outdir + "/index.html", "w")
         

@@ -2,8 +2,8 @@ from workspace.haizea.common.config import RMMultiConfig
 from workspace.haizea.analysis.report import Report
 from workspace.haizea.common.utils import genDataDirName, genTraceInjName
 
-def report(multiconfig, statsdir):
-    r = Report(multiconfig, statsdir)
+def report(multiconfig, statsdir, htmlonly=False):
+    r = Report(multiconfig, statsdir, htmlonly)
     r.generate()
 
 
