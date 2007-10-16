@@ -1,5 +1,7 @@
 import optparse
 import os.path
+from mx import DateTime
+from math import ceil
 
 class Option (optparse.Option):
     ATTRS = optparse.Option.ATTRS + ['required']
@@ -88,3 +90,6 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
     condor.close()
     sh.close()
     reportsh.close()
+    
+def roundDateTimeDelta(d):
+    return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))
