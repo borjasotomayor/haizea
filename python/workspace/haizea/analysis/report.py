@@ -84,7 +84,7 @@ class Section(object):
                 self.final[p] = final
         
     def generateGraph(self, outdir):
-        if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_STEP_VALUE, constants.GRAPH_POINT_VALUE]:
+        if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_STEP_VALUE, constants.GRAPH_POINT_VALUE, constants.GRAPH_CUMULATIVE]:
             values = [[(v[0],v[2]) for v in self.data[p]] for p in self.profiles]
         elif self.graphtype in [constants.GRAPH_LINE_AVG]:
             values = [[(v[0],v[3]) for v in self.data[p]] for p in self.profiles]
@@ -96,6 +96,9 @@ class Section(object):
             legends = self.profiles
         elif self.graphtype in [constants.GRAPH_STEP_VALUE]:
             graph = graphs.StepGraph
+            legends = self.profiles
+        elif self.graphtype in [constants.GRAPH_CUMULATIVE]:
+            graph = graphs.CumulativeGraph
             legends = self.profiles
         elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
             graph = graphs.PointAndLineGraph
@@ -170,6 +173,7 @@ class Report(object):
                  Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE),
                  #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
                  Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
+                 Section("Cumulative Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_CUMULATIVE, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
                  Section("'Client happiness' ratio", constants.UTILRATIOFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE)
                  #Section("Best-Effort Wait Time (from submission to lease start) [NOCLIP]", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
                  ]

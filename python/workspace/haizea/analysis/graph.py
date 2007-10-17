@@ -129,3 +129,43 @@ class PointAndLineGraph(Graph):
     def show(self):
         pylab.show()
         
+class CumulativeGraph(Graph):
+    def __init__(self, data, xlabel="", ylabel="", legends=[]):
+        Graph.__init__(self,"Percentile",ylabel)
+        self.data = data
+        self.legends = legends
+
+    def plotToFile(self, graphfile, thumbfile=None):
+        print "Generating graph %s" % graphfile
+        Graph.plot(self)
+        largestY = None
+        for dataset in self.data:
+            values = [p[1] for p in dataset]
+            n, bins, patches = pylab.hist(values, len(values))
+            xaccum = [0]
+            for m in n:
+                xaccum.append(xaccum[-1] + m)
+            xaccum = [ (float(x) / len(xaccum)) * 100 for x in xaccum]
+            y = [0] + list(bins)
+            largestY = max(largestY,max(y))
+            pylab.plot(xaccum,y)
+        
+
+        pylab.xlim(0, 105)
+        pylab.ylim(0, largestY * 1.05)
+        pylab.gca().yaxis.set_major_formatter(FormatStrFormatter('%d'))
+        pylab.gca().xaxis.set_major_formatter(FormatStrFormatter('%d'))
+        pylab.legend(self.legends, loc='best')
+        
+        pylab.savefig(graphfile)
+        pylab.gcf().clear()
+        
+        if thumbfile != None:
+            print "Generating thumbnail %s" % thumbfile
+            im = Image.open(graphfile)
+            im.thumbnail((640, 480), Image.ANTIALIAS)
+            im.save(thumbfile)
+    
+    def show(self):
+        pylab.show()
+        
