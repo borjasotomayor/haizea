@@ -294,7 +294,7 @@ class Report(object):
         
         html = "<h3><a name='table'></a>Tabular Summary</h3>"
         reportfile.write(html)
-        table = self.generateTableSummary()
+        table = self.generateTableSummary(dirs)
         reportfile.write(table)
         
         csvfile = "summary.csv"
@@ -303,7 +303,7 @@ class Report(object):
         html += "</div></div>"
         reportfile.write(html)
 
-        self.generateCSVSummary(self.outdir + "/" + csvfile)
+        self.generateCSVSummary(outdir + "/" + csvfile, dirs)
             
         footer = self.generateHTMLFooter()
         reportfile.write(footer)
@@ -345,8 +345,8 @@ class Report(object):
         
         return toc
     
-    def generateTableSummary(self):   
-        profiles = self.profiles
+    def generateTableSummary(self, dirs):   
+        profiles = dirs.keys()
         profiles.sort()
         sections = [s for s in self.sections if s.tablefinal!=None] 
 
@@ -366,8 +366,8 @@ class Report(object):
         html += "</table>"        
         return html
     
-    def generateCSVSummary(self, csvfile):  
-        profiles = self.profiles
+    def generateCSVSummary(self, csvfile, dirs):  
+        profiles = dirs.keys()
         profiles.sort()
         sections = [s for s in self.sections if s.tablefinal!=None] 
         

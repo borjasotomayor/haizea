@@ -3,7 +3,8 @@ from workspace.haizea.resourcemanager.main import simulate
 from workspace.haizea.traces.generators import generateTrace
 from workspace.haizea.common.utils import Option, OptionParser, generateScripts
 from workspace.haizea.common.config import RMConfig, RMMultiConfig, TraceConfig
-        
+from workspace.haizea.analysis.traces import analyzeExactLeaseInjection
+
 class Report(object):
     def __init__(self):
         pass
@@ -78,3 +79,17 @@ class GenScripts(object):
         dir = opt.dir
 
         generateScripts(configfile, multiconfig, dir)
+        
+class InjectionAnalyzer(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-f", "--injectionfile", action="store", type="string", dest="injectionfile", required=True))
+
+        opt, args = p.parse_args(argv)
+        
+        injectionfile = opt.injectionfile
+
+        analyzeExactLeaseInjection(injectionfile)  

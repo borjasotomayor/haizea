@@ -1,5 +1,6 @@
 from mx.DateTime import TimeDelta
 from mx.DateTime import ISO
+from mx.DateTime import now
 from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
 import workspace.haizea.common.constants as constants
 import workspace.haizea.traces.formats as formats
@@ -137,9 +138,12 @@ def SWF(tracefile, config):
                 requests.append(req)
     return requests
 
-def LWF(tracefile, config):
+def LWF(tracefile, config = None):
     file = formats.LWF.fromFile(tracefile)
-    inittime = config.getInitialTime()
+    if config != None:
+        inittime = config.getInitialTime()
+    else:
+        inittime = now()
     requests = []
     for entry in file.entries:
         tSubmit = inittime + TimeDelta(seconds=entry.reqTime) 
