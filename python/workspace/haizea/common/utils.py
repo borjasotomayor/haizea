@@ -56,11 +56,16 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
     sh = open(dir + "/run.sh", "w")
     reportsh = open(dir + "/report.sh", "w")
     
+    exclude = ["sox", "nefarious", "cuckoo", "admiral", "fledermaus-2", "microbe", "merry", "berkshire"]
+
     condor.write("Universe   = vanilla\n")
-    condor.write("Executable = /opt/python/python-2.5/bin/python2.5\n")
+    condor.write("Executable = /home/borja/bin/python2.5\n")
     condor.write("transfer_executable = false\n")
     condor.write("getenv = true\n")
-    condor.write("requirements = Mips >= 2000 && Machine != \"sox.cs.uchicago.edu\" && Machine != \"nefarious.cs.uchicago.edu\"\n")
+    req = "requirements = Mips >= 2000"
+    for h in exclude:
+        req += " && Machine != \"%s.cs.uchicago.edu\"" % h
+    condor.write("%s\n" % req)
     condor.write("Log        = experiment-indiv.log\n")
     condor.write("Output     = experiment-indiv.$(Process).out\n")
     condor.write("Error      = experiment-indiv.$(Process).error\n\n")
