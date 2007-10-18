@@ -147,6 +147,13 @@ class RMConfig(Config):
             return None
         else:
             return self.config.getint(constants.SIMULATION_SEC, constants.RUNOVERHEAD_OPT)
+
+    def overheadOnlyBestEffort(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT):
+            return False
+        else:
+            return self.config.getboolean(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT)
+
     
 class RMMultiConfig(Config):
     def __init__(self, config):

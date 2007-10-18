@@ -23,8 +23,11 @@ class ResourceManager(object):
         overhead = self.config.getRuntimeOverhead()
         if overhead != None:
             for r in self.requests:
-                r.addRuntimeOverhead(overhead)
-            
+                if isinstance(r,BestEffortLease):
+                    r.addRuntimeOverhead(overhead)
+                elif isinstance(r,ExactLease):
+                    if not self.config.overheadOnlyBestEffort():
+                        r.addRuntimeOverhead(overhead)
         
     def existsPendingReq(self):
         return len(self.requests) != 0
