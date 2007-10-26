@@ -1,5 +1,6 @@
 import pylab
 from matplotlib.ticker import FormatStrFormatter
+import matplotlib.mlab as mlab
 import Image
 
 class Graph(object):
@@ -141,7 +142,7 @@ class CumulativeGraph(Graph):
         largestY = None
         for dataset in self.data:
             values = [p[1] for p in dataset]
-            n, bins, patches = pylab.hist(values, len(values))
+            n, bins = mlab.hist(values, len(values))
             xaccum = [0]
             for m in n:
                 xaccum.append(xaccum[-1] + m)
