@@ -155,8 +155,8 @@ class VMResourceReservation(ResourceReservationBase):
         edebug("On Complete    : %s" % self.oncomplete, DS, None)
         
 class SuspensionResourceReservation(ResourceReservationBase):
-    def __init__(self, start, end, nodes, oncomplete):
-        ResourceReservationBase.__init__(self, start, end)
+    def __init__(self, start, end, nodes, db_rsp_ids):
+        ResourceReservationBase.__init__(self, start, end, db_rsp_ids)
         self.nodes = nodes
 
     def printContents(self):
@@ -165,8 +165,8 @@ class SuspensionResourceReservation(ResourceReservationBase):
         edebug("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
         
 class ResumptionResourceReservation(ResourceReservationBase):
-    def __init__(self, start, end, nodes, oncomplete):
-        ResourceReservationBase.__init__(self, start, end)
+    def __init__(self, start, end, nodes, db_rsp_ids):
+        ResourceReservationBase.__init__(self, start, end, db_rsp_ids)
         self.nodes = nodes
 
     def printContents(self):

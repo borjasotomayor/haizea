@@ -117,6 +117,9 @@ class RMConfig(Config):
     def getBandwidth(self):
         return self.config.getint(constants.SIMULATION_SEC, constants.BANDWIDTH_OPT)
 
+    def getSuspendResumeRate(self):
+        return self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDRATE_OPT)
+
     def getTracefile(self):
         return self.config.get(constants.GENERAL_SEC, constants.TRACEFILE_OPT)
 

@@ -1,5 +1,5 @@
 from sets import Set
-from mx.DateTime import ISO
+from mx.DateTime import ISO, TimeDelta
 from operator import attrgetter
 import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.db as db
@@ -448,7 +448,7 @@ class SlotTable(object):
         return list(atstart | atmiddle)
 
 
-    def fitBestEffort(self, leaseID, earliest, remdur, vmimage, numnodes, resreq, canreserve, realdur, suspendable):
+    def fitBestEffort(self, leaseID, earliest, remdur, vmimage, numnodes, resreq, canreserve, realdur, suspendable, mustresume):
         slottypes = resreq.keys()
         start = None
         end = None
@@ -464,6 +464,15 @@ class SlotTable(object):
             futurecp = [ISO.ParseDateTime(p["time"]) for p in futurecp.fetchall()]
         else:
             futurecp = []
+
+        resumetime = None
+        if mustresume:
+            resumerate = self.rm.config.getSuspendResumeRate()
+            resumetime = float(resreq[constants.RES_MEM]) / resumerate
+            resumetime = TimeDelta(seconds = resumetime)
+            # Must allocate time for resumption too
+            remdur += resumetime
+            realdur += resumetime
 
         first = changepoints[0]
         
@@ -558,6 +567,20 @@ class SlotTable(object):
         except IntegrityError, msg:
             pass # Ignore these for now. TODO: Redesign DB to remove TB_RESERVATION
 
+        suspendtime = None
+        if mustsuspend:
+            suspendrate = self.rm.config.getSuspendResumeRate()
+            suspendtime = float(resreq[constants.RES_MEM]) / suspendrate
+            suspendtime = TimeDelta(seconds = suspendtime)
+            if end != realend:
+                end -= suspendtime
+            else:
+                end -= suspendtime
+                realend -= suspendtime
+                
+        if mustresume:
+            start += resumetime
+        
         mappings = {}
         vmnode = 1
         db_rsp_ids = []
@@ -575,8 +598,26 @@ class SlotTable(object):
                         self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = realend)
                     vmnode += 1
                     break
-
-        return mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids
+        resume_db_rsp_id = None
+        if mustresume:
+            rsp_name = "RESUME %i" % leaseID
+            rsp_id = self.db.addReservationPart(leaseID, rsp_name, 4, preemptible=False)
+            for vmnode in mappings:
+                physnode = mappings[vmnode]
+                sl_id = self.availabilitywindow.slot_ids[n][constants.RES_MEM]
+                self.db.addAllocation(rsp_id, sl_id, start - resumetime, start, resreq[constants.RES_MEM], realEndTime=start)
+            resume_db_rsp_id = rsp_id
+        suspend_db_rsp_id = None
+        if mustsuspend:
+            rsp_name = "SUSPEND %i" % leaseID
+            rsp_id = self.db.addReservationPart(leaseID, rsp_name, 3, preemptible=False)
+            for vmnode in mappings:
+                physnode = mappings[vmnode]
+                sl_id = self.availabilitywindow.slot_ids[n][constants.RES_MEM]
+                self.db.addAllocation(rsp_id, sl_id, end, end + suspendtime, resreq[constants.RES_MEM], realEndTime=end+suspendtime)
+            suspend_db_rsp_id = rsp_id
+    
+        return mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_db_rsp_id, suspend_db_rsp_id
 
     def slideback(self, lease, earliest):
         nodes = lease.rr[-1].nodes.values()

@@ -3,6 +3,7 @@ from workspace.haizea.resourcemanager.slottable import SlotTable, SlotFittingExc
 from workspace.haizea.common.log import info, debug, warning, edebug
 import workspace.haizea.common.constants as constants
 
+
 class SchedException(Exception):
     pass
 
@@ -77,9 +78,9 @@ class Scheduler(object):
                 elif isinstance(rr,ds.VMResourceReservation):
                     self.handleEndVM(l, rr)
                 elif isinstance(rr,ds.SuspensionResourceReservation):
-                    pass
+                    self.handleEndSuspend(l, rr)
                 elif isinstance(rr,ds.ResumptionResourceReservation):
-                    pass
+                    self.handleEndResume(l, rr)
         
         for l in starting:
             rrs = l.getStartingReservations(self.rm.time)
@@ -89,9 +90,9 @@ class Scheduler(object):
                 elif isinstance(rr,ds.VMResourceReservation):
                     self.handleStartVM(l, rr)                    
                 elif isinstance(rr,ds.SuspensionResourceReservation):
-                    pass
+                    self.handleStartSuspend(l, rr)
                 elif isinstance(rr,ds.ResumptionResourceReservation):
-                    pass
+                    self.handleStartResume(l, rr)
 
     def handleStartVM(self, l, rr):
         info("LEASE-%i Start of handleStartVM" % l.leaseID, constants.SCHED, self.rm.time)
@@ -132,11 +133,7 @@ class Scheduler(object):
             if isinstance(l,ds.BestEffortLease):
                 if not prematureend:
                     rr.realend = rr.end
-                    l.state = constants.LEASE_STATE_SUSPENDED
                     rr.state = constants.RES_STATE_DONE
-                    self.scheduledleases.remove(l)
-                    self.queue.enqueueInOrder(l)
-                    self.rm.stats.incrQueueSize(l.leaseID)
                 else:
                     l.state = constants.LEASE_STATE_DONE
                     rr.state = constants.RES_STATE_DONE
@@ -155,6 +152,38 @@ class Scheduler(object):
         l.printContents()
         debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED, self.rm.time)
         
+
+    def handleStartSuspend(self, l, rr):
+        info("LEASE-%i Start of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
+        l.printContents()
+        rr.state = constants.RES_STATE_ACTIVE
+        l.printContents()
+        debug("LEASE-%i End of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
+
+    def handleEndSuspend(self, l, rr):
+        info("LEASE-%i Start of handleEndSuspend" % l.leaseID, constants.SCHED, self.rm.time)
+        l.printContents()
+        rr.state = constants.RES_STATE_DONE
+        l.state = constants.LEASE_STATE_SUSPENDED
+        self.scheduledleases.remove(l)
+        self.queue.enqueueInOrder(l)
+        self.rm.stats.incrQueueSize(l.leaseID)
+        l.printContents()
+        debug("LEASE-%i End of handleEndSuspend" % l.leaseID, constants.SCHED, self.rm.time)
+
+    def handleStartResume(self, l, rr):
+        info("LEASE-%i Start of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
+        l.printContents()
+        rr.state = constants.RES_STATE_ACTIVE
+        l.printContents()
+        debug("LEASE-%i End of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
+
+    def handleEndResume(self, l, rr):
+        info("LEASE-%i Start of handleEndResume" % l.leaseID, constants.SCHED, self.rm.time)
+        l.printContents()
+        rr.state = constants.RES_STATE_DONE
+        l.printContents()
+        debug("LEASE-%i End of handleEndResume" % l.leaseID, constants.SCHED, self.rm.time)
     
     def scheduleExactLease(self, req):
         try:
@@ -193,8 +222,9 @@ class Scheduler(object):
         earliest = dict([(node+1, [self.rm.time,constants.TRANSFER_NO]) for node in range(numnodes)])
         suspendable = self.rm.config.isSuspensionAllowed()
         try:
+            mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
             canreserve = self.canReserveBestEffort()
-            (mappings, start, end, realend, mustsuspend, reservation, db_rsp_ids) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realremdur, suspendable=suspendable)
+            (mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, suspend_rsp_id, resume_rsp_id) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realremdur, suspendable=suspendable, mustresume=mustresume)
             # Schedule image transfers
             dotransfer = False
             
@@ -204,14 +234,25 @@ class Scheduler(object):
                 req.state = constants.LEASE_STATE_DEPLOYED            
 
             # Add resource reservations
-            if mustsuspend:
+            if resumetime != None:
+                resmrr = ds.ResumptionResourceReservation(start-resumetime, start, mappings, [resume_rsp_id])
+                resmrr.state = constants.RES_STATE_SCHEDULED
+                req.appendRR(resmrr)
+
+            if suspendtime != None:
                 oncomplete = constants.ONCOMPLETE_SUSPEND
             else:
                 oncomplete = constants.ONCOMPLETE_ENDLEASE
+
             vmrr = ds.VMResourceReservation(start, end, realend, mappings, oncomplete, reservation, db_rsp_ids)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
-            
+
+            if suspendtime != None:
+                susprr = ds.SuspensionResourceReservation(end, end + suspendtime, mappings, [suspend_rsp_id])
+                susprr.state = constants.RES_STATE_SCHEDULED
+                req.appendRR(susprr)
+           
             if reservation:
                 self.numbesteffortres += 1
             
