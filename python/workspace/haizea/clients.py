@@ -4,6 +4,7 @@ from workspace.haizea.traces.generators import generateTrace
 from workspace.haizea.common.utils import Option, OptionParser, generateScripts
 from workspace.haizea.common.config import RMConfig, RMMultiConfig, TraceConfig
 from workspace.haizea.analysis.traces import analyzeExactLeaseInjection
+from workspace.haizea.analysis.misc import genpercentiles
 
 class Report(object):
     def __init__(self):
@@ -25,6 +26,26 @@ class Report(object):
         statsdir = opt.statsdir
 
         report(multiconfig, statsdir, opt.htmlonly)
+        
+class GenPercentiles(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        from workspace.haizea.analysis.main import report
+
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
+
+        opt, args = p.parse_args(argv)
+        
+        configfile=opt.conf
+        multiconfig = RMMultiConfig.fromFile(configfile)
+            
+        statsdir = opt.statsdir
+
+        genpercentiles(multiconfig, statsdir)
 
 class Simulate(object):
     def __init__(self):
