@@ -137,6 +137,9 @@ class Scheduler(object):
                 else:
                     l.state = constants.LEASE_STATE_DONE
                     rr.state = constants.RES_STATE_DONE
+                    rrs = l.getRRafter(rr)
+                    for r in rrs:
+                        l.removeRR(r)
                     self.completedleases.add(l)
                     self.scheduledleases.remove(l)
                     self.rm.stats.incrBestEffortCompleted(l.leaseID)            
@@ -148,7 +151,7 @@ class Scheduler(object):
             if rr.backfillres == True:
                 self.numbesteffortres -= 1
         if prematureend and self.rm.config.isBackfilling():
-            self.reevaluateSchedule(l)
+            self.reevaluateSchedule(l, True)
         l.printContents()
         debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED, self.rm.time)
         
@@ -204,7 +207,7 @@ class Scheduler(object):
             
             
             # Add resource reservations
-            vmrr = ds.VMResourceReservation(req.start, req.end, req.prematureend, mappings, constants.ONCOMPLETE_ENDLEASE, False, db_rsp_ids)
+            vmrr = ds.VMResourceReservation(req, req.start, req.end, req.prematureend, mappings, constants.ONCOMPLETE_ENDLEASE, False, db_rsp_ids)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
             
@@ -224,7 +227,7 @@ class Scheduler(object):
         try:
             mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
             canreserve = self.canReserveBestEffort()
-            (mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, suspend_rsp_id, resume_rsp_id) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realremdur, suspendable=suspendable, mustresume=mustresume)
+            (mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_rsp_id, suspend_rsp_id) = self.slottable.fitBestEffort(req.leaseID, earliest, req.remdur, req.vmimage, req.numnodes, req.resreq, canreserve, realdur=req.realremdur, suspendable=suspendable, mustresume=mustresume)
             # Schedule image transfers
             dotransfer = False
             
@@ -235,7 +238,7 @@ class Scheduler(object):
 
             # Add resource reservations
             if resumetime != None:
-                resmrr = ds.ResumptionResourceReservation(start-resumetime, start, mappings, [resume_rsp_id])
+                resmrr = ds.ResumptionResourceReservation(req, start-resumetime, start, mappings, [resume_rsp_id])
                 resmrr.state = constants.RES_STATE_SCHEDULED
                 req.appendRR(resmrr)
 
@@ -244,12 +247,12 @@ class Scheduler(object):
             else:
                 oncomplete = constants.ONCOMPLETE_ENDLEASE
 
-            vmrr = ds.VMResourceReservation(start, end, realend, mappings, oncomplete, reservation, db_rsp_ids)
+            vmrr = ds.VMResourceReservation(req, start, end, realend, mappings, oncomplete, reservation, db_rsp_ids)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
 
             if suspendtime != None:
-                susprr = ds.SuspensionResourceReservation(end, end + suspendtime, mappings, [suspend_rsp_id])
+                susprr = ds.SuspensionResourceReservation(req, end, end + suspendtime, mappings, [suspend_rsp_id])
                 susprr.state = constants.RES_STATE_SCHEDULED
                 req.appendRR(susprr)
            
@@ -279,11 +282,7 @@ class Scheduler(object):
         else:
             if self.rm.config.isSuspensionAllowed():
                 debug("The lease will be suspended while running.", constants.SCHED, self.rm.time)
-                rr.oncomplete = constants.ONCOMPLETE_SUSPEND
-                rr.end = time
-                for rsp_id in rr.db_rsp_ids:
-                    self.slottable.updateLeaseEnd(rsp_id, time)
-                # Schedule suspensions RRs
+                self.slottable.suspend(req, time)
             else:
                 debug("The lease has to be cancelled and resubmitted.", constants.SCHED, self.rm.time)
                 for rsp_id in rr.db_rsp_ids:
@@ -297,19 +296,22 @@ class Scheduler(object):
         edebug("Lease after preemption:", constants.SCHED, self.rm.time)
         req.printContents()
         
-    def reevaluateSchedule(self, endinglease):
-        rr = endinglease.rr[-1]
-        realend = rr.realend
-        nodes = rr.nodes.values()
-        debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,realend), constants.SCHED, self.rm.time)
-        leases = self.scheduledleases.getNextLeasesScheduledInNodes(realend, nodes)
+    def reevaluateSchedule(self, endinglease, checkreal):
+        vmrr, susprr = endinglease.getLastVMRR()
+        if checkreal:
+            end = vmrr.realend
+        else:
+            end = vmrr.end
+        nodes = vmrr.nodes.values()
+        debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,end), constants.SCHED, self.rm.time)
+        leases = self.scheduledleases.getNextLeasesScheduledInNodes(end, nodes)
         leases = [l for l in leases if isinstance(l,ds.BestEffortLease)]
         for l in leases:
             debug("Found lease %i" % l.leaseID, constants.SCHED, self.rm.time)
             l.printContents()
-            self.slottable.slideback(l, realend)
+            self.slottable.slideback(l, end)
         for l in leases:
-            self.reevaluateSchedule(l)
+            self.reevaluateSchedule(l, False)
             
         
     def findEarliestStartingTimes(self, imageURI, imageSize, time):

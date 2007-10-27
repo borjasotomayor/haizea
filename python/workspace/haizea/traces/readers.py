@@ -39,10 +39,10 @@ def CSV(tracefile, config):
                 if fields[7] != "NULL": # 7: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[7])) # 7: deadline
                     end = start + TimeDelta(seconds=int(fields[8])) # 8: duration
-                    req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, end)
+                    req = ExactLease(None, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, end)
                 else:
                     maxdur = TimeDelta(seconds=int(fields[8])) # 8: duration
-                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, maxdur)
+                    req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, maxdur)
             elif len(fields) == 12:
                 # In this format, the fields have the following meaning:
                 #     0:"time",
@@ -69,11 +69,11 @@ def CSV(tracefile, config):
                     start = tSubmit + TimeDelta(seconds=int(fields[8])) # 8: deadline
                     end = start + TimeDelta(seconds=int(fields[9])) # 9: duration
                     prematureend = start + TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend)
+                    req = ExactLease(None, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend)
                 else:
                     maxdur = TimeDelta(seconds=int(fields[9])) # 9: duration
                     realdur = TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
+                    req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
             req.state = constants.LEASE_STATE_PENDING
             requests.append(req)
     return requests
@@ -104,7 +104,7 @@ def GWF(tracefile, config):
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
                 maxdur = TimeDelta(seconds=reqtime)
                 realdur = TimeDelta(seconds=int(fields[3])) # 3: RunTime
-                req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
+                req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
                 req.state = constants.LEASE_STATE_PENDING
                 requests.append(req)
     return requests
@@ -133,7 +133,7 @@ def SWF(tracefile, config):
                 realdur = TimeDelta(seconds=int(fields[3])) # 3: RunTime
                 if realdur > maxdur:
                     realdur = maxdur
-                req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
+                req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
                 req.state = constants.LEASE_STATE_PENDING
                 requests.append(req)
     return requests
@@ -157,7 +157,7 @@ def LWF(tracefile, config = None):
         resreq[constants.RES_CPU] = entry.CPU
         resreq[constants.RES_MEM] = entry.mem
         resreq[constants.RES_DISK] = vmimagesize + entry.disk
-        req = ExactLease(tSubmit, tStart, tEnd, vmimage, vmimagesize, numnodes, resreq, tRealEnd)
+        req = ExactLease(None, tSubmit, tStart, tEnd, vmimage, vmimagesize, numnodes, resreq, tRealEnd)
         req.state = constants.LEASE_STATE_PENDING
         requests.append(req)
     return requests

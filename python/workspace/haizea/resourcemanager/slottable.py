@@ -3,6 +3,7 @@ from mx.DateTime import ISO, TimeDelta
 from operator import attrgetter
 import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.db as db
+import workspace.haizea.resourcemanager.datastruct as ds
 from workspace.haizea.common.log import info, debug, warning, edebug
 from pysqlite2.dbapi2 import IntegrityError
 
@@ -569,9 +570,7 @@ class SlotTable(object):
 
         suspendtime = None
         if mustsuspend:
-            suspendrate = self.rm.config.getSuspendResumeRate()
-            suspendtime = float(resreq[constants.RES_MEM]) / suspendrate
-            suspendtime = TimeDelta(seconds = suspendtime)
+            suspendtime = self.getSuspendTime(resreq[constants.RES_MEM])
             if end != realend:
                 end -= suspendtime
             else:
@@ -604,7 +603,7 @@ class SlotTable(object):
             rsp_id = self.db.addReservationPart(leaseID, rsp_name, 4, preemptible=False)
             for vmnode in mappings:
                 physnode = mappings[vmnode]
-                sl_id = self.availabilitywindow.slot_ids[n][constants.RES_MEM]
+                sl_id = self.availabilitywindow.slot_ids[physnode][constants.RES_MEM]
                 self.db.addAllocation(rsp_id, sl_id, start - resumetime, start, resreq[constants.RES_MEM], realEndTime=start)
             resume_db_rsp_id = rsp_id
         suspend_db_rsp_id = None
@@ -613,15 +612,53 @@ class SlotTable(object):
             rsp_id = self.db.addReservationPart(leaseID, rsp_name, 3, preemptible=False)
             for vmnode in mappings:
                 physnode = mappings[vmnode]
-                sl_id = self.availabilitywindow.slot_ids[n][constants.RES_MEM]
+                sl_id = self.availabilitywindow.slot_ids[physnode][constants.RES_MEM]
                 self.db.addAllocation(rsp_id, sl_id, end, end + suspendtime, resreq[constants.RES_MEM], realEndTime=end+suspendtime)
             suspend_db_rsp_id = rsp_id
-    
+
         return mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_db_rsp_id, suspend_db_rsp_id
 
+    def suspend(self, lease, time):
+        (vmrr, susprr) = lease.getLastVMRR()
+        
+        suspendtime = self.getSuspendTime(lease.resreq[constants.RES_MEM])
+        if vmrr.end != vmrr.realend:
+            vmrr.end = time - suspendtime
+        else:
+            vmrr.end = time - suspendtime
+            vmrr.realend = vmrr.end
+            
+        vmrr.oncomplete = constants.ONCOMPLETE_SUSPEND
+        
+        if susprr != None:
+            lease.removeRR(susprr)
+
+        # New suspension allocations
+        mappings = vmrr.nodes
+        rsp_name = "SUSPEND %i" % lease.leaseID
+        rsp_id = self.db.addReservationPart(lease.leaseID, rsp_name, 3, preemptible=False)
+        for vmnode in mappings:
+            physnode = mappings[vmnode]
+            sl_id = self.availabilitywindow.slot_ids[physnode][constants.RES_MEM]
+            self.db.addAllocation(rsp_id, sl_id, time - suspendtime, time, lease.resreq[constants.RES_MEM], realEndTime=time)
+        self.commit()
+
+        newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, mappings, rsp_id)
+        newsusprr.state = constants.RES_STATE_SCHEDULED
+        lease.appendRR(newsusprr)
+            
+    def getSuspendTime(self, memsize):
+        suspendrate = self.rm.config.getSuspendResumeRate()
+        suspendtime = float(memsize) / suspendrate
+        suspendtime = TimeDelta(seconds = suspendtime)
+        return suspendtime
+
+
+
     def slideback(self, lease, earliest):
-        nodes = lease.rr[-1].nodes.values()
-        originalstart = lease.rr[-1].start
+        (vmrr, susprr) = lease.getLastVMRR()
+        nodes = vmrr.nodes.values()
+        originalstart = vmrr.start
         cp = self.db.findChangePointsInNode(start=earliest, end=originalstart, nodes=nodes, closed=False)
         cp = [ISO.ParseDateTime(p["time"]) for p in cp.fetchall()]
         cp = [earliest] + cp
@@ -640,15 +677,27 @@ class SlotTable(object):
             pass
         else:
             diff = originalstart - newstart
-            rr = lease.rr[-1]
-            rr.start -= diff
-            rr.end -= diff
-            rr.realend -= diff
-            self.db.updateReservationPartTimes(rr.db_rsp_ids, rr.start, rr.end, rr.realend)
+            vmrr.start -= diff
+            if susprr != None:
+                # This lease was going to be suspended. Determine if
+                # we still want to use some of the extra time.
+                if vmrr.end - newstart < lease.remdur:
+                    # We still need to run until the end, and suspend there
+                    # Don't change the end time or the suspend RR
+                    if newstart + lease.realremdur < vmrr.end:
+                        vmrr.realend = newstart + lease.realremdur
+                else:
+                    # No need to suspend any more.
+                    vmrr.end -= diff
+                    vmrr.realend -= diff
+                    vmrr.oncomplete = constants.ONCOMPLETE_ENDLEASE
+                    lease.removeRR(susprr)
+            self.db.updateReservationPartTimes(vmrr.db_rsp_ids, vmrr.start, vmrr.end, vmrr.realend)
             self.db.commit()
             self.availabilitywindow.flushCache()
             edebug("New lease descriptor (after slideback):", constants.ST, self.rm.time)
             lease.printContents()
+
 
     def prioritizenodes(self,candidatenodes,vmimage,start,resreq, canpreempt):
         # TODO2: Choose appropriate prioritizing function based on a
@@ -789,7 +838,7 @@ class AvailabilityWindow(object):
         self.db = db
         self.avail = None
         self.availcache = {}
-        self.slot_ids = None
+        self.slot_ids = {}
 
     def findAvailableSlots(self, time, amount=None, type=None, canpreempt=False, slotfilter=None):
         if not self.availcache.has_key(time):
@@ -818,7 +867,7 @@ class AvailabilityWindow(object):
     # Generate raw availability at change points
     def genAvail(self):
         self.avail = {}
-        self.slot_ids = {}
+        slot_ids = {}
         slottypes = self.resreq.keys()
         
         # Initially, this will be a dictionary (key: physnode) of
@@ -838,9 +887,12 @@ class AvailabilityWindow(object):
                 avail = slot["available"]
                 if not avail_aux.has_key(nod_id):
                     avail_aux[nod_id] = {}
-                    self.slot_ids[nod_id] = {}
+                    if not self.slot_ids.has_key(nod_id):
+                        self.slot_ids[nod_id] = {}
+                    slot_ids[nod_id] = {}
                 avail_aux[nod_id][slottype] = [AvailEntry(self.time,avail)]
                 self.slot_ids[nod_id][slottype] = slot_id
+                slot_ids[nod_id][slottype] = slot_id
 
         # Filter out nodes that don't have enough resources for at
         # least one VM (the previous step may have selected nodes that,
@@ -855,11 +907,11 @@ class AvailabilityWindow(object):
                     enough = False
             if not enough:
                 del avail_aux[physnode]
-                del self.slot_ids[physnode]
+                del slot_ids[physnode]
                 
 
         # Determine the availability at the subsequent change points
-        slot_ids = [v.values() for v in self.slot_ids.values()]
+        slot_ids = [v.values() for v in slot_ids.values()]
         slot_ids = [x for y in slot_ids for x in y] # Flatten
         slot_ids = set(slot_ids)
         changepoints = self.db.findChangePoints(self.time, slots=list(slot_ids), closed=False)

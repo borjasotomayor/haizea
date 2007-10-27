@@ -22,7 +22,7 @@ def prettyNodemap(nodes):
     return s
 
 class LeaseBase(object):
-    def __init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq):
+    def __init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq):
         self.leaseID = getLeaseID()
         self.tSubmit = tSubmit
         self.state = None
@@ -33,6 +33,7 @@ class LeaseBase(object):
         self.vmimagemap = {}
         self.memimagemap = {}
         self.rr = []
+        self.scheduler = scheduler
         
     def printContents(self):
         edebug("Lease ID       : %i" % self.leaseID, DS, None)
@@ -66,10 +67,26 @@ class LeaseBase(object):
 
     def getEndingReservations(self, time):
         return [r for r in self.rr if (r.end == time or r.realend == time) and r.state == RES_STATE_ACTIVE]
+    
+    def getLastVMRR(self):
+        if isinstance(self.rr[-1],VMResourceReservation):
+            return (self.rr[-1], None)
+        elif isinstance(self.rr[1],SuspensionResourceReservation):
+            return (self.rr[-2], self.rr[-1])
+        
+    def getRRafter(self, rr):
+        return self.rr[self.rr.index(rr)+1:]
+    
+    def removeRR(self, rr):
+        if not rr in self.rr:
+            raise Exception, "Tried to remove an RR not contained in this lease"
+        else:
+            rr.removeDBentries()
+            self.rr.remove(rr)
         
 class ExactLease(LeaseBase):
-    def __init__(self, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
-        LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq)
+    def __init__(self, scheduler, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
+        LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
         self.start = start
         self.end = end
         self.prematureend = prematureend
@@ -92,8 +109,8 @@ class ExactLease(LeaseBase):
         self.prematureend = self.start + roundDateTimeDelta(realduration * factor)
         
 class BestEffortLease(LeaseBase):
-    def __init__(self, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None):
-        LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq)
+    def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None):
+        LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
         self.maxdur = maxdur
         self.remdur = maxdur
         self.realremdur = realdur
@@ -117,10 +134,11 @@ class BestEffortLease(LeaseBase):
         self.realdur = roundDateTimeDelta(self.realdur * factor)
         
 class ResourceReservationBase(object):
-    def __init__(self, start, end, db_rsp_ids, realend = None):
+    def __init__(self, lease, start, end, db_rsp_ids, realend = None):
         self.start = start
         self.end = end
         self.realend = realend
+        self.lease = lease
         self.state = None
         self.db_rsp_ids = db_rsp_ids
         
@@ -129,10 +147,15 @@ class ResourceReservationBase(object):
         edebug("End            : %s" % self.end, DS, None)
         edebug("Real End       : %s" % self.realend, DS, None)
         edebug("State          : %s" % rstate_str(self.state), DS, None)
+        edebug("RSP_ID         : %s" % self.db_rsp_ids, DS, None)
+        
+    def removeDBentries(self):
+        for rsp_id in self.db_rsp_ids:
+            self.lease.scheduler.slottable.removeReservationPart(rsp_id)
         
 class FileTransferResourceReservation(ResourceReservationBase):
-    def __init__(self, start, end, transfers):
-        ResourceReservationBase.__init__(self, start, end)
+    def __init__(self, lease, start, end, transfers):
+        ResourceReservationBase.__init__(self, start, end, lease)
         self.transfers = transfers
 
     def printContents(self):
@@ -142,8 +165,8 @@ class FileTransferResourceReservation(ResourceReservationBase):
 
                 
 class VMResourceReservation(ResourceReservationBase):
-    def __init__(self, start, end, realend, nodes, oncomplete, backfillres, db_rsp_ids):
-        ResourceReservationBase.__init__(self, start, end, db_rsp_ids, realend=realend)
+    def __init__(self, lease, start, end, realend, nodes, oncomplete, backfillres, db_rsp_ids):
+        ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids, realend=realend)
         self.nodes = nodes
         self.oncomplete = oncomplete
         self.backfillres = backfillres
@@ -155,8 +178,8 @@ class VMResourceReservation(ResourceReservationBase):
         edebug("On Complete    : %s" % self.oncomplete, DS, None)
         
 class SuspensionResourceReservation(ResourceReservationBase):
-    def __init__(self, start, end, nodes, db_rsp_ids):
-        ResourceReservationBase.__init__(self, start, end, db_rsp_ids)
+    def __init__(self, lease, start, end, nodes, db_rsp_ids):
+        ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids)
         self.nodes = nodes
 
     def printContents(self):
@@ -165,8 +188,8 @@ class SuspensionResourceReservation(ResourceReservationBase):
         edebug("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
         
 class ResumptionResourceReservation(ResourceReservationBase):
-    def __init__(self, start, end, nodes, db_rsp_ids):
-        ResourceReservationBase.__init__(self, start, end, db_rsp_ids)
+    def __init__(self, lease, start, end, nodes, db_rsp_ids):
+        ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids)
         self.nodes = nodes
 
     def printContents(self):
