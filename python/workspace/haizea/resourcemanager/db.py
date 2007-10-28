@@ -510,11 +510,13 @@ class SlotTableDB(object):
         cur.execute(sql, (rsp_id,))
         sql = "DELETE FROM tb_alloc WHERE rsp_id=?"
         cur.execute(sql, (rsp_id,))
+        self.changePointCacheDirty = True
 
     def removeAllocation(self, rsp_id, sl_id, all_schedstart):
         sql = "DELETE FROM tb_alloc WHERE rsp_id=? and sl_id=? and all_schedstart=?"
         cur = self.getConn().cursor()
         cur.execute(sql, (rsp_id,sl_id,all_schedstart))
+        self.changePointCacheDirty = True
 
     def isReservationDone(self, res_id):
         sql = "SELECT COUNT(*) FROM V_ALLOCATION WHERE res_id=? AND rsp_status in (0,1)" # Hardcoding bad!
