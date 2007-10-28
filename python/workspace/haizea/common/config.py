@@ -1,5 +1,6 @@
 import ConfigParser
 from mx.DateTime import ISO
+from mx.DateTime import TimeDelta
 import workspace.haizea.common.constants as constants
 import workspace.haizea.common.stats as stats
 import os.path
@@ -119,6 +120,12 @@ class RMConfig(Config):
 
     def getSuspendResumeRate(self):
         return self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDRATE_OPT)
+
+    def getSuspendThreshold(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLD_OPT):
+            return None
+        else:
+            return TimeDelta(seconds=self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLD_OPT))
 
     def getTracefile(self):
         return self.config.get(constants.GENERAL_SEC, constants.TRACEFILE_OPT)

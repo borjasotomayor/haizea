@@ -6,6 +6,7 @@ import workspace.haizea.resourcemanager.db as db
 import workspace.haizea.resourcemanager.datastruct as ds
 from workspace.haizea.common.log import info, debug, warning, edebug
 from pysqlite2.dbapi2 import IntegrityError
+from workspace.haizea.common.utils import roundDateTimeDelta
 
 class SlotFittingException(Exception):
     pass
@@ -470,10 +471,12 @@ class SlotTable(object):
         if mustresume:
             resumerate = self.rm.config.getSuspendResumeRate()
             resumetime = float(resreq[constants.RES_MEM]) / resumerate
-            resumetime = TimeDelta(seconds = resumetime)
+            resumetime = roundDateTimeDelta(TimeDelta(seconds = resumetime))
             # Must allocate time for resumption too
             remdur += resumetime
             realdur += resumetime
+
+        suspendthreshold = self.rm.config.getSuspendThreshold()
 
         first = changepoints[0]
         
@@ -494,8 +497,15 @@ class SlotTable(object):
                     info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
                     
                     if suspendable:
-                        # It the lease is suspendable, just keep the current selection
-                        break
+                        # It the lease is suspendable...
+                        if suspendthreshold != None:
+                            if end-start > suspendthreshold:
+                                break
+                            else:
+                                info("This starting time does not meet the suspend threshold (%s < %s)" % (end-start, suspendthreshold), constants.ST, self.rm.time)
+                                start = None
+                        else:
+                            pass
                     else:
                         # Keep looking
                         pass
@@ -536,11 +546,15 @@ class SlotTable(object):
                         mustsuspend=True
                         info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
                         if suspendable:
-                            # It the lease is suspendable, just keep the current selection
-                            break
-                        else:
-                            # Keep looking
-                            pass
+                            # It the lease is suspendable...
+                            if suspendthreshold != None:
+                                if end-start > suspendthreshold:
+                                    break
+                                else:
+                                    info("This starting time does not meet the suspend threshold (%s < %s)" % (end-start, suspendthreshold), constants.ST, self.rm.time)
+                                    start = None
+                            else:
+                                pass
                     else:
                         mustsuspend=False
                         # We've found a satisfactory starting time
@@ -643,14 +657,14 @@ class SlotTable(object):
             self.db.addAllocation(rsp_id, sl_id, time - suspendtime, time, lease.resreq[constants.RES_MEM], realEndTime=time)
         self.commit()
 
-        newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, mappings, rsp_id)
+        newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, mappings, [rsp_id])
         newsusprr.state = constants.RES_STATE_SCHEDULED
         lease.appendRR(newsusprr)
             
     def getSuspendTime(self, memsize):
         suspendrate = self.rm.config.getSuspendResumeRate()
         suspendtime = float(memsize) / suspendrate
-        suspendtime = TimeDelta(seconds = suspendtime)
+        suspendtime = roundDateTimeDelta(TimeDelta(seconds = suspendtime))
         return suspendtime
 
 

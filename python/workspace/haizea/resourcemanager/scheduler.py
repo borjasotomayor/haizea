@@ -175,11 +175,11 @@ class Scheduler(object):
         debug("LEASE-%i End of handleEndSuspend" % l.leaseID, constants.SCHED, self.rm.time)
 
     def handleStartResume(self, l, rr):
-        info("LEASE-%i Start of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
+        info("LEASE-%i Start of handleStartResume" % l.leaseID, constants.SCHED, self.rm.time)
         l.printContents()
         rr.state = constants.RES_STATE_ACTIVE
         l.printContents()
-        debug("LEASE-%i End of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
+        debug("LEASE-%i End of handleStartResume" % l.leaseID, constants.SCHED, self.rm.time)
 
     def handleEndResume(self, l, rr):
         info("LEASE-%i Start of handleEndResume" % l.leaseID, constants.SCHED, self.rm.time)
