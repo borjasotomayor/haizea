@@ -71,8 +71,12 @@ class ResourceManager(object):
                 status("STATUS ----End----", constants.RM, self.time)
                 prevstatustime = self.time
             nextchangepoint = self.scheduler.slottable.peekNextChangePoint(self.time)
-            debug("Next change point (in slot table): %s" % nextchangepoint,constants.RM, self.time)
             nextreqtime = self.getNextReqTime()
+            debug("Next change point (in slot table): %s" % nextchangepoint,constants.RM, self.time)
+            debug("Next request time: %s" % nextreqtime,constants.RM, self.time)
+            debug("Scheduled requests: %i" % len(self.scheduler.scheduledleases.entries),constants.RM, self.time)
+            debug("Pending requests: %i" % len(self.requests),constants.RM, self.time)
+            debug("Queue size: %i" % len(self.scheduler.queue.q),constants.RM, self.time)
             if nextchangepoint != None and nextreqtime == None:
                 self.time = nextchangepoint
             if nextchangepoint == None and nextreqtime != None:
