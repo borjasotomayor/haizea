@@ -4,7 +4,7 @@ import workspace.haizea.resourcemanager.enactment as enactment
 import workspace.haizea.resourcemanager.stats as stats
 import workspace.haizea.common.constants as constants
 from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
-from workspace.haizea.common.log import info, debug, status
+from workspace.haizea.common.log import info, debug, status, error
 
 class ResourceManager(object):
     def __init__(self, requests, config):
@@ -72,11 +72,9 @@ class ResourceManager(object):
                 prevstatustime = self.time
             nextchangepoint = self.scheduler.slottable.peekNextChangePoint(self.time)
             nextreqtime = self.getNextReqTime()
-            debug("Next change point (in slot table): %s" % nextchangepoint,constants.RM, self.time)
-            debug("Next request time: %s" % nextreqtime,constants.RM, self.time)
-            debug("Scheduled requests: %i" % len(self.scheduler.scheduledleases.entries),constants.RM, self.time)
-            debug("Pending requests: %i" % len(self.requests),constants.RM, self.time)
-            debug("Queue size: %i" % len(self.scheduler.queue.q),constants.RM, self.time)
+            self.printStats(debug, nextchangepoint, nextreqtime)
+            
+            prevtime = self.time
             if nextchangepoint != None and nextreqtime == None:
                 self.time = nextchangepoint
             if nextchangepoint == None and nextreqtime != None:
@@ -95,6 +93,11 @@ class ResourceManager(object):
                 pendingbesteffort = [r for r in self.requests if isinstance(r,BestEffortLease)]
                 if self.scheduler.isQueueEmpty() and len(scheduledbesteffort) + len(pendingbesteffort) == 0:
                     done = True
+                    
+            if self.time == prevtime and done != True:
+                error("RM has fallen into an infinite loop. Dumping state..." ,constants.RM, self.time)
+                self.printStats(error, nextchangepoint, nextreqtime, verbose=True)
+                raise Exception, "Resource manager has fallen into an infinite loop."
 
         status("Simulation done, generating stats...", constants.RM, self.time)
         self.stats.addFinalMarker()
@@ -107,7 +110,30 @@ class ResourceManager(object):
             l.printContents()
             
         
-                
+    def printStats(self, logfun, nextcp, nextreqtime, verbose=False):
+        logfun("Next change point (in slot table): %s" % nextcp,constants.RM, self.time)
+        logfun("Next request time: %s" % nextreqtime,constants.RM, self.time)
+        scheduled = self.scheduler.scheduledleases.entries.keys()
+        logfun("Scheduled requests: %i" % len(scheduled),constants.RM, self.time)
+        if verbose and len(scheduled)>0:
+            logfun("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",constants.RM, None)
+            for k in scheduled:
+                lease = self.scheduler.scheduledleases.getLease(k)
+                lease.printContents(logfun=error)
+            logfun("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM, None)
+        logfun("Pending requests: %i" % len(self.requests),constants.RM, self.time)
+        if verbose and len(self.requests)>0:
+            logfun("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",constants.RM, None)
+            for lease in self.requests:
+                lease.printContents(logfun=error)
+            logfun("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM, None)
+        logfun("Queue size: %i" % len(self.scheduler.queue.q),constants.RM, self.time)
+        if verbose and len(self.scheduler.queue.q)>0:
+            logfun("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",constants.RM, None)
+            for lease in self.scheduler.queue.q:
+                lease.printContents(logfun=logfun)
+            logfun("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM, None)
+           
             
             
             
