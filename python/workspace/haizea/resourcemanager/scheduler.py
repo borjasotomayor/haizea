@@ -104,7 +104,8 @@ class Scheduler(object):
                 self.rm.stats.startExec(l.leaseID)            
             # TODO: Enactment
         elif l.state == constants.LEASE_STATE_SUSPENDED:
-            pass
+            l.state = constants.LEASE_STATE_ACTIVE
+            rr.state = constants.RES_STATE_ACTIVE
         l.printContents()
         debug("LEASE-%i End of handleStartVM" % l.leaseID, constants.SCHED, self.rm.time)
 
@@ -137,7 +138,7 @@ class Scheduler(object):
                 else:
                     l.state = constants.LEASE_STATE_DONE
                     rr.state = constants.RES_STATE_DONE
-                    rrs = l.getRRafter(rr)
+                    rrs = l.nextRRs(rr)
                     for r in rrs:
                         l.removeRR(r)
                     self.completedleases.add(l)
@@ -231,10 +232,11 @@ class Scheduler(object):
             # Schedule image transfers
             dotransfer = False
             
-            if dotransfer:
-                req.state = constants.LEASE_STATE_SCHEDULED
-            else:
-                req.state = constants.LEASE_STATE_DEPLOYED            
+            if req.state == constants.LEASE_STATE_PENDING:
+                if dotransfer:
+                    req.state = constants.LEASE_STATE_SCHEDULED
+                else:
+                    req.state = constants.LEASE_STATE_DEPLOYED            
 
             # Add resource reservations
             if resumetime != None:
@@ -268,14 +270,15 @@ class Scheduler(object):
         info("Preempting lease %i at time %s." % (req.leaseID, time), constants.SCHED, self.rm.time)
         edebug("Lease before preemption:", constants.SCHED, self.rm.time)
         req.printContents()
-        rr = req.rr[-1]
-        if rr.state == constants.RES_STATE_SCHEDULED and rr.start >= time:
+        vmrr, susprr  = req.getLastVMRR()
+        if vmrr.state == constants.RES_STATE_SCHEDULED and vmrr.start >= time:
             debug("The lease has not yet started. Removing reservation and resubmitting to queue.", constants.SCHED, self.rm.time)
-            for rsp_id in rr.db_rsp_ids:
-                self.slottable.removeReservationPart(rsp_id)            
-            if rr.backfillres == True:
+            req.state = constants.LEASE_STATE_PENDING
+            if vmrr.backfillres == True:
                 self.numbesteffortres -= 1
-            del req.rr[-1]
+            req.removeRR(vmrr)
+            if susprr != None:
+                req.removeRR(susprr)
             self.scheduledleases.remove(req)
             self.queue.enqueueInOrder(req)
             self.rm.stats.incrQueueSize(req.leaseID)
@@ -285,11 +288,15 @@ class Scheduler(object):
                 self.slottable.suspend(req, time)
             else:
                 debug("The lease has to be cancelled and resubmitted.", constants.SCHED, self.rm.time)
-                for rsp_id in rr.db_rsp_ids:
-                    self.slottable.removeReservationPart(rsp_id)            
-                if rr.backfillres == True:
+                req.state = constants.LEASE_STATE_PENDING
+                if vmrr.backfillres == True:
                     self.numbesteffortres -= 1
-                del req.rr[-1]
+                req.removeRR(vmrr)
+                if susprr != None:
+                    req.removeRR(susprr)
+                if req.state == constants.LEASE_STATE_SUSPENDED:
+                    resmrr = lease.prevRR(vmrr)
+                    req.removeRR(resmrr)
                 self.scheduledleases.remove(req)
                 self.queue.enqueueInOrder(req)
                 self.rm.stats.incrQueueSize(req.leaseID)

@@ -644,6 +644,8 @@ class SlotTable(object):
             
         vmrr.oncomplete = constants.ONCOMPLETE_SUSPEND
         
+        self.db.updateReservationPartTimes(vmrr.db_rsp_ids, vmrr.start, vmrr.end, vmrr.realend)            
+        
         if susprr != None:
             lease.removeRR(susprr)
 
@@ -672,7 +674,12 @@ class SlotTable(object):
     def slideback(self, lease, earliest):
         (vmrr, susprr) = lease.getLastVMRR()
         nodes = vmrr.nodes.values()
-        originalstart = vmrr.start
+        if lease.state == constants.LEASE_STATE_SUSPENDED:
+            resmrr = lease.prevRR(vmrr)
+            originalstart = resmrr.start
+        else:
+            resmrr = None
+            originalstart = vmrr.start
         cp = self.db.findChangePointsInNode(start=earliest, end=originalstart, nodes=nodes, closed=False)
         cp = [ISO.ParseDateTime(p["time"]) for p in cp.fetchall()]
         cp = [earliest] + cp
@@ -691,6 +698,10 @@ class SlotTable(object):
             pass
         else:
             diff = originalstart - newstart
+            if resmrr != None:
+                resmrr.start -= diff
+                resmrr.end -= diff
+                self.db.updateReservationPartTimes(resmrr.db_rsp_ids, resmrr.start, resmrr.end, resmrr.realend)            
             vmrr.start -= diff
             if susprr != None:
                 # This lease was going to be suspended. Determine if
@@ -706,6 +717,9 @@ class SlotTable(object):
                     vmrr.realend -= diff
                     vmrr.oncomplete = constants.ONCOMPLETE_ENDLEASE
                     lease.removeRR(susprr)
+            else:
+                vmrr.end -= diff
+                vmrr.realend -= diff
             self.db.updateReservationPartTimes(vmrr.db_rsp_ids, vmrr.start, vmrr.end, vmrr.realend)
             self.db.commit()
             self.availabilitywindow.flushCache()
