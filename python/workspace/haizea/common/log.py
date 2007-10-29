@@ -41,3 +41,8 @@ def warning(msg, comp, time):
     if time == None:
         time = "                      "
     log.warning("[%s] %s %s" % (time,comp.ljust(7),msg))    
+    
+def error(msg, comp, time):
+    if time == None:
+        time = "                      "
+    log.error("[%s] %s %s" % (time,comp.ljust(7),msg))        

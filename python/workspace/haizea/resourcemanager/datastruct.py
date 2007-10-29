@@ -35,23 +35,23 @@ class LeaseBase(object):
         self.rr = []
         self.scheduler = scheduler
         
-    def printContents(self):
-        edebug("Lease ID       : %i" % self.leaseID, DS, None)
-        edebug("Submission time: %s" % self.tSubmit, DS, None)
-        edebug("State          : %s" % state_str(self.state), DS, None)
-        edebug("VM image       : %s" % self.vmimage, DS, None)
-        edebug("VM image size  : %s" % self.vmimagesize, DS, None)
-        edebug("Num nodes      : %s" % self.numnodes, DS, None)
-        edebug("Resource req   : %s" % "  ".join([res_str(r[0]) + ": " + `r[1]` for r in self.resreq.items()]), DS, None)
-        edebug("VM image map   : %s" % self.vmimagemap, DS, None)
-        edebug("Mem image map  : %s" % self.memimagemap, DS, None)
+    def printContents(self, logfun=edebug):
+        logfun("Lease ID       : %i" % self.leaseID, DS, None)
+        logfun("Submission time: %s" % self.tSubmit, DS, None)
+        logfun("State          : %s" % state_str(self.state), DS, None)
+        logfun("VM image       : %s" % self.vmimage, DS, None)
+        logfun("VM image size  : %s" % self.vmimagesize, DS, None)
+        logfun("Num nodes      : %s" % self.numnodes, DS, None)
+        logfun("Resource req   : %s" % "  ".join([res_str(r[0]) + ": " + `r[1]` for r in self.resreq.items()]), DS, None)
+        logfun("VM image map   : %s" % self.vmimagemap, DS, None)
+        logfun("Mem image map  : %s" % self.memimagemap, DS, None)
 
-    def printRR(self):
-        edebug("RESOURCE RESERVATIONS", DS, None)
-        edebug("~~~~~~~~~~~~~~~~~~~~~", DS, None)
+    def printRR(self, logfun=edebug):
+        logfun("RESOURCE RESERVATIONS", DS, None)
+        logfun("~~~~~~~~~~~~~~~~~~~~~", DS, None)
         for r in self.rr:
-            r.printContents()
-            edebug("##", DS, None)
+            r.printContents(logfun)
+            logfun("##", DS, None)
             
     def appendRR(self, rr):
         self.rr.append(rr)
@@ -74,8 +74,12 @@ class LeaseBase(object):
         elif isinstance(self.rr[1],SuspensionResourceReservation):
             return (self.rr[-2], self.rr[-1])
         
-    def getRRafter(self, rr):
+    def nextRRs(self, rr):
         return self.rr[self.rr.index(rr)+1:]
+
+    def prevRR(self, rr):
+        return self.rr[self.rr.index(rr)-1]
+
     
     def removeRR(self, rr):
         if not rr in self.rr:
@@ -91,15 +95,15 @@ class ExactLease(LeaseBase):
         self.end = end
         self.prematureend = prematureend
         
-    def printContents(self):
-        edebug("__________________________________________________", DS, None)
-        LeaseBase.printContents(self)
-        edebug("Type           : EXACT", DS, None)
-        edebug("Start time     : %s" % self.start, DS, None)
-        edebug("End time       : %s" % self.end, DS, None)
-        edebug("Early end time : %s" % self.prematureend, DS, None)
-        self.printRR()
-        edebug("--------------------------------------------------", DS, None)
+    def printContents(self, logfun=edebug):
+        logfun("__________________________________________________", DS, None)
+        LeaseBase.printContents(self, logfun)
+        logfun("Type           : EXACT", DS, None)
+        logfun("Start time     : %s" % self.start, DS, None)
+        logfun("End time       : %s" % self.end, DS, None)
+        logfun("Early end time : %s" % self.prematureend, DS, None)
+        self.printRR(logfun)
+        logfun("--------------------------------------------------", DS, None)
         
     def addRuntimeOverhead(self, percent):
         factor = 1 + float(percent)/100
@@ -116,15 +120,15 @@ class BestEffortLease(LeaseBase):
         self.realremdur = realdur
         self.realdur = realdur
 
-    def printContents(self):
-        edebug("__________________________________________________", DS, None)
-        LeaseBase.printContents(self)
-        edebug("Type           : BEST-EFFORT", DS, None)
-        edebug("Max duration   : %s" % self.maxdur, DS, None)
-        edebug("Rem duration   : %s" % self.remdur, DS, None)
-        edebug("Real duration  : %s" % self.realremdur, DS, None)
-        self.printRR()
-        edebug("--------------------------------------------------", DS, None)
+    def printContents(self, logfun=edebug):
+        logfun("__________________________________________________", DS, None)
+        LeaseBase.printContents(self, logfun)
+        logfun("Type           : BEST-EFFORT", DS, None)
+        logfun("Max duration   : %s" % self.maxdur, DS, None)
+        logfun("Rem duration   : %s" % self.remdur, DS, None)
+        logfun("Real duration  : %s" % self.realremdur, DS, None)
+        self.printRR(logfun)
+        logfun("--------------------------------------------------", DS, None)
 
     def addRuntimeOverhead(self, percent):
         factor = 1 + float(percent)/100
@@ -142,12 +146,12 @@ class ResourceReservationBase(object):
         self.state = None
         self.db_rsp_ids = db_rsp_ids
         
-    def printContents(self):
-        edebug("Start          : %s" % self.start, DS, None)
-        edebug("End            : %s" % self.end, DS, None)
-        edebug("Real End       : %s" % self.realend, DS, None)
-        edebug("State          : %s" % rstate_str(self.state), DS, None)
-        edebug("RSP_ID         : %s" % self.db_rsp_ids, DS, None)
+    def printContents(self, logfun=edebug):
+        logfun("Start          : %s" % self.start, DS, None)
+        logfun("End            : %s" % self.end, DS, None)
+        logfun("Real End       : %s" % self.realend, DS, None)
+        logfun("State          : %s" % rstate_str(self.state), DS, None)
+        logfun("RSP_ID         : %s" % self.db_rsp_ids, DS, None)
         
     def removeDBentries(self):
         for rsp_id in self.db_rsp_ids:
@@ -158,10 +162,10 @@ class FileTransferResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, start, end, lease)
         self.transfers = transfers
 
-    def printContents(self):
-        ResourceReservationBase.printContents(self)
-        edebug("Type           : FILE TRANSFER", DS, None)
-        edebug("Transfers      : %s" % self.transfers, DS, None)
+    def printContents(self, logfun=edebug):
+        ResourceReservationBase.printContents(self, logfun)
+        logfun("Type           : FILE TRANSFER", DS, None)
+        logfun("Transfers      : %s" % self.transfers, DS, None)
 
                 
 class VMResourceReservation(ResourceReservationBase):
@@ -171,31 +175,31 @@ class VMResourceReservation(ResourceReservationBase):
         self.oncomplete = oncomplete
         self.backfillres = backfillres
 
-    def printContents(self):
-        ResourceReservationBase.printContents(self)
-        edebug("Type           : VM", DS, None)
-        edebug("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
-        edebug("On Complete    : %s" % self.oncomplete, DS, None)
+    def printContents(self, logfun=edebug):
+        ResourceReservationBase.printContents(self, logfun)
+        logfun("Type           : VM", DS, None)
+        logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
+        logfun("On Complete    : %s" % self.oncomplete, DS, None)
         
 class SuspensionResourceReservation(ResourceReservationBase):
     def __init__(self, lease, start, end, nodes, db_rsp_ids):
         ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids)
         self.nodes = nodes
 
-    def printContents(self):
-        ResourceReservationBase.printContents(self)
-        edebug("Type           : SUSPEND", DS, None)
-        edebug("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
+    def printContents(self, logfun=edebug):
+        ResourceReservationBase.printContents(self, logfun)
+        logfun("Type           : SUSPEND", DS, None)
+        logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
         
 class ResumptionResourceReservation(ResourceReservationBase):
     def __init__(self, lease, start, end, nodes, db_rsp_ids):
         ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids)
         self.nodes = nodes
 
-    def printContents(self):
-        ResourceReservationBase.printContents(self)
-        edebug("Type           : RESUME", DS, None)
-        edebug("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
+    def printContents(self, logfun=edebug):
+        ResourceReservationBase.printContents(self, logfun)
+        logfun("Type           : RESUME", DS, None)
+        logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
         
 class Queue(object):
     def __init__(self, scheduler):
