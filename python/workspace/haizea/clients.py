@@ -73,6 +73,7 @@ class TraceGenerator(object):
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
         p.add_option(Option("-f", "--tracefile", action="store", type="string", dest="tracefile", required=True))
+        p.add_option(Option("-g", "--guaranteeavg", action="store_true", dest="guaranteeavg"))
 
         opt, args = p.parse_args(argv)
         
@@ -81,7 +82,7 @@ class TraceGenerator(object):
         
         tracefile = opt.tracefile
 
-        generateTrace(config, tracefile)     
+        generateTrace(config, tracefile, opt.guaranteeavg)     
         
 class GenScripts(object):
     def __init__(self):

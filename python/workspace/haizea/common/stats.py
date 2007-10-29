@@ -1,4 +1,5 @@
 import random
+import operator 
 
 TESTDIST_NUM_ITERS=10000
 
@@ -6,6 +7,7 @@ class DiscreteDistributionBase(object):
     def __init__(self, values, probabilities):
         self.values = values
         self.probabilities = probabilities
+        self.avg = reduce(operator.add, [x[0]*x[1] for x in zip(values,probabilities)])
         accum = 0.0
         for i,prob in enumerate(self.probabilities):
             accum += prob
