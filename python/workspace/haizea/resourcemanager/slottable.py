@@ -450,10 +450,29 @@ class SlotTable(object):
         return list(atstart | atmiddle)
 
 
-    def fitBestEffort(self, leaseID, earliest, remdur, vmimage, numnodes, resreq, canreserve, realdur, suspendable, mustresume):
+    def fitBestEffort(self, lease, earliest, canreserve, suspendable, mustresume):
+        leaseID = lease.leaseID
+        remdur = lease.remdur
+        numnodes = lease.numnodes
+        resreq = lease.resreq
+        realdur = lease.realremdur
+        
         slottypes = resreq.keys()
+
         start = None
         end = None
+        
+        if mustresume:
+            # If we have to resume this lease, make sure that
+            # we have enough time to transfer the images.
+            mbtotransfer = lease.vmimagesize + resreq[constants.RES_MEM]
+            migratetime = float(mbtotransfer) / self.rm.config.getBandwidth()
+            migratetime = roundDateTimeDelta(TimeDelta(seconds=migratetime))
+            earliesttransfer = self.rm.time + migratetime
+
+            for n in earliest:
+                earliest[n][0] = max(earliest[n][0],earliesttransfer)
+        
         changepoints = list(set([x[0] for x in earliest.values()]))
         changepoints.sort()
         
@@ -572,7 +591,17 @@ class SlotTable(object):
             realend = end
 
         physnodes = canfit.keys()
-        physnodes.sort() # Arbitrary, prioritize nodes, as in exact
+        if mustresume:
+            # If we're resuming, we prefer resuming in the nodes we're already
+            # deployed in, to minimize the number of transfers.
+            vmrr, susprr = lease.getLastVMRR()
+            nodes = set(vmrr.nodes.values())
+            availnodes = set(physnodes)
+            deplnodes = availnodes.intersection(nodes)
+            notdeplnodes = availnodes.difference(nodes)
+            physnodes = list(deplnodes) + list(notdeplnodes)
+        else:
+            physnodes.sort() # Arbitrary, prioritize nodes, as in exact
         
         self.availabilitywindow.flushCache()
 
