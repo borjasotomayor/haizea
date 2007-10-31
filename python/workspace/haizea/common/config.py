@@ -4,6 +4,7 @@ from mx.DateTime import TimeDelta
 import workspace.haizea.common.constants as constants
 import workspace.haizea.common.stats as stats
 import os.path
+from workspace.haizea.common.utils import genDataDirName
 
 class Config(object):
     def __init__(self, config):
@@ -164,6 +165,44 @@ class RMConfig(Config):
         else:
             return self.config.getboolean(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT)
 
+class GraphDataEntry(object):
+    def __init__(self, title, profile, trace, inject):
+        self.title = title
+        self.dirname = genDataDirName(profile,trace,inject)
+
+class GraphConfig(Config):
+    def __init__(self, config):
+        Config.__init__(self, config)    
+    
+    def getTitle(self):
+        return self.config.get(constants.GENERAL_SEC, constants.TITLE_OPT)
+    
+    def getDatafile(self):
+        return self.config.get(constants.GENERAL_SEC, constants.DATAFILE_OPT)
+
+    def getTitleX(self):
+        return self.config.get(constants.GENERAL_SEC, constants.TITLEX_OPT)
+    
+    def getTitleY(self):
+        return self.config.get(constants.GENERAL_SEC, constants.TITLEY_OPT)
+
+    def getGraphType(self):
+        graphname = self.config.get(constants.GENERAL_SEC, constants.GRAPHTYPE_OPT)
+        return constants.graphtype[graphname]
+    
+    def getDataEntries(self):
+        datasections = [s for s in self.config.sections() if s.startswith("data")]
+        datasections.sort()
+        data = []
+        for s in datasections:
+            title = self.config.get(s, constants.TITLE_OPT)
+            profile = self.config.get(s, constants.PROFILE_OPT)
+            trace = self.config.get(s, constants.TRACE_OPT)
+            inject = self.config.get(s, constants.INJ_OPT)
+            if inject == "NONE":
+                inject = None
+            data.append(GraphDataEntry(title, profile, trace, inject))
+        return data
     
 class RMMultiConfig(Config):
     def __init__(self, config):

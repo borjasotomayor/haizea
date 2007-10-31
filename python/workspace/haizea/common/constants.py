@@ -123,6 +123,25 @@ BACKFILLING_AGGRESSIVE="aggressive"
 BACKFILLING_CONSERVATIVE="conservative"
 BACKFILLING_INTERMEDIATE="intermediate"
 
+
+# Graph configfile sections and options
+TITLE_OPT="title"
+DATAFILE_OPT="datafile"
+TITLEX_OPT="title-x"
+TITLEY_OPT="title-y"
+GRAPHTYPE_OPT="graph"
+PROFILE_OPT="profile"
+TRACE_OPT="trace"
+INJ_OPT="injection"
+
+GRAPHNAME_LINE_VALUE="line-value"
+GRAPHNAME_LINE_AVG="line-average"
+GRAPHNAME_STEP_VALUE="step-value"
+GRAPHNAME_POINT_VALUE="point-value"
+GRAPHNAME_POINTLINE_VALUEAVG="point-value+line-avg"
+GRAPHNAME_CUMULATIVE="cumulative"
+
+
 # Component names
 RM="RM"
 SCHED="SCHED"
@@ -164,6 +183,13 @@ GRAPH_STEP_VALUE=2
 GRAPH_POINT_VALUE=3
 GRAPH_POINTLINE_VALUEAVG=4
 GRAPH_CUMULATIVE=5
+
+graphtype = dict([(GRAPHNAME_LINE_VALUE,GRAPH_LINE_VALUE),
+                (GRAPHNAME_LINE_AVG,GRAPH_LINE_AVG),
+                (GRAPHNAME_STEP_VALUE,GRAPH_STEP_VALUE),
+                (GRAPHNAME_POINT_VALUE,GRAPH_POINT_VALUE),
+                (GRAPHNAME_POINTLINE_VALUEAVG,GRAPH_POINTLINE_VALUEAVG),
+                (GRAPHNAME_CUMULATIVE,GRAPH_CUMULATIVE)])
 
 
 # Trace config file secs and opts
