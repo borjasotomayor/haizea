@@ -116,6 +116,7 @@ SUSPENDTHRESHOLD_OPT="suspend-threshold"
 RESOURCES_OPT="resources"
 STOPBESTEFFORTDONE_OPT="stopwhenbesteffortdone"
 RUNOVERHEAD_OPT="runtime-overhead"
+BOOTOVERHEAD_OPT="bootshutdown-overhead"
 RUNOVERHEADBE_OPT="runtime-overhead-onlybesteffort"
 
 BACKFILLING_OFF="off"

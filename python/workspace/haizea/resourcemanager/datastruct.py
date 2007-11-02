@@ -2,6 +2,7 @@ from workspace.haizea.common.constants import res_str, state_str, rstate_str, DS
 from workspace.haizea.common.log import edebug
 from workspace.haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
+from mx.DateTime import TimeDelta
 leaseID = 1
 
 def getLeaseID():
@@ -112,6 +113,10 @@ class ExactLease(LeaseBase):
         self.end = self.start + roundDateTimeDelta(duration * factor)
         self.prematureend = self.start + roundDateTimeDelta(realduration * factor)
         
+    def addBootOverhead(self, t):
+        self.end += TimeDelta(seconds=t)
+        self.prematureend += TimeDelta(seconds=t)
+        
 class BestEffortLease(LeaseBase):
     def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None):
         LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
@@ -136,6 +141,13 @@ class BestEffortLease(LeaseBase):
         self.remdur = roundDateTimeDelta(self.remdur * factor)
         self.realremdur = roundDateTimeDelta(self.realremdur * factor)
         self.realdur = roundDateTimeDelta(self.realdur * factor)
+
+    def addBootOverhead(self, t):
+        self.maxdur += TimeDelta(seconds=t)
+        self.remdur += TimeDelta(seconds=t)
+        self.realremdur += TimeDelta(seconds=t)
+        self.realdur += TimeDelta(seconds=t)
+
         
 class ResourceReservationBase(object):
     def __init__(self, lease, start, end, db_rsp_ids, realend = None):

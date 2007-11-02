@@ -159,6 +159,13 @@ class RMConfig(Config):
         else:
             return self.config.getint(constants.SIMULATION_SEC, constants.RUNOVERHEAD_OPT)
 
+    def getBootOverhead(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.BOOTOVERHEAD_OPT):
+            return 0
+        else:
+            return self.config.getint(constants.SIMULATION_SEC, constants.BOOTOVERHEAD_OPT)
+
+
     def overheadOnlyBestEffort(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT):
             return False

@@ -31,6 +31,11 @@ class ResourceManager(object):
                 elif isinstance(r,ExactLease):
                     if not self.config.overheadOnlyBestEffort():
                         r.addRuntimeOverhead(overhead)
+                        
+        # Add boot + shutdown overhead
+        overhead = self.config.getBootOverhead()
+        for r in self.requests:
+            r.addBootOverhead(overhead)
         
     def existsPendingReq(self):
         return len(self.requests) != 0
