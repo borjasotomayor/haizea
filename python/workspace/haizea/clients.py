@@ -45,6 +45,7 @@ class Graph(object):
         
         configfile=opt.conf
         graphconfig = GraphConfig.fromFile(configfile)
+        graphfile = configfile.split(".")[0]
             
         statsdir = opt.statsdir
 
@@ -62,7 +63,7 @@ class Graph(object):
         s = Section(title, datafile, graphtype)
         
         s.loadData(dict(dirs), profilenames=[v[0] for v in dirs])
-        s.generateGraph("./", titlex=titlex, titley=titley)
+        s.generateGraph("./", filename=graphfile, titlex=titlex, titley=titley)
         
         
 class GenPercentiles(object):

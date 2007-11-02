@@ -86,7 +86,7 @@ class Section(object):
                 final = self.data[p][-1][3]
                 self.final[p] = final
         
-    def generateGraph(self, outdir, titlex=None, titley=None):
+    def generateGraph(self, outdir, filename=None, titlex=None, titley=None):
         if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_STEP_VALUE, constants.GRAPH_POINT_VALUE, constants.GRAPH_CUMULATIVE]:
             values = [[(v[0],v[2]) for v in self.data[p]] for p in self.profiles]
         elif self.graphtype in [constants.GRAPH_LINE_AVG]:
@@ -116,8 +116,12 @@ class Section(object):
             titley = self.title
             
         g = graph(values, titlex, titley, legends)
-        graphfile = outdir + "/" + self.graphfile
-        thumbfile = outdir + "/" + self.thumbfile
+        if filename==None:
+            graphfile = outdir + "/" + self.graphfile
+            thumbfile = outdir + "/" + self.thumbfile
+        else:
+            graphfile = outdir + "/" + filename + ".png"
+            thumbfile = outdir + "/" + filename + "-thumb.png"
         g.plotToFile(graphfile, thumbfile)
         
     def generateHTML(self):
@@ -195,18 +199,18 @@ class Report(object):
 
     def generate(self):
         self.generateIndex()
-        for t in self.traces:
-            print "Generating report for trace %s" % t[2]
-            profilesdirs = [(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
-            profilesdirs = dict([(p,d) for p,d in profilesdirs if os.path.exists(d)])
-            if len(profilesdirs) > 0:
-                self.generateReport(t[2],profilesdirs)
         for p in self.profiles:
             print "Generating report for profile %s" % p
             tracesdirs = [(t[2], self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces]
             tracesdirs = dict([(t,d) for t,d in tracesdirs if os.path.exists(d)])
             if len(tracesdirs) > 0:
                 self.generateReport(p, tracesdirs)
+        for t in self.traces:
+            print "Generating report for trace %s" % t[2]
+            profilesdirs = [(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
+            profilesdirs = dict([(p,d) for p,d in profilesdirs if os.path.exists(d)])
+            if len(profilesdirs) > 0:
+                self.generateReport(t[2],profilesdirs)
 
     def generateIndex(self):
         indexfile = open(self.outdir + "/index.html", "w")
