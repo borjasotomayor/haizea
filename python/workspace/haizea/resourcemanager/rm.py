@@ -77,15 +77,18 @@ class ResourceManager(object):
                 prevstatustime = self.time
             nextchangepoint = self.scheduler.slottable.peekNextChangePoint(self.time)
             nextreqtime = self.getNextReqTime()
+            nextcancelpoint = self.scheduler.queue.getNextCancelPoint()
             self.printStats(debug, nextchangepoint, nextreqtime)
             
             prevtime = self.time
             if nextchangepoint != None and nextreqtime == None:
                 self.time = nextchangepoint
-            if nextchangepoint == None and nextreqtime != None:
+            elif nextchangepoint == None and nextreqtime != None:
                 self.time = nextreqtime
             elif nextchangepoint != None and nextreqtime != None:
                 self.time = min(nextchangepoint, nextreqtime)
+            if nextcancelpoint != None:
+                self.time = min(nextcancelpoint, self.time)
             if nextchangepoint == self.time:
                 self.time = self.scheduler.slottable.getNextChangePoint(self.time)
                 
@@ -104,6 +107,13 @@ class ResourceManager(object):
                 self.printStats(error, nextchangepoint, nextreqtime, verbose=True)
                 raise Exception, "Resource manager has fallen into an infinite loop."
 
+        status("STATUS ---Begin---", constants.RM, self.time)
+        status("STATUS Completed best-effort leases: %i" % self.stats.besteffortcompletedcount, constants.RM, self.time)
+        status("STATUS Queue size: %i" % self.stats.queuesizecount, constants.RM, self.time)
+        status("STATUS Best-effort reservations: %i" % self.scheduler.numbesteffortres, constants.RM, self.time)
+        status("STATUS Accepted exact leases: %i" % self.stats.exactacceptedcount, constants.RM, self.time)
+        status("STATUS Rejected exact leases: %i" % self.stats.exactrejectedcount, constants.RM, self.time)
+        status("STATUS ----End----", constants.RM, self.time)
         status("Simulation done, generating stats...", constants.RM, self.time)
         self.stats.addFinalMarker()
         

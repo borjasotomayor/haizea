@@ -1,4 +1,4 @@
-from mx.DateTime import TimeDelta
+from mx.DateTime import TimeDelta, DateTimeDelta
 from mx.DateTime import ISO
 from mx.DateTime import now
 from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
@@ -71,7 +71,10 @@ def CSV(tracefile, config):
                     prematureend = start + TimeDelta(seconds=int(fields[10])) # 10: realduration
                     req = ExactLease(None, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend)
                 else:
-                    maxdur = TimeDelta(seconds=int(fields[9])) # 9: duration
+                    if fields[9]=="INF":
+                        maxdur = DateTimeDelta(30) # 30 days
+                    else:
+                        maxdur = TimeDelta(seconds=int(fields[9])) # 9: duration
                     realdur = TimeDelta(seconds=int(fields[10])) # 10: realduration
                     req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
             req.state = constants.LEASE_STATE_PENDING
@@ -118,6 +121,9 @@ def SWF(tracefile, config):
             req = None
             fields = line.split()
             reqtime = float(fields[8])
+            runtime = int(fields[3]) # 3: RunTime
+            waittime = int(fields[2])
+            status = int(fields[10])
             
             if reqtime > 0:
                 tSubmit = int(fields[1]) # 1: Submission time
@@ -127,13 +133,21 @@ def SWF(tracefile, config):
                 numnodes = int(fields[7]) # 7: reqNProcs
                 resreq = {}
                 resreq[constants.RES_CPU] = 1 # One CPU per VM
-                resreq[constants.RES_MEM] = 512 # Arbitrary (2 VMs per node)
+                resreq[constants.RES_MEM] = 1024 # Arbitrary (1 VMs per node)
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
                 maxdur = TimeDelta(seconds=reqtime)
-                realdur = TimeDelta(seconds=int(fields[3])) # 3: RunTime
+                if runtime < 0 and status==5:
+                    # This is a job that got cancelled while waiting in the queue
+                    realdur = maxdur
+                    maxqueuetime = tSubmit + TimeDelta(seconds=waittime)
+                else:
+                    if runtime == 0:
+                        runtime = 1 # Runtime of 0 is <0.5 rounded down.
+                    realdur = TimeDelta(seconds=runtime) # 3: RunTime
+                    maxqueuetime = None
                 if realdur > maxdur:
                     realdur = maxdur
-                req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
+                req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur, maxqueuetime)
                 req.state = constants.LEASE_STATE_PENDING
                 requests.append(req)
     return requests

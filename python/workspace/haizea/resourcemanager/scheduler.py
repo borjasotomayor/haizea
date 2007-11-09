@@ -7,6 +7,9 @@ import workspace.haizea.common.constants as constants
 class SchedException(Exception):
     pass
 
+class CancelException(Exception):
+    pass
+
 class Scheduler(object):
     def __init__(self, rm):
         self.rm = rm
@@ -20,6 +23,13 @@ class Scheduler(object):
         self.endcliplease = None
         
     def schedule(self, requests):
+        # Cancel best-effort requests that have to be cancelled
+        cancelled = self.queue.purgeCancelled()
+        if len(cancelled) > 0:
+            info("Cancelled leases %s" % cancelled, constants.SCHED, self.rm.time)
+            for leaseID in cancelled:
+                self.rm.stats.decrQueueSize(leaseID)
+        
         self.processReservations()
         
         # Process exact requests
@@ -61,6 +71,9 @@ class Scheduler(object):
                     info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
                     if not self.rm.config.isBackfilling():
                         done = True
+                except CancelException, msg:
+                    # Don't do anything. This effectively cancels the lease.
+                    self.rm.stats.decrQueueSize(r.leaseID)
                     
         newqueue.q += self.queue.q 
         self.queue = newqueue
@@ -229,6 +242,12 @@ class Scheduler(object):
             mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
             canreserve = self.canReserveBestEffort()
             (mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_rsp_id, suspend_rsp_id) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, mustresume=mustresume)
+            if req.maxqueuetime != None:
+                self.slottable.rollback()
+                msg = "Lease %i is being scheduled, but is meant to be cancelled at %s" % (req.leaseID, req.maxqueuetime)
+                warning(msg, constants.SCHED, self.rm.time)
+                raise CancelException, msg
+            
             # Schedule image transfers
             dotransfer = False
             

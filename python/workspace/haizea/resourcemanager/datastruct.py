@@ -118,12 +118,13 @@ class ExactLease(LeaseBase):
         self.prematureend += TimeDelta(seconds=t)
         
 class BestEffortLease(LeaseBase):
-    def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None):
+    def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None):
         LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
         self.maxdur = maxdur
         self.remdur = maxdur
         self.realremdur = realdur
         self.realdur = realdur
+        self.maxqueuetime = maxqueuetime
 
     def printContents(self, logfun=edebug):
         logfun("__________________________________________________", DS, None)
@@ -132,6 +133,7 @@ class BestEffortLease(LeaseBase):
         logfun("Max duration   : %s" % self.maxdur, DS, None)
         logfun("Rem duration   : %s" % self.remdur, DS, None)
         logfun("Real duration  : %s" % self.realremdur, DS, None)
+        logfun("Max queue time : %s" % self.maxqueuetime, DS, None)
         self.printRR(logfun)
         logfun("--------------------------------------------------", DS, None)
 
@@ -147,6 +149,14 @@ class BestEffortLease(LeaseBase):
         self.remdur += TimeDelta(seconds=t)
         self.realremdur += TimeDelta(seconds=t)
         self.realdur += TimeDelta(seconds=t)
+        
+    def mustBeCancelled(self, t):
+        if self.maxqueuetime == None:
+            return False
+        else:
+            return t >= self.maxqueuetime
+        
+
 
         
 class ResourceReservationBase(object):
@@ -230,6 +240,17 @@ class Queue(object):
     def enqueueInOrder(self, r):
         self.q.append(r)
         self.q.sort(key=attrgetter("tSubmit"))
+    
+    def getNextCancelPoint(self):
+        if self.isEmpty():
+            return None
+        else:
+            return min([l.maxqueuetime for l in self.q])
+        
+    def purgeCancelled(self):
+        cancelled = [l.leaseID for l in self.q if l.mustBeCancelled(self.scheduler.rm.time)]
+        self.q = [l for l in self.q if not l.mustBeCancelled(self.scheduler.rm.time)]
+        return cancelled
         
 class LeaseTable(object):
     def __init__(self, scheduler):
