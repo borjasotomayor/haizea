@@ -96,6 +96,10 @@ class RMConfig(Config):
     def isMigrationAllowed(self):
         return self.config.getboolean(constants.GENERAL_SEC, constants.MIGRATION_OPT)
 
+    def getMustMigrate(self):
+        return self.config.getboolean(constants.GENERAL_SEC, constants.MIGRATE_OPT)
+
+
     def getMaxReservations(self):
         if self.getBackfillingType() == constants.BACKFILLING_OFF:
             return 0

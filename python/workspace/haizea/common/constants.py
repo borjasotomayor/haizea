@@ -95,6 +95,7 @@ LOGLEVEL_OPT="loglevel"
 PROFILE_OPT="profile"
 SUSPENSION_OPT="suspension"
 MIGRATION_OPT="migration"
+MIGRATE_OPT="migrate"
 BACKFILLING_OPT="backfilling"
 RESERVATIONS_OPT="backfilling-reservations"
 TRACEFILE_OPT="tracefile"
@@ -125,6 +126,9 @@ BACKFILLING_AGGRESSIVE="aggressive"
 BACKFILLING_CONSERVATIVE="conservative"
 BACKFILLING_INTERMEDIATE="intermediate"
 
+MIGRATE_NONE="nothing"
+MIGRATE_MEM="mem"
+MIGRATE_MEMVM="mem+vm"
 
 # Graph configfile sections and options
 TITLE_OPT="title"

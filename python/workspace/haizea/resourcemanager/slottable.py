@@ -472,13 +472,19 @@ class SlotTable(object):
         if mustresume and canmigrate:
             # If we have to resume this lease, make sure that
             # we have enough time to transfer the images.
-            mbtotransfer = lease.vmimagesize + resreq[constants.RES_MEM]
-            migratetime = float(mbtotransfer) / self.rm.config.getBandwidth()
-            migratetime = roundDateTimeDelta(TimeDelta(seconds=migratetime))
-            earliesttransfer = self.rm.time + migratetime
+            whattomigrate = self.rm.config.getMustMigrate()
+            if whattomigrate != constants.MIGRATE_NONE:
+                if whatttomigrate == constants.MIGRATE_MEM:
+                    mbtotransfer = resreq[constants.RES_MEM]
+                elif whattomigrate == constants.MIGRATE_MEMVM:
+                    mbtotransfer = lease.vmimagesize + resreq[constants.RES_MEM]
+            
+                migratetime = float(mbtotransfer) / self.rm.config.getBandwidth()
+                migratetime = roundDateTimeDelta(TimeDelta(seconds=migratetime))
+                earliesttransfer = self.rm.time + migratetime
 
-            for n in earliest:
-                earliest[n][0] = max(earliest[n][0],earliesttransfer)
+                for n in earliest:
+                    earliest[n][0] = max(earliest[n][0],earliesttransfer)
         
         changepoints = list(set([x[0] for x in earliest.values()]))
         changepoints.sort()
