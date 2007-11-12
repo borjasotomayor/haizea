@@ -93,6 +93,9 @@ class RMConfig(Config):
     def isSuspensionAllowed(self):
         return self.config.getboolean(constants.GENERAL_SEC, constants.SUSPENSION_OPT)
 
+    def isMigrationAllowed(self):
+        return self.config.getboolean(constants.GENERAL_SEC, constants.MIGRATION_OPT)
+
     def getMaxReservations(self):
         if self.getBackfillingType() == constants.BACKFILLING_OFF:
             return 0

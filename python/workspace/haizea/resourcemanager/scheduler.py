@@ -238,10 +238,11 @@ class Scheduler(object):
         numnodes = self.rm.config.getNumPhysicalNodes()
         earliest = dict([(node+1, [self.rm.time,constants.TRANSFER_NO]) for node in range(numnodes)])
         suspendable = self.rm.config.isSuspensionAllowed()
+        canmigrate = self.rm.config.isMigrationAllowed()
         try:
             mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
             canreserve = self.canReserveBestEffort()
-            (mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_rsp_id, suspend_rsp_id) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, mustresume=mustresume)
+            (mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_rsp_id, suspend_rsp_id) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, canmigrate=canmigrate, mustresume=mustresume)
             if req.maxqueuetime != None:
                 self.slottable.rollback()
                 msg = "Lease %i is being scheduled, but is meant to be cancelled at %s" % (req.leaseID, req.maxqueuetime)

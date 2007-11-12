@@ -450,7 +450,7 @@ class SlotTable(object):
         return list(atstart | atmiddle)
 
 
-    def fitBestEffort(self, lease, earliest, canreserve, suspendable, mustresume):
+    def fitBestEffort(self, lease, earliest, canreserve, suspendable, canmigrate, mustresume):
         leaseID = lease.leaseID
         remdur = lease.remdur
         numnodes = lease.numnodes
@@ -459,10 +459,17 @@ class SlotTable(object):
         
         slottypes = resreq.keys()
 
+        curnodes=None
+        # If we can't migrate, we have to stay in the
+        # nodes where the lease is currently deployed
+        if mustresume and not canmigrate:
+            vmrr, susprr = lease.getLastVMRR()
+            curnodes = set(vmrr.nodes.values())
+
         start = None
         end = None
         
-        if mustresume:
+        if mustresume and canmigrate:
             # If we have to resume this lease, make sure that
             # we have enough time to transfer the images.
             mbtotransfer = lease.vmimagesize + resreq[constants.RES_MEM]
@@ -500,7 +507,7 @@ class SlotTable(object):
         first = changepoints[0]
         
         for p in changepoints:
-            self.availabilitywindow.initWindow(p, resreq)
+            self.availabilitywindow.initWindow(p, resreq, curnodes)
             self.availabilitywindow.printContents()
             
             if self.availabilitywindow.fitAtStart() >= numnodes:
@@ -892,12 +899,13 @@ class AvailabilityWindow(object):
     def __init__(self, db):
         self.time = None
         self.resreq = None
+        self.onlynodes = None
         self.db = db
         self.avail = None
         self.availcache = {}
         self.slot_ids = {}
 
-    def findAvailableSlots(self, time, amount=None, type=None, canpreempt=False, slotfilter=None):
+    def findAvailableSlots(self, time, amount=None, type=None, canpreempt=False, slotfilter=None, nodes=None):
         if not self.availcache.has_key(time):
             # Cache miss
             self.availcache[time] = []
@@ -913,6 +921,13 @@ class AvailabilityWindow(object):
                     self.availcache[time].append(slot)
         
         slots = self.availcache[time]
+        
+        if nodes != None:
+            slotfilter = []
+            for n in nodes:
+                slotfilter.append(self.slot_ids[n].values())
+            slotfilter = [x for y in slotfilter for x in y] # Flatten
+        
         if slotfilter != None:
             slotfilter = set(slotfilter)
             slots = [s for s in slots if s["SL_ID"] in slotfilter]
@@ -937,7 +952,7 @@ class AvailabilityWindow(object):
         for slottype in slottypes:
             needed = self.resreq[slottype]
             
-            slots = self.findAvailableSlots(time=self.time, amount=needed, type=slottype, canpreempt=False)
+            slots = self.findAvailableSlots(time=self.time, amount=needed, type=slottype, canpreempt=False, nodes=self.onlynodes)
             for slot in slots:
                 nod_id = slot["NOD_ID"]
                 slot_id = slot["SL_ID"]
@@ -1046,9 +1061,10 @@ class AvailabilityWindow(object):
                     e.canfit = min(canfit)
                 
     # Create avail structure
-    def initWindow(self, time, resreq):
+    def initWindow(self, time, resreq, onlynodes = None):
         self.time = time
         self.resreq = resreq
+        self.onlynodes = onlynodes
         self.genAvail()
         
     def flushCache(self):
