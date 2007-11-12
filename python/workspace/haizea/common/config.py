@@ -90,14 +90,14 @@ class RMConfig(Config):
     def getProfile(self):
         return self.config.get(constants.GENERAL_SEC, constants.PROFILE_OPT)
 
-    def isSuspensionAllowed(self):
-        return self.config.getboolean(constants.GENERAL_SEC, constants.SUSPENSION_OPT)
+    def getSuspensionType(self):
+        return self.config.get(constants.GENERAL_SEC, constants.SUSPENSION_OPT)
 
     def isMigrationAllowed(self):
         return self.config.getboolean(constants.GENERAL_SEC, constants.MIGRATION_OPT)
 
     def getMustMigrate(self):
-        return self.config.getboolean(constants.GENERAL_SEC, constants.MIGRATE_OPT)
+        return self.config.get(constants.GENERAL_SEC, constants.MIGRATE_OPT)
 
 
     def getMaxReservations(self):

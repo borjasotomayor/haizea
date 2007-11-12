@@ -450,7 +450,7 @@ class SlotTable(object):
         return list(atstart | atmiddle)
 
 
-    def fitBestEffort(self, lease, earliest, canreserve, suspendable, canmigrate, mustresume):
+    def fitBestEffort(self, lease, earliest, canreserve, suspendable, preemptible, canmigrate, mustresume):
         leaseID = lease.leaseID
         remdur = lease.remdur
         numnodes = lease.numnodes
@@ -474,7 +474,7 @@ class SlotTable(object):
             # we have enough time to transfer the images.
             whattomigrate = self.rm.config.getMustMigrate()
             if whattomigrate != constants.MIGRATE_NONE:
-                if whatttomigrate == constants.MIGRATE_MEM:
+                if whattomigrate == constants.MIGRATE_MEM:
                     mbtotransfer = resreq[constants.RES_MEM]
                 elif whattomigrate == constants.MIGRATE_MEMVM:
                     mbtotransfer = lease.vmimagesize + resreq[constants.RES_MEM]
@@ -645,7 +645,7 @@ class SlotTable(object):
                     canfit[n] -= 1
                     mappings[vmnode] = n
                     rsp_name = "VM %i" % (vmnode)
-                    rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible=True)
+                    rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible=preemptible)
                     db_rsp_ids.append(rsp_id)
                     for slottype in slottypes:
                         amount = resreq[slottype]
