@@ -238,7 +238,10 @@ class Scheduler(object):
         numnodes = self.rm.config.getNumPhysicalNodes()
         earliest = dict([(node+1, [self.rm.time,constants.TRANSFER_NO]) for node in range(numnodes)])
         susptype = self.rm.config.getSuspensionType()
-        if susptype == constants.SUSPENSION_ALL:
+        if susptype == constants.SUSPENSION_NONE:
+            suspendable = False
+            preemptible = True
+        elif susptype == constants.SUSPENSION_ALL:
             suspendable = True
             preemptible = True
         elif susptype == constants.SUSPENSION_SERIAL:
@@ -247,7 +250,7 @@ class Scheduler(object):
                 preemptible = True
             else:
                 suspendable = False
-                preemptible = False
+                preemptible = True
         canmigrate = self.rm.config.isMigrationAllowed()
         try:
             mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
@@ -313,7 +316,8 @@ class Scheduler(object):
             self.queue.enqueueInOrder(req)
             self.rm.stats.incrQueueSize(req.leaseID)
         else:
-            if self.rm.config.isSuspensionAllowed():
+            susptype = self.rm.config.getSuspensionType()
+            if susptype == constants.SUSPENSION_ALL or (req.numnodes == 1 and susptype == constants.SUSPENSION_SERIAL):
                 debug("The lease will be suspended while running.", constants.SCHED, self.rm.time)
                 self.slottable.suspend(req, time)
             else:
