@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tns:lease xmlns:jsdl="http://schemas.ggf.org/jsdl/2005/11/jsdl"
+	xmlns:tns="http://www.example.org/leases"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.example.org/leases leases.xsd http://schemas.ggf.org/jsdl/2005/11/jsdl http://schemas.ggf.org/jsdl/2005/11/jsdl ">
+
+	<preemptible>false</preemptible>
+
+	<priority>2</priority>
+
+	<availability>
+
+		<start>
+			<!-- Event must arrive during this window -->
+			<userEvent>
+				<windowstart>2007-11-04T11:00:00</windowstart>
+				<windowend>2007-11-04T18:00:00</windowend>
+			</userEvent>
+		</start>
+
+		<duration>PT15M</duration>
+
+		<!-- Requests 8 nodes, each with 1 x86 CPU, 1GB of memory, 
+			4GB disk, one NIC for entire availability period -->
+		<allocations>
+			<allocation>
+				<duration>PT15M</duration>
+				<resources>
+					<nodes>64</nodes>
+					<cpu>
+						<individualcpu>
+							<jsdl:CPUArchitecture>
+								<jsdl:CPUArchitectureName>x86</jsdl:CPUArchitectureName>
+							</jsdl:CPUArchitecture>
+							<CPUPercentage>
+								<jsdl:Exact>100.0</jsdl:Exact>
+							</CPUPercentage>
+						</individualcpu>
+					</cpu>
+					<jsdl:IndividualPhysicalMemory>
+						<jsdl:Exact>1024.0</jsdl:Exact>
+					</jsdl:IndividualPhysicalMemory>
+					<storage>
+						<slot>
+							<size>
+								<jsdl:Exact>4096.0</jsdl:Exact>
+							</size>
+						</slot>
+					</storage>
+					<networking>
+						<NIC>
+							<inBandwidth>
+								<jsdl:Exact>100.0</jsdl:Exact>
+							</inBandwidth>
+							<outBandwidth>
+								<jsdl:Exact>100.0</jsdl:Exact>
+							</outBandwidth>
+						</NIC>
+					</networking>
+				</resources>
+			</allocation>
+		</allocations>
+	</availability>
+
+	<!-- No constraints -->
+	<constraints />
+
+	<softwareEnvironment>
+		<vmImage>nfs:/vm/vm_images/ttylinux.img</vmImage>
+	</softwareEnvironment>
+
+</tns:lease>
