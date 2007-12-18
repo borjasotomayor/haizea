@@ -100,6 +100,7 @@ BACKFILLING_OPT="backfilling"
 RESERVATIONS_OPT="backfilling-reservations"
 TRACEFILE_OPT="tracefile"
 INJFILE_OPT="injectionfile"
+REUSE_OPT="reuse"
 
 REPORTING_SEC="reporting"
 CSS_OPT="css"
@@ -158,6 +159,7 @@ SCHED="SCHED"
 ST="SLOT"
 DB="DB"
 DS="STRUCT"
+ENACT="ENACT"
 
 # Transfer required in deployment
 TRANSFER_NO = 0
@@ -225,3 +227,6 @@ DIST_EXPLICIT = "explicit"
 
 CLIP_BYTIME = 0
 CLIP_BYLEASE = 1
+
+REUSE_NONE = 0
+REUSE_COWPOOL = 1

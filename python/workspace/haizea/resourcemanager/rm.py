@@ -13,7 +13,7 @@ class ResourceManager(object):
         
         self.interface = interface.Interface(self)
         self.scheduler = scheduler.Scheduler(self)
-        self.enactment = enactment.Enactment(self)
+        self.enactment = enactment.SimulatedEnactment(self)
         self.stats = stats.Stats(self)
                 
         for r in self.requests:

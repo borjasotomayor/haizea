@@ -178,6 +178,16 @@ class RMConfig(Config):
             return False
         else:
             return self.config.getboolean(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT)
+        
+    def getReuseAlgorithm(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.REUSE_OPT):
+            return constants.REUSE_NONE
+        else:
+            reuse = self.config.get(constants.SIMULATION_SEC, constants.REUSE_OPT)        
+            if reuse == "none":
+                return constants.REUSE_NONE
+            elif reuse == "cowpool":
+                return constants.REUSE_COWPOOL
 
 class GraphDataEntry(object):
     def __init__(self, title, profile, trace, inject):
