@@ -674,6 +674,174 @@ class SlotTable(object):
 
         return mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_db_rsp_id, suspend_db_rsp_id
 
+    def do_scheduleImageTransferEDF(self, res_id, reqTime, deadline, imgURI, imgsize, destinationNode, VMrsp_id, imgslot=None, type=None):
+        # Algorithm for fitting image transfers is essentially the same as 
+        # the one used in scheduleVMs. The main difference is that we can
+        # scale down the code since we know a priori what slot we're fitting the
+        # network transfer in, and the transfers might be moveable (which means
+        # we will have to do some Earliest Deadline First magic)
+        
+        # Estimate image transfer time 
+        imgTransferTime=self.estimateTransferTime(imgsize)
+        
+        # Find next schedulable transfer time
+        # If there are no image transfers in progress, that means now.
+        # If there is an image transfer in progress, then that means right after the transfer.
+        transferscur = self.resDB.getCurrentAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_RUNNING)
+        transfers = transferscur.fetchall()
+        if len(transfers) == 0:
+            startTime = reqTime
+        else:
+            startTime = transfers[0]["all_schedend"]
+            startTime = ISO.ParseDateTime(startTime)
+        
+        # Take all the image transfers scheduled from the current time onwards
+        # (not including image transfers which have already started)
+        transferscur = self.resDB.getFutureAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_PENDING)
+        transfers = []
+        for t in transferscur:
+            transfer={}
+            transfer["sl_id"] = t["sl_id"]
+            transfer["rsp_id"] = t["rsp_id"]
+            transfer["all_schedstart"] = ISO.ParseDateTime(t["all_schedstart"])
+            transfer["all_duration"] = TimeDelta(seconds=t["all_duration"])
+            transfer["all_deadline"] = ISO.ParseDateTime(t["all_deadline"])
+            transfer["new"] = False
+            transfers.append(transfer)
+            
+        newtransfer = {}
+        newtransfer["sl_id"] = imgslot
+        rsp_id = self.resDB.addReservationPart(res_id, "Image transfer", 2)
+        newtransfer["rsp_id"] = rsp_id
+        newtransfer["all_schedstart"] = None
+        newtransfer["all_duration"] = imgTransferTime
+        newtransfer["all_deadline"] = deadline
+        newtransfer["new"] = True
+        transfers.append(newtransfer)
+
+        def comparedates(x,y):
+            dx=x["all_deadline"]
+            dy=y["all_deadline"]
+            if dx>dy:
+                return 1
+            elif dx==dy:
+                # If deadlines are equal, we break the tie by order of arrival
+                # (currently, we just check the "new" attribute; in the future, an
+                # arrival timestamp might be necessary)
+                if not x["new"]:
+                    return -1
+                elif not y["new"]:
+                    return 1
+                else:
+                    return 0
+            else:
+                return -1
+        
+        # Order transfers by deadline
+        transfers.sort(comparedates)
+
+        # Compute start times and make sure that deadlines are met
+        fits = True
+        for transfer in transfers:
+             transfer["new_all_schedstart"] = startTime
+             transfer["all_schedend"] = startTime + transfer["all_duration"]
+             if transfer["all_schedend"] > transfer["all_deadline"]:
+                 fits = False
+                 break
+             startTime = transfer["all_schedend"]
+             
+        if not fits:
+             raise SchedException, "Adding this VW results in an unfeasible image transfer schedule."
+
+        # EDF allows us to check that the deadlines will be met, but it results in
+        # an aggressive staging schedule. In EDF/JIT, we push all the image transfers 
+        # as close as possible to their deadlines. Note that this does not affect
+        # the feasibility of the schedule in this precise moment, but might
+        # make future requests infeasible.
+        feasibleEndTime=transfers[-1]["all_deadline"]        
+        if type==EDF_JIT:
+            fits = False
+            if self.config.has_option(GENERAL_SEC, JITBUFFER_OPT):
+                jitbuffer = self.config.getint(GENERAL_SEC, JITBUFFER_OPT)
+                fits = True
+                for transfer in reversed(transfers):
+                    deadline = transfer["all_deadline"]
+                    duration = transfer["all_duration"]
+
+                    newEndTime=min([deadline,feasibleEndTime]) - TimeDelta(seconds=jitbuffer)
+                    transfer["all_schedend"]=newEndTime
+                    newStartTime=newEndTime-duration
+                    transfer["new_all_schedstart"]=newStartTime
+                    feasibleEndTime=newStartTime
+                    if transfer["all_schedend"] > transfer["all_deadline"] or newStartTime < self.getTime():
+                        fits = False
+                        break
+            
+            if not fits:
+                feasibleEndTime=transfers[-1]["all_deadline"]        
+                for transfer in reversed(transfers):
+                    deadline = transfer["all_deadline"]
+                    duration = transfer["all_duration"]
+    
+                    newEndTime=min([deadline,feasibleEndTime])
+                    transfer["all_schedend"]=newEndTime
+                    newStartTime=newEndTime-duration
+                    transfer["new_all_schedstart"]=newStartTime
+                    feasibleEndTime=newStartTime
+        
+        # Make changes in database     
+        for t in transfers:
+            if t["new"]:
+                self.resDB.addAllocation(t["rsp_id"], t["sl_id"], t["new_all_schedstart"], t["all_schedend"], 100.0, moveable=True, deadline=t["all_deadline"], duration=t["all_duration"].seconds)
+            else:
+                self.resDB.updateAllocation(t["sl_id"], t["rsp_id"], t["all_schedstart"], newstart=t["new_all_schedstart"], end=t["all_schedend"])            
+        
+        return (rsp_id,)
+
+    def scheduleImageTransferFIFO(self, res_id, reqTime, numnodes, imguri, imgsize, destinationNode, VMrsp_id, imgslot=None, allocate=True):
+        # This schedules image transfers in a FIFO manner, appropriate when there is no
+        # deadline for the image to arrive. Unlike EDF, we don't consider the
+        # transfer allocations to be moveable. This results in:
+        #  - If there is no transfer currently happening, there is no transfer
+        #    scheduled in the future.
+        #  - If there is a transfer currently in progress, there will be no gaps
+        #    between transfers. The next transfer should be scheduled after the
+        #    last queued transfer.
+        
+        # Estimate image transfer time 
+        imgTransferTime=self.estimateTransferTime(imgsize)
+        
+        
+        # Find next schedulable transfer time
+        # If there are no image transfers in progress, that means now.
+        # If there is an image transfer in progress, then that means right after 
+        # all the transfers in queue.
+        transferscur = self.resDB.getCurrentAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_RUNNING)
+        transfers = transferscur.fetchall()
+        transferscur = self.resDB.getCurrentAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_PENDING)
+        transfers += transferscur.fetchall()
+        if len(transfers) == 0:
+            # We can schedule the image transfer right now
+            startTime = reqTime
+        else:
+            futuretransferscur = self.resDB.getFutureAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_PENDING)
+            futuretransfers = futuretransferscur.fetchall()
+            if len(futuretransfers) == 0:
+                startTime = transfers[0]["all_schedend"]
+            else:
+                startTime = futuretransfers[-1]["all_schedend"]
+            startTime = ISO.ParseDateTime(startTime)
+            
+        endTime = startTime+imgTransferTime
+        rsp_id = None
+        
+        if allocate:
+            rsp_id = self.resDB.addReservationPart(res_id, "Image transfer for rsp_id=%s" % VMrsp_id, type=2)
+            self.resDB.addAllocation(rsp_id, imgslot, startTime, endTime, 100.0, moveable=False)
+        
+        return (rsp_id, imgslot, startTime, endTime)
+
+
     def suspend(self, lease, time):
         (vmrr, susprr) = lease.getLastVMRR()
         

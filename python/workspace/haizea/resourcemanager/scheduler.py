@@ -356,7 +356,40 @@ class Scheduler(object):
             
         
     def findEarliestStartingTimes(self, imageURI, imageSize, time):
-        pass
+        avoidredundant = self.config.getboolean(GENERAL_SEC, REDUNDANT_OPT)
+        reusealg = self.config.get(GENERAL_SEC, REUSEALG_OPT)
+
+        # Figure out starting time assuming we have to transfer the image
+        transfer = self.scheduleImageTransferFIFO(res_id=None, reqTime=time, numnodes=1, imguri=imageURI, imgsize=imageSize, imgslot=self.imagenodeslot_batch, VMrsp_id=None, destinationNode=None, allocate=False)
+        startTime = transfer[3]
+        
+        earliest = {}
+        for node in range(self.getNumNodes()):
+            earliest[node+1] = [startTime, TRANSFER_REQUIRED, None]
+        
+        if reusealg=="cache":
+            nodeswithcached = self.backend.getNodesWithCachedImg(imageURI)
+            for node in nodeswithcached:
+                earliest[node] = [time, TRANSFER_CACHED, None]
+                
+        if reusealg=="cowpool":
+            nodeswithimg = self.backend.getNodesWithImg(imageURI)
+            for node in nodeswithimg:
+                earliest[node] = [time, TRANSFER_COW, None]
+
+        
+        if avoidredundant:
+            cur = self.resDB.getCurrentAllocationsInSlot(self.getTime(), self.imagenodeslot_batch)
+            transfers = cur.fetchall()
+            for t in transfers:
+                transferImg = self.imagetransfers[t["RSP_ID"]].imgURI
+                node = self.imagetransfers[t["RSP_ID"]].destinationNode
+                if transferImg == imageURI:
+                    startTime = ISO.ParseDateTime(t["ALL_SCHEDEND"])
+                    if startTime < earliest[node]:
+                        earliest[node] = [startTime, TRANSFER_REUSE, t["RSP_ID"]]
+
+        return earliest
     
     def existsScheduledLeases(self):
         return not self.scheduledleases.isEmpty()
