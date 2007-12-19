@@ -152,6 +152,21 @@ def SWF(tracefile, config):
                 requests.append(req)
     return requests
 
+def IMG(imgfile):
+    file = open (imgfile, "r")
+    imagesizes = {}
+    images = []
+    state = 0  # 0 -> Reading image sizes  1 -> Reading image sequence
+    for line in file:
+        if line[0]=='#':
+            state = 1
+        elif state == 0:
+            image,size = line.split()
+            imagesizes[image] = int(size)
+        elif state == 1:
+            images.append(line.strip())
+    return imagesizes, images
+
 def LWF(tracefile, config = None):
     file = formats.LWF.fromFile(tracefile)
     if config != None:

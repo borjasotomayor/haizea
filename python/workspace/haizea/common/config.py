@@ -144,6 +144,14 @@ class RMConfig(Config):
             return None
         else:
             return injfile
+
+    def getImagefile(self):
+        imgfile = self.config.get(constants.GENERAL_SEC, constants.IMGFILE_OPT)
+        if imgfile == "None":
+            return None
+        else:
+            return imgfile
+
         
     def isBackfilling(self):
         if self.getBackfillingType() == constants.BACKFILLING_OFF:
@@ -382,4 +390,31 @@ class TraceConfig(Config):
         
     def getDuration(self):
         return self.durationdist.get()
+    
+class ImageConfig(Config):
+    def __init__(self, c):
+        Config.__init__(self, c)
+        self.sizedist = self.createDiscreteDistributionFromSection(constants.SIZE_SEC)
+        numimages = self.config.getint(constants.GENERAL_SEC, constants.IMAGES_OPT)
+        self.images = ["image_" + str(i+1) for i in range(numimages)]
+        
+        distribution = self.config.get(constants.GENERAL_SEC, constants.DISTRIBUTION_OPT)
+        if distribution == "uniform":
+            self.imagedist = stats.DiscreteUniformDistribution(self.images) 
+        else:
+            probs = []
+            explicitprobs = distribution.split()
+            for p in explicitprobs:
+                numitems, prob = p.split(",")
+                itemprob = float(prob)/100
+                for i in range(int(numitems)):
+                    probs.append(itemprob)
+            self.imagedist = stats.DiscreteDistribution(self.images, probs)
+            print probs
+    
+    def getFileLength(self):
+        return self.config.getint(constants.GENERAL_SEC, constants.LENGTH_OPT)
+        
+
+        
         

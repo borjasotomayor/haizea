@@ -1,8 +1,8 @@
 import workspace.haizea.common.constants as constants
 from workspace.haizea.resourcemanager.main import simulate
-from workspace.haizea.traces.generators import generateTrace
+from workspace.haizea.traces.generators import generateTrace, generateImages
 from workspace.haizea.common.utils import Option, OptionParser, generateScripts
-from workspace.haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig
+from workspace.haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig, ImageConfig
 from workspace.haizea.analysis.traces import analyzeExactLeaseInjection
 from workspace.haizea.analysis.misc import genpercentiles
 
@@ -122,6 +122,24 @@ class TraceGenerator(object):
         tracefile = opt.tracefile
 
         generateTrace(config, tracefile, opt.guaranteeavg)     
+
+class ImageGenerator(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        p.add_option(Option("-f", "--imagefile", action="store", type="string", dest="imagefile", required=True))
+
+        opt, args = p.parse_args(argv)
+        
+        configfile=opt.conf
+        config = ImageConfig.fromFile(configfile)
+        
+        imagefile = opt.imagefile
+
+        generateImages(config, imagefile)           
         
 class GenScripts(object):
     def __init__(self):

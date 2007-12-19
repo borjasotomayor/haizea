@@ -15,6 +15,7 @@ def simulate(config, statsdir):
 
     tracefile = config.getTracefile()
     injectfile = config.getInjectfile()
+    imagefile = config.getImagefile()
     
     # Read trace file
     # Requests is a list of lease requests
@@ -31,7 +32,13 @@ def simulate(config, statsdir):
         injectedleases = tracereaders.LWF(injectfile, config)
         requests += injectedleases
         requests.sort(key=operator.attrgetter("tSubmit"))
-    
+        
+    if imagefile != None:
+        imagesizes, images = tracereaders.IMG(imagefile)
+        for r,i in zip(requests,images):
+            r.vmimage = i
+            r.vmimagesize = imagesizes[i]
+       
     resourceManager = rm.ResourceManager(requests, config)
     
     resourceManager.run()
@@ -76,7 +83,8 @@ def pickle(data, dir, file):
 
 if __name__ == "__main__":
     configfile="../configfiles/test.conf"
-    tracefile="../traces/examples/test_earlystop.csv"
+    tracefile="../traces/examples/test_reuse1.csv"
+    imagefile="../traces/examples/1GBfiles.images"
     injectedfile="None"
     #tracefile="../traces/examples/test_inject.csv"
     #injectedfile="../traces/examples/test_inject.lwf"
@@ -85,5 +93,6 @@ if __name__ == "__main__":
     config = RMConfig.fromFile(configfile)
     config.config.set(constants.GENERAL_SEC, constants.TRACEFILE_OPT, tracefile)
     config.config.set(constants.GENERAL_SEC, constants.INJFILE_OPT, injectedfile)
+    config.config.set(constants.GENERAL_SEC, constants.IMGFILE_OPT, imagefile)
 
     simulate(config, statsdir)

@@ -18,7 +18,7 @@ class ResourceManager(object):
                 
         for r in self.requests:
             r.scheduler = self.scheduler
-        
+
         self.starttime = config.getInitialTime()
         self.time = self.starttime
         

@@ -1,15 +1,15 @@
-from workspace.haizea.common.config import TraceConfig
+from workspace.haizea.common.config import TraceConfig, ImageConfig
 from workspace.haizea.traces.formats import LWF, LWFEntry
 
 def generateTrace(config, file, guaranteeAvg = False):
     tracedur = config.getTraceDuration()
     
-    avgnumreq = tracedur / config.intervaldist.avg
-    idealaccumdur = avgnumreq * config.durationdist.avg * config.numnodesdist.avg
+    avgnumreq = tracedur / config.intervaldist.getAvg()
+    idealaccumdur = avgnumreq * config.durationdist.getAvg() * config.numnodesdist.getAvg()
 
     print avgnumreq
-    print config.durationdist.avg
-    print config.numnodesdist.avg
+    print config.durationdist.getAvg()
+    print config.numnodesdist.getAvg()
     print idealaccumdur
 
     good = False
@@ -49,13 +49,28 @@ def generateTrace(config, file, guaranteeAvg = False):
     lwf = LWF(entries)
     lwf.toFile(file)
         
+        
+def generateImages(config, file):
+    f = open(file, "w")
+    
+    # Write image sizes
+    for i in config.images:
+        print >>f, "%s %i" % (i, config.sizedist.get())
+    
+    print >>f, "#"
+    
+    l = config.getFileLength()
+    for i in xrange(l):
+        print >>f, config.imagedist.get()
+
+    f.close()
 
 
 if __name__ == "__main__":
-    configfile="../configfiles/inject.traceconf"
-    tracefile="../traces/examples/generated.lwf"
+    configfile="../configfiles/images.conf"
+    imagefile="../traces/examples/generated.images"
 
 
-    config = TraceConfig.fromFile(configfile)
+    config = ImageConfig.fromFile(configfile)
     
-    generateTrace(config, tracefile)   
+    generateImages(config, imagefile)   

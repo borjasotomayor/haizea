@@ -100,6 +100,7 @@ BACKFILLING_OPT="backfilling"
 RESERVATIONS_OPT="backfilling-reservations"
 TRACEFILE_OPT="tracefile"
 INJFILE_OPT="injectionfile"
+IMGFILE_OPT="imagefile"
 REUSE_OPT="reuse"
 
 REPORTING_SEC="reporting"
@@ -224,6 +225,12 @@ STDEV_OPT = "stdev"
 
 DIST_UNIFORM = "uniform"
 DIST_EXPLICIT = "explicit"
+
+# Image config file secs and opts
+IMAGES_OPT="images"
+DISTRIBUTION_OPT="distribution"
+LENGTH_OPT="filelength"
+SIZE_SEC="size"
 
 CLIP_BYTIME = 0
 CLIP_BYLEASE = 1
