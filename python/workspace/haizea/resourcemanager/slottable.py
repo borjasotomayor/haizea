@@ -675,48 +675,6 @@ class SlotTable(object):
         return mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_db_rsp_id, suspend_db_rsp_id
 
 
-    def scheduleImageTransferFIFO(self, res_id, reqTime, numnodes, imguri, imgsize, destinationNode, VMrsp_id, imgslot=None, allocate=True):
-        # This schedules image transfers in a FIFO manner, appropriate when there is no
-        # deadline for the image to arrive. Unlike EDF, we don't consider the
-        # transfer allocations to be moveable. This results in:
-        #  - If there is no transfer currently happening, there is no transfer
-        #    scheduled in the future.
-        #  - If there is a transfer currently in progress, there will be no gaps
-        #    between transfers. The next transfer should be scheduled after the
-        #    last queued transfer.
-        
-        # Estimate image transfer time 
-        imgTransferTime=self.estimateTransferTime(imgsize)
-        
-        
-        # Find next schedulable transfer time
-        # If there are no image transfers in progress, that means now.
-        # If there is an image transfer in progress, then that means right after 
-        # all the transfers in queue.
-        transferscur = self.resDB.getCurrentAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_RUNNING)
-        transfers = transferscur.fetchall()
-        transferscur = self.resDB.getCurrentAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_PENDING)
-        transfers += transferscur.fetchall()
-        if len(transfers) == 0:
-            # We can schedule the image transfer right now
-            startTime = reqTime
-        else:
-            futuretransferscur = self.resDB.getFutureAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_PENDING)
-            futuretransfers = futuretransferscur.fetchall()
-            if len(futuretransfers) == 0:
-                startTime = transfers[0]["all_schedend"]
-            else:
-                startTime = futuretransfers[-1]["all_schedend"]
-            startTime = ISO.ParseDateTime(startTime)
-            
-        endTime = startTime+imgTransferTime
-        rsp_id = None
-        
-        if allocate:
-            rsp_id = self.resDB.addReservationPart(res_id, "Image transfer for rsp_id=%s" % VMrsp_id, type=2)
-            self.resDB.addAllocation(rsp_id, imgslot, startTime, endTime, 100.0, moveable=False)
-        
-        return (rsp_id, imgslot, startTime, endTime)
 
 
     def suspend(self, lease, time):

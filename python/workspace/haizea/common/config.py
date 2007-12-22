@@ -174,6 +174,18 @@ class RMConfig(Config):
         else:
             return self.config.get(constants.GENERAL_SEC, constants.TRANSFER_OPT)
 
+    def getReuseAlg(self):
+        if not self.config.has_option(constants.GENERAL_SEC, constants.REUSE_OPT):
+            return constants.REUSE_NONE
+        else:
+            return self.config.get(constants.GENERAL_SEC, constants.REUSE_OPT)
+        
+    def isAvoidingRedundantTransfers(self):
+        if not self.config.has_option(constants.GENERAL_SEC, constants.AVOIDREDUNDANT_OPT):
+            return False
+        else:
+            return self.config.getboolean(constants.GENERAL_SEC, constants.AVOIDREDUNDANT_OPT)
+
     def getForceTransferTime(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.FORCETRANSFERT_OPT):
             return None

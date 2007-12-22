@@ -19,6 +19,7 @@ class Scheduler(object):
         self.completedleases = ds.LeaseTable(self)
         self.rejectedleases = ds.LeaseTable(self)
         self.transfersEDF = []
+        self.transfersFIFO = []
         self.completedTransfers = []
         self.maxres = self.rm.config.getMaxReservations()
         self.numbesteffortres = 0
@@ -241,10 +242,8 @@ class Scheduler(object):
             
             # Schedule image transfers
             transfertype = self.rm.config.getTransferType()
-            #reusealg = self.rm.config.getReuseAlg()
-            #avoidredundant = self.rm.config.isAvoidingRedundantTransfers()
-            reusealg = constants.REUSE_NONE
-            avoidredundant = False
+            reusealg = self.rm.config.getReuseAlg()
+            avoidredundant = self.rm.config.isAvoidingRedundantTransfers()
             
             if transfertype == constants.TRANSFER_NONE:
                 req.state = constants.LEASE_STATE_DEPLOYED
@@ -294,9 +293,8 @@ class Scheduler(object):
         # Determine earliest start time in each node
         # This depends on image transfer schedule. For now, the earliest
         # start time is now (no image transfers)
-        
-        numnodes = self.rm.config.getNumPhysicalNodes()
-        earliest = dict([(node+1, [self.rm.time,constants.REQTRANSFER_NO]) for node in range(numnodes)])
+
+        earliest = self.findEarliestStartingTimes(req)
         susptype = self.rm.config.getSuspensionType()
         if susptype == constants.SUSPENSION_NONE:
             suspendable = False
@@ -323,13 +321,18 @@ class Scheduler(object):
                 raise CancelException, msg
             
             # Schedule image transfers
-            dotransfer = False
+            transfertype = self.rm.config.getTransferType()
+            reusealg = self.rm.config.getReuseAlg()
+            avoidredundant = self.rm.config.isAvoidingRedundantTransfers()
             
             if req.state == constants.LEASE_STATE_PENDING:
-                if dotransfer:
-                    req.state = constants.LEASE_STATE_SCHEDULED
+                if transfertype == constants.TRANSFER_NONE:
+                    req.state = constants.LEASE_STATE_DEPLOYED
                 else:
-                    req.state = constants.LEASE_STATE_DEPLOYED            
+                    req.state = constants.LEASE_STATE_SCHEDULED
+                    transferRRs = self.scheduleImageTransferFIFO(req, mappings)
+                    for rr in transferRRs:
+                        req.appendRR(rr)                                    
 
             # Add resource reservations
             if resumetime != None:
@@ -415,39 +418,51 @@ class Scheduler(object):
             self.reevaluateSchedule(l, False)
             
         
-    def findEarliestStartingTimes(self, imageURI, imageSize, time):
-        avoidredundant = self.config.getboolean(GENERAL_SEC, REDUNDANT_OPT)
-        reusealg = self.config.get(GENERAL_SEC, REUSEALG_OPT)
-
+    def findEarliestStartingTimes(self, req):
+        numnodes = self.rm.config.getNumPhysicalNodes()
+        transfertype = self.rm.config.getTransferType()        
+        reusealg = self.rm.config.getReuseAlg()
+        avoidredundant = self.rm.config.isAvoidingRedundantTransfers()
+        imgTransferTime=self.estimateTransferTime(req.vmimagesize)
+        
         # Figure out starting time assuming we have to transfer the image
-        transfer = self.scheduleImageTransferFIFO(res_id=None, reqTime=time, numnodes=1, imguri=imageURI, imgsize=imageSize, imgslot=self.imagenodeslot_batch, VMrsp_id=None, destinationNode=None, allocate=False)
-        startTime = transfer[3]
+        nextfifo = self.getNextFIFOTransferTime()
         
-        earliest = {}
-        for node in range(self.getNumNodes()):
-            earliest[node+1] = [startTime, TRANSFER_REQUIRED, None]
-        
-        if reusealg=="cache":
-            nodeswithcached = self.backend.getNodesWithCachedImg(imageURI)
-            for node in nodeswithcached:
-                earliest[node] = [time, TRANSFER_CACHED, None]
-                
-        if reusealg=="cowpool":
-            nodeswithimg = self.backend.getNodesWithImg(imageURI)
-            for node in nodeswithimg:
-                earliest[node] = [time, TRANSFER_COW, None]
-
-        
-        if avoidredundant:
-            cur = self.resDB.getCurrentAllocationsInSlot(self.getTime(), self.imagenodeslot_batch)
-            transfers = cur.fetchall()
-            for t in transfers:
-                transferImg = self.imagetransfers[t["RSP_ID"]].imgURI
-                node = self.imagetransfers[t["RSP_ID"]].destinationNode
-                if transferImg == imageURI:
-                    startTime = ISO.ParseDateTime(t["ALL_SCHEDEND"])
-                    if startTime < earliest[node]:
-                        earliest[node] = [startTime, TRANSFER_REUSE, t["RSP_ID"]]
+        if transfertype == constants.TRANSFER_NONE:
+            earliest = dict([(node+1, [self.rm.time,constants.REQTRANSFER_NO]) for node in range(numnodes)])
+        else:
+            if req.numnodes == 1:
+                startTime = nextfifo + imgTransferTime
+                earliest = dict([(node+1, [startTime,constants.REQTRANSFER_YES]) for node in range(numnodes)])                
+                # TODO: Take into account reusable images
+            else:
+                # TODO: Take into account reusable images
+                # Unlike the previous case, we may have to find a new start time
+                # for all the nodes.
+                if transfertype == constants.TRANSFER_UNICAST:
+                    pass
+                    # TODO: If transferring each image individually, this will
+                    # make determining what images can be reused more complicated.
+                if transfertype == constants.TRANSFER_MULTICAST:
+                    startTime = nextfifo + imgTransferTime
+                    earliest = dict([(node+1, [startTime,constants.REQTRANSFER_YES]) for node in range(numnodes)])                                    # TODO: Take into account reusable images
+            
+                    #if reusealg=="cowpool":
+                    #    nodeswithimg = self.backend.getNodesWithImg(imageURI)
+                    #    for node in nodeswithimg:
+                    #        earliest[node] = [time, TRANSFER_COW, None]
+            
+                    
+                    #if avoidredundant:
+                    #    cur = self.resDB.getCurrentAllocationsInSlot(self.getTime(), self.imagenodeslot_batch)
+                    #    transfers = cur.fetchall()
+                    #    for t in transfers:
+                    #        transferImg = self.imagetransfers[t["RSP_ID"]].imgURI
+                    #        node = self.imagetransfers[t["RSP_ID"]].destinationNode
+                    #        if transferImg == imageURI:
+                    #            startTime = ISO.ParseDateTime(t["ALL_SCHEDEND"])
+                    #            if startTime < earliest[node]:
+                    #                earliest[node] = [startTime, TRANSFER_REUSE, t["RSP_ID"]]
 
         return earliest
 
@@ -537,6 +552,46 @@ class Scheduler(object):
                 t2.updateDBentry()            
         
         return newtransfer
+    
+    def scheduleImageTransferFIFO(self, req, reqtransfers):
+        # Estimate image transfer time 
+        imgTransferTime=self.estimateTransferTime(req.vmimagesize)
+        startTime = self.getNextFIFOTransferTime()
+        transfertype = self.rm.config.getTransferType()        
+
+        newtransfers = []
+        
+        if transfertype == constants.TRANSFER_UNICAST:
+            pass
+            # TODO: If transferring each image individually, this will
+            # make determining what images can be reused more complicated.
+        if transfertype == constants.TRANSFER_MULTICAST:
+            # Time to transfer is imagesize / bandwidth, regardless of 
+            # number of nodes
+            newtransfer = ds.FileTransferResourceReservation(req)
+            newtransfer.start = startTime
+            newtransfer.end = startTime+imgTransferTime
+            newtransfer.deadline = None
+            newtransfer.state = constants.RES_STATE_SCHEDULED
+            newtransfer.file = req.vmimage
+            for vnode in reqtransfers:
+                physnode = reqtransfers[vnode]
+                newtransfer.piggyback(req.leaseID, vnode, physnode)
+            rsp_id = self.slottable.addImageTransfer(req, newtransfer)
+            newtransfer.db_rsp_ids = [rsp_id]
+            newtransfers.append(newtransfer)
+            
+        self.transfersFIFO += newtransfers
+        
+        return newtransfers
+    
+    def getNextFIFOTransferTime(self):
+        transfers = [t for t in self.transfersFIFO if t.state != constants.RES_STATE_DONE]
+        if len(transfers) > 0:
+            startTime = transfers[-1].end
+        else:
+            startTime = self.rm.time
+        return startTime
     
     def estimateTransferTime(self, imgsize):
         forceTransferTime = self.rm.config.getForceTransferTime()

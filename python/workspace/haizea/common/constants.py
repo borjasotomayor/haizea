@@ -124,6 +124,8 @@ RUNOVERHEAD_OPT="runtime-overhead"
 BOOTOVERHEAD_OPT="bootshutdown-overhead"
 RUNOVERHEADBE_OPT="runtime-overhead-onlybesteffort"
 FORCETRANSFERT_OPT="force-transfer-time"
+REUSE_OPT="reuse"
+AVOIDREDUNDANT_OPT="avoid-redundant-transfers"
 
 BACKFILLING_OFF="off"
 BACKFILLING_AGGRESSIVE="aggressive"
@@ -174,6 +176,7 @@ ENACT="ENACT"
 
 # Transfer required in deployment
 REQTRANSFER_NO = 0
+REQTRANSFER_YES = 1
 
 # Misc
 BETTER = -1
