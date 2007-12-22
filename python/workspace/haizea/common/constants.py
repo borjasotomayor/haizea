@@ -96,6 +96,7 @@ PROFILE_OPT="profile"
 SUSPENSION_OPT="suspension"
 MIGRATION_OPT="migration"
 MIGRATE_OPT="migrate"
+TRANSFER_OPT="transfer"
 BACKFILLING_OPT="backfilling"
 RESERVATIONS_OPT="backfilling-reservations"
 TRACEFILE_OPT="tracefile"
@@ -122,6 +123,7 @@ STOPBESTEFFORTDONE_OPT="stopwhenbesteffortdone"
 RUNOVERHEAD_OPT="runtime-overhead"
 BOOTOVERHEAD_OPT="bootshutdown-overhead"
 RUNOVERHEADBE_OPT="runtime-overhead-onlybesteffort"
+FORCETRANSFERT_OPT="force-transfer-time"
 
 BACKFILLING_OFF="off"
 BACKFILLING_AGGRESSIVE="aggressive"
@@ -135,6 +137,14 @@ SUSPENSION_ALL="all"
 MIGRATE_NONE="nothing"
 MIGRATE_MEM="mem"
 MIGRATE_MEMVM="mem+vm"
+
+TRANSFER_NONE="none"
+TRANSFER_UNICAST="unicast"
+TRANSFER_MULTICAST="multicast"
+
+REUSE_NONE="none"
+REUSE_POOL="pool"
+REUSE_COWPOOL="cowpool"
 
 # Graph configfile sections and options
 TITLE_OPT="title"
@@ -163,7 +173,7 @@ DS="STRUCT"
 ENACT="ENACT"
 
 # Transfer required in deployment
-TRANSFER_NO = 0
+REQTRANSFER_NO = 0
 
 # Misc
 BETTER = -1

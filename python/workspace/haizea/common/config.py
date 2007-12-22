@@ -168,6 +168,18 @@ class RMConfig(Config):
         else:
             return self.config.getboolean(constants.SIMULATION_SEC, constants.STOPBESTEFFORTDONE_OPT)
 
+    def getTransferType(self):
+        if not self.config.has_option(constants.GENERAL_SEC, constants.TRANSFER_OPT):
+            return constants.TRANSFER_NONE
+        else:
+            return self.config.get(constants.GENERAL_SEC, constants.TRANSFER_OPT)
+
+    def getForceTransferTime(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.FORCETRANSFERT_OPT):
+            return None
+        else:
+            return TimeDelta(seconds=self.config.getint(constants.SIMULATION_SEC, constants.FORCETRANSFERT_OPT))
+
     def getRuntimeOverhead(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.RUNOVERHEAD_OPT):
             return None

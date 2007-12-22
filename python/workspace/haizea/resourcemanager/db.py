@@ -437,6 +437,14 @@ class SlotTableDB(object):
         cur = self.getConn().cursor()
         cur.execute(sql, (status,) + interval)
 
+    def updateStartTimes(self, respart, start):
+        sql = "UPDATE TB_ALLOC SET ALL_SCHEDSTART = ? WHERE "
+        sql += " RSP_ID=%i" % respart
+                
+        cur = self.getConn().cursor()
+        cur.execute(sql, (start,))
+        self.changePointCacheDirty = True
+
     def updateEndTimes(self, respart, end):
         sql = "UPDATE TB_ALLOC SET ALL_SCHEDEND = ? WHERE "
         sql += " RSP_ID=%i" % respart

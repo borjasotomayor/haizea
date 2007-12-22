@@ -156,7 +156,7 @@ class SlotTable(object):
                 rsp_name = "VM %i" % (vwnode)
                 rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible)
                 db_rsp_ids.append(rsp_id)
-                transfers.append((nodeassignment[vwnode], rsp_id))
+                transfers.append((vwnode, nodeassignment[vwnode]))
                 for slottype in slottypes:
                     amount = resreq[slottype]
                     sl_id = assignment[vwnode][slottype]
@@ -674,129 +674,6 @@ class SlotTable(object):
 
         return mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_db_rsp_id, suspend_db_rsp_id
 
-    def do_scheduleImageTransferEDF(self, res_id, reqTime, deadline, imgURI, imgsize, destinationNode, VMrsp_id, imgslot=None, type=None):
-        # Algorithm for fitting image transfers is essentially the same as 
-        # the one used in scheduleVMs. The main difference is that we can
-        # scale down the code since we know a priori what slot we're fitting the
-        # network transfer in, and the transfers might be moveable (which means
-        # we will have to do some Earliest Deadline First magic)
-        
-        # Estimate image transfer time 
-        imgTransferTime=self.estimateTransferTime(imgsize)
-        
-        # Find next schedulable transfer time
-        # If there are no image transfers in progress, that means now.
-        # If there is an image transfer in progress, then that means right after the transfer.
-        transferscur = self.resDB.getCurrentAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_RUNNING)
-        transfers = transferscur.fetchall()
-        if len(transfers) == 0:
-            startTime = reqTime
-        else:
-            startTime = transfers[0]["all_schedend"]
-            startTime = ISO.ParseDateTime(startTime)
-        
-        # Take all the image transfers scheduled from the current time onwards
-        # (not including image transfers which have already started)
-        transferscur = self.resDB.getFutureAllocationsInSlot(reqTime, imgslot, allocstatus=STATUS_PENDING)
-        transfers = []
-        for t in transferscur:
-            transfer={}
-            transfer["sl_id"] = t["sl_id"]
-            transfer["rsp_id"] = t["rsp_id"]
-            transfer["all_schedstart"] = ISO.ParseDateTime(t["all_schedstart"])
-            transfer["all_duration"] = TimeDelta(seconds=t["all_duration"])
-            transfer["all_deadline"] = ISO.ParseDateTime(t["all_deadline"])
-            transfer["new"] = False
-            transfers.append(transfer)
-            
-        newtransfer = {}
-        newtransfer["sl_id"] = imgslot
-        rsp_id = self.resDB.addReservationPart(res_id, "Image transfer", 2)
-        newtransfer["rsp_id"] = rsp_id
-        newtransfer["all_schedstart"] = None
-        newtransfer["all_duration"] = imgTransferTime
-        newtransfer["all_deadline"] = deadline
-        newtransfer["new"] = True
-        transfers.append(newtransfer)
-
-        def comparedates(x,y):
-            dx=x["all_deadline"]
-            dy=y["all_deadline"]
-            if dx>dy:
-                return 1
-            elif dx==dy:
-                # If deadlines are equal, we break the tie by order of arrival
-                # (currently, we just check the "new" attribute; in the future, an
-                # arrival timestamp might be necessary)
-                if not x["new"]:
-                    return -1
-                elif not y["new"]:
-                    return 1
-                else:
-                    return 0
-            else:
-                return -1
-        
-        # Order transfers by deadline
-        transfers.sort(comparedates)
-
-        # Compute start times and make sure that deadlines are met
-        fits = True
-        for transfer in transfers:
-             transfer["new_all_schedstart"] = startTime
-             transfer["all_schedend"] = startTime + transfer["all_duration"]
-             if transfer["all_schedend"] > transfer["all_deadline"]:
-                 fits = False
-                 break
-             startTime = transfer["all_schedend"]
-             
-        if not fits:
-             raise SchedException, "Adding this VW results in an unfeasible image transfer schedule."
-
-        # EDF allows us to check that the deadlines will be met, but it results in
-        # an aggressive staging schedule. In EDF/JIT, we push all the image transfers 
-        # as close as possible to their deadlines. Note that this does not affect
-        # the feasibility of the schedule in this precise moment, but might
-        # make future requests infeasible.
-        feasibleEndTime=transfers[-1]["all_deadline"]        
-        if type==EDF_JIT:
-            fits = False
-            if self.config.has_option(GENERAL_SEC, JITBUFFER_OPT):
-                jitbuffer = self.config.getint(GENERAL_SEC, JITBUFFER_OPT)
-                fits = True
-                for transfer in reversed(transfers):
-                    deadline = transfer["all_deadline"]
-                    duration = transfer["all_duration"]
-
-                    newEndTime=min([deadline,feasibleEndTime]) - TimeDelta(seconds=jitbuffer)
-                    transfer["all_schedend"]=newEndTime
-                    newStartTime=newEndTime-duration
-                    transfer["new_all_schedstart"]=newStartTime
-                    feasibleEndTime=newStartTime
-                    if transfer["all_schedend"] > transfer["all_deadline"] or newStartTime < self.getTime():
-                        fits = False
-                        break
-            
-            if not fits:
-                feasibleEndTime=transfers[-1]["all_deadline"]        
-                for transfer in reversed(transfers):
-                    deadline = transfer["all_deadline"]
-                    duration = transfer["all_duration"]
-    
-                    newEndTime=min([deadline,feasibleEndTime])
-                    transfer["all_schedend"]=newEndTime
-                    newStartTime=newEndTime-duration
-                    transfer["new_all_schedstart"]=newStartTime
-                    feasibleEndTime=newStartTime
-        
-        # Make changes in database     
-        for t in transfers:
-            if t["new"]:
-                self.resDB.addAllocation(t["rsp_id"], t["sl_id"], t["new_all_schedstart"], t["all_schedend"], 100.0, moveable=True, deadline=t["all_deadline"], duration=t["all_duration"].seconds)
-            else:
-                self.resDB.updateAllocation(t["sl_id"], t["rsp_id"], t["all_schedstart"], newstart=t["new_all_schedstart"], end=t["all_schedend"])            
-        
-        return (rsp_id,)
 
     def scheduleImageTransferFIFO(self, res_id, reqTime, numnodes, imguri, imgsize, destinationNode, VMrsp_id, imgslot=None, allocate=True):
         # This schedules image transfers in a FIFO manner, appropriate when there is no
@@ -1042,9 +919,19 @@ class SlotTable(object):
         
         return stats
     
-    def updateEndTimes(self, db_rsp_ids, realend):
+    def addImageTransfer(self, lease, t):
+        rsp_id = self.db.addReservationPart(lease.leaseID, "Image transfer", 2)
+        self.db.addAllocation(rsp_id, self.imagenodeslot_exact, t.start, t.end, 100.0, moveable=True, deadline=t.deadline, duration=(t.end-t.start).seconds)
+        return rsp_id
+
+    def updateStartTimes(self, db_rsp_ids, newstart):
         for rsp_id in db_rsp_ids:
-            self.db.updateEndTimes(rsp_id, realend)
+            self.db.updateStartTimes(rsp_id, newstart)
+        self.availabilitywindow.flushCache()
+    
+    def updateEndTimes(self, db_rsp_ids, newend):
+        for rsp_id in db_rsp_ids:
+            self.db.updateEndTimes(rsp_id, newend)
         self.availabilitywindow.flushCache()
             
     def updateLeaseEnd(self, rsp_id, newend):
@@ -1057,6 +944,8 @@ class SlotTable(object):
         
     def isFull(self, time):
         return self.db.isFull(time, constants.RES_CPU)
+    
+
 
 class AvailEntry(object):
     def __init__(self, time, avail, availpreempt = None):

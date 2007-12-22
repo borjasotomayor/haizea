@@ -178,16 +178,32 @@ class ResourceReservationBase(object):
     def removeDBentries(self):
         for rsp_id in self.db_rsp_ids:
             self.lease.scheduler.slottable.removeReservationPart(rsp_id)
+            
+    def updateDBentry(self):
+        self.lease.scheduler.slottable.updateStartTimes(self.db_rsp_ids, self.start)
+        self.lease.scheduler.slottable.updateEndTimes(self.db_rsp_ids, self.end)
         
 class FileTransferResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, transfers):
-        ResourceReservationBase.__init__(self, start, end, lease)
-        self.transfers = transfers
+    def __init__(self, lease, start=None, end=None, db_rsp_ids=None):
+        ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids)
+        self.deadline = None
+        self.file = None
+        # Dictionary of  physnode -> [ (leaseID, vnode)* ]
+        self.transfers = {}
 
     def printContents(self, logfun=edebug):
         ResourceReservationBase.printContents(self, logfun)
         logfun("Type           : FILE TRANSFER", DS, None)
+        logfun("Deadline       : %s" % self.deadline, DS, None)
+        logfun("File           : %s" % self.file, DS, None)
         logfun("Transfers      : %s" % self.transfers, DS, None)
+        
+    def piggyback(self, leaseID, vnode, physnode):
+        if self.transfers.has_key(physnode):
+            self.transfers[physnode].append((leaseID, vnode))
+        else:
+            self.transfers[physnode] = (leaseID, vnode)
+            
 
                 
 class VMResourceReservation(ResourceReservationBase):
