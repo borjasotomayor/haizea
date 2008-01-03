@@ -44,8 +44,8 @@ class LeaseBase(object):
         logfun("VM image size  : %s" % self.vmimagesize, DS, None)
         logfun("Num nodes      : %s" % self.numnodes, DS, None)
         logfun("Resource req   : %s" % "  ".join([res_str(r[0]) + ": " + `r[1]` for r in self.resreq.items()]), DS, None)
-        logfun("VM image map   : %s" % self.vmimagemap, DS, None)
-        logfun("Mem image map  : %s" % self.memimagemap, DS, None)
+        logfun("VM image map   : %s" % prettyNodemap(self.vmimagemap), DS, None)
+        logfun("Mem image map  : %s" % prettyNodemap(self.memimagemap), DS, None)
 
     def printRR(self, logfun=edebug):
         logfun("RESOURCE RESERVATIONS", DS, None)
@@ -74,6 +74,10 @@ class LeaseBase(object):
             return (self.rr[-1], None)
         elif isinstance(self.rr[1],SuspensionResourceReservation):
             return (self.rr[-2], self.rr[-1])
+        
+    def getEnd(self):
+        vmrr, resrr = self.getLastVMRR()
+        return vmrr.end
         
     def nextRRs(self, rr):
         return self.rr[self.rr.index(rr)+1:]
@@ -202,7 +206,7 @@ class FileTransferResourceReservation(ResourceReservationBase):
         if self.transfers.has_key(physnode):
             self.transfers[physnode].append((leaseID, vnode))
         else:
-            self.transfers[physnode] = (leaseID, vnode)
+            self.transfers[physnode] = [(leaseID, vnode)]
             
 
                 

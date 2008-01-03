@@ -103,6 +103,7 @@ TRACEFILE_OPT="tracefile"
 INJFILE_OPT="injectionfile"
 IMGFILE_OPT="imagefile"
 REUSE_OPT="reuse"
+MAXPOOL_OPT="maxpool"
 
 REPORTING_SEC="reporting"
 CSS_OPT="css"
@@ -248,5 +249,4 @@ SIZE_SEC="size"
 CLIP_BYTIME = 0
 CLIP_BYLEASE = 1
 
-REUSE_NONE = 0
-REUSE_COWPOOL = 1
+POOL_UNLIMITED = -1

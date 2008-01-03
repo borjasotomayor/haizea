@@ -98,3 +98,6 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
     
 def roundDateTimeDelta(d):
     return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))
+
+def vnodemapstr(vnodes):
+    return ",".join(["L"+`l`+"V"+`v` for (l,v) in vnodes])

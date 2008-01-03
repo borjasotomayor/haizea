@@ -144,6 +144,8 @@ class Scheduler(object):
                 self.slottable.commit()
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
+            for vnode,pnode in l.vmimagemap.items():
+                self.rm.enactment.removeImage(pnode, l.leaseID, vnode)
             if isinstance(l,ds.BestEffortLease):
                 self.rm.stats.incrBestEffortCompleted(l.leaseID)            
         elif rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
@@ -191,7 +193,24 @@ class Scheduler(object):
         if l.state == constants.LEASE_STATE_DEPLOYING:
             l.state = constants.LEASE_STATE_DEPLOYED
             rr.state = constants.RES_STATE_DONE
-            # TODO: Enactment
+            for physnode in rr.transfers:
+                vnodes = rr.transfers[physnode]
+                
+                # Update VM Image maps
+                for leaseID,v in vnodes:
+                    lease = self.scheduledleases.getLease(leaseID)
+                    lease.vmimagemap[v] = physnode
+                    
+                # Find out timeout of image. It will be the latest end time of all the
+                # leases being used by that image.
+                leases = [l for (l,v) in vnodes]
+                maxend=None
+                for leaseID in leases:
+                    l = self.scheduledleases.getLease(leaseID)
+                    end = l.getEnd()
+                    if maxend==None or end>maxend:
+                        maxend=end
+                self.rm.enactment.addImageToNode(physnode, rr.file, l.vmimagesize, vnodes, timeout=maxend)
         elif l.state == constants.LEASE_STATE_SUSPENDED:
             pass
             # TODO: Migrating
@@ -271,8 +290,9 @@ class Scheduler(object):
                         # No transfer already scheduled. Check if we can reuse
                         # an image .
                         if reusealg == constants.REUSE_COWPOOL:
-                            pass
                             # TODO
+                            filetransfer = self.scheduleImageTransferEDF(req, vnode, physnode)                 
+                            req.appendRR(filetransfer)
                         else:
                             filetransfer = self.scheduleImageTransferEDF(req, vnode, physnode)                 
                             req.appendRR(filetransfer)
