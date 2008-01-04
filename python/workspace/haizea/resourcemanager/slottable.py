@@ -783,13 +783,12 @@ class SlotTable(object):
         nodes = candidatenodes.keys()
         
         # TODO
-        #reusealg = self.config.get(GENERAL_SEC, REUSEALG_OPT)
+        reusealg = self.rm.config.getReuseAlg()
         nodeswithimg=[]
-        #if reusealg=="cache":
-        #    nodeswithimg = self.backend.getNodesWithCachedImg(imguri)
-        #elif reusealg=="cowpool":
-        #    nodeswithimg = self.backend.getNodesWithImgLater(imguri, startTime)
+        if reusealg==constants.REUSE_COWPOOL:
+            nodeswithimg = self.rm.enactment.getNodesWithImgInPool(vmimage, start)
         
+        print nodeswithimg
         # Compares node x and node y. 
         # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)
         def comparenodes(x,y):

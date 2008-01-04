@@ -283,28 +283,37 @@ class Scheduler(object):
                 # Dictionary of transfer RRs. Key is the physical node where
                 # the image is being transferred to
                 transferRRs = {}
+                mustTransfer = False
                 for transfer in transfers:
                     leaseID = req.leaseID
                     vnode = transfer[0]
                     physnode = transfer[1]
-                    info("Scheduling image transfer for vnode %i to physnode %i" % (vnode, physnode), constants.SCHED, self.rm.time)
+                    info("Scheduling image transfer for of '%s' from vnode %i to physnode %i" % (req.vmimage, vnode, physnode), constants.SCHED, self.rm.time)
                     if transferRRs.has_key(physnode):
                         # We've already scheduled a transfer to this node. Reuse it.
-                        info("No need to schedule an image transfer (reusing an existing transfer)")
+                        info("No need to schedule an image transfer (reusing an existing transfer)", constants.SCHED, self.rm.time)
                         transferRR = transferRR[physnode]
                         transferRR.piggyback(leaseID, vnode, physnode, req.end)
                     else:
                         # No transfer already scheduled. Check if we can reuse
                         # an image .
                         if reusealg == constants.REUSE_COWPOOL:
-                            # TODO
-                            filetransfer = self.scheduleImageTransferEDF(req, vnode, physnode)                 
-                            req.appendRR(filetransfer)
+                            if self.rm.enactment.isInPool(physnode,req.vmimage, req.start):
+                                info("No need to schedule an image transfer (reusing an image in pool)", constants.SCHED, self.rm.time)
+                                self.rm.enactment.addToPool(physnode, req.vmimage, leaseID, vnode, req.start)
+                            else:
+                                info("Need to schedule a transfer.", constants.SCHED, self.rm.time)
+                                filetransfer = self.scheduleImageTransferEDF(req, vnode, physnode)                 
+                                req.appendRR(filetransfer)
+                                transferRRs[physnode] = filetransfer
                         else:
+                            info("Need to schedule a transfer.", constants.SCHED, self.rm.time)
                             filetransfer = self.scheduleImageTransferEDF(req, vnode, physnode)                 
                             req.appendRR(filetransfer)
-                        
-                    
+                            transferRRs[physnode] = filetransfer
+
+                if len(transferRRs) == 0:
+                    req.state = constants.LEASE_STATE_DEPLOYED
             
             # Add resource reservations
             vmrr = ds.VMResourceReservation(req, req.start, req.end, req.prematureend, mappings, constants.ONCOMPLETE_ENDLEASE, False, db_rsp_ids)
@@ -314,6 +323,7 @@ class Scheduler(object):
             self.slottable.commit()
         except SlotFittingException, msg:
             self.slottable.rollback()
+            # TODO: More stuff has to be rollbacked (RRs, entries in pools)
             raise SchedException, "The requested exact lease is infeasible. Reason: %s" % msg
 
     def scheduleBestEffortLease(self, req):

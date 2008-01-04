@@ -53,6 +53,7 @@ class BaseNode(object):
                 f.addMapping(leaseID, vnode)
                 f.updateTimeout(timeout)
                 break  # Ugh
+        self.printFiles()
             
     def getPoolEntry(self, imagefile, after = None, leaseID=None, vnode=None):
         images = self.getPoolImages()
@@ -89,7 +90,8 @@ class BaseNode(object):
         return sum([f.filesize for f in self.getPoolImages()])
     
     def purgeOldestUnusedImage(self):
-        unused = [img for img in self.deployedimages if len(img.rsp_ids)==0]
+        pool = self.getPoolImages()
+        unused = [img for img in pool if not img.hasMappings()]
         if len(unused) == 0:
             return 0
         else:
@@ -98,18 +100,21 @@ class BaseNode(object):
             for img in i:
                 if img.timeout < oldest.timeout:
                     oldest = img
-            self.deployedimages.remove(oldest)
+            self.files.remove(oldest)
             return 1
     
-    def purgeImagesDownTo(self, target):
+    def purgePoolDownTo(self, target):
         done = False
         while not done:
             removed = self.purgeOldestUnusedImage()
             if removed==0:
                 done = True
+                success = False
             elif removed == 1:
-                if len(self.deployedimages) == target:
+                if self.getPoolSize() <= target:
                     done = True
+                    success = True
+        return success
         
     def printFiles(self):
         images = ""
@@ -148,12 +153,25 @@ class SimulatedEnactment(BaseEnactment):
                     img.addMapping(leaseID,vnode)
                 if self.maxpoolsize != constants.POOL_UNLIMITED:
                     poolsize = self.getNode(nod_id).getPoolSize()
-                    if poolsize >= self.maxpoolsize:
-                        info("Node %i has %i deployed images. Will try to bring it down to %i" % (nod_id, numDeployed, self.maxDeployImg -1), constants.ENACT, None)
-                        self.getNode(nod_id).printDeployedImages()
-                        self.getNode(nod_id).purgeImagesDownTo(self.maxDeployImg - 1)
-                        self.getNode(nod_id).printDeployedImages()
-                self.getNode(nod_id).addFile(img)
+                    reqsize = poolsize + imagesize
+                    if reqsize > self.maxpoolsize:
+                        desiredsize = self.maxpoolsize - imagesize
+                        info("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize), constants.ENACT, None)
+                        self.getNode(nod_id).printFiles()
+                        success = self.getNode(nod_id).purgePoolDownTo(self.maxpoolsize)
+                        if not success:
+                            info("Unable to add to pool. Creating tainted image instead.", constants.ENACT, None)
+                            # If unsuccessful, this just means we couldn't add the image
+                            # to the pool. We will have to create tainted images to be used
+                            # only by these leases
+                            for (leaseID, vnode) in vnodes:
+                                img = VMImageFile(imagefile, imagesize, masterimg=False)
+                                img.addMapping(leaseID,vnode)
+                                self.getNode(nod_id).addFile(img)
+                        else:
+                            self.getNode(nod_id).addFile(img)
+                    else:
+                        self.getNode(nod_id).addFile(img)
             
         self.getNode(nod_id).printFiles()
         
@@ -167,25 +185,29 @@ class SimulatedEnactment(BaseEnactment):
         elif self.reusealg == constants.REUSE_COWPOOL:
             poolentry = node.getPoolEntry(imagefile, leaseID=leaseID, vnode=vnode)
             if poolentry == None:
-                error("Image for L%iV%i is not in pool on node %i" % (leaseID, vnode, pnode), constants.ENACT, None)
-            # Create tainted image
-            info("Adding tainted image for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT, None)
-            node.printFiles()
-            img = VMImageFile(imagefile, poolentry.filesize, masterimg=False)
-            img.addMapping(leaseID,vnode)
-            node.addFile(img)
-            node.printFiles()
-            self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
-        
-    def addVMtoCOWImg(self,nod_id,imgURI,rsp_id,timeout):
-        info("Adding additional rsp_id=%s in nod_id=%i" % (rsp_id,nod_id), constants.ENACT, None)
-        self.rspnode[rsp_id]=nod_id
-        self.getNode(nod_id).printDeployedImages()
-        self.getNode(nod_id).addVMtoCOWImg(imgURI, rsp_id, timeout)
-        self.getNode(nod_id).printDeployedImages()
+                # Not necessarily an error. Maybe the pool was full, and
+                # we had to fall back on creating a tainted image right
+                # when the image was transferred. We have to check this.
+                if not node.hasTaintedImage(leaseID, vnode, imagefile):
+                    error("Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (leaseID, vnode, pnode), constants.ENACT, None)
+            else:
+                # Create tainted image
+                info("Adding tainted image for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT, None)
+                node.printFiles()
+                img = VMImageFile(imagefile, poolentry.filesize, masterimg=False)
+                img.addMapping(leaseID,vnode)
+                node.addFile(img)
+                node.printFiles()
+                self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
     
-    def isImgDeployedLater(self,nod_id,imgURI, time):
-        return self.getNode(nod_id).isImgDeployedLater(imgURI, time)
+    def isInPool(self,pnode,imagefile,time):
+        return self.getNode(pnode).isInPool(imagefile, after=time)
+    
+    def getNodesWithImgInPool(self, imagefile, time):
+        return [n.nod_id for n in self.nodes if n.isInPool(imagefile, after=time)]
+    
+    def addToPool(self,pnode, imagefile, leaseID, vnode, timeout):
+        return self.getNode(pnode).addToPool(imagefile, leaseID, vnode, timeout)
     
     def removeImage(self,pnode,lease,vnode):
         node = self.getNode(pnode)
@@ -198,9 +220,10 @@ class SimulatedEnactment(BaseEnactment):
                 if (lease,vnode) in img.mappings:
                     img.mappings.remove((lease,vnode))
                 node.printFiles()
-                if img.timeout >= self.rm.time and len(img.mappings) == 0:
-                    info("Removing image %s" % img.filename, constants.ENACT, None)
-                    toremove.append(img)
+                # Keep image around, even if it isn't going to be used
+                # by any VMs. It might be reused later on.
+                # It will be purged if space has to be made available
+                # for other images
             for img in toremove:
                 node.files.remove(img)
             node.printFiles()
@@ -238,6 +261,9 @@ class VMImageFile(File):
         
     def hasMapping(self, leaseID, vnode):
         return (leaseID,vnode) in self.mappings
+    
+    def hasMappings(self):
+        return len(self.mappings) > 0
         
     def updateTimeout(self, timeout):
         if timeout > self.timeout:

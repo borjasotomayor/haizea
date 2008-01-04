@@ -100,4 +100,7 @@ def roundDateTimeDelta(d):
     return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))
 
 def vnodemapstr(vnodes):
-    return ",".join(["L"+`l`+"V"+`v` for (l,v) in vnodes])
+    if len(vnodes) == 0:
+        return "UNUSED"
+    else:
+        return ",".join(["L"+`l`+"V"+`v` for (l,v) in vnodes])
