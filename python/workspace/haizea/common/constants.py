@@ -196,6 +196,7 @@ QUEUEWAITFILE="queuewait.dat"
 EXECWAITFILE="execwait.dat"
 UTILRATIOFILE="utilratio.dat"
 CLIPTIMESFILE="cliptimes.dat"
+DISKUSAGEFILE="diskusage.dat"
 
 
 # Types of final tables in report generation

@@ -3,6 +3,7 @@ from workspace.haizea.resourcemanager.slottable import SlotTable, SlotFittingExc
 from workspace.haizea.common.log import info, debug, warning, edebug
 import workspace.haizea.common.constants as constants
 import copy
+from mx.DateTime import TimeDelta
 
 class SchedException(Exception):
     pass
@@ -118,7 +119,13 @@ class Scheduler(object):
             rr.state = constants.RES_STATE_ACTIVE
             if isinstance(l,ds.BestEffortLease):
                 self.rm.stats.startExec(l.leaseID)            
-            # TODO: Enactment
+            # TODO: More enactment
+            
+            # Check that the image is available
+            # If we're reusing images, this might require creating
+            # a tainted copy
+            for (vnode,pnode) in rr.nodes.items():
+                self.rm.enactment.checkImage(pnode, l.leaseID, vnode, l.vmimage)
         elif l.state == constants.LEASE_STATE_SUSPENDED:
             l.state = constants.LEASE_STATE_ACTIVE
             rr.state = constants.RES_STATE_ACTIVE

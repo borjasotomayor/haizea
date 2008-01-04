@@ -9,6 +9,7 @@ class Stats(object):
         self.queuewait = []
         self.execwait = []
         self.utilratio = []
+        self.diskusage = []
 
         self.besteffortstartID = []
         self.besteffortendID = []
@@ -31,6 +32,7 @@ class Stats(object):
         self.exactaccepted.append((time,None,0))
         self.exactrejected.append((time,None,0))
         self.queuesize.append((time,None,0))
+        self.diskusage.append((time,None,0))
 
     def addFinalMarker(self):
         time = self.rm.time
@@ -100,7 +102,10 @@ class Stats(object):
             end = self.queuewaittimes[leaseID][2]
             wait = (end - start).seconds
             self.execwait.append((time,leaseID,wait))
-
+            
+    def addDiskUsage(self, usage):
+        time = self.rm.time
+        self.diskusage.append((time,None,usage))
         
     def normalizeTimes(self, data):
         return [((v[0] - self.rm.starttime).seconds,v[1],v[2]) for v in data]
@@ -177,4 +182,11 @@ class Stats(object):
     def getUtilizationRatio(self):
         l = self.normalizeTimes(self.utilratio)
         return self.addAverage(l)
+    
+    def getDiskUsage(self):
+        l = self.normalizeTimes(self.diskusage)
+        l = self.addNoAverage(l)
+        for p in l:
+            print p
+        return l
         
