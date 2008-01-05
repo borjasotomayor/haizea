@@ -72,7 +72,7 @@ class LeaseBase(object):
     def getLastVMRR(self):
         if isinstance(self.rr[-1],VMResourceReservation):
             return (self.rr[-1], None)
-        elif isinstance(self.rr[1],SuspensionResourceReservation):
+        elif isinstance(self.rr[-1],SuspensionResourceReservation):
             return (self.rr[-2], self.rr[-1])
         
     def getEnd(self):
@@ -129,6 +129,7 @@ class BestEffortLease(LeaseBase):
         self.realremdur = realdur
         self.realdur = realdur
         self.maxqueuetime = maxqueuetime
+        self.imagesavail = None
 
     def printContents(self, logfun=edebug):
         logfun("__________________________________________________", DS, None)
@@ -138,6 +139,7 @@ class BestEffortLease(LeaseBase):
         logfun("Rem duration   : %s" % self.remdur, DS, None)
         logfun("Real duration  : %s" % self.realremdur, DS, None)
         logfun("Max queue time : %s" % self.maxqueuetime, DS, None)
+        logfun("Images Avail @ : %s" % self.imagesavail, DS, None)
         self.printRR(logfun)
         logfun("--------------------------------------------------", DS, None)
 

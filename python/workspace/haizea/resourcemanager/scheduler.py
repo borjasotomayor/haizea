@@ -233,6 +233,8 @@ class Scheduler(object):
         info("LEASE-%i Start of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
         l.printContents()
         rr.state = constants.RES_STATE_ACTIVE
+        for vnode,pnode in rr.nodes.items():
+            self.rm.enactment.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq[constants.RES_MEM])
         l.printContents()
         debug("LEASE-%i End of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
 
@@ -258,6 +260,8 @@ class Scheduler(object):
         info("LEASE-%i Start of handleEndResume" % l.leaseID, constants.SCHED, self.rm.time)
         l.printContents()
         rr.state = constants.RES_STATE_DONE
+        for vnode,pnode in rr.nodes.items():
+            self.rm.enactment.removeRAMFileFromNode(pnode, l.leaseID, vnode)
         l.printContents()
         debug("LEASE-%i End of handleEndResume" % l.leaseID, constants.SCHED, self.rm.time)
     
@@ -397,8 +401,10 @@ class Scheduler(object):
                             musttransfer[vnode] = pnode
                     if len(musttransfer)>0:
                         transferRRs = self.scheduleImageTransferFIFO(req, musttransfer)
+                        req.imagesavail = transferRRs[-1].end
                     else:
                         req.state = constants.LEASE_STATE_DEPLOYED
+                        req.imagesavail = self.rm.time
                     for rr in transferRRs:
                         req.appendRR(rr)                                    
 
@@ -443,6 +449,10 @@ class Scheduler(object):
             req.removeRR(vmrr)
             if susprr != None:
                 req.removeRR(susprr)
+            for vnode,pnode in req.vmimagemap.items():
+                self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
+            self.removeFromFIFOTransfers(req.leaseID)
+            req.vmimagemap = {}
             self.scheduledleases.remove(req)
             self.queue.enqueueInOrder(req)
             self.rm.stats.incrQueueSize(req.leaseID)
@@ -462,6 +472,10 @@ class Scheduler(object):
                 if req.state == constants.LEASE_STATE_SUSPENDED:
                     resmrr = lease.prevRR(vmrr)
                     req.removeRR(resmrr)
+                for vnode,pnode in req.vmimagemap.items():
+                    self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
+                self.removeFromFIFOTransfers(req.leaseID)
+                req.vmimagemap = {}
                 self.scheduledleases.remove(req)
                 self.queue.enqueueInOrder(req)
                 self.rm.stats.incrQueueSize(req.leaseID)
@@ -665,6 +679,23 @@ class Scheduler(object):
         else:
             startTime = self.rm.time
         return startTime
+
+    def removeFromFIFOTransfers(self, leaseID):
+        transfers = [t for t in self.transfersFIFO if t.state != constants.RES_STATE_DONE]
+        toremove = []
+        for t in transfers:
+            for pnode in t.transfers:
+                leases = [l for l,v in t.transfers[pnode]]
+                if leaseID in leases:
+                    newtransfers = [(l,v) for l,v in t.transfers[pnode] if l!=leaseID]
+                    t.transfers[pnode] = newtransfers
+            # Check if the transfer has to be cancelled
+            a = sum([len(l) for l in t.transfers.values()])
+            if a == 0:
+                t.lease.removeRR(t)
+                toremove.append(t)
+        for t in toremove:
+            self.transfersFIFO.remove(t)
     
     def estimateTransferTime(self, imgsize):
         forceTransferTime = self.rm.config.getForceTransferTime()

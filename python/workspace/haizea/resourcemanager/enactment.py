@@ -33,8 +33,9 @@ class BaseNode(object):
         
     def removeTainted(self, lease, vnode):
         img = [f for f in self.files if isinstance(f, VMImageFile) and f.masterimg==False and (lease,vnode) in f.mappings]
-        img = img[0]
-        self.files.remove(img)
+        if len(img) > 0:
+            img = img[0]
+            self.files.remove(img)
         
     def hasTaintedImage(self, leaseID, vnode, imagefile):
         images = self.getTaintedImages()
@@ -233,6 +234,12 @@ class SimulatedEnactment(BaseEnactment):
         node.printFiles()
         
         self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+        
+    def addRAMFileToNode(self, physnode, leaseID, vnode, size):
+        pass
+
+    def removeRAMFileFromNode(self, physnode, leaseID, vnode):
+        pass
         
     def getMaxDiskUsage(self):
         return max([n.getTotalFileSize() for n in self.nodes])
