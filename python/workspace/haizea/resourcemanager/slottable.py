@@ -787,8 +787,7 @@ class SlotTable(object):
         nodeswithimg=[]
         if reusealg==constants.REUSE_COWPOOL:
             nodeswithimg = self.rm.enactment.getNodesWithImgInPool(vmimage, start)
-        
-        print nodeswithimg
+
         # Compares node x and node y. 
         # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)
         def comparenodes(x,y):

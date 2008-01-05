@@ -181,7 +181,7 @@ class SimulatedEnactment(BaseEnactment):
         node = self.getNode(pnode)
         if self.reusealg == constants.REUSE_NONE:
             if not node.hasTaintedImage(leaseID, vnode, imagefile):
-                error("Image for L%iV%i is not deployed on node %i" % (leaseID, vnode, pnode), constants.ENACT, None)
+                error("ERROR: Image for L%iV%i is not deployed on node %i" % (leaseID, vnode, pnode), constants.ENACT, None)
         elif self.reusealg == constants.REUSE_COWPOOL:
             poolentry = node.getPoolEntry(imagefile, leaseID=leaseID, vnode=vnode)
             if poolentry == None:
@@ -189,7 +189,7 @@ class SimulatedEnactment(BaseEnactment):
                 # we had to fall back on creating a tainted image right
                 # when the image was transferred. We have to check this.
                 if not node.hasTaintedImage(leaseID, vnode, imagefile):
-                    error("Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (leaseID, vnode, pnode), constants.ENACT, None)
+                    error("ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (leaseID, vnode, pnode), constants.ENACT, None)
             else:
                 # Create tainted image
                 info("Adding tainted image for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT, None)
@@ -203,8 +203,8 @@ class SimulatedEnactment(BaseEnactment):
     def isInPool(self,pnode,imagefile,time):
         return self.getNode(pnode).isInPool(imagefile, after=time)
     
-    def getNodesWithImgInPool(self, imagefile, time):
-        return [n.nod_id for n in self.nodes if n.isInPool(imagefile, after=time)]
+    def getNodesWithImgInPool(self, imagefile, after = None):
+        return [n.nod_id for n in self.nodes if n.isInPool(imagefile, after=after)]
     
     def addToPool(self,pnode, imagefile, leaseID, vnode, timeout):
         return self.getNode(pnode).addToPool(imagefile, leaseID, vnode, timeout)
@@ -215,7 +215,6 @@ class SimulatedEnactment(BaseEnactment):
         if self.reusealg == constants.REUSE_COWPOOL:
             info("Removing pooled images for L%iV%i in node %i" % (lease,vnode,pnode), constants.ENACT, None)
             toremove = []
-            print node.getPoolImages()
             for img in node.getPoolImages():
                 if (lease,vnode) in img.mappings:
                     img.mappings.remove((lease,vnode))

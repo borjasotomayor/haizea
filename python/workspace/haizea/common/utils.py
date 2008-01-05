@@ -88,6 +88,7 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
         condor.write("Arguments  = %s\n" % command)
         condor.write("Queue\n\n")
         
+        sh.write("echo Running profile=%s trace=%s\n" % (profile, name))
         sh.write("python2.5 %s\n" % command)
     
     reportsh.write("python2.5 /home/borja/bin/vw/haizea-report -c %s -s /home/borja/docs/uchicago/research/experiments/haizea/data\n" % multiconfigfilename)
