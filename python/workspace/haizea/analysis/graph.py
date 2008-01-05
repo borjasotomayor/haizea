@@ -28,7 +28,10 @@ class LineGraph(Graph):
         for dataset in self.data:
             x = [p[0] for p in dataset]
             y = [p[1] for p in dataset]
-            largestY = max(largestY,max(y))
+            if len(y) == 0:
+                largestY = 0
+            else:
+                largestY = max(largestY,max(y))
             pylab.plot(x,y)
         
 
@@ -61,7 +64,10 @@ class StepGraph(Graph):
         for dataset in self.data:
             x = [p[0] for p in dataset]
             y = [p[1] for p in dataset]
-            largestY = max(largestY,max(y))
+            if len(y) == 0:
+                largestY = 0
+            else:
+                largestY = max(largestY,max(y))
             pylab.plot(x,y, linestyle="steps")
         
 

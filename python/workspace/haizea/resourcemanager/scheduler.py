@@ -283,42 +283,53 @@ class Scheduler(object):
                 if avoidredundant:
                     pass
                     #TODO
-                
-                # Dictionary of transfer RRs. Key is the physical node where
-                # the image is being transferred to
-                transferRRs = {}
-                mustTransfer = False
+                    
+                musttransfer = {}
+                mustpool = {}
                 for transfer in transfers:
                     leaseID = req.leaseID
                     vnode = transfer[0]
-                    physnode = transfer[1]
-                    info("Scheduling image transfer for of '%s' from vnode %i to physnode %i" % (req.vmimage, vnode, physnode), constants.SCHED, self.rm.time)
-                    if transferRRs.has_key(physnode):
-                        # We've already scheduled a transfer to this node. Reuse it.
-                        info("No need to schedule an image transfer (reusing an existing transfer)", constants.SCHED, self.rm.time)
-                        transferRR = transferRR[physnode]
-                        transferRR.piggyback(leaseID, vnode, physnode, req.end)
-                    else:
-                        # No transfer already scheduled. Check if we can reuse
-                        # an image .
-                        if reusealg == constants.REUSE_COWPOOL:
-                            if self.rm.enactment.isInPool(physnode,req.vmimage, req.start):
-                                info("No need to schedule an image transfer (reusing an image in pool)", constants.SCHED, self.rm.time)
-                                self.rm.enactment.addToPool(physnode, req.vmimage, leaseID, vnode, req.start)
-                            else:
-                                info("Need to schedule a transfer.", constants.SCHED, self.rm.time)
-                                filetransfer = self.scheduleImageTransferEDF(req, vnode, physnode)                 
-                                req.appendRR(filetransfer)
-                                transferRRs[physnode] = filetransfer
+                    pnode = transfer[1]
+                    info("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (req.vmimage, vnode, pnode), constants.SCHED, self.rm.time)
+
+                    if reusealg == constants.REUSE_COWPOOL:
+                        if self.rm.enactment.isInPool(pnode,req.vmimage, req.start):
+                            info("No need to schedule an image transfer (reusing an image in pool)", constants.SCHED, self.rm.time)
+                            mustpool[vnode] = pnode                            
                         else:
                             info("Need to schedule a transfer.", constants.SCHED, self.rm.time)
-                            filetransfer = self.scheduleImageTransferEDF(req, vnode, physnode)                 
-                            req.appendRR(filetransfer)
-                            transferRRs[physnode] = filetransfer
+                            musttransfer[vnode] = pnode
+                    else:
+                        info("Need to schedule a transfer.", constants.SCHED, self.rm.time)
+                        musttransfer[vnode] = pnode
 
-                if len(transferRRs) == 0:
+                if len(musttransfer) == 0:
                     req.state = constants.LEASE_STATE_DEPLOYED
-            
+                else:
+                    if transfertype == constants.TRANSFER_UNICAST:
+                        # Dictionary of transfer RRs. Key is the physical node where
+                        # the image is being transferred to
+                        transferRRs = {}
+                        for vnode,pnode in musttransfer:
+                            if transferRRs.has_key(physnode):
+                                # We've already scheduled a transfer to this node. Reuse it.
+                                info("No need to schedule an image transfer (reusing an existing transfer)", constants.SCHED, self.rm.time)
+                                transferRR = transferRR[physnode]
+                                transferRR.piggyback(leaseID, vnode, physnode, req.end)
+                            else:
+                                filetransfer = self.scheduleImageTransferEDF(req, {vnode:physnode})                 
+                                transferRRs[physnode] = filetransfer
+                                req.appendRR(filetransfer)
+                    elif transfertype == constants.TRANSFER_MULTICAST:
+                        filetransfer = self.scheduleImageTransferEDF(req, musttransfer)
+                        req.appendRR(filetransfer)
+ 
+            # No chance of scheduling exception at this point. It's safe
+            # to add entries to the pools
+            if reusealg == constants.REUSE_COWPOOL:
+                for (vnode,pnode) in mustpool.items():
+                    self.rm.enactment.addToPool(pnode, req.vmimage, leaseID, vnode, req.start)
+ 
             # Add resource reservations
             vmrr = ds.VMResourceReservation(req, req.start, req.end, req.prematureend, mappings, constants.ONCOMPLETE_ENDLEASE, False, db_rsp_ids)
             vmrr.state = constants.RES_STATE_SCHEDULED
@@ -327,7 +338,6 @@ class Scheduler(object):
             self.slottable.commit()
         except SlotFittingException, msg:
             self.slottable.rollback()
-            # TODO: More stuff has to be rollbacked (RRs, entries in pools)
             raise SchedException, "The requested exact lease is infeasible. Reason: %s" % msg
 
     def scheduleBestEffortLease(self, req):
@@ -372,26 +382,23 @@ class Scheduler(object):
                 else:
                     req.state = constants.LEASE_STATE_SCHEDULED
                     transferRRs = []
-                    if reusealg == constants.REUSE_NONE:
-                        transferRRs = self.scheduleImageTransferFIFO(req, mappings)
-                    elif reusealg == constants.REUSE_COWPOOL:
-                        musttransfer = {}
-                        for (vnode, pnode) in mappings.items():
-                            reqtransfer = earliest[pnode][1]
-                            if reqtransfer == constants.REQTRANSFER_COWPOOL:
-                                # Add to pool
-                                self.rm.enactment.addToPool(pnode, req.vmimage, req.leaseID, vnode, end)
-                            elif reqtransfer == constants.REQTRANSFER_PIGGYBACK:
-                                # We can piggyback on an existing transfer
-                                transferRR = earliest[pnode][2]
-                                transferRR.piggyback(req.leaseID, vnode, pnode)
-                            else:
-                                # Transfer
-                                musttransfer[vnode] = pnode
-                        if len(musttransfer)>0:
-                            transferRRs = self.scheduleImageTransferFIFO(req, mappings)
+                    musttransfer = {}
+                    for (vnode, pnode) in mappings.items():
+                        reqtransfer = earliest[pnode][1]
+                        if reqtransfer == constants.REQTRANSFER_COWPOOL:
+                            # Add to pool
+                            self.rm.enactment.addToPool(pnode, req.vmimage, req.leaseID, vnode, end)
+                        elif reqtransfer == constants.REQTRANSFER_PIGGYBACK:
+                            # We can piggyback on an existing transfer
+                            transferRR = earliest[pnode][2]
+                            transferRR.piggyback(req.leaseID, vnode, pnode)
                         else:
-                            req.state = constants.LEASE_STATE_DEPLOYED
+                            # Transfer
+                            musttransfer[vnode] = pnode
+                    if len(musttransfer)>0:
+                        transferRRs = self.scheduleImageTransferFIFO(req, musttransfer)
+                    else:
+                        req.state = constants.LEASE_STATE_DEPLOYED
                     for rr in transferRRs:
                         req.appendRR(rr)                                    
 
@@ -531,7 +538,7 @@ class Scheduler(object):
 
         return earliest
 
-    def scheduleImageTransferEDF(self, req, vnode, physnode):
+    def scheduleImageTransferEDF(self, req, vnodes):
         # Estimate image transfer time 
         imgTransferTime=self.estimateTransferTime(req.vmimagesize)
         
@@ -549,7 +556,8 @@ class Scheduler(object):
         newtransfer.deadline = req.start
         newtransfer.state = constants.RES_STATE_SCHEDULED
         newtransfer.file = req.vmimage
-        newtransfer.piggyback(req.leaseID, vnode, physnode)
+        for vnode,pnode in vnodes.items():
+            newtransfer.piggyback(req.leaseID, vnode, pnode)
         newtransfers.append(newtransfer)
 
         def comparedates(x,y):

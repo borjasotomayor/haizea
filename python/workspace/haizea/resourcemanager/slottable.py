@@ -485,10 +485,10 @@ class SlotTable(object):
 
                 for n in earliest:
                     earliest[n][0] = max(earliest[n][0],earliesttransfer)
-        
+
         changepoints = list(set([x[0] for x in earliest.values()]))
         changepoints.sort()
-        
+
         # If we can make reservations for best-effort leases,
         # we also consider future changepoints
         # (otherwise, we only allow the VMs to start "now", accounting

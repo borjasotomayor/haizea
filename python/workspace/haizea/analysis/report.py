@@ -75,16 +75,25 @@ class Section(object):
         # If we are going to produce a table, create it now
         if self.tablefinal == constants.TABLE_FINALTIME:
             for p in self.profiles:
-                final = self.data[p][-1][0]
-                self.final[p] = final
+                if len(self.data[p]) > 0:
+                    final = self.data[p][-1][0]
+                    self.final[p] = final
+                else:
+                    self.final[p] = 0
         if self.tablefinal == constants.TABLE_FINALVALUE:
             for p in self.profiles:
-                final = self.data[p][-1][2]
-                self.final[p] = final
+                if len(self.data[p]) > 0:
+                    final = self.data[p][-1][2]
+                    self.final[p] = final
+                else:
+                    self.final[p] = 0
         if self.tablefinal == constants.TABLE_FINALAVG:
             for p in self.profiles:
-                final = self.data[p][-1][3]
-                self.final[p] = final
+                if len(self.data[p]) > 0:
+                    final = self.data[p][-1][3]
+                    self.final[p] = final
+                else:
+                    self.final[p] = 0
         
     def generateGraph(self, outdir, filename=None, titlex=None, titley=None):
         if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_STEP_VALUE, constants.GRAPH_POINT_VALUE, constants.GRAPH_CUMULATIVE]:
@@ -94,35 +103,39 @@ class Section(object):
         elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
             values = [[(v[0],v[2],v[3]) for v in self.data[p]] for p in self.profiles]
 
-        if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_LINE_AVG]:
-            graph = graphs.LineGraph
-            legends = self.profiles
-        elif self.graphtype in [constants.GRAPH_STEP_VALUE]:
-            graph = graphs.StepGraph
-            legends = self.profiles
-        elif self.graphtype in [constants.GRAPH_CUMULATIVE]:
-            graph = graphs.CumulativeGraph
-            legends = self.profiles
-        elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
-            graph = graphs.PointAndLineGraph
-            legends = []
-            for l in self.profiles:
-                legends.append(l)
-                legends.append(l + " (avg)")
-            
-        if titlex==None:
-            titlex = "Time (s)"
-        if titley==None:
-            titley = self.title
-            
-        g = graph(values, titlex, titley, legends)
-        if filename==None:
-            graphfile = outdir + "/" + self.graphfile
-            thumbfile = outdir + "/" + self.thumbfile
+        if sum([len(l) for l in values]) == 0:
+            pass
+            # TODO: print out an error message
         else:
-            graphfile = outdir + "/" + filename + ".png"
-            thumbfile = outdir + "/" + filename + "-thumb.png"
-        g.plotToFile(graphfile, thumbfile)
+            if self.graphtype in [constants.GRAPH_LINE_VALUE, constants.GRAPH_LINE_AVG]:
+                graph = graphs.LineGraph
+                legends = self.profiles
+            elif self.graphtype in [constants.GRAPH_STEP_VALUE]:
+                graph = graphs.StepGraph
+                legends = self.profiles
+            elif self.graphtype in [constants.GRAPH_CUMULATIVE]:
+                graph = graphs.CumulativeGraph
+                legends = self.profiles
+            elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
+                graph = graphs.PointAndLineGraph
+                legends = []
+                for l in self.profiles:
+                    legends.append(l)
+                    legends.append(l + " (avg)")
+                
+            if titlex==None:
+                titlex = "Time (s)"
+            if titley==None:
+                titley = self.title
+            
+            g = graph(values, titlex, titley, legends)
+            if filename==None:
+                graphfile = outdir + "/" + self.graphfile
+                thumbfile = outdir + "/" + self.thumbfile
+            else:
+                graphfile = outdir + "/" + filename + ".png"
+                thumbfile = outdir + "/" + filename + "-thumb.png"
+            g.plotToFile(graphfile, thumbfile)
         
     def generateHTML(self):
         html  = "<div class='image'>"
@@ -181,7 +194,7 @@ class Report(object):
         self.sections = [
                  Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
                  Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
-                 #Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
+                 Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
                  #Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE),
                  #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
                  #Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
@@ -200,18 +213,18 @@ class Report(object):
 
     def generate(self):
         self.generateIndex()
-        for p in self.profiles:
-            print "Generating report for profile %s" % p
-            tracesdirs = [(t[2], self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces]
-            tracesdirs = dict([(t,d) for t,d in tracesdirs if os.path.exists(d)])
-            if len(tracesdirs) > 0:
-                self.generateReport(p, tracesdirs)
         for t in self.traces:
             print "Generating report for trace %s" % t[2]
             profilesdirs = [(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
             profilesdirs = dict([(p,d) for p,d in profilesdirs if os.path.exists(d)])
             if len(profilesdirs) > 0:
                 self.generateReport(t[2],profilesdirs)
+        for p in self.profiles:
+            print "Generating report for profile %s" % p
+            tracesdirs = [(t[2], self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces]
+            tracesdirs = dict([(t,d) for t,d in tracesdirs if os.path.exists(d)])
+            if len(tracesdirs) > 0:
+                self.generateReport(p, tracesdirs)
 
     def generateIndex(self):
         indexfile = open(self.outdir + "/index.html", "w")
