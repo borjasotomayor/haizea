@@ -38,6 +38,7 @@ def simulate(config, statsdir):
         for r,i in zip(requests,images):
             r.vmimage = i
             r.vmimagesize = imagesizes[i]
+            r.resreq[constants.RES_DISK] = imagesizes[i] + r.resreq[constants.RES_MEM]
        
     resourceManager = rm.ResourceManager(requests, config)
     
@@ -62,6 +63,7 @@ def writeDataToDisk(resourcemanager, dir):
     queuewait = resourcemanager.stats.getQueueWait()
     execwait = resourcemanager.stats.getExecWait()
     utilratio = resourcemanager.stats.getUtilizationRatio()
+    diskusage = resourcemanager.stats.getDiskUsage()
     
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     #pickle(memutilization, dir, constants.MEMUTILFILE)
@@ -73,6 +75,7 @@ def writeDataToDisk(resourcemanager, dir):
     pickle(queuewait, dir, constants.QUEUEWAITFILE)
     pickle(execwait, dir, constants.EXECWAITFILE)
     pickle(utilratio, dir, constants.UTILRATIOFILE)
+    pickle(diskusage, dir, constants.DISKUSAGEFILE)
         
 def pickle(data, dir, file):
     f = open (dir + "/" + file, "w")
@@ -83,7 +86,7 @@ def pickle(data, dir, file):
 
 if __name__ == "__main__":
     configfile="../configfiles/test.conf"
-    tracefile="../traces/examples/test_reuse1.csv"
+    tracefile="../traces/examples/test_reuse8.csv"
     imagefile="../traces/examples/1GBfiles.images"
     injectedfile="None"
     #tracefile="../traces/examples/test_inject.csv"
