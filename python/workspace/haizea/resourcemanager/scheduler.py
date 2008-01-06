@@ -516,7 +516,10 @@ class Scheduler(object):
         for l in leases:
             debug("Found lease %i" % l.leaseID, constants.SCHED, self.rm.time)
             l.printContents()
-            self.slottable.slideback(l, end)
+            # Earliest time can't be earlier than time when images will be
+            # available in node
+            earliest = max(end, l.imagesavail)
+            self.slottable.slideback(l, earliest)
         for l in leases:
             self.reevaluateSchedule(l, False)
             
