@@ -393,22 +393,37 @@ class Scheduler(object):
                     req.state = constants.LEASE_STATE_SCHEDULED
                     transferRRs = []
                     musttransfer = {}
+                    piggybacking = []
                     for (vnode, pnode) in mappings.items():
                         reqtransfer = earliest[pnode][1]
                         if reqtransfer == constants.REQTRANSFER_COWPOOL:
                             # Add to pool
+                            info("Reusing image for V%i->P%i." % (vnode, pnode), constants.SCHED, self.rm.time)
                             self.rm.enactment.addToPool(pnode, req.vmimage, req.leaseID, vnode, end)
                         elif reqtransfer == constants.REQTRANSFER_PIGGYBACK:
                             # We can piggyback on an existing transfer
                             transferRR = earliest[pnode][2]
                             transferRR.piggyback(req.leaseID, vnode, pnode)
+                            info("Piggybacking transfer for V%i->P%i on existing transfer in lease %i." % (vnode, pnode, transferRR.lease.leaseID), constants.SCHED, self.rm.time)
+                            piggybacking.append(transferRR)
                         else:
                             # Transfer
                             musttransfer[vnode] = pnode
+                            info("Must transfer V%i->P%i." % (vnode, pnode), constants.SCHED, self.rm.time)
                     if len(musttransfer)>0:
                         transferRRs = self.scheduleImageTransferFIFO(req, musttransfer)
-                        req.imagesavail = transferRRs[-1].end
+                        endtransfer = transferRRs[-1].end
+                        req.imagesavail = endtransfer
                     else:
+                        # TODO: Not strictly correct. Should mark the lease
+                        # as deployed when piggybacked transfers have concluded
+                        req.state = constants.LEASE_STATE_DEPLOYED
+                    if len(piggybacking) > 0: 
+                        endtimes = [t.end for t in piggybacking]
+                        if len(musttransfer) > 0:
+                            endtimes.append(endtransfer)
+                        req.imagesavail = max(endtimes)
+                    if len(musttransfer)==0 and len(piggybacking)==0:
                         req.state = constants.LEASE_STATE_DEPLOYED
                         req.imagesavail = self.rm.time
                     for rr in transferRRs:
