@@ -1,6 +1,6 @@
 from sets import Set
 from mx.DateTime import ISO, TimeDelta
-from operator import attrgetter
+from operator import attrgetter, itemgetter
 import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.db as db
 import workspace.haizea.resourcemanager.datastruct as ds
@@ -486,15 +486,33 @@ class SlotTable(object):
                 for n in earliest:
                     earliest[n][0] = max(earliest[n][0],earliesttransfer)
 
-        changepoints = list(set([x[0] for x in earliest.values()]))
-        changepoints.sort()
+        # Find the changepoints, and the nodes we can use at each changepoint
+        # Nodes may not be available at a changepoint because images
+        # cannot be transferred at that time.
+        if not mustresume:
+            cps = [(node,e[0]) for node,e in earliest.items()]
+            cps.sort(key=itemgetter(1))
+            curcp = None
+            changepoints = []
+            nodes = []
+            for node, time in cps:
+                nodes.append(node)
+                if time != curcp:
+                    changepoints.append([time, nodes[:]])
+                    curcp = time
+                else:
+                    changepoints[-1][1] = nodes[:]
+        else:
+            changepoints = list(set([x[0] for x in earliest.values()]))
+            changepoints.sort()
+            changepoints = [(x, curnodes) for x in changepoints]
 
         # If we can make reservations for best-effort leases,
         # we also consider future changepoints
         # (otherwise, we only allow the VMs to start "now", accounting
         #  for the fact that vm images will have to be deployed)
         if canreserve:
-            futurecp = self.db.findChangePoints(changepoints[-1], closed=False)
+            futurecp = self.db.findChangePoints(changepoints[-1][0], closed=False)
             futurecp = [ISO.ParseDateTime(p["time"]) for p in futurecp.fetchall()]
         else:
             futurecp = []
@@ -513,11 +531,11 @@ class SlotTable(object):
         first = changepoints[0]
         
         for p in changepoints:
-            self.availabilitywindow.initWindow(p, resreq, curnodes)
+            self.availabilitywindow.initWindow(p[0], resreq, p[1])
             self.availabilitywindow.printContents()
             
             if self.availabilitywindow.fitAtStart() >= numnodes:
-                start=p
+                start=p[0]
                 maxend = start + remdur
                 realend = start + realdur
                 end, canfit = self.availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
@@ -922,20 +940,27 @@ class AvailabilityWindow(object):
         self.db = db
         self.avail = None
         self.availcache = {}
+        self.slots = self.db.getSlots().fetchall()
         self.slot_ids = {}
+        for slot in self.slots:
+            sl_id = slot["sl_id"]
+            nod_id = slot["nod_id"]
+            slottype = slot["slt_id"]
+            if not self.slot_ids.has_key(nod_id):
+                self.slot_ids[nod_id] = {}    
+            self.slot_ids[nod_id][slottype] = sl_id 
 
     def findAvailableSlots(self, time, amount=None, type=None, canpreempt=False, slotfilter=None, nodes=None):
         if not self.availcache.has_key(time):
             # Cache miss
             self.availcache[time] = []
             availslots = self.db.quickFindAvailableSlots(time, canpreempt=canpreempt)
-            slots = self.db.getSlots()
             slot_ids = set()
             for slot in availslots:
                 slot_ids.add(slot["SL_ID"])
                 self.availcache[time].append(slot)
             
-            for slot in slots:
+            for slot in self.slots:
                 if not slot["SL_ID"] in slot_ids:
                     self.availcache[time].append(slot)
         
@@ -978,11 +1003,8 @@ class AvailabilityWindow(object):
                 avail = slot["available"]
                 if not avail_aux.has_key(nod_id):
                     avail_aux[nod_id] = {}
-                    if not self.slot_ids.has_key(nod_id):
-                        self.slot_ids[nod_id] = {}
                     slot_ids[nod_id] = {}
                 avail_aux[nod_id][slottype] = [AvailEntry(self.time,avail)]
-                self.slot_ids[nod_id][slottype] = slot_id
                 slot_ids[nod_id][slottype] = slot_id
 
         # Filter out nodes that don't have enough resources for at

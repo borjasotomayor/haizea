@@ -36,6 +36,12 @@ class BaseNode(object):
         if len(img) > 0:
             img = img[0]
             self.files.remove(img)
+            
+    def removeRAMFile(self, lease, vnode):
+        img = [f for f in self.files if isinstance(f, RAMImageFile) and f.leaseID==lease and f.vnode==vnode]
+        if len(img) > 0:
+            img = img[0]
+            self.files.remove(img)
         
     def hasTaintedImage(self, leaseID, vnode, imagefile):
         images = self.getTaintedImages()
@@ -79,7 +85,8 @@ class BaseNode(object):
         if len(self.files) == 0:
             return 0
         else:
-            return sum([v.filesize for v in self.files])
+            # Do not include pool files
+            return sum([f.filesize for f in self.files if not (isinstance(f, VMImageFile) and f.masterimg==True)])
 
     def getPoolImages(self):
         return [f for f in self.files if isinstance(f, VMImageFile) and f.masterimg==True]
@@ -178,6 +185,14 @@ class SimulatedEnactment(BaseEnactment):
         
         self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
         
+    def addTaintedImageToNode(self,pnode,imagefile,imagesize,lease,vnode):
+        info("Adding tainted image for L%iV%i in pnode=%i" % (lease,vnode,pnode), constants.ENACT, None)
+        self.getNode(pnode).printFiles()
+        img = VMImageFile(imagefile, imagesize, masterimg=False)
+        img.addMapping(lease,vnode)
+        self.getNode(pnode).addFile(img)
+        self.getNode(pnode).printFiles()
+        
     def checkImage(self, pnode, leaseID, vnode, imagefile):
         node = self.getNode(pnode)
         if self.reusealg == constants.REUSE_NONE:
@@ -235,11 +250,22 @@ class SimulatedEnactment(BaseEnactment):
         
         self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
         
-    def addRAMFileToNode(self, physnode, leaseID, vnode, size):
-        pass
+    def addRAMFileToNode(self, pnode, leaseID, vnode, size):
+        node = self.getNode(pnode)
+        info("Adding RAM file for L%iV%i in node %i" % (leaseID,vnode,pnode), constants.ENACT, None)
+        node.printFiles()
+        f = RAMImageFile("RAM_L%iV%i" % (leaseID,vnode), size, leaseID,vnode)
+        node.addFile(f)        
+        node.printFiles()
+        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
 
-    def removeRAMFileFromNode(self, physnode, leaseID, vnode):
-        pass
+    def removeRAMFileFromNode(self, pnode, leaseID, vnode):
+        node = self.getNode(pnode)
+        info("Removing RAM file for L%iV%i in node %i" % (leaseID,vnode,pnode), constants.ENACT, None)
+        node.printFiles()
+        node.removeRAMFile(leaseID, vnode)
+        node.printFiles()
+        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
         
     def getMaxDiskUsage(self):
         return max([n.getTotalFileSize() for n in self.nodes])
@@ -294,12 +320,12 @@ class VMImageFile(File):
             timeout = self.timeout
         return "(DISK " + self.filename + " " + vnodemapstr(self.mappings) + " " + master + " " + str(timeout) + ")"
 
-class RAMImageFile(object):
-    def __init__(self, imagefile, imagesize, leaseID, vnode):
+class RAMImageFile(File):
+    def __init__(self, filename, filesize, leaseID, vnode):
         File.__init__(self, filename, filesize)
         self.leaseID = leaseID
         self.vnode = vnode
                 
     def __str__(self):
         mappings = [(self.leaseID, self.vnode)]
-        return "(RAM " + self.imagefile + " " + vnodemapstr(mappings)+ ")"
+        return "(RAM " + self.filename + " " + vnodemapstr(mappings)+ ")"

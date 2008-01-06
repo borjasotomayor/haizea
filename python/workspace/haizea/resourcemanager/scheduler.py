@@ -235,6 +235,7 @@ class Scheduler(object):
         rr.state = constants.RES_STATE_ACTIVE
         for vnode,pnode in rr.nodes.items():
             self.rm.enactment.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq[constants.RES_MEM])
+            l.memimagemap[vnode] = pnode
         l.printContents()
         debug("LEASE-%i End of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
 
@@ -346,10 +347,15 @@ class Scheduler(object):
 
     def scheduleBestEffortLease(self, req):
         # Determine earliest start time in each node
-        # This depends on image transfer schedule. For now, the earliest
-        # start time is now (no image transfers)
-
-        earliest = self.findEarliestStartingTimes(req)
+        if req.state == constants.LEASE_STATE_PENDING:
+            # Figure out earliest start times based on
+            # image schedule and reusable images
+            earliest = self.findEarliestStartingTimes(req)
+        elif req.state == constants.LEASE_STATE_SUSPENDED:
+            # No need to transfer images from repository
+            # (only intra-node transfer)
+            earliest = dict([(node+1, [self.rm.time,constants.REQTRANSFER_NO, None]) for node in range(req.numnodes)])
+            
         susptype = self.rm.config.getSuspensionType()
         if susptype == constants.SUSPENSION_NONE:
             suspendable = False
@@ -406,8 +412,23 @@ class Scheduler(object):
                         req.state = constants.LEASE_STATE_DEPLOYED
                         req.imagesavail = self.rm.time
                     for rr in transferRRs:
-                        req.appendRR(rr)                                    
-
+                        req.appendRR(rr)
+            elif req.state == constants.LEASE_STATE_SUSPENDED:
+                # TODO: This would be more correctly handled in the RR handle functions.
+                # Update VM image mappings, since we might be resuming
+                # in different nodes.
+                for vnode,pnode in req.vmimagemap.items():
+                    self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
+                req.vmimagemap = mappings
+                for vnode,pnode in req.vmimagemap.items():
+                    self.rm.enactment.addTaintedImageToNode(pnode, req.vmimage, req.vmimagesize, req.leaseID, vnode)
+                # Update RAM file mappings
+                for vnode,pnode in req.memimagemap.items():
+                    self.rm.enactment.removeRAMFileFromNode(pnode, req.leaseID, vnode)
+                for vnode,pnode in mappings.items():
+                    self.rm.enactment.addRAMFileToNode(pnode, req.leaseID, vnode, req.resreq[constants.RES_MEM])
+                    req.memimagemap[vnode] = pnode
+                    
             # Add resource reservations
             if resumetime != None:
                 resmrr = ds.ResumptionResourceReservation(req, start-resumetime, start, mappings, [resume_rsp_id])
