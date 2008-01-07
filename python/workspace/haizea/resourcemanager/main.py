@@ -44,6 +44,9 @@ def simulate(config, statsdir):
     
     resourceManager.run()
     
+    for n in resourceManager.enactment.nodes:
+        n.printFiles()
+    
     # Write data to disk
     profile = config.getProfile()
     dir = statsdir + "/" + utils.genDataDirName(profile, tracefile, injectfile)
@@ -64,6 +67,7 @@ def writeDataToDisk(resourcemanager, dir):
     execwait = resourcemanager.stats.getExecWait()
     utilratio = resourcemanager.stats.getUtilizationRatio()
     diskusage = resourcemanager.stats.getDiskUsage()
+    boundedslowdown = resourcemanager.stats.getBoundedSlowdown()
     
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     #pickle(memutilization, dir, constants.MEMUTILFILE)
@@ -76,6 +80,7 @@ def writeDataToDisk(resourcemanager, dir):
     pickle(execwait, dir, constants.EXECWAITFILE)
     pickle(utilratio, dir, constants.UTILRATIOFILE)
     pickle(diskusage, dir, constants.DISKUSAGEFILE)
+    pickle(diskusage, dir, constants.SLOWDOWNFILE)
         
 def pickle(data, dir, file):
     f = open (dir + "/" + file, "w")

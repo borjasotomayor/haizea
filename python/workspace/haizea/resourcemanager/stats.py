@@ -8,6 +8,7 @@ class Stats(object):
         self.queuesize = []
         self.queuewait = []
         self.execwait = []
+        self.boundedslowdown = []
         self.utilratio = []
         self.diskusage = []
 
@@ -103,6 +104,10 @@ class Stats(object):
             wait = (end - start).seconds
             self.execwait.append((time,leaseID,wait))
             
+    def addBoundedSlowdown(self, leaseID, slowdown):
+        time = self.rm.time
+        self.boundedslowdown.append((time,leaseID,slowdown))
+        
     def addDiskUsage(self, usage):
         time = self.rm.time
         self.diskusage.append((time,None,usage))
@@ -186,7 +191,9 @@ class Stats(object):
     def getDiskUsage(self):
         l = self.normalizeTimes(self.diskusage)
         l = self.addNoAverage(l)
-        for p in l:
-            print p
         return l
         
+    def getBoundedSlowdown(self):
+        l = self.normalizeTimes(self.boundedslowdown)
+        l = self.addAverage(l)
+        return l

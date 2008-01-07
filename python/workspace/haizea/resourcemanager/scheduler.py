@@ -158,7 +158,8 @@ class Scheduler(object):
             for vnode,pnode in l.vmimagemap.items():
                 self.rm.enactment.removeImage(pnode, l.leaseID, vnode)
             if isinstance(l,ds.BestEffortLease):
-                self.rm.stats.incrBestEffortCompleted(l.leaseID)            
+                self.rm.stats.incrBestEffortCompleted(l.leaseID)
+                self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time))        
         elif rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
             if isinstance(l,ds.BestEffortLease):
                 if not prematureend:
@@ -172,7 +173,10 @@ class Scheduler(object):
                         l.removeRR(r)
                     self.completedleases.add(l)
                     self.scheduledleases.remove(l)
-                    self.rm.stats.incrBestEffortCompleted(l.leaseID)            
+                    for vnode,pnode in l.vmimagemap.items():
+                        self.rm.enactment.removeImage(pnode, l.leaseID, vnode)
+                    self.rm.stats.incrBestEffortCompleted(l.leaseID)   
+                    self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time))         
                     self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
                     self.slottable.commit()
                     # TODO: Clean up next reservations
