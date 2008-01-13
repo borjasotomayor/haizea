@@ -159,7 +159,7 @@ class Scheduler(object):
                 self.rm.enactment.removeImage(pnode, l.leaseID, vnode)
             if isinstance(l,ds.BestEffortLease):
                 self.rm.stats.incrBestEffortCompleted(l.leaseID)
-                self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time, runtimeoverhead=self.rm.config.getRuntimeOverhead()))        
+                self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time))        
         elif rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
             if isinstance(l,ds.BestEffortLease):
                 if not prematureend:
@@ -176,7 +176,7 @@ class Scheduler(object):
                     for vnode,pnode in l.vmimagemap.items():
                         self.rm.enactment.removeImage(pnode, l.leaseID, vnode)
                     self.rm.stats.incrBestEffortCompleted(l.leaseID)   
-                    self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time, runtimeoverhead=self.rm.config.getRuntimeOverhead()))         
+                    self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time))         
                     self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
                     self.slottable.commit()
                     # TODO: Clean up next reservations
@@ -192,7 +192,7 @@ class Scheduler(object):
     def handleStartFileTransfer(self, l, rr):
         info("LEASE-%i Start of handleStartFileTransfer" % l.leaseID, constants.SCHED, self.rm.time)
         l.printContents()
-        if l.state == constants.LEASE_STATE_SCHEDULED:
+        if l.state == constants.LEASE_STATE_SCHEDULED or l.state == constants.LEASE_STATE_DEPLOYED:
             l.state = constants.LEASE_STATE_DEPLOYING
             rr.state = constants.RES_STATE_ACTIVE
             # TODO: Enactment

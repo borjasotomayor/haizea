@@ -122,14 +122,15 @@ class ExactLease(LeaseBase):
         self.prematureend += TimeDelta(seconds=t)
         
 class BestEffortLease(LeaseBase):
-    def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None):
+    def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
         LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
         self.maxdur = maxdur
         self.remdur = maxdur
         self.realremdur = realdur
         self.realdur = realdur
         self.maxqueuetime = maxqueuetime
-        self.imagesavail = None
+        self.timeOnDedicated = timeOnDedicated
+        self.imagesavail = None        
 
     def printContents(self, logfun=edebug):
         logfun("__________________________________________________", DS, None)
@@ -162,12 +163,8 @@ class BestEffortLease(LeaseBase):
         else:
             return t >= self.maxqueuetime
         
-    def getSlowdown(self, end, bound=10, runtimeoverhead=None):
-        timeOnDedicated = self.maxdur - self.remdur
-        if runtimeoverhead != None:
-            # Remove runtime overhead
-            factor = 1 + float(runtimeoverhead)/100
-            timeOnDedicated = roundDateTimeDelta(timeOnDedicated / factor)
+    def getSlowdown(self, end, bound=10):
+        timeOnDedicated = self.timeOnDedicated
         timeOnLoaded = end - self.tSubmit
         bound = TimeDelta(seconds=bound)
         if timeOnDedicated < bound:
