@@ -6,19 +6,20 @@ TESTDIST_NUM_ITERS=10000
 class DiscreteDistributionBase(object):
     def __init__(self, values, probabilities):
         self.values = values
-        self.probabilities = probabilities
+        self.probabilities = probabilities[:]
+        self.accumprobabilities = probabilities[:]
         accum = 0.0
         for i,prob in enumerate(self.probabilities):
             accum += prob
-            self.probabilities[i] = accum
+            self.accumprobabilities[i] = accum
         self.numValues = len(self.values)
         
     def getAvg(self):
-        return reduce(operator.add, [x[0]*x[1] for x in zip(values,probabilities)])
+        return reduce(operator.add, [x[0]*x[1] for x in zip(self.values,self.probabilities)])
 
     def getValueFromProb(self, prob):
         pos = None
-        for i,p in enumerate(self.probabilities):
+        for i,p in enumerate(self.accumprobabilities):
             if prob < p:
                 pos = i
                 break #Ugh

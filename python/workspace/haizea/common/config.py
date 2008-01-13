@@ -162,11 +162,11 @@ class RMConfig(Config):
     def getBackfillingType(self):
         return self.config.get(constants.GENERAL_SEC, constants.BACKFILLING_OPT)
     
-    def stopWhenBestEffortDone(self):
-        if not self.config.has_option(constants.SIMULATION_SEC, constants.STOPBESTEFFORTDONE_OPT):
-            return False
+    def stopWhen(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.STOPWHEN_OPT):
+            return None
         else:
-            return self.config.getboolean(constants.SIMULATION_SEC, constants.STOPBESTEFFORTDONE_OPT)
+            return self.config.get(constants.SIMULATION_SEC, constants.STOPWHEN_OPT)
 
     def getTransferType(self):
         if not self.config.has_option(constants.GENERAL_SEC, constants.TRANSFER_OPT):
@@ -399,17 +399,42 @@ class RMMultiConfig(Config):
 class TraceConfig(Config):
     def __init__(self, c):
         Config.__init__(self, c)
-        self.intervaldist = self.createDiscreteDistributionFromSection(constants.INTERVAL_SEC)
         self.numnodesdist = self.createDiscreteDistributionFromSection(constants.NUMNODES_SEC)
         self.deadlinedist = self.createDiscreteDistributionFromSection(constants.DEADLINE_SEC)
         self.durationdist = self.createDiscreteDistributionFromSection(constants.DURATION_SEC)
         self.imagesdist = self.createDiscreteDistributionFromSection(constants.IMAGES_SEC)
+        if self.isGenerateBasedOnWorkload():
+            # Find interval between requests
+            tracedur = self.getTraceDuration()
+            percent = self.getPercent()
+            nodes = self.getNumNodes()
+            accumduration = tracedur * nodes * percent
+            numreqs = accumduration / (self.numnodesdist.getAvg() * self.durationdist.getAvg())
+            intervalavg = int(tracedur / numreqs)
+            min = intervalavg - 3600 # Make this configurable
+            max = intervalavg + 3600 # Make this configurable
+            values = range(min,max+1)
+            self.intervaldist = stats.DiscreteUniformDistribution(values)
+        else:
+            self.intervaldist = self.createDiscreteDistributionFromSection(constants.INTERVAL_SEC)
         
     def getTraceDuration(self):
         return self.config.getint(constants.GENERAL_SEC, constants.DURATION_OPT)
         
+    def getPercent(self):
+        percent = self.config.getint(constants.WORKLOAD_SEC, constants.PERCENT_OPT)
+        percent = percent / 100.0
+        return percent
+    
+    def getNumNodes(self):
+        return self.config.getint(constants.WORKLOAD_SEC, constants.NUMNODES_OPT)
+
     def getDuration(self):
         return self.durationdist.get()
+    
+    def isGenerateBasedOnWorkload(self):
+        return self.config.has_section(constants.WORKLOAD_SEC)
+
     
 class ImageConfig(Config):
     def __init__(self, c):

@@ -96,10 +96,14 @@ class ResourceManager(object):
                 if not self.existsPendingReq():
                     if self.scheduler.isQueueEmpty():
                         done = True
-            if self.config.stopWhenBestEffortDone():
-                scheduledbesteffort = self.scheduler.scheduledleases.getLeases(type=BestEffortLease)
-                pendingbesteffort = [r for r in self.requests if isinstance(r,BestEffortLease)]
+            stopwhen = self.config.stopWhen()
+            scheduledbesteffort = self.scheduler.scheduledleases.getLeases(type=BestEffortLease)
+            pendingbesteffort = [r for r in self.requests if isinstance(r,BestEffortLease)]
+            if stopwhen == constants.STOPWHEN_BEDONE:
                 if self.scheduler.isQueueEmpty() and len(scheduledbesteffort) + len(pendingbesteffort) == 0:
+                    done = True
+            elif stopwhen == constants.STOPWHEN_BESUBMITTED:
+                if len(pendingbesteffort) == 0:
                     done = True
                     
             if self.time == prevtime and done != True:

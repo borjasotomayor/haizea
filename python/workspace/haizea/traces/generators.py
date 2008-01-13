@@ -4,6 +4,8 @@ from workspace.haizea.traces.formats import LWF, LWFEntry
 def generateTrace(config, file, guaranteeAvg = False):
     tracedur = config.getTraceDuration()
     
+    print config.intervaldist.getAvg()
+    
     avgnumreq = tracedur / config.intervaldist.getAvg()
     idealaccumdur = avgnumreq * config.durationdist.getAvg() * config.numnodesdist.getAvg()
 
@@ -13,15 +15,13 @@ def generateTrace(config, file, guaranteeAvg = False):
     print idealaccumdur
 
     good = False
+    deadlineavg = config.deadlinedist.get()
 
     while not good:
         entries = []
         time = 0
         accumdur = 0
         while time < tracedur:
-            interval = config.intervaldist.get()          
-            time += interval
-    
             entry = LWFEntry()
             entry.reqTime = time
             entry.startTime = time + config.deadlinedist.get()
@@ -36,6 +36,9 @@ def generateTrace(config, file, guaranteeAvg = False):
             accumdur += entry.duration * entry.numNodes
             entries.append(entry)
 
+            interval = config.intervaldist.get()          
+            time += interval
+            
         if not guaranteeAvg:
             good = True
         else:

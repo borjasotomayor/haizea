@@ -162,8 +162,12 @@ class BestEffortLease(LeaseBase):
         else:
             return t >= self.maxqueuetime
         
-    def getSlowdown(self, end, bound=10):
+    def getSlowdown(self, end, bound=10, runtimeoverhead=None):
         timeOnDedicated = self.maxdur - self.remdur
+        if runtimeoverhead != None:
+            # Remove runtime overhead
+            factor = 1 + float(runtimeoverhead)/100
+            timeOnDedicated = roundDateTimeDelta(timeOnDedicated / factor)
         timeOnLoaded = end - self.tSubmit
         bound = TimeDelta(seconds=bound)
         if timeOnDedicated < bound:
