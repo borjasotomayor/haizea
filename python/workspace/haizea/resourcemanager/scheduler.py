@@ -589,9 +589,10 @@ class Scheduler(object):
                     for t in transfers:
                         if t.file == req.vmimage:
                             startTime = t.end
-                            for n in earliest:
-                                if startTime < earliest[n]:
-                                    earliest[n] = [startTime, constants.REQTRANSFER_PIGGYBACK, t]
+                            if startTime > self.rm.time:
+                                for n in earliest:
+                                    if startTime < earliest[n]:
+                                        earliest[n] = [startTime, constants.REQTRANSFER_PIGGYBACK, t]
 
         return earliest
 

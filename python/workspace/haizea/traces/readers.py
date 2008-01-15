@@ -76,7 +76,7 @@ def CSV(tracefile, config):
                     else:
                         maxdur = TimeDelta(seconds=int(fields[9])) # 9: duration
                     realdur = TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
+                    req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur, timeOnDedicated=realdur)
             req.state = constants.LEASE_STATE_PENDING
             requests.append(req)
     return requests
@@ -147,7 +147,7 @@ def SWF(tracefile, config):
                     maxqueuetime = None
                 if realdur > maxdur:
                     realdur = maxdur
-                req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur, maxqueuetime)
+                req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur, maxqueuetime, timeOnDedicated=realdur)
                 req.state = constants.LEASE_STATE_PENDING
                 requests.append(req)
     return requests

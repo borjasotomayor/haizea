@@ -69,6 +69,9 @@ def writeDataToDisk(resourcemanager, dir):
     diskusage = resourcemanager.stats.getDiskUsage()
     boundedslowdown = resourcemanager.stats.getBoundedSlowdown()
     
+    for b in boundedslowdown:
+        print b
+    
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     #pickle(memutilization, dir, constants.MEMUTILFILE)
     #pickle(memutilizationavg, dir, constants.MEMUTILAVGFILE)
@@ -80,7 +83,7 @@ def writeDataToDisk(resourcemanager, dir):
     pickle(execwait, dir, constants.EXECWAITFILE)
     pickle(utilratio, dir, constants.UTILRATIOFILE)
     pickle(diskusage, dir, constants.DISKUSAGEFILE)
-    pickle(diskusage, dir, constants.SLOWDOWNFILE)
+    pickle(boundedslowdown, dir, constants.SLOWDOWNFILE)
         
 def pickle(data, dir, file):
     f = open (dir + "/" + file, "w")
@@ -91,7 +94,7 @@ def pickle(data, dir, file):
 
 if __name__ == "__main__":
     configfile="../configfiles/test.conf"
-    tracefile="../traces/examples/test_reuse8.csv"
+    tracefile="../traces/examples/test_slowdown.csv"
     imagefile="../traces/examples/1GBfiles.images"
     injectedfile="None"
     #tracefile="../traces/examples/test_inject.csv"
