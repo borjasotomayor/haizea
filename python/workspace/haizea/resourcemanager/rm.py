@@ -64,7 +64,13 @@ class ResourceManager(object):
                 self.stats.incrQueueSize(r.leaseID)
                 self.stats.startQueueWait(r.leaseID)
             
-            self.scheduler.schedule(exact)
+            try:
+                self.scheduler.schedule(exact)
+            except Exception, msg:
+                error("Exception in scheduling function. Dumping state..." ,constants.RM, self.time)
+                self.printStats(error, verbose=True)
+                raise
+                
             debug("Ending iteration", constants.RM, self.time)
             if (self.time - prevstatustime).minutes >= 15:
                 status("STATUS ---Begin---", constants.RM, self.time)
@@ -129,9 +135,9 @@ class ResourceManager(object):
             l.printContents()
             
         
-    def printStats(self, logfun, nextcp, nextreqtime, verbose=False):
-        logfun("Next change point (in slot table): %s" % nextcp,constants.RM, self.time)
-        logfun("Next request time: %s" % nextreqtime,constants.RM, self.time)
+    def printStats(self, logfun, nextcp="NONE", nextreqtime="NONE", verbose=False):
+        logfun("Next change point (in slot table): %s" % nextcp,constants.RM, nextcp)
+        logfun("Next request time: %s" % nextreqtime,constants.RM, nextreqtime)
         scheduled = self.scheduler.scheduledleases.entries.keys()
         logfun("Scheduled requests: %i" % len(scheduled),constants.RM, self.time)
         if verbose and len(scheduled)>0:
