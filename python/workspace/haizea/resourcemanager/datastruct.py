@@ -174,20 +174,20 @@ class BestEffortLease(LeaseBase):
 
         
 class ResourceReservationBase(object):
-    def __init__(self, lease, start, end, db_rsp_ids, realend = None):
+    def __init__(self, lease, start, end, res, realend = None):
         self.start = start
         self.end = end
         self.realend = realend
         self.lease = lease
         self.state = None
-        self.db_rsp_ids = db_rsp_ids
+        self.res = res
         
     def printContents(self, logfun=edebug):
         logfun("Start          : %s" % self.start, DS, None)
         logfun("End            : %s" % self.end, DS, None)
         logfun("Real End       : %s" % self.realend, DS, None)
         logfun("State          : %s" % rstate_str(self.state), DS, None)
-        logfun("RSP_ID         : %s" % self.db_rsp_ids, DS, None)
+        logfun("Resources      : %s" % self.res, DS, None)
         
     def removeDBentries(self):
         for rsp_id in self.db_rsp_ids:
@@ -221,8 +221,8 @@ class FileTransferResourceReservation(ResourceReservationBase):
 
                 
 class VMResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, realend, nodes, oncomplete, backfillres, db_rsp_ids):
-        ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids, realend=realend)
+    def __init__(self, lease, start, end, realend, nodes, res, oncomplete, backfillres):
+        ResourceReservationBase.__init__(self, lease, start, end, res, realend=realend)
         self.nodes = nodes
         self.oncomplete = oncomplete
         self.backfillres = backfillres
@@ -233,9 +233,15 @@ class VMResourceReservation(ResourceReservationBase):
         logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
         logfun("On Complete    : %s" % self.oncomplete, DS, None)
         
+    def isPreemptible(self):
+        if isinstance(self.lease,BestEffortLease):
+            return True
+        elif isinstance(self.lease, ExactLease):
+            return False
+        
 class SuspensionResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, nodes, db_rsp_ids):
-        ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids)
+    def __init__(self, lease, start, end, nodes):
+        ResourceReservationBase.__init__(self, lease, start, end)
         self.nodes = nodes
 
     def printContents(self, logfun=edebug):
@@ -244,8 +250,8 @@ class SuspensionResourceReservation(ResourceReservationBase):
         logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
         
 class ResumptionResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, nodes, db_rsp_ids):
-        ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids)
+    def __init__(self, lease, start, end, nodes):
+        ResourceReservationBase.__init__(self, lease, start, end)
         self.nodes = nodes
 
     def printContents(self, logfun=edebug):
@@ -269,7 +275,7 @@ class Queue(object):
     
     def enqueueInOrder(self, r):
         self.q.append(r)
-        self.q.sort(key=attrgetter("tSubmit"))
+        self.q.sort(key=attrgetter("leaseID"))
     
     def getNextCancelPoint(self):
         if self.isEmpty():

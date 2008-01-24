@@ -98,6 +98,7 @@ class Scheduler(object):
                     self.handleEndSuspend(l, rr)
                 elif isinstance(rr,ds.ResumptionResourceReservation):
                     self.handleEndResume(l, rr)
+                self.handleEndRR(l, rr)
         
         for l in starting:
             rrs = l.getStartingReservations(self.rm.time)
@@ -269,6 +270,9 @@ class Scheduler(object):
             self.rm.enactment.removeRAMFileFromNode(pnode, l.leaseID, vnode)
         l.printContents()
         debug("LEASE-%i End of handleEndResume" % l.leaseID, constants.SCHED, self.rm.time)
+
+    def handleEndRR(self, l, rr):
+        self.slottable.removeReservation(rr)
     
     def scheduleExactLease(self, req):
         try:
@@ -378,7 +382,7 @@ class Scheduler(object):
         try:
             mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
             canreserve = self.canReserveBestEffort()
-            (mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_rsp_id, suspend_rsp_id) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, preemptible=preemptible, canmigrate=canmigrate, mustresume=mustresume)
+            (start, end, realend, mappings, res, resumetime, suspendtime, reservation) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, preemptible=preemptible, canmigrate=canmigrate, mustresume=mustresume)
             if req.maxqueuetime != None:
                 self.slottable.rollback()
                 msg = "Lease %i is being scheduled, but is meant to be cancelled at %s" % (req.leaseID, req.maxqueuetime)
@@ -450,7 +454,7 @@ class Scheduler(object):
                     
             # Add resource reservations
             if resumetime != None:
-                resmrr = ds.ResumptionResourceReservation(req, start-resumetime, start, mappings, [resume_rsp_id])
+                resmrr = ds.ResumptionResourceReservation(req, start-resumetime, start, mappings)
                 resmrr.state = constants.RES_STATE_SCHEDULED
                 req.appendRR(resmrr)
 
@@ -459,21 +463,25 @@ class Scheduler(object):
             else:
                 oncomplete = constants.ONCOMPLETE_ENDLEASE
 
-            vmrr = ds.VMResourceReservation(req, start, end, realend, mappings, oncomplete, reservation, db_rsp_ids)
+            vmrr = ds.VMResourceReservation(req, start, end, realend, mappings, res, oncomplete, reservation)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
 
             if suspendtime != None:
-                susprr = ds.SuspensionResourceReservation(req, end, end + suspendtime, mappings, [suspend_rsp_id])
+                susprr = ds.SuspensionResourceReservation(req, end, end + suspendtime, mappings)
                 susprr.state = constants.RES_STATE_SCHEDULED
                 req.appendRR(susprr)
            
             if reservation:
                 self.numbesteffortres += 1
             
-            self.slottable.commit()        
+            # Add to slot table
+            if resumetime != None:
+                self.slottable.addRR(resmrr)
+            self.slottable.addReservation(vmrr)
+            if suspendtime != None:
+                self.slottable.addRR(susprr)
         except SlotFittingException, msg:
-            self.slottable.rollback()
             raise SchedException, "The requested best-effort lease is infeasible. Reason: %s" % msg
         
     def preempt(self, req, time):

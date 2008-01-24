@@ -26,6 +26,17 @@ def res_str(s):
     elif s == RES_DISK:
         return "Disk"
 
+def str_res(s):
+    if s == "CPU":
+        return RES_CPU
+    elif s == "Mem":
+        return RES_MEM
+    elif s == "Net (in)":
+        return RES_NETIN
+    elif s == "Net (out)":
+        return RES_NETOUT
+    elif s == "Disk":
+        return RES_DISK
 
 # Types of file transfers
 TRANSFER_DEPLOY = 0

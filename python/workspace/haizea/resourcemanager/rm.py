@@ -128,7 +128,8 @@ class ResourceManager(object):
         self.stats.addFinalMarker()
         
         # Get utilization stats
-        util = self.scheduler.slottable.genUtilizationStats(self.starttime)
+        #util = self.scheduler.slottable.genUtilizationStats(self.starttime)
+        util = None
         self.stats.utilization[constants.RES_CPU] = util
         status("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():

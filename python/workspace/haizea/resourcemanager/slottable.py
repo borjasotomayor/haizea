@@ -2,320 +2,294 @@ from sets import Set
 from mx.DateTime import ISO, TimeDelta
 from operator import attrgetter, itemgetter
 import workspace.haizea.common.constants as constants
-import workspace.haizea.resourcemanager.db as db
 import workspace.haizea.resourcemanager.datastruct as ds
 from workspace.haizea.common.log import info, debug, warning, edebug
 from pysqlite2.dbapi2 import IntegrityError
 from workspace.haizea.common.utils import roundDateTimeDelta
+import copy
 
 class SlotFittingException(Exception):
     pass
+
+class Node(object):
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.capacitywithpreemption = capacity
+        
+class ResourceTuple(object):
+    def __init__(self, res):
+        self.res = res
+        
+    def fitsIn(self, res2):
+        fits = True
+        for slottype in self.res:
+            needed = self.res[slottype]
+            available = res2[slottype]
+            if needed < available:
+                fits = False
+                break
+        return fits
+    
+    def getNumFitsIn(self, res2):
+        canfit = []
+        for slottype in self.res:
+            needed = self.res[slottype]
+            available = res2[slottype]
+            canfit.append(int(available / needed))
+        return min(canfit)
 
 class SlotTable(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.rm = scheduler.rm
-        
-        templatedb = self.rm.config.getDBTemplate()
-        targetdb = self.rm.config.getTargetDB()
-        if targetdb == "memory":
-            self.db = db.SQLiteSlotTableDB.toMemFromFile(templatedb)
-        else:
-            self.db = db.SQLiteSlotTableDB.toFileFromFile(templatedb, targetdb)
+        self.nodes = {}
+        self.reservations = []
+        self.availabilitycache = {}
+        self.changepointcache = None
             
-        self.createDatabase()
-        
-        self.availabilitywindow = AvailabilityWindow(self.db)
-
-        
-    def createDatabase(self):
         numnodes = self.rm.config.getNumPhysicalNodes()
         resources = self.rm.config.getResourcesPerPhysNode()
         bandwidth = self.rm.config.getBandwidth()
         
-        slottypes = []
+        capacity = {}
         for r in resources:
             resourcename = r.split(",")[0]
             resourcecapacity = r.split(",")[1]
-            slottypes.append((self.db.getSlotTypeID(resourcename), resourcecapacity))
+            capacity[constants.str_res(resourcename)] = float(resourcecapacity)
             
         # Create nodes
-        for node in range(numnodes):
-            nod_id = self.db.addNode("fakenode-%i.mcs.anl.gov" % (node+1))
-            # Create slots
-            for slottype in slottypes:
-                self.db.addSlot(nod_id,slt_id=slottype[0],sl_capacity=slottype[1])
+        for n in range(numnodes):
+            self.nodes[n+1] = Node(copy.copy(capacity))
                 
         # Create image nodes
-        nod_id = self.db.addNode("fakeimagenode-exact.mcs.anl.gov")
-        sl_id = self.db.addSlot(nod_id,slt_id=constants.RES_NETOUT,sl_capacity=bandwidth)
+        imgcapacity = { constants.RES_CPU:0, constants.RES_MEM:0, constants.RES_NETIN:0, constants.RES_NETOUT : bandwidth, constants.RES_DISK:0 }
+        self.nodes[4200] = Node(imgcapacity)
+        self.nodes[4201] = Node(imgcapacity)  
         
-        self.imagenodeslot_exact = sl_id
+        self.availabilitywindow = AvailabilityWindow(self)
 
-        nod_id = self.db.addNode("fakeimagenode-besteffort.mcs.anl.gov")
-        sl_id = self.db.addSlot(nod_id,slt_id=constants.RES_NETOUT,sl_capacity=bandwidth)
-        
-        self.imagenodeslot_besteffort = sl_id
-        self.db.commit()
-        
-    def commit(self):
-        self.db.commit()
+    def dirty(self):
+        # You're a dirty, dirty slot table and you should be
+        # ashamed of having outdated caches!
+        self.availabilitycache = {}
+        self.changepointcache = None
+
+    def getAvailability(self, time, resreq=None, onlynodes=None):
+        if not self.availabilitycache.has_key(time):
+            # Cache miss
+            nodes = copy.deepcopy(self.nodes)
+
+            reservations = self.getReservationsAt(time)
     
-    def rollback(self):
-        self.db.rollback()
+            # Find how much resources are available on each node
+            for r in reservations:
+                for node in r.res:
+                    for (restype, amount) in r.res[node].items():
+                        nodes[node].capacity[restype] -= amount
+                        if not r.isPreemptible():
+                            nodes[node].capacitywithpreemption[restype] -= amount                        
+                            
+            self.availabilitycache[time] = nodes
+
+        nodes = self.availabilitycache[time]
+        
+        # Filter nodes
+        if onlynodes != None:
+            allnodes = set(nodes.keys())
+            onlynodes = set(onlynodes)
+            exclude = allnodes - onlynodes
+            for n in exclude:
+                del nodes[n]
+
+        # Keep only those nodes with enough resources
+        if resreq != None:
+            exclude = []
+            for n in nodes:
+                for restype in resreq:
+                    needed = resreq[restype]
+                    available = nodes[n].capacity[restype]
+                    if needed > available:
+                        exclude.append(n)
+                        break
+            for n in exclude:
+                del nodes[n]
+                
+        return nodes
+        
+    def getReservationsAt(self, time):
+        res = [rr for rr in self.reservations if rr.start <= time and rr.end > time]
+        return res
+    
+    def addReservation(self, rr):
+        self.reservations.append(rr)
+        self.dirty()
+
+    def removeReservation(self, rr):
+        self.reservations.remove(rr)
+        self.dirty()
+    
+    def findChangePointsAfter(self, time, includereal = False, nodes=None):
+        changepoints = set()
+        if includereal:
+            res = [rr for rr in self.reservations if rr.start > time or rr.end > time or rr.realend > time]
+        else:
+            res = [rr for rr in self.reservations if rr.start > time or rr.end > time]
+        for rr in res:
+            if rr.start > time:
+                changepoints.add(rr.start)
+            if rr.end > time:
+                changepoints.add(rr.end)
+            if includereal and rr.realend > time:
+                changepoints.add(rr.realend)
+        changepoints = list(changepoints)
+        changepoints.sort()
+        return changepoints
+    
+    def peekNextChangePoint(self, time):
+        if self.changepointcache == None:
+            # Cache is empty
+            changepoints = self.findChangePointsAfter(time, includereal = True)
+            changepoints.reverse()
+            self.changepointcache = changepoints
+        if len(self.changepointcache) == 0:
+            return None
+        else:
+            return self.changepointcache[-1]
     
     def getNextChangePoint(self, time):
-        return self.db.popNextChangePoint(time)
-
-    def peekNextChangePoint(self, time):
-        return self.db.peekNextChangePoint(time)
+        p = self.peekNextChangePoint(time)
+        if p != None:
+            self.changepointcache.pop()
+        return p
     
     def fitExact(self, leaseID, start, end, vmimage, numnodes, resreq, prematureend=None, preemptible=False, canpreempt=True):
-        slottypes = resreq.keys()
-                
-        candidatenodes = self.candidateNodesInRange(start,end,resreq,canpreempt)
+        canfit, canfitpreempt, mustpreempt = self.candidateNodesInRange(start,end,numnodes,resreq,canpreempt)
 
-        # Decide if we can actually fit the entire VW
-        # This is the point were we can apply different slot fitting algorithms
-        # Currently, a greedy algorithm is used
-        # This is O(numvirtualnodes*numphysicalnodes), but could be implemented
-        # in O(numvirtualnodes). We'll worry about that later.
-        allfits = True
-        assignment = {}
-        nodeassignment = {}
-        orderednodes = self.prioritizenodes(candidatenodes,vmimage,start, resreq, canpreempt)
+        # At this point we know if the lease is feasible.
+        # 
+        # We have to consider the following cases:
+        # - If it doesn't require preemption, use "canfit" (order the nodes first)
+        # - If it requires preemption, use canfitpreempt. Order the nodes first
+        #   to minimize preemption. Keep track of how much we need to preempt in
+        #   each node.
+
+#        # Decide if we can actually fit the entire VW
+#        # This is the point were we can apply different slot fitting algorithms
+#        # Currently, a greedy algorithm is used
+#        # This is O(numvirtualnodes*numphysicalnodes), but could be implemented
+#        # in O(numvirtualnodes). We'll worry about that later.
+#        allfits = True
+#        assignment = {}
+#        nodeassignment = {}
+#        orderednodes = self.prioritizenodes(candidatenodes,vmimage,start, resreq, canpreempt)
+#        
+#        # We try to fit each virtual node into a physical node
+#        # First we iterate through the physical nodes trying to fit the virtual node
+#        # without using preemption. If preemption is allowed, we iterate through the
+#        # nodes again but try to use preemptible resources.
+#        
+#        # This variable keeps track of how many resources we have to preempt on a node
+#        mustpreempt={}
+#        info("Node ordering: %s" % orderednodes, constants.ST, self.rm.time)
+#
+#        for vwnode in range(1,numnodes+1):
+#            assignment[vwnode] = {}
+#            # Without preemption
+#            for physnode in orderednodes:
+#                fits = True
+#                for slottype in slottypes:
+#                    res = resreq[slottype]
+#                    if res > candidatenodes[physnode][slottype][2]:
+#                        fits = False
+#                if fits:
+#                    for slottype in slottypes:
+#                        res = resreq[slottype]
+#                        assignment[vwnode][slottype] = candidatenodes[physnode][slottype][1]
+#                        nodeassignment[vwnode] = physnode
+#
+#                        candidatenodes[physnode][slottype][2] -= res
+#                        candidatenodes[physnode][slottype][3] -= res
+#                    break # Ouch
+#            else:
+#                if not canpreempt:
+#                    raise SlotFittingException, "Could not fit node %i in any physical node (w/o preemption)" % vwnode
+#                # Try preemption
+#                for physnode in orderednodes:
+#                    fits = True
+#                    for slottype in slottypes:
+#                        res = resreq[slottype]
+#                        if res > candidatenodes[physnode][slottype][3]:
+#                            fits = False
+#                    if fits:
+#                        for slottype in slottypes:
+#                            res = resreq[slottype]
+#                            assignment[vwnode][slottype] = candidatenodes[physnode][slottype][1]
+#                            nodeassignment[vwnode] = physnode
+#                            # See how much we have to preempt
+#                            if candidatenodes[physnode][slottype][2] > 0:
+#                                if res > candidatenodes[physnode][slottype][2]:
+#                                    res -= candidatenodes[physnode][slottype][2]
+#                                    candidatenodes[physnode][slottype][2] = 0
+#                                else:
+#                                    res = 0
+#                                    candidatenodes[physnode][slottype][2] -= res
+#                            candidatenodes[physnode][slottype][3] -= res
+#                            if not mustpreempt.has_key(physnode):
+#                                mustpreempt[physnode] = {}
+#                            if not mustpreempt[physnode].has_key(slottype):
+#                                mustpreempt[physnode][slottype]=res                                
+#                            else:
+#                                mustpreempt[physnode][slottype]+=res                              
+#                        break # Ouch
+#                else:
+#                    raise SlotFittingException, "Could not fit node %i in any physical node (w/preemption)" % vwnode
+#
+#        db_rsp_ids = []
+#        if allfits:
+#            self.availabilitywindow.flushCache()
+#            transfers = []
+#            info("The VM reservations for this lease are feasible", constants.ST, self.rm.time)
+#            self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
+#            for vwnode in range(1,numnodes+1):
+#                rsp_name = "VM %i" % (vwnode)
+#                rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible)
+#                db_rsp_ids.append(rsp_id)
+#                transfers.append((vwnode, nodeassignment[vwnode]))
+#                for slottype in slottypes:
+#                    amount = resreq[slottype]
+#                    sl_id = assignment[vwnode][slottype]
+#                    self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = prematureend)
+#            return nodeassignment, mustpreempt, transfers, db_rsp_ids
+#        else:
+#            raise SlotFittingException        
         
-        # We try to fit each virtual node into a physical node
-        # First we iterate through the physical nodes trying to fit the virtual node
-        # without using preemption. If preemption is allowed, we iterate through the
-        # nodes again but try to use preemptible resources.
-        
-        # This variable keeps track of how many resources we have to preempt on a node
-        mustpreempt={}
-        info("Node ordering: %s" % orderednodes, constants.ST, self.rm.time)
+    def candidateNodesInRange(self, start, end, numnodes, resreq, canpreempt):
+        self.availabilitywindow.initWindow(start, resreq)
+        self.availabilitywindow.printContents()
 
-        for vwnode in range(1,numnodes+1):
-            assignment[vwnode] = {}
-            # Without preemption
-            for physnode in orderednodes:
-                fits = True
-                for slottype in slottypes:
-                    res = resreq[slottype]
-                    if res > candidatenodes[physnode][slottype][2]:
-                        fits = False
-                if fits:
-                    for slottype in slottypes:
-                        res = resreq[slottype]
-                        assignment[vwnode][slottype] = candidatenodes[physnode][slottype][1]
-                        nodeassignment[vwnode] = physnode
-
-                        candidatenodes[physnode][slottype][2] -= res
-                        candidatenodes[physnode][slottype][3] -= res
-                    break # Ouch
+        mustpreempt = False
+        feasibleend, canfit = self.availabilitywindow.findPhysNodesForVMs(numnodes, end, canpreempt = False)
+        if feasibleend != end:
+            if not canpreempt:
+                raise SlotFittingException, "Not enough resources in specified interval"
             else:
-                if not canpreempt:
-                    raise SlotFittingException, "Could not fit node %i in any physical node (w/o preemption)" % vwnode
-                # Try preemption
-                for physnode in orderednodes:
-                    fits = True
-                    for slottype in slottypes:
-                        res = resreq[slottype]
-                        if res > candidatenodes[physnode][slottype][3]:
-                            fits = False
-                    if fits:
-                        for slottype in slottypes:
-                            res = resreq[slottype]
-                            assignment[vwnode][slottype] = candidatenodes[physnode][slottype][1]
-                            nodeassignment[vwnode] = physnode
-                            # See how much we have to preempt
-                            if candidatenodes[physnode][slottype][2] > 0:
-                                if res > candidatenodes[physnode][slottype][2]:
-                                    res -= candidatenodes[physnode][slottype][2]
-                                    candidatenodes[physnode][slottype][2] = 0
-                                else:
-                                    res = 0
-                                    candidatenodes[physnode][slottype][2] -= res
-                            candidatenodes[physnode][slottype][3] -= res
-                            if not mustpreempt.has_key(physnode):
-                                mustpreempt[physnode] = {}
-                            if not mustpreempt[physnode].has_key(slottype):
-                                mustpreempt[physnode][slottype]=res                                
-                            else:
-                                mustpreempt[physnode][slottype]+=res                              
-                        break # Ouch
-                else:
-                    raise SlotFittingException, "Could not fit node %i in any physical node (w/preemption)" % vwnode
-
-        db_rsp_ids = []
-        if allfits:
-            self.availabilitywindow.flushCache()
-            transfers = []
-            info("The VM reservations for this lease are feasible", constants.ST, self.rm.time)
-            self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
-            for vwnode in range(1,numnodes+1):
-                rsp_name = "VM %i" % (vwnode)
-                rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible)
-                db_rsp_ids.append(rsp_id)
-                transfers.append((vwnode, nodeassignment[vwnode]))
-                for slottype in slottypes:
-                    amount = resreq[slottype]
-                    sl_id = assignment[vwnode][slottype]
-                    self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = prematureend)
-            return nodeassignment, mustpreempt, transfers, db_rsp_ids
+                unfeasiblewithoutpreemption = True
         else:
-            raise SlotFittingException        
-        
-    def candidateNodesInRange(self, start, end, resreq, canpreempt):
-        slottypes = resreq.keys()
-        
-        # This variable stores the candidate slots. It is a dictionary, where the key
-        # is the slot type (i.e. this allows us easy access to the candidate slots for
-        # one type of slot). Each item is a list containing:
-        #    1. Node id
-        #    2. Slot id
-        #    3. Maximum available resources in that slot (without preemption)
-        #    4. Maximum available resources in that slot (with preemption)
-        candidateslots = {}
-        
-        # TODO: There are multiple points at which the slot fitting could be aborted
-        # for lack of resources. Currently, this is only checked at the very end.
-        for slottype in slottypes:
-            candidateslots[slottype] = []
-            needed = resreq[slottype]
+            unfeasiblewithoutpreemption = False
             
-            # This variable stores the (possibly multiple) availabilities of a slot
-            # during the requested time interval. It is a dictionary with the slot id
-            # as a key. The value is itself a dictionary, with the time (at which
-            # availability is measured) as a key. The value is a list with two elements:
-            #    [ available resources,
-            #      available resources (assuming we can preempt ]
-            capacity={}
-            
-            # This is a list of candidate slot id's
-            slots = []
-
-            # TODO: Lots of code here which can be factored out into a function
-
-            # First sieve: select all slots that have enough resources at the beginning
-            slotsbegin = []
-            slots1 = self.db.findAvailableSlots(time=start, amount=needed, type=slottype, canpreempt=False)
-            for slot in slots1:
-                slot_id = slot["SL_ID"]
-                slotsbegin.append(slot_id)
-                if not capacity.has_key(slot_id):
-                    capacity[slot_id] = {}
-                capacity[slot_id][start] =[slot["available"],0]
-
-            # Find available resources if we can do preemption    
-            if canpreempt:
-                slots1 = self.db.findAvailableSlots(time=start, amount=needed, type=slottype, canpreempt=True)
-                for slot in slots1:
-                    slot_id = slot["SL_ID"]
-                    if not slot_id in slots:
-                        slotsbegin.append(slot_id)
-                    if not capacity.has_key(slot_id):
-                        capacity[slot_id] = {}
-                        capacity[slot_id][start]=[0,slot["available"]]
-                    else:
-                        capacity[slot_id][start][1]=slot["available"]
-
-            # Second sieve: remove slots that don't have enough resources at the end
-            slots2 = self.db.findAvailableSlots(time=end, amount=needed, slots=slotsbegin, closed=False, canpreempt=False)
-            slots = []
-            for slot in slots2:
-                nod_id = slot["NOD_ID"]
-                slot_id = slot["SL_ID"]
-                slots.append((nod_id,slot_id))
-                if not capacity.has_key(slot_id):
-                    capacity[slot_id] = {}
-                capacity[slot_id][end] = [slot["available"], 0]
-
-            # Find available resources if we can do preemption    
-            if canpreempt:
-                slots2 = self.db.findAvailableSlots(time=end, amount=needed, slots=slotsbegin, closed=False, canpreempt=True)
-                for slot in slots2:
-                    nod_id = slot["NOD_ID"]
-                    slot_id = slot["SL_ID"]
-                    if not (nod_id,slot_id) in slots:
-                        slots.append((nod_id,slot_id))
-                    if not capacity.has_key(slot_id):
-                        capacity[slot_id] = {}
-                        capacity[slot_id][end]=[0,slot["available"]]
-                    else:
-                        if capacity[slot_id].has_key(end):
-                            capacity[slot_id][end][1]=slot["available"]
-                        else:
-                            capacity[slot_id][end] = [0,slot["available"]]
-
-            # Final sieve: Determine "resource change points" and make sure that 
-            # there is enough resources at each point too (and determine maximum
-            # available)
-            cur = self.db.findChangePoints(start, end, closed=False, withSlots=True)
-            changepointsslots = cur.fetchall()
-            for slot in slots:
-                slot_id=slot[1]
-                             
-                changepoints = [r for r in changepointsslots if r["sl_id"] == slot_id]
-                for point in changepoints:
-                    time = point["time"]
-
-                    cur = self.db.findAvailableSlots(time=time, slots=[slot_id], canpreempt=False)
-                    avail = cur.fetchone()["available"]
-                    if canpreempt:
-                        cur = self.db.findAvailableSlots(time=time, slots=[slot_id], canpreempt=True)
-                        availpreempt = cur.fetchone()["available"]
-                    else:
-                        availpreempt = 0
-                        
-                    capacity[slot_id][time]=[avail, availpreempt]
+        canfitpreempt = None
+        if canpreempt:
+            feasibleendpreempt, canfitpreempt = self.availabilitywindow.findPhysNodesForVMs(numnodes, end, canpreempt = True)
+            if feasibleendpreempt != end:
+                raise SlotFittingException, "Not enough resources in specified interval"
+            else:
+                if unfeasiblewithoutpreemption:
+                    mustpreempt = True
+                    canfit = None
+                else:
+                    mustpreempt = False
                     
-                maxavail = float("inf")
-                if canpreempt:
-                    maxavailpreempt = float("inf")
-                for cap in capacity[slot_id].values():
-                    if cap[0] < maxavail:
-                        maxavail = cap[0]
-                    if canpreempt and cap[1] < maxavailpreempt:
-                        maxavailpreempt = cap[1]
-                        
-                if not canpreempt and maxavail >= needed:
-                    candidateslots[slottype].append([slot[0],slot[1],maxavail, maxavail])
-                elif canpreempt and maxavailpreempt >= needed:
-                    candidateslots[slottype].append([slot[0],slot[1],maxavail, maxavailpreempt])
-            
-            info("Slot type %i has candidates %s" % (slottype,candidateslots[slottype]), constants.ST, self.rm.time)
-        
-        # Make sure that available resources are all available on the same node
-        # (e.g. discard candidate nodes where we can provision memory but not the cpu)
-        nodeset = Set()
-        for slottype in slottypes:
-            nodes = Set([s[0] for s in candidateslots[slottype]])
-            nodeset |= nodes
-            
-        for slottype in slottypes:
-            nodes = Set([s[0] for s in candidateslots[slottype]])
-            nodeset &= nodes
-                
-        if len(nodeset) == 0:
-            raise SlotFittingException, "No physical node has enough available resources for this request"
-        
-        # This variable contains essentially the same information as candidateslots, except
-        # access is done by node id and slottype (i.e. provides an easy way of asking
-        # "what is the slot id of the memory slot in node 5")
-        # Items have the same information as candidateslots.
-        candidatenodes = {}
-        
-        for slottype in slottypes:
-            for slot in candidateslots[slottype]:
-                nod_id = slot[0]
-                if nod_id in nodeset:
-                    if not candidatenodes.has_key(nod_id):
-                        candidatenodes[nod_id]={}
-                    candidatenodes[nod_id][slottype] = slot
-        for node in nodeset:    
-            info("Node %i has final candidates %s" % (node,candidatenodes[node]), constants.ST, self.rm.time)
-            
-        return candidatenodes
+        return canfit, canfitpreempt, mustpreempt
 
     def findLeasesToPreempt(self, mustpreempt, startTime, endTime):
         def comparepreemptability(x,y):
@@ -633,14 +607,6 @@ class SlotTable(object):
             physnodes = list(deplnodes) + list(notdeplnodes)
         else:
             physnodes.sort() # Arbitrary, prioritize nodes, as in exact
-        
-        self.availabilitywindow.flushCache()
-
-        # Make the reservation
-        try:
-            self.db.addReservation(leaseID, "LEASE #%i" % leaseID)
-        except IntegrityError, msg:
-            pass # Ignore these for now. TODO: Redesign DB to remove TB_RESERVATION
 
         suspendtime = None
         if mustsuspend:
@@ -655,42 +621,20 @@ class SlotTable(object):
             start += resumetime
         
         mappings = {}
+        res = {}
         vmnode = 1
-        db_rsp_ids = []
         while vmnode <= numnodes:
             for n in physnodes:
                 if canfit[n]>0:
                     canfit[n] -= 1
                     mappings[vmnode] = n
-                    rsp_name = "VM %i" % (vmnode)
-                    rsp_id = self.db.addReservationPart(leaseID, rsp_name, 1, preemptible=preemptible)
-                    db_rsp_ids.append(rsp_id)
-                    for slottype in slottypes:
-                        amount = resreq[slottype]
-                        sl_id = self.availabilitywindow.slot_ids[n][slottype]
-                        self.db.addAllocation(rsp_id, sl_id, start, end, amount, realEndTime = realend)
+                    res[n] = resreq
                     vmnode += 1
                     break
-        resume_db_rsp_id = None
-        if mustresume:
-            rsp_name = "RESUME %i" % leaseID
-            rsp_id = self.db.addReservationPart(leaseID, rsp_name, 4, preemptible=False)
-            for vmnode in mappings:
-                physnode = mappings[vmnode]
-                sl_id = self.availabilitywindow.slot_ids[physnode][constants.RES_MEM]
-                self.db.addAllocation(rsp_id, sl_id, start - resumetime, start, resreq[constants.RES_MEM], realEndTime=start)
-            resume_db_rsp_id = rsp_id
-        suspend_db_rsp_id = None
-        if mustsuspend:
-            rsp_name = "SUSPEND %i" % leaseID
-            rsp_id = self.db.addReservationPart(leaseID, rsp_name, 3, preemptible=False)
-            for vmnode in mappings:
-                physnode = mappings[vmnode]
-                sl_id = self.availabilitywindow.slot_ids[physnode][constants.RES_MEM]
-                self.db.addAllocation(rsp_id, sl_id, end, end + suspendtime, resreq[constants.RES_MEM], realEndTime=end+suspendtime)
-            suspend_db_rsp_id = rsp_id
 
-        return mappings, start, end, realend, resumetime, suspendtime, reservation, db_rsp_ids, resume_db_rsp_id, suspend_db_rsp_id
+        # TODO: Return the RRs, instead of all the spare data
+
+        return start, end, realend, mappings, res, resumetime, suspendtime, reservation
 
 
 
@@ -922,184 +866,108 @@ class SlotTable(object):
 
 
 class AvailEntry(object):
-    def __init__(self, time, avail, availpreempt = None):
+    def __init__(self, time, avail, availpreempt, resreq):
         self.time = time
         self.avail = avail
-        self.canfit = None
         self.availpreempt = availpreempt
-        self.canfitpreempt = None
+        
+        canfit = []
+        canfitpreempt = []
+        for slottype in resreq.keys():
+            needed = resreq[slottype]
+            canfit.append(int(avail[slottype] / needed))
+            canfitpreempt.append(int(availpreempt[slottype] / needed))
+        self.canfit = min(canfit)
+        self.canfitpreempt = min(canfitpreempt)
+        
+    def getCanfit(self, canpreempt):
+        if canpreempt:
+            return self.canfitpreempt
+        else:
+            return self.canfit
 
-# Does not support preemption just yet
-# TODO: Constrain window to only specific nodes (to take into account
-# earliest start times)
+
 class AvailabilityWindow(object):
-    def __init__(self, db):
+    def __init__(self, slottable):
+        self.slottable = slottable
         self.time = None
         self.resreq = None
         self.onlynodes = None
-        self.db = db
         self.avail = None
-        self.availcache = {}
-        self.slots = self.db.getSlots().fetchall()
-        self.slot_ids = {}
-        for slot in self.slots:
-            sl_id = slot["sl_id"]
-            nod_id = slot["nod_id"]
-            slottype = slot["slt_id"]
-            if not self.slot_ids.has_key(nod_id):
-                self.slot_ids[nod_id] = {}    
-            self.slot_ids[nod_id][slottype] = sl_id 
-
-    def findAvailableSlots(self, time, amount=None, type=None, canpreempt=False, slotfilter=None, nodes=None):
-        if not self.availcache.has_key(time):
-            # Cache miss
-            self.availcache[time] = []
-            availslots = self.db.quickFindAvailableSlots(time, canpreempt=canpreempt)
-            slot_ids = set()
-            for slot in availslots:
-                slot_ids.add(slot["SL_ID"])
-                self.availcache[time].append(slot)
-            
-            for slot in self.slots:
-                if not slot["SL_ID"] in slot_ids:
-                    self.availcache[time].append(slot)
-        
-        slots = self.availcache[time]
-        
-        if nodes != None:
-            slotfilter = []
-            for n in nodes:
-                slotfilter.append(self.slot_ids[n].values())
-            slotfilter = [x for y in slotfilter for x in y] # Flatten
-        
-        if slotfilter != None:
-            slotfilter = set(slotfilter)
-            slots = [s for s in slots if s["SL_ID"] in slotfilter]
-        if type != None and amount != None:
-            slots = [s for s in slots if s["SLT_ID"] == type and s["available"] >= amount]
-         
-        return slots
         
     # Generate raw availability at change points
     def genAvail(self):
         self.avail = {}
-        slot_ids = {}
-        slottypes = self.resreq.keys()
-        
-        # Initially, this will be a dictionary (key: physnode) of
-        # dictionaries (key: slottype), containing AvailEntry objects
-        # This is done because it makes it easier to extract the information
-        # from the database. Later on, we will transform this into
-        # a more convenient structure.
-        avail_aux = {}
+
         # Availability at initial time
-        for slottype in slottypes:
-            needed = self.resreq[slottype]
-            
-            slots = self.findAvailableSlots(time=self.time, amount=needed, type=slottype, canpreempt=False, nodes=self.onlynodes)
-            for slot in slots:
-                nod_id = slot["NOD_ID"]
-                slot_id = slot["SL_ID"]
-                avail = slot["available"]
-                if not avail_aux.has_key(nod_id):
-                    avail_aux[nod_id] = {}
-                    slot_ids[nod_id] = {}
-                avail_aux[nod_id][slottype] = [AvailEntry(self.time,avail)]
-                slot_ids[nod_id][slottype] = slot_id
+        availatstart = self.slottable.getAvailability(self.time, self.resreq, self.onlynodes)
 
-        # Filter out nodes that don't have enough resources for at
-        # least one VM (the previous step may have selected nodes that,
-        # for example, have enough CPU but not enough memory)
-        for physnode in avail_aux.keys():
-            # Check that the node has enough resources for at least one VM
-            enough = True
-            for slottype in slottypes:
-                if not avail_aux[physnode].has_key(slottype):
-                    enough = False
-                elif avail_aux[physnode][slottype][0].avail < self.resreq[slottype]:
-                    enough = False
-            if not enough:
-                del avail_aux[physnode]
-                del slot_ids[physnode]
-                
-
+        for node in availatstart:
+            capacity = availatstart[node].capacity
+            capacitywithpreemption = availatstart[node].capacitywithpreemption
+            self.avail[node] = [AvailEntry(self.time,capacity,capacitywithpreemption, self.resreq)]
+        
         # Determine the availability at the subsequent change points
-        slot_ids = [v.values() for v in slot_ids.values()]
-        slot_ids = [x for y in slot_ids for x in y] # Flatten
-        slot_ids = set(slot_ids)
-        changepoints = self.db.findChangePoints(self.time, slots=list(slot_ids), closed=False)
-        cp = [ISO.ParseDateTime(p["time"]) for p in changepoints.fetchall()]
-        for p in cp:
-            slots = self.findAvailableSlots(time=p, slotfilter=list(slot_ids), canpreempt=False)
-            for slot in slots:
-                nod_id = slot["NOD_ID"]
-                slot_id = slot["sl_id"]
-                slottype = slot["slt_id"]
-                avail = slot["available"]
-                if avail < self.resreq[slottype]:
-                    # If the available resources at this changepoint are
-                    # less than what is required to run a single VM,
-                    # this node has (de facto) no resources available
-                    # in this availability window.
-                    avail = 0
-                    # No need to keep on checking this slot.
-                    slot_ids.remove(slot_id)
-                    
-                # Only interested if the available resources decrease
-                # in the window.
-                prevavail = avail_aux[nod_id][slottype][-1].avail
-                if avail < prevavail:
-                    avail_aux[nod_id][slottype].append(AvailEntry(p,avail))
+        changepoints = self.slottable.findChangePointsAfter(self.time, nodes=self.avail.keys())
+        for p in changepoints:
+            pass
+#            slots = self.findAvailableSlots(time=p, slotfilter=list(slot_ids), canpreempt=False)
+#            for slot in slots:
+#                nod_id = slot["NOD_ID"]
+#                slot_id = slot["sl_id"]
+#                slottype = slot["slt_id"]
+#                avail = slot["available"]
+#                if avail < self.resreq[slottype]:
+#                    # If the available resources at this changepoint are
+#                    # less than what is required to run a single VM,
+#                    # this node has (de facto) no resources available
+#                    # in this availability window.
+#                    avail = 0
+#                    # No need to keep on checking this slot.
+#                    slot_ids.remove(slot_id)
+#                    
+#                # Only interested if the available resources decrease
+#                # in the window.
+#                prevavail = avail_aux[nod_id][slottype][-1].avail
+#                if avail < prevavail:
+#                    avail_aux[nod_id][slottype].append(AvailEntry(p,avail))
 
         # Now, we need to change the avail_aux into something more 
         # convenient. We will end up with a dictionary (key: physnode)
         # of AvailEntry objects. Now, the "avail" field will contain
         # a dictionary (key: slottype). 
-        physnodes = avail_aux.keys()
-        for n in physnodes:
-            self.avail[n] = []
-            slottypes = avail_aux[n].keys()
-            l = []
-            for s in slottypes:
-                l += [(s,a) for a in avail_aux[n][s]]
-            
-            # Sort by time
-            getTime = lambda x: x[1].time
-            l.sort(key=getTime)
-            
-            prevtime = None
-            res = dict([(s,None) for s in slottypes])
-            
-            for x in l:
-                slottype = x[0]
-                time = x[1].time
-                avail = x[1].avail
-                
-                if time > prevtime:
-                    a = AvailEntry(time,dict(res))
-                    self.avail[n].append(a)
-                    prevtime = time
-                
-                if avail == 0:
-                    self.avail[n][-1].avail = None
-                    break
-                else: 
-                    self.avail[n][-1].avail[slottype] = avail
-                    res[slottype] = avail
-        
-        # Include (for convenience) the number of VMs we can fit
-        # at each changepoint
-        for n in physnodes:
-            for e in self.avail[n]:
-                if e.avail == None:
-                    e.canfit = 0
-                else:
-                    canfit = []
-                    for slottype in self.resreq.keys():
-                        needed = self.resreq[slottype]
-                        avail = e.avail[slottype]
-                        canfit.append(int(avail / needed))
-                    e.canfit = min(canfit)
+#        physnodes = avail_aux.keys()
+#        for n in physnodes:
+#            self.avail[n] = []
+#            slottypes = avail_aux[n].keys()
+#            l = []
+#            for s in slottypes:
+#                l += [(s,a) for a in avail_aux[n][s]]
+#            
+#            # Sort by time
+#            getTime = lambda x: x[1].time
+#            l.sort(key=getTime)
+#            
+#            prevtime = None
+#            res = dict([(s,None) for s in slottypes])
+#            
+#            for x in l:
+#                slottype = x[0]
+#                time = x[1].time
+#                avail = x[1].avail
+#                
+#                if time > prevtime:
+#                    a = AvailEntry(time,dict(res))
+#                    self.avail[n].append(a)
+#                    prevtime = time
+#                
+#                if avail == 0:
+#                    self.avail[n][-1].avail = None
+#                    break
+#                else: 
+#                    self.avail[n][-1].avail[slottype] = avail
+#                    res[slottype] = avail
+
                 
     # Create avail structure
     def initWindow(self, time, resreq, onlynodes = None):
@@ -1107,9 +975,6 @@ class AvailabilityWindow(object):
         self.resreq = resreq
         self.onlynodes = onlynodes
         self.genAvail()
-        
-    def flushCache(self):
-        self.availcache = {}
     
     def fitAtStart(self, nodes = None):
         if nodes != None:
@@ -1118,10 +983,10 @@ class AvailabilityWindow(object):
             avail = self.avail.values()
         return sum([e[0].canfit for e in avail])
     
-    def findPhysNodesForVMs(self, numnodes, maxend):
+    def findPhysNodesForVMs(self, numnodes, maxend, canpreempt=False):
         # Returns the physical nodes that can run all VMs, and the
         # time at which the VMs must end
-        canfit = dict([(n, v[0].canfit) for (n,v) in self.avail.items()])
+        canfit = dict([(n, v[0].getCanfit(canpreempt)) for (n,v) in self.avail.items()])
         entries = []
         for n in self.avail.keys():
             entries += [(n,e) for e in self.avail[n][1:]]
