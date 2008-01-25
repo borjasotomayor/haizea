@@ -1,7 +1,7 @@
 from mx.DateTime import TimeDelta, DateTimeDelta
 from mx.DateTime import ISO
 from mx.DateTime import now
-from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
+from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease, ResourceTuple
 import workspace.haizea.common.constants as constants
 import workspace.haizea.traces.formats as formats
 
@@ -64,7 +64,10 @@ def CSV(tracefile, config):
                 resreq = {}
                 resreq[constants.RES_CPU] = 1 # One CPU per VM
                 resreq[constants.RES_MEM] = int(fields[5]) # 5: memory
+                resreq[constants.RES_NETIN] = 0
+                resreq[constants.RES_NETOUT] = 0
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
+                resreq = ResourceTuple(resreq)
                 if fields[8] != "NULL": # 8: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[8])) # 8: deadline
                     end = start + TimeDelta(seconds=int(fields[9])) # 9: duration
@@ -104,7 +107,10 @@ def GWF(tracefile, config):
                 resreq = {}
                 resreq[constants.RES_CPU] = 1 # One CPU per VM
                 resreq[constants.RES_MEM] = 512 # Arbitrary (2 VMs per node)
+                resreq[constants.RES_NETIN] = 0
+                resreq[constants.RES_NETOUT] = 0
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
+                resreq = ResourceTuple(resreq)
                 maxdur = TimeDelta(seconds=reqtime)
                 realdur = TimeDelta(seconds=int(fields[3])) # 3: RunTime
                 req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)

@@ -276,7 +276,7 @@ class Scheduler(object):
     
     def scheduleExactLease(self, req):
         try:
-            (mappings, preemptions, transfers, db_rsp_ids) = self.slottable.fitExact(req.leaseID, req.start, req.end, req.vmimage, req.numnodes, req.resreq, prematureend=req.prematureend, preemptible=False, canpreempt=True)
+            (nodeassignment, res, preemptions) = self.slottable.fitExact(req, preemptible=False, canpreempt=True)
             if len(preemptions) > 0:
                 info("Must preempt the following: %s" % preemptions, constants.SCHED, self.rm.time)
                 leases = self.slottable.findLeasesToPreempt(preemptions, req.start, req.end)
@@ -299,7 +299,7 @@ class Scheduler(object):
                     
                 musttransfer = {}
                 mustpool = {}
-                for transfer in transfers:
+                for (vnode,pnode) in nodeassignment:
                     leaseID = req.leaseID
                     vnode = transfer[0]
                     pnode = transfer[1]
@@ -344,13 +344,11 @@ class Scheduler(object):
                     self.rm.enactment.addToPool(pnode, req.vmimage, leaseID, vnode, req.start)
  
             # Add resource reservations
-            vmrr = ds.VMResourceReservation(req, req.start, req.end, req.prematureend, mappings, constants.ONCOMPLETE_ENDLEASE, False, db_rsp_ids)
+            vmrr = ds.VMResourceReservation(req, req.start, req.end, req.prematureend, nodeassignment, res, constants.ONCOMPLETE_ENDLEASE, False)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
-            
-            self.slottable.commit()
+            self.slottable.addReservation(vmrr)
         except SlotFittingException, msg:
-            self.slottable.rollback()
             raise SchedException, "The requested exact lease is infeasible. Reason: %s" % msg
 
     def scheduleBestEffortLease(self, req):
