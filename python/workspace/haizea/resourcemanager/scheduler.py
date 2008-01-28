@@ -152,8 +152,7 @@ class Scheduler(object):
             if not prematureend:
                 rr.realend = rr.end
             else:
-                self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
-                self.slottable.commit()
+                rr.end = rr.realend
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
             for vnode,pnode in l.vmimagemap.items():
@@ -172,21 +171,19 @@ class Scheduler(object):
                     rrs = l.nextRRs(rr)
                     for r in rrs:
                         l.removeRR(r)
+                        self.slottable.removeReservation(r)
                     self.completedleases.add(l)
                     self.scheduledleases.remove(l)
                     for vnode,pnode in l.vmimagemap.items():
                         self.rm.enactment.removeImage(pnode, l.leaseID, vnode)
                     self.rm.stats.incrBestEffortCompleted(l.leaseID)   
                     self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time))         
-                    self.slottable.updateEndTimes(rr.db_rsp_ids, rr.realend)
-                    self.slottable.commit()
-                    # TODO: Clean up next reservations
         
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
                 self.numbesteffortres -= 1
         if prematureend and self.rm.config.isBackfilling():
-            self.reevaluateSchedule(l, True)
+            self.reevaluateSchedule(l, rr.nodes.values(), self.rm.time, [])
         l.printContents()
         debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED, self.rm.time)
         
@@ -239,7 +236,7 @@ class Scheduler(object):
         l.printContents()
         rr.state = constants.RES_STATE_ACTIVE
         for vnode,pnode in rr.nodes.items():
-            self.rm.enactment.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq[constants.RES_MEM])
+            self.rm.enactment.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq.res[constants.RES_MEM])
             l.memimagemap[vnode] = pnode
         l.printContents()
         debug("LEASE-%i End of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
@@ -380,7 +377,7 @@ class Scheduler(object):
         try:
             mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
             canreserve = self.canReserveBestEffort()
-            (start, end, realend, mappings, res, resumetime, suspendtime, reservation) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, preemptible=preemptible, canmigrate=canmigrate, mustresume=mustresume)
+            (resmrr, vmrr, susprr, reservation) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, preemptible=preemptible, canmigrate=canmigrate, mustresume=mustresume)
             if req.maxqueuetime != None:
                 self.slottable.rollback()
                 msg = "Lease %i is being scheduled, but is meant to be cancelled at %s" % (req.leaseID, req.maxqueuetime)
@@ -440,45 +437,29 @@ class Scheduler(object):
                 # in different nodes.
                 for vnode,pnode in req.vmimagemap.items():
                     self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
-                req.vmimagemap = mappings
+                req.vmimagemap = vmrr.nodes
                 for vnode,pnode in req.vmimagemap.items():
                     self.rm.enactment.addTaintedImageToNode(pnode, req.vmimage, req.vmimagesize, req.leaseID, vnode)
                 # Update RAM file mappings
                 for vnode,pnode in req.memimagemap.items():
                     self.rm.enactment.removeRAMFileFromNode(pnode, req.leaseID, vnode)
-                for vnode,pnode in mappings.items():
-                    self.rm.enactment.addRAMFileToNode(pnode, req.leaseID, vnode, req.resreq[constants.RES_MEM])
+                for vnode,pnode in vmrr.nodes.items():
+                    self.rm.enactment.addRAMFileToNode(pnode, req.leaseID, vnode, req.resreq.res[constants.RES_MEM])
                     req.memimagemap[vnode] = pnode
                     
             # Add resource reservations
-            if resumetime != None:
-                resmrr = ds.ResumptionResourceReservation(req, start-resumetime, start, mappings)
-                resmrr.state = constants.RES_STATE_SCHEDULED
+            if resmrr != None:
                 req.appendRR(resmrr)
-
-            if suspendtime != None:
-                oncomplete = constants.ONCOMPLETE_SUSPEND
-            else:
-                oncomplete = constants.ONCOMPLETE_ENDLEASE
-
-            vmrr = ds.VMResourceReservation(req, start, end, realend, mappings, res, oncomplete, reservation)
-            vmrr.state = constants.RES_STATE_SCHEDULED
+                self.slottable.addReservation(resmrr)
             req.appendRR(vmrr)
-
-            if suspendtime != None:
-                susprr = ds.SuspensionResourceReservation(req, end, end + suspendtime, mappings)
-                susprr.state = constants.RES_STATE_SCHEDULED
+            self.slottable.addReservation(vmrr)
+            if susprr != None:
                 req.appendRR(susprr)
+                self.slottable.addReservation(susprr)
            
             if reservation:
                 self.numbesteffortres += 1
             
-            # Add to slot table
-            if resumetime != None:
-                self.slottable.addRR(resmrr)
-            self.slottable.addReservation(vmrr)
-            if suspendtime != None:
-                self.slottable.addRR(susprr)
         except SlotFittingException, msg:
             raise SchedException, "The requested best-effort lease is infeasible. Reason: %s" % msg
         
@@ -528,25 +509,21 @@ class Scheduler(object):
         edebug("Lease after preemption:", constants.SCHED, self.rm.time)
         req.printContents()
         
-    def reevaluateSchedule(self, endinglease, checkreal):
-        vmrr, susprr = endinglease.getLastVMRR()
-        if checkreal:
-            end = vmrr.realend
-        else:
-            end = vmrr.end
-        nodes = vmrr.nodes.values()
-        debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,end), constants.SCHED, self.rm.time)
-        leases = self.scheduledleases.getNextLeasesScheduledInNodes(end, nodes)
-        leases = [l for l in leases if isinstance(l,ds.BestEffortLease)]
+    def reevaluateSchedule(self, endinglease, nodes, endtime, checkedleases):
+        debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,endtime), constants.SCHED, self.rm.time)        
+        leases = self.scheduledleases.getNextLeasesScheduledInNodes(endtime, nodes)
+        leases = [l for l in leases if isinstance(l,ds.BestEffortLease) and not l in checkedleases]
         for l in leases:
             debug("Found lease %i" % l.leaseID, constants.SCHED, self.rm.time)
             l.printContents()
             # Earliest time can't be earlier than time when images will be
             # available in node
-            earliest = max(end, l.imagesavail)
+            earliest = max(endtime, l.imagesavail)
             self.slottable.slideback(l, earliest)
-        for l in leases:
-            self.reevaluateSchedule(l, False)
+            checkedleases.append(l)
+        #for l in leases:
+        #    vmrr, susprr = l.getLastVMRR()
+        #    self.reevaluateSchedule(l, vmrr.nodes.values(), vmrr.end, checkedleases)
             
         
     def findEarliestStartingTimes(self, req):

@@ -3,7 +3,6 @@ from workspace.haizea.common.log import edebug
 from workspace.haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
 from mx.DateTime import TimeDelta
-import copy
 leaseID = 1
 
 def getLeaseID():
@@ -25,7 +24,9 @@ def prettyNodemap(nodes):
 
 class ResourceTuple(object):
     def __init__(self, res):
-        self.res = copy.copy(res)
+        self.res = {}
+        for slottype in res:
+            self.res[slottype] = res[slottype]
         
     def fitsIn(self, res2):
         fits = True
@@ -128,7 +129,6 @@ class LeaseBase(object):
         if not rr in self.rr:
             raise Exception, "Tried to remove an RR not contained in this lease"
         else:
-            rr.removeDBentries()
             self.rr.remove(rr)
         
 class ExactLease(LeaseBase):
@@ -278,8 +278,8 @@ class VMResourceReservation(ResourceReservationBase):
             return False
         
 class SuspensionResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, nodes):
-        ResourceReservationBase.__init__(self, lease, start, end)
+    def __init__(self, lease, start, end, res, nodes):
+        ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
     def printContents(self, logfun=edebug):
@@ -287,15 +287,21 @@ class SuspensionResourceReservation(ResourceReservationBase):
         logfun("Type           : SUSPEND", DS, None)
         logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
         
+    def isPreemptible(self):
+        return False        
+        
 class ResumptionResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, nodes):
-        ResourceReservationBase.__init__(self, lease, start, end)
+    def __init__(self, lease, start, end, res, nodes):
+        ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
     def printContents(self, logfun=edebug):
         ResourceReservationBase.printContents(self, logfun)
         logfun("Type           : RESUME", DS, None)
         logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
+
+    def isPreemptible(self):
+        return False        
         
 class Queue(object):
     def __init__(self, scheduler):
