@@ -5,6 +5,7 @@ import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.datastruct as ds
 from workspace.haizea.common.log import info, debug, warning, edebug
 from workspace.haizea.common.utils import roundDateTimeDelta
+import bisect
 
 class SlotFittingException(Exception):
     pass
@@ -21,8 +22,13 @@ class Node(object):
         else:
             self.capacitywithpreemption = ds.ResourceTuple(capacitywithpreemption)
         
-
-
+class KeyValueWrapper(object):
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+        
+    def __cmp__(self, other):
+        return cmp(self.key, other.key)
 
 class SlotTable(object):
     def __init__(self, scheduler):
@@ -30,6 +36,8 @@ class SlotTable(object):
         self.rm = scheduler.rm
         self.nodes = {}
         self.reservations = []
+        self.reservationsByStart = []
+        self.reservationsByEnd = []
         self.availabilitycache = {}
         self.changepointcache = None
             
@@ -99,30 +107,89 @@ class SlotTable(object):
         
         return nodes
         
+#    def getReservationsAt(self, time):
+#        res = [rr for rr in self.reservations if rr.start <= time and rr.end > time]
+#        return res
+#    
+#    def getReservationsStartingBetween(self, start, end):
+#        res = [rr for rr in self.reservations if rr.start >= start and rr.start < end]
+#        return res    
+#    
+#    def addReservation(self, rr):
+#        self.reservations.append(rr)
+#        self.dirty()
+#
+#    def removeReservation(self, rr):
+#        self.reservations.remove(rr)
+#        self.dirty()
+#
+#    def getReservationsWithChangePointsAfter(self, after, includereal):
+#        if includereal:
+#            res = [r for r in self.reservations if r.start > after or r.end > after or r.realend > after]
+#        else:
+#            res = [r for r in self.reservations  if r.start > after or r.end > after]
+#        return res
+
     def getReservationsAt(self, time):
-        res = [rr for rr in self.reservations if rr.start <= time and rr.end > time]
-        return res
+        item = KeyValueWrapper(time, None)
+        startpos = bisect.bisect_right(self.reservationsByStart, item)
+        bystart = set([x.value for x in self.reservationsByStart[:startpos]])
+        endpos = bisect.bisect_right(self.reservationsByEnd, item)
+        byend = set([x.value for x in self.reservationsByEnd[endpos:]])
+        res = bystart & byend
+        return list(res)
     
     def getReservationsStartingBetween(self, start, end):
-        res = [rr for rr in self.reservations if rr.start >= start and rr.start < end]
-        return res    
+        startitem = KeyValueWrapper(start, None)
+        enditem = KeyValueWrapper(end, None)
+        startpos = bisect.bisect_left(self.reservationsByStart, startitem)
+        endpos = bisect.bisect_right(self.reservationsByEnd, enditem)
+        res = [x.value for x in self.reservationsByStart[startpos:endpos]]
+        return res
+    
+    def getReservationsWithChangePointsAfter(self, after, includereal):
+        if includereal:
+            # Inefficient, but ok since this query seldom happens
+            res = [i.value for i in self.reservationsByStart if i.value.start > after or i.value.end > after or i.value.realend > after]
+            return res
+        else:
+            item = KeyValueWrapper(after, None)
+            startpos = bisect.bisect_right(self.reservationsByStart, item)
+            bystart = set([x.value for x in self.reservationsByStart[:startpos]])
+            endpos = bisect.bisect_right(self.reservationsByEnd, item)
+            byend = set([x.value for x in self.reservationsByEnd[endpos:]])
+            res = bystart | byend
+            return list(res)    
     
     def addReservation(self, rr):
-        if rr == None:
-            print "DANGER WILL ROBINSON!!!!!!!!!!!!!!!!"
-        self.reservations.append(rr)
+        startitem = KeyValueWrapper(rr.start, rr)
+        enditem = KeyValueWrapper(rr.end, rr)
+        bisect.insort(self.reservationsByStart, startitem)
+        bisect.insort(self.reservationsByEnd, enditem)
         self.dirty()
 
+    def getIndexOfReservation(self, rlist, rr, key):
+        item = KeyValueWrapper(key, None)
+        pos = bisect.bisect_left(rlist, item)
+        found = False
+        while not found:
+            if rlist[pos].value == rr:
+                found = True
+            else:
+                pos += 1
+        return pos
+
     def removeReservation(self, rr):
-        self.reservations.remove(rr)
+        posstart = self.getIndexOfReservation(self.reservationsByStart, rr, rr.start)
+        posend = self.getIndexOfReservation(self.reservationsByEnd, rr, rr.end)
+        self.reservationsByStart.pop(posstart)
+        self.reservationsByEnd.pop(posend)
         self.dirty()
+
     
     def findChangePointsAfter(self, after, until=None, includereal = False, nodes=None):
         changepoints = set()
-        if includereal:
-            res = [rr for rr in self.reservations if rr.start > after or rr.end > after or rr.realend > after]
-        else:
-            res = [rr for rr in self.reservations if rr.start > after or rr.end > after]
+        res = self.getReservationsWithChangePointsAfter(after, includereal)
         for rr in res:
             if nodes == None or (nodes != None and len(set(rr.nodes.values()) & set(nodes)) > 0):
                 if rr.start > after:
@@ -798,7 +865,6 @@ class AvailabilityWindow(object):
         self.time = time
         self.resreq = resreq
         self.onlynodes = onlynodes
-        print onlynodes
 
         self.avail = {}
 

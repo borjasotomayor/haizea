@@ -12,6 +12,8 @@ import operator
 def simulate(config, statsdir):
     level = config.getLogLevel()
     log.setLevel(loglevel[level])
+    if level == "EXTREMEDEBUG":
+        log.extremedebug = True
 
     tracefile = config.getTracefile()
     injectfile = config.getInjectfile()
@@ -38,7 +40,7 @@ def simulate(config, statsdir):
         for r,i in zip(requests,images):
             r.vmimage = i
             r.vmimagesize = imagesizes[i]
-            r.resreq[constants.RES_DISK] = imagesizes[i] + r.resreq[constants.RES_MEM]
+            r.resreq.set(constants.RES_DISK, imagesizes[i] + r.resreq.get(constants.RES_MEM))
        
     resourceManager = rm.ResourceManager(requests, config)
     
@@ -68,10 +70,7 @@ def writeDataToDisk(resourcemanager, dir):
     utilratio = resourcemanager.stats.getUtilizationRatio()
     diskusage = resourcemanager.stats.getDiskUsage()
     boundedslowdown = resourcemanager.stats.getBoundedSlowdown()
-    
-    for b in boundedslowdown:
-        print b
-    
+
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     #pickle(memutilization, dir, constants.MEMUTILFILE)
     #pickle(memutilizationavg, dir, constants.MEMUTILAVGFILE)
@@ -94,7 +93,7 @@ def pickle(data, dir, file):
 
 if __name__ == "__main__":
     configfile="../configfiles/test.conf"
-    tracefile="../traces/examples/test_slowdown.csv"
+    tracefile="../traces/examples/test_simple.csv"
     imagefile="../traces/examples/1GBfiles.images"
     injectedfile="None"
     #tracefile="../traces/examples/test_inject.csv"

@@ -1,6 +1,7 @@
 import logging
 
 log = logging.getLogger("haizea")
+extremedebug = False
 
 handler = logging.StreamHandler()
 formatter = logging.Formatter('%(message)s')
@@ -28,9 +29,14 @@ def debug(msg, comp, time):
     log.debug("[%s] %s %s" % (time,comp.ljust(7),msg))
 
 def edebug(msg, comp, time):
-    if time == None:
-        time = "                      "
-    log.log(loglevel["EXTREMEDEBUG"],"[%s] %s %s" % (time,comp.ljust(7),msg))
+    # Since there is such a huge amount of edebug messages, we use the
+    # extremedebug variable to decide if we call the log function
+    # (this actually saves quite a bit of cycles spent in logging functions
+    # that ultimately determine that the message doesn't have to printed)
+    if extremedebug:
+        if time == None:
+            time = "                      "
+        log.log(loglevel["EXTREMEDEBUG"],"[%s] %s %s" % (time,comp.ljust(7),msg))
 
 def status(msg, comp, time):
     if time == None:

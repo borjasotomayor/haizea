@@ -24,9 +24,7 @@ def prettyNodemap(nodes):
 
 class ResourceTuple(object):
     def __init__(self, res):
-        self.res = {}
-        for slottype in res:
-            self.res[slottype] = res[slottype]
+        self.res = dict(res.items())
         
     def fitsIn(self, res2):
         fits = True
