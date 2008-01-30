@@ -278,7 +278,7 @@ class Scheduler(object):
                 info("Must preempt the following: %s" % preemptions, constants.SCHED, self.rm.time)
                 leases = self.slottable.findLeasesToPreempt(preemptions, req.start, req.end)
                 for l in leases:
-                    self.preempt(self.scheduledleases.getLease(l), time=req.start)
+                    self.preempt(l, time=req.start)
             
             # Schedule image transfers
             transfertype = self.rm.config.getTransferType()

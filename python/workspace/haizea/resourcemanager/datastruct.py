@@ -60,6 +60,9 @@ class ResourceTuple(object):
 
     def set(self, slottype, value):
         self.res[slottype] = value
+        
+    def isZeroOrLess(self):
+        return sum([v for v in self.res.values()]) <= 0
 
 class LeaseBase(object):
     def __init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq):

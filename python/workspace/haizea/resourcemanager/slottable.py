@@ -93,7 +93,7 @@ class SlotTable(object):
         if resreq != None:
             exclude = []
             for n in nodes:
-                if not resreq.fitsIn(nodes[n].capacity):
+                if not resreq.fitsIn(nodes[n].capacity) and not resreq.fitsIn(nodes[n].capacitywithpreemption):
                     exclude.append(n)
             for n in exclude:
                 del nodes[n]
@@ -103,6 +103,10 @@ class SlotTable(object):
     def getReservationsAt(self, time):
         res = [rr for rr in self.reservations if rr.start <= time and rr.end > time]
         return res
+    
+    def getReservationsStartingBetween(self, start, end):
+        res = [rr for rr in self.reservations if rr.start >= start and rr.start < end]
+        return res    
     
     def addReservation(self, rr):
         self.reservations.append(rr)
@@ -159,29 +163,41 @@ class SlotTable(object):
         prematureend = leasereq.prematureend
 
         self.availabilitywindow.initWindow(start, resreq)
-        self.availabilitywindow.printContents()
+        self.availabilitywindow.printContents(withpreemption = False)
+        self.availabilitywindow.printContents(withpreemption = True)
 
         mustpreempt = False
-        feasibleend, canfitnopreempt = self.availabilitywindow.findPhysNodesForVMs(numnodes, end, canpreempt = False)
-        if feasibleend != end:
+        unfeasiblewithoutpreemption = False
+        
+        fitatstart = self.availabilitywindow.fitAtStart(canpreempt = False)
+        if fitatstart < numnodes:
             if not canpreempt:
                 raise SlotFittingException, "Not enough resources in specified interval"
             else:
                 unfeasiblewithoutpreemption = True
-        else:
-            unfeasiblewithoutpreemption = False
-            
+        feasibleend, canfitnopreempt = self.availabilitywindow.findPhysNodesForVMs(numnodes, end, strictend=True, canpreempt = False)
+        fitatend = sum([n for n in canfitnopreempt.values()])
+        if fitatend < numnodes:
+            if not canpreempt:
+                raise SlotFittingException, "Not enough resources in specified interval"
+            else:
+                unfeasiblewithoutpreemption = True
+
         canfitpreempt = None
         if canpreempt:
-            feasibleendpreempt, canfitpreempt = self.availabilitywindow.findPhysNodesForVMs(numnodes, end, canpreempt = True)
-            if feasibleendpreempt != end:
+            fitatstart = self.availabilitywindow.fitAtStart(canpreempt = True)
+            if fitatstart < numnodes:
+                raise SlotFittingException, "Not enough resources in specified interval"
+            feasibleendpreempt, canfitpreempt = self.availabilitywindow.findPhysNodesForVMs(numnodes, end, strictend=True, canpreempt = True)
+            fitatend = sum([n for n in canfitpreempt.values()])
+            if fitatend < numnodes:
                 raise SlotFittingException, "Not enough resources in specified interval"
             else:
                 if unfeasiblewithoutpreemption:
                     mustpreempt = True
                 else:
                     mustpreempt = False
-        
+
         # At this point we know if the lease is feasible, and if
         # will require preemption.
         if not mustpreempt:
@@ -239,9 +255,9 @@ class SlotTable(object):
                     canfit[physnode][1] -= 1
                     vnode += 1
                     if preemptions.has_key(physnode):
-                        preemptions[physnode] += 1
+                        preemptions[physnode].incr(resreq)
                     else:
-                        preemptions[physnode] = 1
+                        preemptions[physnode] = ds.ResourceTuple(resreq.res)
                     if vnode > numnodes:
                         break
                 if vnode > numnodes:
@@ -254,136 +270,87 @@ class SlotTable(object):
 
 
     def findLeasesToPreempt(self, mustpreempt, startTime, endTime):
-        def comparepreemptability(x,y):
-            leaseIDX = x["RES_ID"]
-            leaseIDY = y["RES_ID"]
-            
-            leaseX = self.scheduler.scheduledleases.getLease(leaseIDX)
-            leaseY = self.scheduler.scheduledleases.getLease(leaseIDY)
-            if leaseX.tSubmit > leaseY.tSubmit:
+        def comparepreemptability(rrX,rrY):
+            if rrX.lease.tSubmit > rrY.lease.tSubmit:
                 return constants.BETTER
-            elif leaseX.tSubmit < leaseY.tSubmit:
+            elif rrX.lease.tSubmit < rrY.lease.tSubmit:
                 return constants.WORSE
             else:
                 return constants.EQUAL        
+            
+        def preemptedEnough(amountToPreempt):
+            for node in amountToPreempt:
+                if not amountToPreempt[node].isZeroOrLess():
+                    return False
+            return True
         
         # Get allocations at the specified time
         atstart = set()
         atmiddle = set()
-
-        for node in mustpreempt.keys():
-            preemptibleAtStart = {}
-            preemptibleAtMiddle = {}
-            cur = self.db.getCurrentAllocationsInNode(startTime, node, rsp_preemptible=True)
-            cur = cur.fetchall()
-            for alloc in cur:
-                restype=alloc["slt_id"]
-                # Make sure this allocation falls within the preemptible period
-                start = ISO.ParseDateTime(alloc["all_schedstart"])
-                end = ISO.ParseDateTime(alloc["all_schedend"])
-                if start < startTime and end > startTime:
-                    if not preemptibleAtStart.has_key(restype):
-                        preemptibleAtStart[restype] = []
-                    preemptibleAtStart[restype].append(alloc)
-                elif start < endTime and end > startTime:
-                    if not preemptibleAtMiddle.has_key(restype):
-                        preemptibleAtMiddle[restype] = []
-                    preemptibleAtMiddle[restype].append(alloc)
-
-            # Reservation parts we will be preempting
-            resparts = set()
-            leasesStart = set()
-            leasesMiddle = set()
-            respartsinfo = {}
-
-            # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
-            # These can potentially be already running, so we want to choose
-            # the ones which will be least impacted by being preempted
-            
-            if len(preemptibleAtStart) > 0:
-                # Order preemptible resources
-                for restype in preemptibleAtStart.keys():
-                    preemptibleAtStart[restype].sort(comparepreemptability)
-
-                # Start marking resources for preemption, until we've preempted
-                # all the resources db need.
-                for restype in mustpreempt[node].keys():
-                    amountToPreempt = mustpreempt[node][restype]
-                    for alloc in preemptibleAtStart[restype]:
-                        amount = alloc["all_amount"]
-                        amountToPreempt -= amount
-                        rsp_key = alloc["rsp_id"]
-                        resparts.add(rsp_key)
-                        leasesStart.add(alloc["res_id"])
-                        respartsinfo[rsp_key] = alloc
-                        if amountToPreempt <= 0:
-                            break # Ugh
-            
-            # Second step: CHOOSE RESOURCES TO PREEMPT DURING RESERVATION
-            # These cannot be running, so we greedily choose the largest resources
-            # first, to minimize the number of preempted resources. This algorithm
-            # could potentially also take into account the scheduled starting time
-            # of the preempted resource (later is better)
-            
-            if len(preemptibleAtMiddle) > 0:
-                # Find changepoints
-                changepoints = Set()
-                for restype in mustpreempt[node].keys():
-                    for alloc in preemptibleAtMiddle[restype]:
-                        start = ISO.ParseDateTime(alloc["all_schedstart"])
-                        end = ISO.ParseDateTime(alloc["all_schedend"])
-                        if start < endTime:
-                            changepoints.add(start)
-                        if end < endTime:
-                            changepoints.add(end)
-                        
-                changepoints = list(changepoints)
-                changepoints.sort()
-                
-                #print resparts
-                
-                # Go through changepoints and, at each point, make sure we have enough
-                # resources
-                for changepoint in changepoints:
-                    #print changepoint
-                    for restype in mustpreempt[node].keys():
-                        # Find allocations in that changepoint
-                        allocs = []
-                        amountToPreempt = mustpreempt[node][restype]
-                        preemptallocs = preemptibleAtMiddle[restype]
-                        if len(preemptibleAtStart) > 0:
-                            preemptallocs += preemptibleAtStart[restype]
-                        for alloc in preemptallocs:
-                            start = ISO.ParseDateTime(alloc["all_schedstart"])
-                            end = ISO.ParseDateTime(alloc["all_schedend"])
-                            rsp_id = alloc["rsp_id"]
-                            # Only choose it if we have not already decided to preempt it
-                            if start <= changepoint and changepoint < end:
-                                #print rsp_id
-                                if not rsp_id in resparts:
-                                    allocs.append(alloc)
-                                else:
-                                    amountToPreempt -= alloc["all_amount"]
-                        allocs.sort(comparepreemptability)
-                        #print [v["rsp_id"] for v in allocs]
-                        for alloc in allocs:
-                            if amountToPreempt <= 0:
-                                break # Ugh
-                            amount = alloc["all_amount"]
-                            amountToPreempt -= amount
-                            rsp_key = alloc["rsp_id"]
-                            #print rsp_key, amountToPreempt
-                            resparts.add(rsp_key)
-                            leasesMiddle.add(alloc["res_id"])
-                            respartsinfo[rsp_key] = alloc
-
-            atstart.update(leasesStart)
-            atmiddle.update(leasesMiddle)
-            
-        info("Preempting leases (at start of reservation): %s" % atstart, constants.ST, None)
-        info("Preempting leases (in middle of reservation): %s" % atmiddle, constants.ST, None)
+        nodes = set(mustpreempt.keys())
         
-        return list(atstart | atmiddle)
+        reservationsAtStart = self.getReservationsAt(startTime)
+        reservationsAtStart = [r for r in reservationsAtStart if r.isPreemptible()
+                        and len(set(r.res.keys()) & nodes)>0]
+        
+        reservationsAtMiddle = self.getReservationsStartingBetween(startTime, endTime)
+        reservationsAtMiddle = [r for r in reservationsAtMiddle if r.isPreemptible()
+                        and len(set(r.res.keys()) & nodes)>0]
+        
+        reservationsAtStart.sort(comparepreemptability)
+        reservationsAtMiddle.sort(comparepreemptability)
+        
+        amountToPreempt = {}
+        for n in mustpreempt:
+            amountToPreempt[n] = ds.ResourceTuple(mustpreempt[n].res)
+
+        # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
+        for r in reservationsAtStart:
+            # The following will really only come into play when we have
+            # multiple VMs per node
+            mustpreemptres = False
+            for n in r.res.keys():
+                # Don't need to preempt if we've already preempted all
+                # the needed resources in node n
+                if amountToPreempt.has_key(n) and not amountToPreempt[n].isZeroOrLess():
+                    amountToPreempt[n].decr(r.res[n])
+                    mustpreemptres = True
+            if mustpreemptres:
+                atstart.add(r)
+            if preemptedEnough(amountToPreempt):
+                break
+        
+        # Second step: CHOOSE RESOURCES TO PREEMPT DURING RESERVATION
+        if len(reservationsAtMiddle)>0:
+            changepoints = set()
+            for r in reservationsAtMiddle:
+                changepoints.add(r.start)
+            changepoints = list(changepoints)
+            changepoints.sort()        
+            
+            for cp in changepoints:
+                amountToPreempt = {}
+                for n in mustpreempt:
+                    amountToPreempt[n] = ds.ResourceTuple(mustpreempt[n].res)
+                reservations = [r for r in reservationsAtMiddle 
+                                if r.start <= cp and cp < r.end]
+                for r in reservations:
+                    mustpreemptres = False
+                    for n in r.res.keys():
+                        if amountToPreempt.has_key(n) and not amountToPreempt[n].isZeroOrLess():
+                            amountToPreempt[n].decr(r.res[n])
+                            mustpreemptres = True
+                    if mustpreemptres:
+                        atmiddle.add(r)
+                    if preemptedEnough(amountToPreempt):
+                        break
+            
+        info("Preempting leases (at start of reservation): %s" % [r.lease.leaseID for r in atstart], constants.ST, None)
+        info("Preempting leases (in middle of reservation): %s" % [r.lease.leaseID for r in atmiddle], constants.ST, None)
+        
+        leases = [r.lease for r in atstart|atmiddle]
+        
+        return leases
 
 
     def fitBestEffort(self, lease, earliest, canreserve, suspendable, preemptible, canmigrate, mustresume):
@@ -744,8 +711,8 @@ class SlotTable(object):
             canfitpreemptionX = canfit[x][1]
             hasPreemptibleX = canfitpreemptionX > canfitnopreemptionX
             
-            canfitnopreemptionY = canfit[x][0]
-            canfitpreemptionY = canfit[x][1]
+            canfitnopreemptionY = canfit[y][0]
+            canfitpreemptionY = canfit[y][1]
             hasPreemptibleY = canfitpreemptionY > canfitnopreemptionY
           
             if hasPreemptibleX and not hasPreemptibleY:
@@ -851,6 +818,7 @@ class AvailabilityWindow(object):
         self.time = time
         self.resreq = resreq
         self.onlynodes = onlynodes
+        print onlynodes
 
         self.avail = {}
 
@@ -887,14 +855,19 @@ class AvailabilityWindow(object):
                 if prevavail.getCanfit(canpreempt=False) > fits or prevavail.getCanfit(canpreempt=True) > fitswithpreemption:
                     self.avail[node].append(AvailEntry(p, capacity, capacitywithpreemption, self.resreq))
     
-    def fitAtStart(self, nodes = None):
+    def fitAtStart(self, nodes = None, canpreempt = False):
         if nodes != None:
             avail = [v for (k,v) in self.avail.items() if k in nodes]
         else:
             avail = self.avail.values()
-        return sum([e[0].canfit for e in avail])
-    
-    def findPhysNodesForVMs(self, numnodes, maxend, canpreempt=False):
+        if canpreempt:
+            return sum([e[0].canfitpreempt for e in avail])
+        else:
+            return sum([e[0].canfit for e in avail])
+        
+    # TODO: Also return the amount of resources that would have to be
+    # preempted in each physnode
+    def findPhysNodesForVMs(self, numnodes, maxend, strictend=False, canpreempt=False):
         # Returns the physical nodes that can run all VMs, and the
         # time at which the VMs must end
         canfit = dict([(n, v[0].getCanfit(canpreempt)) for (n,v) in self.avail.items()])
@@ -903,7 +876,10 @@ class AvailabilityWindow(object):
             entries += [(n,e) for e in self.avail[n][1:]]
         getTime = lambda x: x[1].time
         entries.sort(key=getTime)
-        end = maxend
+        if strictend:
+            end = None
+        else:
+            end = maxend
         for e in entries:
             physnode = e[0]
             entry = e[1]
@@ -912,15 +888,15 @@ class AvailabilityWindow(object):
                 # Can run to its maximum duration
                 break
             else:
-                diff = canfit[physnode] - entry.canfit
+                diff = canfit[physnode] - entry.getCanfit(canpreempt)
                 totalcanfit = sum([n for n in canfit.values()]) - diff
-                if totalcanfit < numnodes:
+                if totalcanfit < numnodes and not strictend:
                     # Not enough resources. Must end here
                     end = entry.time
                     break
                 else:
                     # Update canfit
-                    canfit[physnode] = entry.canfit
+                    canfit[physnode] = entry.getCanfit(canpreempt)
 
         # Filter out nodes where we can't fit any vms
         canfit = dict([(n,v) for (n,v) in canfit.items() if v > 0])
@@ -928,13 +904,17 @@ class AvailabilityWindow(object):
         return end, canfit
             
                     
-    def printContents(self, nodes = None):
+    def printContents(self, nodes = None, withpreemption = False):
         if nodes == None:
             physnodes = self.avail.keys()
         else:
             physnodes = [k for k in self.avail.keys() if k in nodes]
         physnodes.sort()
-        edebug("AVAILABILITY WINDOW (time=%s, nodes=%s)"%(self.time,nodes), constants.ST, None)
+        if withpreemption:
+            p = "(with preemption)"
+        else:
+            p = "(without preemption)"
+        edebug("AVAILABILITY WINDOW (time=%s, nodes=%s) %s"%(self.time, nodes, p), constants.ST, None)
         for n in physnodes:
             contents = "Node %i --- " % n
             for x in self.avail[n]:
@@ -943,9 +923,15 @@ class AvailabilityWindow(object):
                 if x.avail == None and x.availpreempt == None:
                     contents += "END "
                 else:
-                    for s in x.avail.res.keys():
-                        contents += "%s:%.2f " % (constants.res_str(s),x.avail.res[s])
-                contents += "} (Fits: %i) ]  " % x.canfit
+                    if withpreemption:
+                        res = x.availpreempt.res
+                        canfit = x.canfitpreempt
+                    else:
+                        res = x.avail.res
+                        canfit = x.canfit
+                    for s in res.keys():
+                        contents += "%s:%.2f " % (constants.res_str(s),res[s])
+                contents += "} (Fits: %i) ]  " % canfit
             edebug(contents, constants.ST, None)
                 
 
