@@ -75,6 +75,7 @@ class ResourceManager(object):
             if (self.time - prevstatustime).minutes >= 15:
                 status("STATUS ---Begin---", constants.RM, self.time)
                 status("STATUS Completed best-effort leases: %i" % self.stats.besteffortcompletedcount, constants.RM, self.time)
+                status("STATUS Queue: %s" % self.scheduler.queue.q, constants.RM, self.time)
                 status("STATUS Queue size: %i" % self.stats.queuesizecount, constants.RM, self.time)
                 status("STATUS Best-effort reservations: %i" % self.scheduler.numbesteffortres, constants.RM, self.time)
                 status("STATUS Accepted exact leases: %i" % self.stats.exactacceptedcount, constants.RM, self.time)

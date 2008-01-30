@@ -4,7 +4,6 @@ from operator import attrgetter, itemgetter
 import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.datastruct as ds
 from workspace.haizea.common.log import info, debug, warning, edebug
-from pysqlite2.dbapi2 import IntegrityError
 from workspace.haizea.common.utils import roundDateTimeDelta
 
 class SlotFittingException(Exception):
@@ -109,6 +108,8 @@ class SlotTable(object):
         return res    
     
     def addReservation(self, rr):
+        if rr == None:
+            print "DANGER WILL ROBINSON!!!!!!!!!!!!!!!!"
         self.reservations.append(rr)
         self.dirty()
 
@@ -605,7 +606,7 @@ class SlotTable(object):
     def suspend(self, lease, time):
         (vmrr, susprr) = lease.getLastVMRR()
         
-        suspendtime = self.getSuspendTime(lease.resreq[constants.RES_MEM])
+        suspendtime = self.getSuspendTime(lease.resreq.res[constants.RES_MEM])
         if vmrr.end != vmrr.realend:
             vmrr.end = time - suspendtime
         else:
@@ -617,11 +618,22 @@ class SlotTable(object):
         if susprr != None:
             lease.removeRR(susprr)
             self.removeReservation(susprr)
-
-        newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, mappings, [rsp_id])
+        
+        mappings = vmrr.nodes
+        suspres = {}
+        for n in mappings.values():
+            r = {}
+            r[constants.RES_CPU] = 0
+            r[constants.RES_MEM] = vmrr.res[n].res[constants.RES_MEM]
+            r[constants.RES_NETIN] = 0
+            r[constants.RES_NETOUT] = 0
+            r[constants.RES_DISK] = vmrr.res[n].res[constants.RES_DISK]
+            suspres[n] = ds.ResourceTuple(r)
+        
+        newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, suspres, mappings)
         newsusprr.state = constants.RES_STATE_SCHEDULED
         lease.appendRR(newsusprr)
-        self.addReservation(susprr)
+        self.addReservation(newsusprr)
             
     def getSuspendTime(self, memsize):
         suspendrate = self.rm.config.getSuspendResumeRate()
@@ -745,38 +757,6 @@ class SlotTable(object):
         # Order nodes
         nodes.sort(comparenodes)
         return nodes
-
-
-    def genUtilizationStats(self, start, slottype=constants.RES_CPU, end=None):
-        changepoints = self.db.findChangePoints(start, end)
-        accumUtil=0
-        prevTime = None
-        startVM = None
-        stats = []
-        for point in changepoints:
-            cur = self.db.getUtilization(point["time"], type=slottype)
-            totalcapacity = 0
-            totalused =0
-            for row in cur:
-                totalcapacity += row["sl_capacity"]
-                totalused += row["used"]
-            utilization = float(totalused) / totalcapacity
-            time = ISO.ParseDateTime(point["time"])
-            seconds = (time-start).seconds
-            if startVM == None and utilization > 0:
-                startVM = seconds
-            if prevTime != None:
-                timediff = time - prevTime
-                weightedUtilization = prevUtilization*timediff.seconds 
-                accumUtil += weightedUtilization
-                average = accumUtil/seconds
-            else:
-                average = utilization
-            stats.append((seconds, None, utilization, average))
-            prevTime = time
-            prevUtilization = utilization
-        
-        return stats
         
     def isFull(self, time):
         nodes = self.getAvailability(time)

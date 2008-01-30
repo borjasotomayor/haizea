@@ -229,18 +229,10 @@ class ResourceReservationBase(object):
         logfun("Real End       : %s" % self.realend, DS, None)
         logfun("State          : %s" % rstate_str(self.state), DS, None)
         logfun("Resources      : %s" % self.res, DS, None)
-        
-    def removeDBentries(self):
-        for rsp_id in self.db_rsp_ids:
-            self.lease.scheduler.slottable.removeReservationPart(rsp_id)
-            
-    def updateDBentry(self):
-        self.lease.scheduler.slottable.updateStartTimes(self.db_rsp_ids, self.start)
-        self.lease.scheduler.slottable.updateEndTimes(self.db_rsp_ids, self.end)
-        
+                
 class FileTransferResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start=None, end=None, db_rsp_ids=None):
-        ResourceReservationBase.__init__(self, lease, start, end, db_rsp_ids)
+    def __init__(self, lease, res, start=None, end=None):
+        ResourceReservationBase.__init__(self, lease, start, end, res)
         self.deadline = None
         self.file = None
         # Dictionary of  physnode -> [ (leaseID, vnode)* ]
@@ -357,16 +349,6 @@ class LeaseTable(object):
             return self.entries.values()
         else:
             return [e for e in self.entries.values() if isinstance(e,type)]
-        
-    def getLeaseFromRSPIDs(self, rsp_ids):
-        ids = set(rsp_ids)
-        leases = []
-        for l in self.entries.values():
-            for rr in l.rr:
-                if len(ids & set(rr.db_rsp_ids)) > 0:
-                    leases.append(l)
-                    break
-        return leases
     
     def getNextLeasesScheduledInNodes(self, time, nodes):
         nodes = set(nodes)
