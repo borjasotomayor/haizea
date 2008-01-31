@@ -5,7 +5,7 @@ import workspace.haizea.traces.readers as tracereaders
 import workspace.haizea.common.constants as constants
 import workspace.haizea.common.utils as utils
 from workspace.haizea.common.config import RMConfig
-from workspace.haizea.common.log import log, loglevel
+from workspace.haizea.common.log import log, loglevel, setED
 from pickle import Pickler, Unpickler
 import operator
 
@@ -13,8 +13,8 @@ def simulate(config, statsdir):
     level = config.getLogLevel()
     log.setLevel(loglevel[level])
     if level == "EXTREMEDEBUG":
-        log.extremedebug = True
-
+        setED(True)
+        
     tracefile = config.getTracefile()
     injectfile = config.getInjectfile()
     imagefile = config.getImagefile()

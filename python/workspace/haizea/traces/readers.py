@@ -61,7 +61,7 @@ def CSV(tracefile, config):
                 vmimage = fields[2] # 2: uri
                 vmimagesize = int(fields[3]) # 3: size
                 numnodes = int(fields[4]) # 4: numNodes
-                resreq = {}
+                resreq = [None,None,None,None,None] # TODO: Hardcoding == bad
                 resreq[constants.RES_CPU] = 1 # One CPU per VM
                 resreq[constants.RES_MEM] = int(fields[5]) # 5: memory
                 resreq[constants.RES_NETIN] = 0
@@ -104,7 +104,7 @@ def GWF(tracefile, config):
                 vmimage = "NOIMAGE"
                 vmimagesize = 600 # Arbitrary
                 numnodes = int(fields[7]) # 7: reqNProcs
-                resreq = {}
+                resreq = [None,None,None,None,None] # TODO: Hardcoding == bad
                 resreq[constants.RES_CPU] = 1 # One CPU per VM
                 resreq[constants.RES_MEM] = 512 # Arbitrary (2 VMs per node)
                 resreq[constants.RES_NETIN] = 0
@@ -137,7 +137,7 @@ def SWF(tracefile, config):
                 vmimage = "NOIMAGE"
                 vmimagesize = 600 # Arbitrary
                 numnodes = int(fields[7]) # 7: reqNProcs
-                resreq = {}
+                resreq = [None,None,None,None,None] # TODO: Hardcoding == bad
                 resreq[constants.RES_CPU] = 1 # One CPU per VM
                 resreq[constants.RES_MEM] = 1024 
                 resreq[constants.RES_NETIN] = 0

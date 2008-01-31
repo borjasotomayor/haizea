@@ -8,11 +8,11 @@ LEASE_BESTEFFORT = 0
 LEASE_EXACT = 1
 
 # Types of resources
-RES_CPU = 1
-RES_MEM = 2
-RES_NETIN = 3
-RES_NETOUT = 4
-RES_DISK = 5
+RES_CPU = 0
+RES_MEM = 1
+RES_NETIN = 2
+RES_NETOUT = 3
+RES_DISK = 4
 
 def res_str(s):
     if s == RES_CPU:

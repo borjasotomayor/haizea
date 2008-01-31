@@ -25,13 +25,12 @@ def prettyNodemap(nodes):
 
 class ResourceTuple(object):
     def __init__(self, res):
-        self.res = dict(res.items())
+        self.res = res[:]
         
     def fitsIn(self, res2):
+        r = zip(self.res, res2.res)
         fits = True
-        for slottype in self.res:
-            needed = self.res[slottype]
-            available = res2.res[slottype]
+        for (needed,available) in r:
             if needed > available:
                 fits = False
                 break
@@ -39,21 +38,20 @@ class ResourceTuple(object):
     
     def getNumFitsIn(self, res2):
         canfit = 10000 # Arbitrarily large
-        for slottype in self.res:
-            needed = self.res[slottype]
+        r = zip(self.res, res2.res)
+        for (needed,available) in r:
             if needed != 0:
-                available = res2.res[slottype]
                 f = int(available / needed)
                 if f < canfit:
                     canfit = f
         return canfit
     
     def decr(self, res2):
-        for slottype in res2.res:
+        for slottype,x in enumerate(self.res):
             self.res[slottype] -= res2.res[slottype]
 
     def incr(self, res2):
-        for slottype in res2.res:
+        for slottype,x in enumerate(self.res):
             self.res[slottype] += res2.res[slottype]
             
     def get(self, slottype):
@@ -63,7 +61,7 @@ class ResourceTuple(object):
         self.res[slottype] = value
         
     def isZeroOrLess(self):
-        return sum([v for v in self.res.values()]) <= 0
+        return sum([v for v in self.res]) <= 0
 
 class LeaseBase(object):
     def __init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq):
@@ -86,7 +84,7 @@ class LeaseBase(object):
         logfun("VM image       : %s" % self.vmimage, DS, None)
         logfun("VM image size  : %s" % self.vmimagesize, DS, None)
         logfun("Num nodes      : %s" % self.numnodes, DS, None)
-        logfun("Resource req   : %s" % "  ".join([res_str(r[0]) + ": " + `r[1]` for r in self.resreq.res.items()]), DS, None)
+        logfun("Resource req   : %s" % "  ".join([res_str(i) + ": " + `x` for i,x in enumerate(self.resreq.res)]), DS, None)
         logfun("VM image map   : %s" % prettyNodemap(self.vmimagemap), DS, None)
         logfun("Mem image map  : %s" % prettyNodemap(self.memimagemap), DS, None)
 

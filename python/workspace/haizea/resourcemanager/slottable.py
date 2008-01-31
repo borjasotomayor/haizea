@@ -16,12 +16,36 @@ class CriticalSlotFittingException(Exception):
 
 
 class Node(object):
-    def __init__(self, capacity, capacitywithpreemption=None):
+    def __init__(self, capacity, capacitywithpreemption):
         self.capacity = ds.ResourceTuple(capacity)
-        if capacitywithpreemption == None:
-            self.capacitywithpreemption = ds.ResourceTuple(capacity)
-        else:
-            self.capacitywithpreemption = ds.ResourceTuple(capacitywithpreemption)
+        self.capacitywithpreemption = ds.ResourceTuple(capacitywithpreemption)
+
+class NodeList(object):
+    def __init__(self):
+        self.nodelist = []
+
+    def add(self, node):
+        self.nodelist.append(node)
+        
+    def __getitem__(self, n):
+        return self.nodelist[n-1]
+
+    def copy(self):
+        nodelist = NodeList()
+        for n in self.nodelist:
+            nodelist.add(Node(n.capacity.res, n.capacitywithpreemption.res))
+        return nodelist
+
+    def toPairList(self, onlynodes=None):
+        nodelist = []
+        for i,n in enumerate(self.nodelist):
+            if onlynodes == None or (onlynodes != None and i+1 in onlynodes):
+                nodelist.append((i+1,Node(n.capacity.res, n.capacitywithpreemption.res)))
+        return nodelist
+    
+    def toDict(self):
+        nodelist = self.copy()
+        return dict([(i+1,v) for i,v in enumerate(nodelist)])
         
 class KeyValueWrapper(object):
     def __init__(self, key, value):
@@ -35,7 +59,7 @@ class SlotTable(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.rm = scheduler.rm
-        self.nodes = {}
+        self.nodes = NodeList()
         self.reservations = []
         self.reservationsByStart = []
         self.reservationsByEnd = []
@@ -46,7 +70,7 @@ class SlotTable(object):
         resources = self.rm.config.getResourcesPerPhysNode()
         bandwidth = self.rm.config.getBandwidth()
         
-        capacity = {}
+        capacity = [None, None, None, None, None] # TODO: Hardcoding == bad
         for r in resources:
             resourcename = r.split(",")[0]
             resourcecapacity = r.split(",")[1]
@@ -54,12 +78,17 @@ class SlotTable(object):
             
         # Create nodes
         for n in range(numnodes):
-            self.nodes[n+1] = Node(capacity)
+            self.nodes.add(Node(capacity, capacity))
                 
         # Create image nodes
-        imgcapacity = { constants.RES_CPU:0, constants.RES_MEM:0, constants.RES_NETIN:0, constants.RES_NETOUT : bandwidth, constants.RES_DISK:0 }
-        self.nodes[4200] = Node(imgcapacity)
-        self.nodes[4201] = Node(imgcapacity)  
+        imgcapacity = [None, None, None, None, None] # TODO: Hardcoding == bad
+        imgcapacity[constants.RES_CPU]=0
+        imgcapacity[constants.RES_MEM]=0
+        imgcapacity[constants.RES_NETIN]=0
+        imgcapacity[constants.RES_NETOUT]=bandwidth
+        imgcapacity[constants.RES_DISK]=0
+        self.nodes.add(Node(imgcapacity, imgcapacity))
+        self.nodes.add(Node(imgcapacity, imgcapacity))
         
         self.availabilitywindow = AvailabilityWindow(self)
 
@@ -70,9 +99,7 @@ class SlotTable(object):
         self.changepointcache = None
         
     def getAvailabilityCacheMiss(self, time):
-        nodes = {}
-        for n in self.nodes:
-            nodes[n] = Node(self.nodes[n].capacity.res)
+        nodes = self.nodes.copy()
         reservations = self.getReservationsAt(time)
         # Find how much resources are available on each node
         for r in reservations:
@@ -87,34 +114,30 @@ class SlotTable(object):
         if not self.availabilitycache.has_key(time):
             self.getAvailabilityCacheMiss(time)
             # Cache miss
-
-        nodes = dict([(k, Node(v.capacity.res, v.capacitywithpreemption.res)) for (k,v) in self.availabilitycache[time].items()])
+            
+        if onlynodes != None:
+            onlynodes = set(onlynodes)
+            
+        nodes = self.availabilitycache[time].toPairList(onlynodes)
         #nodes = {}
         #for n in self.availabilitycache[time]:
         #    nodes[n] = Node(self.availabilitycache[time][n].capacity.res, self.availabilitycache[time][n].capacitywithpreemption.res)
 
-        # Filter nodes
-        if onlynodes != None:
-            allnodes = set(nodes.keys())
-            onlynodes = set(onlynodes)
-            exclude = allnodes - onlynodes
-            for n in exclude:
-                del nodes[n]
-
         # Keep only those nodes with enough resources
         if resreq != None:
-            exclude = []
-            for n in nodes:
-                if not resreq.fitsIn(nodes[n].capacity) and not resreq.fitsIn(nodes[n].capacitywithpreemption):
-                    exclude.append(n)
-            for n in exclude:
-                del nodes[n]
+            newnodes = []
+            for i,node in nodes:
+                if not resreq.fitsIn(node.capacity) and not resreq.fitsIn(node.capacitywithpreemption):
+                    pass
+                else:
+                    newnodes.append((i,node))
+            nodes = newnodes
         
-        return nodes
+        return dict(nodes)
     
     def getUtilization(self, time, restype=constants.RES_CPU):
         nodes = self.getAvailability(time)
-        total = sum([n.capacity.get(restype) for n in self.nodes.values()])
+        total = sum([n.capacity.get(restype) for n in self.nodes.nodelist])
         avail = sum([n.capacity.get(restype) for n in nodes.values()])
         return 1.0 - (float(avail)/total)
             
@@ -604,7 +627,7 @@ class SlotTable(object):
         if mustresume:
             resmres = {}
             for n in mappings.values():
-                r = {}
+                r = [None, None, None, None, None]  # TODO: Hardcoding == bad
                 r[constants.RES_CPU] = 0
                 r[constants.RES_MEM] = resreq.res[constants.RES_MEM]
                 r[constants.RES_NETIN] = 0
@@ -618,7 +641,7 @@ class SlotTable(object):
         if mustsuspend:
             suspres = {}
             for n in mappings.values():
-                r = {}
+                r = [None, None, None, None, None]  # TODO: Hardcoding == bad
                 r[constants.RES_CPU] = 0
                 r[constants.RES_MEM] = resreq.res[constants.RES_MEM]
                 r[constants.RES_NETIN] = 0
@@ -700,7 +723,7 @@ class SlotTable(object):
         mappings = vmrr.nodes
         suspres = {}
         for n in mappings.values():
-            r = {}
+            r = [None, None, None, None, None] # TODO: Hardcoding == bad
             r[constants.RES_CPU] = 0
             r[constants.RES_MEM] = vmrr.res[n].res[constants.RES_MEM]
             r[constants.RES_NETIN] = 0
@@ -997,8 +1020,8 @@ class AvailabilityWindow(object):
                         else:
                             res = x.avail.res
                             canfit = x.canfit
-                        for s in res.keys():
-                            contents += "%s:%.2f " % (constants.res_str(s),res[s])
+                        for i,x in enumerate(res):
+                            contents += "%s:%.2f " % (constants.res_str(i),x)
                     contents += "} (Fits: %i) ]  " % canfit
                 edebug(contents, constants.ST, None)
                 
