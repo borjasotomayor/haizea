@@ -4,6 +4,7 @@ from operator import attrgetter, itemgetter
 import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.datastruct as ds
 from workspace.haizea.common.log import info, debug, warning, edebug
+import workspace.haizea.common.log as log
 from workspace.haizea.common.utils import roundDateTimeDelta
 import bisect
 
@@ -67,26 +68,30 @@ class SlotTable(object):
         # ashamed of having outdated caches!
         self.availabilitycache = {}
         self.changepointcache = None
+        
+    def getAvailabilityCacheMiss(self, time):
+        nodes = {}
+        for n in self.nodes:
+            nodes[n] = Node(self.nodes[n].capacity.res)
+        reservations = self.getReservationsAt(time)
+        # Find how much resources are available on each node
+        for r in reservations:
+            for node in r.res:
+                nodes[node].capacity.decr(r.res[node])
+                if not r.isPreemptible():
+                    nodes[node].capacitywithpreemption.decr(r.res[node])                        
+            
+        self.availabilitycache[time] = nodes
 
     def getAvailability(self, time, resreq=None, onlynodes=None):
         if not self.availabilitycache.has_key(time):
+            self.getAvailabilityCacheMiss(time)
             # Cache miss
-            nodes = {}
-            for n in self.nodes:
-                nodes[n] = Node(self.nodes[n].capacity.res)
-            reservations = self.getReservationsAt(time)
-            # Find how much resources are available on each node
-            for r in reservations:
-                for node in r.res:
-                    nodes[node].capacity.decr(r.res[node])
-                    if not r.isPreemptible():
-                        nodes[node].capacitywithpreemption.decr(r.res[node])                        
-                
-            self.availabilitycache[time] = nodes
 
-        nodes = {}
-        for n in self.availabilitycache[time]:
-            nodes[n] = Node(self.availabilitycache[time][n].capacity.res, self.availabilitycache[time][n].capacitywithpreemption.res)
+        nodes = dict([(k, Node(v.capacity.res, v.capacitywithpreemption.res)) for (k,v) in self.availabilitycache[time].items()])
+        #nodes = {}
+        #for n in self.availabilitycache[time]:
+        #    nodes[n] = Node(self.availabilitycache[time][n].capacity.res, self.availabilitycache[time][n].capacitywithpreemption.res)
 
         # Filter nodes
         if onlynodes != None:
@@ -106,7 +111,13 @@ class SlotTable(object):
                 del nodes[n]
         
         return nodes
-        
+    
+    def getUtilization(self, time, restype=constants.RES_CPU):
+        nodes = self.getAvailability(time)
+        total = sum([n.capacity.get(restype) for n in self.nodes.values()])
+        avail = sum([n.capacity.get(restype) for n in nodes.values()])
+        return 1.0 - (float(avail)/total)
+            
 #    def getReservationsAt(self, time):
 #        res = [rr for rr in self.reservations if rr.start <= time and rr.end > time]
 #        return res
@@ -230,7 +241,7 @@ class SlotTable(object):
         resreq = leasereq.resreq
         prematureend = leasereq.prematureend
 
-        self.availabilitywindow.initWindow(start, resreq)
+        self.availabilitywindow.initWindow(start, resreq, canpreempt=canpreempt)
         self.availabilitywindow.printContents(withpreemption = False)
         self.availabilitywindow.printContents(withpreemption = True)
 
@@ -635,7 +646,7 @@ class SlotTable(object):
         suspendthreshold = self.rm.config.getSuspendThreshold()
         
         for p in changepoints:
-            self.availabilitywindow.initWindow(p[0], resreq, p[1])
+            self.availabilitywindow.initWindow(p[0], resreq, p[1], canpreempt = False)
             self.availabilitywindow.printContents()
             
             if self.availabilitywindow.fitAtStart() >= numnodes:
@@ -723,7 +734,7 @@ class SlotTable(object):
         cp = [earliest] + cp
         newstart = None
         for p in cp:
-            self.availabilitywindow.initWindow(p, lease.resreq)
+            self.availabilitywindow.initWindow(p, lease.resreq, canpreempt=False)
             self.availabilitywindow.printContents()
             if self.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
                 (end, canfit) = self.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
@@ -843,7 +854,10 @@ class AvailEntry(object):
             self.canfitpreempt = 0
         else:
             self.canfit = resreq.getNumFitsIn(avail)
-            self.canfitpreempt = resreq.getNumFitsIn(availpreempt)
+            if availpreempt == None:
+                self.canfitpreempt = 0
+            else:
+                self.canfitpreempt = resreq.getNumFitsIn(availpreempt)
         
     def getCanfit(self, canpreempt):
         if canpreempt:
@@ -861,7 +875,7 @@ class AvailabilityWindow(object):
         self.avail = None
         
     # Create avail structure
-    def initWindow(self, time, resreq, onlynodes = None):
+    def initWindow(self, time, resreq, onlynodes = None, canpreempt=False):
         self.time = time
         self.resreq = resreq
         self.onlynodes = onlynodes
@@ -873,7 +887,10 @@ class AvailabilityWindow(object):
 
         for node in availatstart:
             capacity = availatstart[node].capacity
-            capacitywithpreemption = availatstart[node].capacitywithpreemption
+            if canpreempt:
+                capacitywithpreemption = availatstart[node].capacitywithpreemption
+            else:
+                capacitywithpreemption = None
             self.avail[node] = [AvailEntry(self.time,capacity,capacitywithpreemption, self.resreq)]
         
         # Determine the availability at the subsequent change points
@@ -894,12 +911,16 @@ class AvailabilityWindow(object):
             # Decrease in the window
             for node in newnodes:
                 capacity = availatpoint[node].capacity
-                capacitywithpreemption = availatpoint[node].capacitywithpreemption
                 fits = self.resreq.getNumFitsIn(capacity)
-                fitswithpreemption = self.resreq.getNumFitsIn(capacitywithpreemption)
+                if canpreempt:
+                    capacitywithpreemption = availatpoint[node].capacitywithpreemption
+                    fitswithpreemption = self.resreq.getNumFitsIn(capacitywithpreemption)
                 prevavail = self.avail[node][-1]
-                if prevavail.getCanfit(canpreempt=False) > fits or prevavail.getCanfit(canpreempt=True) > fitswithpreemption:
+                if not canpreempt and prevavail.getCanfit(canpreempt=False) > fits:
                     self.avail[node].append(AvailEntry(p, capacity, capacitywithpreemption, self.resreq))
+                elif canpreempt and (prevavail.getCanfit(canpreempt=False) > fits or prevavail.getCanfit(canpreempt=True) > fitswithpreemption):
+                    self.avail[node].append(AvailEntry(p, capacity, capacitywithpreemption, self.resreq))
+                  
     
     def fitAtStart(self, nodes = None, canpreempt = False):
         if nodes != None:
@@ -951,34 +972,35 @@ class AvailabilityWindow(object):
             
                     
     def printContents(self, nodes = None, withpreemption = False):
-        if nodes == None:
-            physnodes = self.avail.keys()
-        else:
-            physnodes = [k for k in self.avail.keys() if k in nodes]
-        physnodes.sort()
-        if withpreemption:
-            p = "(with preemption)"
-        else:
-            p = "(without preemption)"
-        edebug("AVAILABILITY WINDOW (time=%s, nodes=%s) %s"%(self.time, nodes, p), constants.ST, None)
-        for n in physnodes:
-            contents = "Node %i --- " % n
-            for x in self.avail[n]:
-                contents += "[ %s " % x.time
-                contents += "{ "
-                if x.avail == None and x.availpreempt == None:
-                    contents += "END "
-                else:
-                    if withpreemption:
-                        res = x.availpreempt.res
-                        canfit = x.canfitpreempt
+        if log.extremedebug:
+            if nodes == None:
+                physnodes = self.avail.keys()
+            else:
+                physnodes = [k for k in self.avail.keys() if k in nodes]
+            physnodes.sort()
+            if withpreemption:
+                p = "(with preemption)"
+            else:
+                p = "(without preemption)"
+            edebug("AVAILABILITY WINDOW (time=%s, nodes=%s) %s"%(self.time, nodes, p), constants.ST, None)
+            for n in physnodes:
+                contents = "Node %i --- " % n
+                for x in self.avail[n]:
+                    contents += "[ %s " % x.time
+                    contents += "{ "
+                    if x.avail == None and x.availpreempt == None:
+                        contents += "END "
                     else:
-                        res = x.avail.res
-                        canfit = x.canfit
-                    for s in res.keys():
-                        contents += "%s:%.2f " % (constants.res_str(s),res[s])
-                contents += "} (Fits: %i) ]  " % canfit
-            edebug(contents, constants.ST, None)
+                        if withpreemption:
+                            res = x.availpreempt.res
+                            canfit = x.canfitpreempt
+                        else:
+                            res = x.avail.res
+                            canfit = x.canfit
+                        for s in res.keys():
+                            contents += "%s:%.2f " % (constants.res_str(s),res[s])
+                    contents += "} (Fits: %i) ]  " % canfit
+                edebug(contents, constants.ST, None)
                 
 
                 

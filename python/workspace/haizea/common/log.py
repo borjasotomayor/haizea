@@ -3,6 +3,10 @@ import logging
 log = logging.getLogger("haizea")
 extremedebug = False
 
+def setED(x):
+    global extremedebug
+    extremedebug = x
+
 handler = logging.StreamHandler()
 formatter = logging.Formatter('%(message)s')
 handler.setFormatter(formatter)

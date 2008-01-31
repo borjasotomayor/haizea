@@ -1,5 +1,6 @@
 from workspace.haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE
 from workspace.haizea.common.log import edebug
+import workspace.haizea.common.log as log
 from workspace.haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
 from mx.DateTime import TimeDelta
@@ -37,13 +38,15 @@ class ResourceTuple(object):
         return fits
     
     def getNumFitsIn(self, res2):
-        canfit = []
+        canfit = 10000 # Arbitrarily large
         for slottype in self.res:
             needed = self.res[slottype]
             if needed != 0:
                 available = res2.res[slottype]
-                canfit.append(int(available / needed))
-        return min(canfit)
+                f = int(available / needed)
+                if f < canfit:
+                    canfit = f
+        return canfit
     
     def decr(self, res2):
         for slottype in res2.res:
@@ -140,14 +143,15 @@ class ExactLease(LeaseBase):
         self.prematureend = prematureend
         
     def printContents(self, logfun=edebug):
-        logfun("__________________________________________________", DS, None)
-        LeaseBase.printContents(self, logfun)
-        logfun("Type           : EXACT", DS, None)
-        logfun("Start time     : %s" % self.start, DS, None)
-        logfun("End time       : %s" % self.end, DS, None)
-        logfun("Early end time : %s" % self.prematureend, DS, None)
-        self.printRR(logfun)
-        logfun("--------------------------------------------------", DS, None)
+        if not (logfun == edebug and not log.extremedebug):
+            logfun("__________________________________________________", DS, None)
+            LeaseBase.printContents(self, logfun)
+            logfun("Type           : EXACT", DS, None)
+            logfun("Start time     : %s" % self.start, DS, None)
+            logfun("End time       : %s" % self.end, DS, None)
+            logfun("Early end time : %s" % self.prematureend, DS, None)
+            self.printRR(logfun)
+            logfun("--------------------------------------------------", DS, None)
         
     def addRuntimeOverhead(self, percent):
         factor = 1 + float(percent)/100
@@ -172,16 +176,17 @@ class BestEffortLease(LeaseBase):
         self.imagesavail = None        
 
     def printContents(self, logfun=edebug):
-        logfun("__________________________________________________", DS, None)
-        LeaseBase.printContents(self, logfun)
-        logfun("Type           : BEST-EFFORT", DS, None)
-        logfun("Max duration   : %s" % self.maxdur, DS, None)
-        logfun("Rem duration   : %s" % self.remdur, DS, None)
-        logfun("Real duration  : %s" % self.realremdur, DS, None)
-        logfun("Max queue time : %s" % self.maxqueuetime, DS, None)
-        logfun("Images Avail @ : %s" % self.imagesavail, DS, None)
-        self.printRR(logfun)
-        logfun("--------------------------------------------------", DS, None)
+        if not (logfun == edebug and not log.extremedebug):
+            logfun("__________________________________________________", DS, None)
+            LeaseBase.printContents(self, logfun)
+            logfun("Type           : BEST-EFFORT", DS, None)
+            logfun("Max duration   : %s" % self.maxdur, DS, None)
+            logfun("Rem duration   : %s" % self.remdur, DS, None)
+            logfun("Real duration  : %s" % self.realremdur, DS, None)
+            logfun("Max queue time : %s" % self.maxqueuetime, DS, None)
+            logfun("Images Avail @ : %s" % self.imagesavail, DS, None)
+            self.printRR(logfun)
+            logfun("--------------------------------------------------", DS, None)
 
     def addRuntimeOverhead(self, percent):
         factor = 1 + float(percent)/100

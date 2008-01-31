@@ -379,7 +379,6 @@ class Scheduler(object):
             canreserve = self.canReserveBestEffort()
             (resmrr, vmrr, susprr, reservation) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, preemptible=preemptible, canmigrate=canmigrate, mustresume=mustresume)
             if req.maxqueuetime != None:
-                self.slottable.rollback()
                 msg = "Lease %i is being scheduled, but is meant to be cancelled at %s" % (req.leaseID, req.maxqueuetime)
                 warning(msg, constants.SCHED, self.rm.time)
                 raise CancelException, msg
@@ -474,8 +473,10 @@ class Scheduler(object):
             if vmrr.backfillres == True:
                 self.numbesteffortres -= 1
             req.removeRR(vmrr)
+            self.slottable.removeReservation(vmrr)
             if susprr != None:
                 req.removeRR(susprr)
+                self.slottable.removeReservation(susprr)
             for vnode,pnode in req.vmimagemap.items():
                 self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
             self.removeFromFIFOTransfers(req.leaseID)
@@ -494,11 +495,14 @@ class Scheduler(object):
                 if vmrr.backfillres == True:
                     self.numbesteffortres -= 1
                 req.removeRR(vmrr)
+                self.slottable.removeReservation(vmrr)
                 if susprr != None:
                     req.removeRR(susprr)
+                    self.slottable.removeReservation(susprr)
                 if req.state == constants.LEASE_STATE_SUSPENDED:
                     resmrr = lease.prevRR(vmrr)
                     req.removeRR(resmrr)
+                    self.slottable.removeReservation(resmrr)
                 for vnode,pnode in req.vmimagemap.items():
                     self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
                 self.removeFromFIFOTransfers(req.leaseID)

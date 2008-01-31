@@ -139,8 +139,11 @@ def SWF(tracefile, config):
                 numnodes = int(fields[7]) # 7: reqNProcs
                 resreq = {}
                 resreq[constants.RES_CPU] = 1 # One CPU per VM
-                resreq[constants.RES_MEM] = 1024 # Arbitrary (1 VMs per node)
+                resreq[constants.RES_MEM] = 1024 
+                resreq[constants.RES_NETIN] = 0
+                resreq[constants.RES_NETOUT] = 0
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
+                resreq = ResourceTuple(resreq)
                 maxdur = TimeDelta(seconds=reqtime)
                 if runtime < 0 and status==5:
                     # This is a job that got cancelled while waiting in the queue
