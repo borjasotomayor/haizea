@@ -27,21 +27,26 @@ class BaseNode(object):
         self.enactment = enactment
         self.nod_id = nod_id
         self.files = []
+        self.workingspacesize = 0
            
     def addFile(self, f):
         self.files.append(f)
+        if not (isinstance(f, VMImageFile) and f.masterimg==True):
+            self.workingspacesize += f.filesize
         
     def removeTainted(self, lease, vnode):
         img = [f for f in self.files if isinstance(f, VMImageFile) and f.masterimg==False and (lease,vnode) in f.mappings]
         if len(img) > 0:
             img = img[0]
             self.files.remove(img)
+            self.workingspacesize -= img.filesize
             
     def removeRAMFile(self, lease, vnode):
         img = [f for f in self.files if isinstance(f, RAMImageFile) and f.leaseID==lease and f.vnode==vnode]
         if len(img) > 0:
             img = img[0]
             self.files.remove(img)
+            self.workingspacesize -= img.filesize
         
     def hasTaintedImage(self, leaseID, vnode, imagefile):
         images = self.getTaintedImages()
@@ -82,11 +87,7 @@ class BaseNode(object):
             return True
         
     def getTotalFileSize(self):
-        if len(self.files) == 0:
-            return 0
-        else:
-            # Do not include pool files
-            return sum([f.filesize for f in self.files if not (isinstance(f, VMImageFile) and f.masterimg==True)])
+        return self.workingspacesize
 
     def getPoolImages(self):
         return [f for f in self.files if isinstance(f, VMImageFile) and f.masterimg==True]

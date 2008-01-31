@@ -296,10 +296,8 @@ class Scheduler(object):
                     
                 musttransfer = {}
                 mustpool = {}
-                for (vnode,pnode) in nodeassignment:
+                for (vnode,pnode) in nodeassignment.items():
                     leaseID = req.leaseID
-                    vnode = transfer[0]
-                    pnode = transfer[1]
                     info("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (req.vmimage, vnode, pnode), constants.SCHED, self.rm.time)
 
                     if reusealg == constants.REUSE_COWPOOL:
@@ -396,7 +394,7 @@ class Scheduler(object):
                     transferRRs = []
                     musttransfer = {}
                     piggybacking = []
-                    for (vnode, pnode) in mappings.items():
+                    for (vnode, pnode) in vmrr.nodes.items():
                         reqtransfer = earliest[pnode][1]
                         if reqtransfer == constants.REQTRANSFER_COWPOOL:
                             # Add to pool
@@ -586,7 +584,8 @@ class Scheduler(object):
     def scheduleImageTransferEDF(self, req, vnodes):
         # Estimate image transfer time 
         imgTransferTime=self.estimateTransferTime(req.vmimagesize)
-        
+        bandwidth = self.rm.config.getBandwidth()
+
         # Determine start time
         activetransfers = [t for t in self.transfersEDF if t.state == constants.RES_STATE_ACTIVE]
         if len(activetransfers) > 0:
@@ -597,7 +596,26 @@ class Scheduler(object):
         transfermap = dict([(copy.copy(t), t) for t in self.transfersEDF if t.state == constants.RES_STATE_SCHEDULED])
         newtransfers = transfermap.keys()
         
-        newtransfer = ds.FileTransferResourceReservation(req)
+        res = {}
+        resimgnode = [None, None, None, None, None] # TODO: Hardcoding == bad
+        resimgnode[constants.RES_CPU]=0
+        resimgnode[constants.RES_MEM]=0
+        resimgnode[constants.RES_NETIN]=0
+        resimgnode[constants.RES_NETOUT]=bandwidth
+        resimgnode[constants.RES_DISK]=0
+        resimgnode = ds.ResourceTuple(resimgnode)
+        resnode = [None, None, None, None, None] # TODO: Hardcoding == bad
+        resnode[constants.RES_CPU]=0
+        resnode[constants.RES_MEM]=0
+        resnode[constants.RES_NETIN]=bandwidth
+        resnode[constants.RES_NETOUT]=0
+        resnode[constants.RES_DISK]=0
+        resnode = ds.ResourceTuple(resnode)
+        res[self.slottable.FIFOnode] = resimgnode
+        for n in vnodes.values():
+            res[n] = resnode
+        
+        newtransfer = ds.FileTransferResourceReservation(req, res)
         newtransfer.deadline = req.start
         newtransfer.state = constants.RES_STATE_SCHEDULED
         newtransfer.file = req.vmimage
@@ -660,14 +678,12 @@ class Scheduler(object):
         # Make changes   
         for t in newtransfers:
             if t == newtransfer:
-                rsp_id = self.slottable.addImageTransfer(req, t)
-                t.db_rsp_ids = [rsp_id]
+                self.slottable.addReservation(t)
                 self.transfersEDF.append(t)
             else:
                 t2 = transfermap[t]
                 t2.start = t.start
                 t2.end = t.end
-                t2.updateDBentry()            
         
         return newtransfer
     
@@ -676,7 +692,8 @@ class Scheduler(object):
         imgTransferTime=self.estimateTransferTime(req.vmimagesize)
         startTime = self.getNextFIFOTransferTime()
         transfertype = self.rm.config.getTransferType()        
-
+        bandwidth = self.rm.config.getBandwidth()
+        
         newtransfers = []
         
         if transfertype == constants.TRANSFER_UNICAST:
@@ -686,7 +703,25 @@ class Scheduler(object):
         if transfertype == constants.TRANSFER_MULTICAST:
             # Time to transfer is imagesize / bandwidth, regardless of 
             # number of nodes
-            newtransfer = ds.FileTransferResourceReservation(req)
+            res = {}
+            resimgnode = [None, None, None, None, None] # TODO: Hardcoding == bad
+            resimgnode[constants.RES_CPU]=0
+            resimgnode[constants.RES_MEM]=0
+            resimgnode[constants.RES_NETIN]=0
+            resimgnode[constants.RES_NETOUT]=bandwidth
+            resimgnode[constants.RES_DISK]=0
+            resimgnode = ds.ResourceTuple(resimgnode)
+            resnode = [None, None, None, None, None] # TODO: Hardcoding == bad
+            resnode[constants.RES_CPU]=0
+            resnode[constants.RES_MEM]=0
+            resnode[constants.RES_NETIN]=bandwidth
+            resnode[constants.RES_NETOUT]=0
+            resnode[constants.RES_DISK]=0
+            resnode = ds.ResourceTuple(resnode)
+            res[self.slottable.FIFOnode] = resimgnode
+            for n in reqtransfers.values():
+                res[n] = resnode
+            newtransfer = ds.FileTransferResourceReservation(req, res)
             newtransfer.start = startTime
             newtransfer.end = startTime+imgTransferTime
             newtransfer.deadline = None
@@ -695,8 +730,7 @@ class Scheduler(object):
             for vnode in reqtransfers:
                 physnode = reqtransfers[vnode]
                 newtransfer.piggyback(req.leaseID, vnode, physnode)
-            rsp_id = self.slottable.addImageTransfer(req, newtransfer)
-            newtransfer.db_rsp_ids = [rsp_id]
+            self.slottable.addReservation(newtransfer)
             newtransfers.append(newtransfer)
             
         self.transfersFIFO += newtransfers
@@ -724,6 +758,7 @@ class Scheduler(object):
             a = sum([len(l) for l in t.transfers.values()])
             if a == 0:
                 t.lease.removeRR(t)
+                self.slottable.removeReservation(t)
                 toremove.append(t)
         for t in toremove:
             self.transfersFIFO.remove(t)

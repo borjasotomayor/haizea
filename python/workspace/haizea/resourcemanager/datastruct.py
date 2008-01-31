@@ -252,7 +252,8 @@ class FileTransferResourceReservation(ResourceReservationBase):
         else:
             self.transfers[physnode] = [(leaseID, vnode)]
             
-
+    def isPreemptible(self):
+        return False        
                 
 class VMResourceReservation(ResourceReservationBase):
     def __init__(self, lease, start, end, realend, nodes, res, oncomplete, backfillres):

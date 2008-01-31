@@ -88,7 +88,9 @@ class SlotTable(object):
         imgcapacity[constants.RES_NETOUT]=bandwidth
         imgcapacity[constants.RES_DISK]=0
         self.nodes.add(Node(imgcapacity, imgcapacity))
+        self.FIFOnode = numnodes + 1
         self.nodes.add(Node(imgcapacity, imgcapacity))
+        self.EDFnode = numnodes + 2
         
         self.availabilitywindow = AvailabilityWindow(self)
 
@@ -225,7 +227,7 @@ class SlotTable(object):
         changepoints = set()
         res = self.getReservationsWithChangePointsAfter(after, includereal)
         for rr in res:
-            if nodes == None or (nodes != None and len(set(rr.nodes.values()) & set(nodes)) > 0):
+            if nodes == None or (nodes != None and len(set(rr.res.keys()) & set(nodes)) > 0):
                 if rr.start > after:
                     changepoints.add(rr.start)
                 if rr.end > after:
