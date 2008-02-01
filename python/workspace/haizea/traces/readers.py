@@ -191,10 +191,13 @@ def LWF(tracefile, config = None):
         vmimage = entry.vmImage
         vmimagesize = entry.vmImageSize
         numnodes = entry.numNodes
-        resreq = {}
+        resreq = [None,None,None,None,None] # TODO: Hardcoding == bad
         resreq[constants.RES_CPU] = entry.CPU
         resreq[constants.RES_MEM] = entry.mem
+        resreq[constants.RES_NETIN] = 0
+        resreq[constants.RES_NETOUT] = 0
         resreq[constants.RES_DISK] = vmimagesize + entry.disk
+        resreq = ResourceTuple.fromList(resreq)
         req = ExactLease(None, tSubmit, tStart, tEnd, vmimage, vmimagesize, numnodes, resreq, tRealEnd)
         req.state = constants.LEASE_STATE_PENDING
         requests.append(req)
