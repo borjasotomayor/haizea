@@ -786,6 +786,7 @@ class SlotTable(object):
             if resmrr != None:
                 resmrr.start -= diff
                 resmrr.end -= diff
+                self.updateReservation(resmrr)
             vmrr.start -= diff
             if susprr != None:
                 # This lease was going to be suspended. Determine if
@@ -805,6 +806,7 @@ class SlotTable(object):
             else:
                 vmrr.end -= diff
                 vmrr.realend -= diff
+            self.updateReservation(vmrr)
             self.dirty()
             edebug("New lease descriptor (after slideback):", constants.ST, self.rm.time)
             lease.printContents()
