@@ -399,7 +399,7 @@ class Scheduler(object):
                         if reqtransfer == constants.REQTRANSFER_COWPOOL:
                             # Add to pool
                             info("Reusing image for V%i->P%i." % (vnode, pnode), constants.SCHED, self.rm.time)
-                            self.rm.enactment.addToPool(pnode, req.vmimage, req.leaseID, vnode, end)
+                            self.rm.enactment.addToPool(pnode, req.vmimage, req.leaseID, vnode, vmrr.end)
                         elif reqtransfer == constants.REQTRANSFER_PIGGYBACK:
                             # We can piggyback on an existing transfer
                             transferRR = earliest[pnode][2]

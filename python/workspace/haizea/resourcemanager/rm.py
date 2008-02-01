@@ -71,6 +71,7 @@ class ResourceManager(object):
                 self.printStats(error, verbose=True)
                 raise
             util = self.scheduler.slottable.getUtilization(self.time)
+            self.stats.addUtilization(util)
             debug("Ending iteration", constants.RM, self.time)
             if (self.time - prevstatustime).minutes >= 15:
                 status("STATUS ---Begin---", constants.RM, self.time)
@@ -128,10 +129,6 @@ class ResourceManager(object):
         status("Simulation done, generating stats...", constants.RM, self.time)
         self.stats.addFinalMarker()
         
-        # Get utilization stats
-        #util = self.scheduler.slottable.genUtilizationStats(self.starttime)
-        util = None
-        self.stats.utilization[constants.RES_CPU] = util
         status("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()

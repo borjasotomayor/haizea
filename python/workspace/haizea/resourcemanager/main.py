@@ -59,8 +59,7 @@ def writeDataToDisk(resourcemanager, dir):
     if not os.path.exists(dir):
         os.makedirs(dir)
         
-    cpuutilization = resourcemanager.stats.getUtilization(constants.RES_CPU)
-    #memutilization = resourcemanager.stats.getUtilization(constants.RES_MEM)
+    cpuutilization = resourcemanager.stats.getUtilization()
     exactaccepted = resourcemanager.stats.getExactAccepted()
     exactrejected = resourcemanager.stats.getExactRejected()
     besteffortcompleted = resourcemanager.stats.getBestEffortCompleted()
@@ -72,8 +71,6 @@ def writeDataToDisk(resourcemanager, dir):
     boundedslowdown = resourcemanager.stats.getBoundedSlowdown()
 
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
-    #pickle(memutilization, dir, constants.MEMUTILFILE)
-    #pickle(memutilizationavg, dir, constants.MEMUTILAVGFILE)
     pickle(exactaccepted, dir, constants.ACCEPTEDFILE)
     pickle(exactrejected, dir, constants.REJECTEDFILE)
     pickle(besteffortcompleted, dir, constants.COMPLETEDFILE)

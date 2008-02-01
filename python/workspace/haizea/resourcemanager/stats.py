@@ -2,6 +2,7 @@ class Stats(object):
     def __init__(self, rm):
         self.rm = rm
         
+        self.utilization = []
         self.exactaccepted = []
         self.exactrejected = []
         self.besteffortcompleted = []
@@ -20,13 +21,11 @@ class Stats(object):
         self.besteffortcompletedcount = 0
         self.queuesizecount = 0
         
-        
-        self.utilization = {}
-        self.utilizationavg = {}
-
         self.queuewaittimes = {}
         self.startendtimes = {}
  
+    def addUtilization(self,util):
+        self.utilization.append((self.rm.time,None,util))
         
     def addInitialMarker(self):
         time = self.rm.time
@@ -131,7 +130,7 @@ class Stats(object):
                 timediff = time - prevTime
                 weightedValue = prevValue*timediff
                 accum += weightedValue
-                average = accum/time
+                avg = accum/time
             else:
                 avg = value
             stats.append((time, leaseID, value, avg))
@@ -178,11 +177,9 @@ class Stats(object):
         l = self.normalizeTimes(self.execwait)
         return self.addAverage(l)
     
-    def getUtilization(self, slottype):
-        return self.utilization[slottype]
-
-    def getUtilizationAvg(self, slottype):
-        return self.utilizationavg[slottype]
+    def getUtilization(self):
+        l = self.normalizeTimes(self.utilization)
+        return self.addTimeWeightedAverage(l)
     
     def getUtilizationRatio(self):
         l = self.normalizeTimes(self.utilratio)
