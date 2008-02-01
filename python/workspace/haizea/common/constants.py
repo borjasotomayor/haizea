@@ -214,6 +214,7 @@ UTILRATIOFILE="utilratio.dat"
 CLIPTIMESFILE="cliptimes.dat"
 DISKUSAGEFILE="diskusage.dat"
 SLOWDOWNFILE="slowdown.dat"
+LEASESFILE="leases.dat"
 
 
 # Types of final tables in report generation

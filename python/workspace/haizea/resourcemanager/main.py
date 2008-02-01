@@ -69,6 +69,7 @@ def writeDataToDisk(resourcemanager, dir):
     utilratio = resourcemanager.stats.getUtilizationRatio()
     diskusage = resourcemanager.stats.getDiskUsage()
     boundedslowdown = resourcemanager.stats.getBoundedSlowdown()
+    leases = resourcemanager.scheduler.completedleases
 
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     pickle(exactaccepted, dir, constants.ACCEPTEDFILE)
@@ -80,6 +81,8 @@ def writeDataToDisk(resourcemanager, dir):
     pickle(utilratio, dir, constants.UTILRATIOFILE)
     pickle(diskusage, dir, constants.DISKUSAGEFILE)
     pickle(boundedslowdown, dir, constants.SLOWDOWNFILE)
+    pickle(leases, dir, constants.LEASESFILE)
+
         
 def pickle(data, dir, file):
     f = open (dir + "/" + file, "w")

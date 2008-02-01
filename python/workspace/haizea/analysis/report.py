@@ -12,8 +12,6 @@ class Section(object):
         self.title = title
         self.filename = filename
         self.graphtype = graphtype
-        self.graphfile = self.filename + "_" + str(graphtype) + ".png"
-        self.thumbfile = self.filename + "_" + str(graphtype) + "-thumb.png"
         self.tablefinal = tablefinal
         self.profiles = None
         self.final = {}
@@ -23,33 +21,50 @@ class Section(object):
         self.cliptimes = None
         self.clipIDs = None
         self.cliptype = cliptype
+        self.graphfile = self.filename + "_" + str(graphtype) + "_" + str(cliptype) + ".png"
+        self.thumbfile = self.filename + "_" + str(graphtype) + "_" + str(cliptype) + "-thumb.png"
         
     def findClips(self, dir):
-        file = open (dir + "/" + constants.COMPLETEDFILE, "r")
-        u = Unpickler(file)
-        besteffortcompleted = u.load()
-        file.close()
-        numreq = len(besteffortcompleted)
-        startclip = int( (self.clip[0] / 100.0) * numreq)
-        endclip = int(numreq - ((self.clip[1]/100.0) * numreq))
-
-        # Find what the top and bottom 5% leases are
-        besteffortcompleted.sort(key=itemgetter(1))
-        startID = besteffortcompleted[startclip][1]
-        endID = besteffortcompleted[endclip][1]
-        endTime = besteffortcompleted[endclip][0]
+#        file = open (dir + "/" + constants.COMPLETEDFILE, "r")
+#        u = Unpickler(file)
+#        besteffortcompleted = u.load()
+#        file.close()
+#        numreq = len(besteffortcompleted)
+#        startclip = int( (self.clip[0] / 100.0) * numreq)
+#        endclip = int(numreq - ((self.clip[1]/100.0) * numreq)) - 1 
+#
+#        # Find what the top and bottom 5% leases are
+#        besteffortcompleted.sort(key=itemgetter(1))
+#        startID = besteffortcompleted[startclip][1]
+#        endID = besteffortcompleted[endclip][1]
+#        endTime = besteffortcompleted[endclip][0]
         
-        # Find when the bottom 5% lease was submitted
-        file = open (dir + "/" + constants.QUEUESIZEFILE, "r")
-        u = Unpickler(file)
-        queuesize = u.load()
-        file.close()
-        queuesize = [e for e in queuesize if e[1] == startID]
-        startTime = queuesize[0][0]
+#        # Find when the bottom 5% lease was submitted
+#        file = open (dir + "/" + constants.QUEUESIZEFILE, "r")
+#        u = Unpickler(file)
+#        queuesize = u.load()
+#        file.close()
+#        # Keep only initial submission
+#        ids = set()
+#        reqs = []
+#        for e in queuesize:
+#            if not e[1] in ids and e[1] != None:
+#                ids.add(e[1])
+#                reqs.append(e)
+#        numreq = len(reqs)
+#        print numreq
+#        startclip = int( (self.clip[0] / 100.0) * numreq)
+#        endclip = int(numreq - ((self.clip[1]/100.0) * numreq)) - 1 
+#        startID = reqs[startclip][1]
+#        endID = reqs[endclip][1]
+#        startTime = reqs[startclip][0]
+#        endTime = reqs[endclip][0]
         
-        self.clipIDs = (startID, endID)
-        self.cliptimes = (startTime, endTime)
-        
+        # TODO: Figure out the clip points based on either the trace file
+        # or by having the scheduler save an additional data file with
+        # the enqueue times        
+        self.clipIDs = (None, None)
+        self.cliptimes = (self.clip[0], self.clip[1])
         
         
     def loadData(self, dirs, profilenames=None):
@@ -64,11 +79,23 @@ class Section(object):
             u = Unpickler(file)
             data = u.load()
             if self.clip != None:
-                self.findClips(dir)  
+                self.findClips(dir)
+                self.cliptimes
                 if self.cliptype == constants.CLIP_BYTIME:
                     data = [e for e in data if e[0] >= self.cliptimes[0] and e[0] <= self.cliptimes[1]]
                 elif self.cliptype == constants.CLIP_BYLEASE:
                     data = [e for e in data if e[1] >= self.clipIDs[0] and e[1] <= self.clipIDs[1]]
+                # Recompute average
+                accum=0
+                count=0
+                newdata = []
+                for v in data:
+                    value = v[2]
+                    accum += value
+                    count += 1
+                    avg = accum/count
+                    newdata.append((v[0], v[1], value, avg))
+                data = newdata
             self.data[p] = data
             file.close()
             
@@ -192,13 +219,17 @@ class Report(object):
             self.clip = None
                 
         self.sections = [
-                 Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
-                 Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
-                 Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
+                 #Section("CPU Utilization", constants.CPUUTILFILE, constants.GRAPH_STEP_VALUE),
+                 #Section("CPU Utilization (avg)", constants.CPUUTILFILE, constants.GRAPH_LINE_AVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
+                 Section("Best-effort Leases Completed", constants.COMPLETEDFILE, constants.GRAPH_STEP_VALUE, tablefinal = constants.TABLE_FINALTIME),
                  #Section("Queue Size", constants.QUEUESIZEFILE, constants.GRAPH_STEP_VALUE),
                  #Section("Best-Effort Wait Time (Queue only)", constants.QUEUEWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, profilesdirs, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
-                 #Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
-                 #Section("Cumulative Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_CUMULATIVE, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
+                 Section("Bounded slowdown (clipped)", constants.SLOWDOWNFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYTIME),
+                 Section("Cumulative bounded slowdown (clipped) ", constants.SLOWDOWNFILE, constants.GRAPH_CUMULATIVE, clip=self.clip, cliptype=constants.CLIP_BYTIME),
+                 Section("Bounded slowdown", constants.SLOWDOWNFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True),
+                 Section("Cumulative bounded slowdown", constants.SLOWDOWNFILE, constants.GRAPH_CUMULATIVE),
+                 Section("Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG),
+                 Section("Cumulative Best-Effort Wait Time (from submission to lease start)", constants.EXECWAITFILE, constants.GRAPH_CUMULATIVE),
                  #Section("'Client happiness' ratio", constants.UTILRATIOFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True, clip=self.clip, cliptype=constants.CLIP_BYLEASE),
                  Section("Disk usage", constants.DISKUSAGEFILE, constants.GRAPH_STEP_VALUE, tablefinal = None)
                  #Section("Best-Effort Wait Time (from submission to lease start) [NOCLIP]", constants.EXECWAITFILE, constants.GRAPH_POINTLINE_VALUEAVG, tablefinal = constants.TABLE_FINALAVG, maxmin = True)
