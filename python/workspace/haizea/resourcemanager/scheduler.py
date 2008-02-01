@@ -603,14 +603,14 @@ class Scheduler(object):
         resimgnode[constants.RES_NETIN]=0
         resimgnode[constants.RES_NETOUT]=bandwidth
         resimgnode[constants.RES_DISK]=0
-        resimgnode = ds.ResourceTuple(resimgnode)
+        resimgnode = ds.ResourceTuple.fromList(resimgnode)
         resnode = [None, None, None, None, None] # TODO: Hardcoding == bad
         resnode[constants.RES_CPU]=0
         resnode[constants.RES_MEM]=0
         resnode[constants.RES_NETIN]=bandwidth
         resnode[constants.RES_NETOUT]=0
         resnode[constants.RES_DISK]=0
-        resnode = ds.ResourceTuple(resnode)
+        resnode = ds.ResourceTuple.fromList(resnode)
         res[self.slottable.FIFOnode] = resimgnode
         for n in vnodes.values():
             res[n] = resnode
@@ -684,6 +684,7 @@ class Scheduler(object):
                 t2 = transfermap[t]
                 t2.start = t.start
                 t2.end = t.end
+                self.slottable.updateReservation(t2)
         
         return newtransfer
     
@@ -710,14 +711,14 @@ class Scheduler(object):
             resimgnode[constants.RES_NETIN]=0
             resimgnode[constants.RES_NETOUT]=bandwidth
             resimgnode[constants.RES_DISK]=0
-            resimgnode = ds.ResourceTuple(resimgnode)
+            resimgnode = ds.ResourceTuple.fromList(resimgnode)
             resnode = [None, None, None, None, None] # TODO: Hardcoding == bad
             resnode[constants.RES_CPU]=0
             resnode[constants.RES_MEM]=0
             resnode[constants.RES_NETIN]=bandwidth
             resnode[constants.RES_NETOUT]=0
             resnode[constants.RES_DISK]=0
-            resnode = ds.ResourceTuple(resnode)
+            resnode = ds.ResourceTuple.fromList(resnode)
             res[self.slottable.FIFOnode] = resimgnode
             for n in reqtransfers.values():
                 res[n] = resnode

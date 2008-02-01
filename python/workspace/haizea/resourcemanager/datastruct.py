@@ -25,33 +25,39 @@ def prettyNodemap(nodes):
 
 class ResourceTuple(object):
     def __init__(self, res):
-        self.res = res[:]
+        self.res = res
+        
+    @classmethod
+    def fromList(cls, l):
+        return cls(l[:])
+
+    @classmethod
+    def copy(cls, rt):
+        return cls(rt.res[:])
         
     def fitsIn(self, res2):
-        r = zip(self.res, res2.res)
         fits = True
-        for (needed,available) in r:
-            if needed > available:
+        for i in xrange(len(self.res)):
+            if self.res[i] > res2.res[i]:
                 fits = False
                 break
         return fits
     
     def getNumFitsIn(self, res2):
         canfit = 10000 # Arbitrarily large
-        r = zip(self.res, res2.res)
-        for (needed,available) in r:
-            if needed != 0:
-                f = int(available / needed)
+        for i in xrange(len(self.res)):
+            if self.res[i] != 0:
+                f = res2.res[i] / self.res[i]
                 if f < canfit:
                     canfit = f
         return canfit
     
     def decr(self, res2):
-        for slottype,x in enumerate(self.res):
+        for slottype in xrange(len(self.res)):
             self.res[slottype] -= res2.res[slottype]
 
     def incr(self, res2):
-        for slottype,x in enumerate(self.res):
+        for slottype in xrange(len(self.res)):
             self.res[slottype] += res2.res[slottype]
             
     def get(self, slottype):

@@ -67,7 +67,7 @@ def CSV(tracefile, config):
                 resreq[constants.RES_NETIN] = 0
                 resreq[constants.RES_NETOUT] = 0
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
-                resreq = ResourceTuple(resreq)
+                resreq = ResourceTuple.fromList(resreq)
                 if fields[8] != "NULL": # 8: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[8])) # 8: deadline
                     end = start + TimeDelta(seconds=int(fields[9])) # 9: duration
@@ -143,7 +143,7 @@ def SWF(tracefile, config):
                 resreq[constants.RES_NETIN] = 0
                 resreq[constants.RES_NETOUT] = 0
                 resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
-                resreq = ResourceTuple(resreq)
+                resreq = ResourceTuple.fromList(resreq)
                 maxdur = TimeDelta(seconds=reqtime)
                 if runtime < 0 and status==5:
                     # This is a job that got cancelled while waiting in the queue

@@ -17,8 +17,8 @@ class CriticalSlotFittingException(Exception):
 
 class Node(object):
     def __init__(self, capacity, capacitywithpreemption):
-        self.capacity = ds.ResourceTuple(capacity)
-        self.capacitywithpreemption = ds.ResourceTuple(capacitywithpreemption)
+        self.capacity = ds.ResourceTuple.copy(capacity)
+        self.capacitywithpreemption = ds.ResourceTuple.copy(capacitywithpreemption)
 
 class NodeList(object):
     def __init__(self):
@@ -33,14 +33,14 @@ class NodeList(object):
     def copy(self):
         nodelist = NodeList()
         for n in self.nodelist:
-            nodelist.add(Node(n.capacity.res, n.capacitywithpreemption.res))
+            nodelist.add(Node(n.capacity, n.capacitywithpreemption))
         return nodelist
 
     def toPairList(self, onlynodes=None):
         nodelist = []
         for i,n in enumerate(self.nodelist):
             if onlynodes == None or (onlynodes != None and i+1 in onlynodes):
-                nodelist.append((i+1,Node(n.capacity.res, n.capacitywithpreemption.res)))
+                nodelist.append((i+1,Node(n.capacity, n.capacitywithpreemption)))
         return nodelist
     
     def toDict(self):
@@ -74,8 +74,8 @@ class SlotTable(object):
         for r in resources:
             resourcename = r.split(",")[0]
             resourcecapacity = r.split(",")[1]
-            capacity[constants.str_res(resourcename)] = float(resourcecapacity)
-            
+            capacity[constants.str_res(resourcename)] = int(resourcecapacity)
+        capacity = ds.ResourceTuple.fromList(capacity)
         # Create nodes
         for n in range(numnodes):
             self.nodes.add(Node(capacity, capacity))
@@ -87,6 +87,7 @@ class SlotTable(object):
         imgcapacity[constants.RES_NETIN]=0
         imgcapacity[constants.RES_NETOUT]=bandwidth
         imgcapacity[constants.RES_DISK]=0
+        imgcapacity = ds.ResourceTuple.fromList(imgcapacity)
         self.nodes.add(Node(imgcapacity, imgcapacity))
         self.FIFOnode = numnodes + 1
         self.nodes.add(Node(imgcapacity, imgcapacity))
@@ -203,6 +204,14 @@ class SlotTable(object):
         bisect.insort(self.reservationsByStart, startitem)
         bisect.insort(self.reservationsByEnd, enditem)
         self.dirty()
+
+    def updateReservation(self, rr):
+        # Remove and reinsert in order
+        # TODO: Might be more efficient to resort lists
+        self.removeReservation(rr)
+        self.addReservation(rr)
+        self.dirty()
+
 
     def getIndexOfReservation(self, rlist, rr, key):
         item = KeyValueWrapper(key, None)
@@ -361,7 +370,7 @@ class SlotTable(object):
                     if preemptions.has_key(physnode):
                         preemptions[physnode].incr(resreq)
                     else:
-                        preemptions[physnode] = ds.ResourceTuple(resreq.res)
+                        preemptions[physnode] = ds.ResourceTuple.copy(resreq)
                     if vnode > numnodes:
                         break
                 if vnode > numnodes:
@@ -406,7 +415,7 @@ class SlotTable(object):
         
         amountToPreempt = {}
         for n in mustpreempt:
-            amountToPreempt[n] = ds.ResourceTuple(mustpreempt[n].res)
+            amountToPreempt[n] = ds.ResourceTuple.copy(mustpreempt[n])
 
         # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
         for r in reservationsAtStart:
@@ -435,7 +444,7 @@ class SlotTable(object):
             for cp in changepoints:
                 amountToPreempt = {}
                 for n in mustpreempt:
-                    amountToPreempt[n] = ds.ResourceTuple(mustpreempt[n].res)
+                    amountToPreempt[n] = ds.ResourceTuple.copy(mustpreempt[n])
                 reservations = [r for r in reservationsAtMiddle 
                                 if r.start <= cp and cp < r.end]
                 for r in reservations:
@@ -635,7 +644,7 @@ class SlotTable(object):
                 r[constants.RES_NETIN] = 0
                 r[constants.RES_NETOUT] = 0
                 r[constants.RES_DISK] = resreq.res[constants.RES_DISK]
-                resmres[n] = ds.ResourceTuple(r)
+                resmres[n] = ds.ResourceTuple.fromList(r)
             resmrr = ds.ResumptionResourceReservation(lease, start-resumetime, start, resmres, mappings)
             resmrr.state = constants.RES_STATE_SCHEDULED
         else:
@@ -649,7 +658,7 @@ class SlotTable(object):
                 r[constants.RES_NETIN] = 0
                 r[constants.RES_NETOUT] = 0
                 r[constants.RES_DISK] = resreq.res[constants.RES_DISK]
-                suspres[n] = ds.ResourceTuple(r)
+                suspres[n] = ds.ResourceTuple.fromList(r)
             susprr = ds.SuspensionResourceReservation(lease, end, end + suspendtime, suspres, mappings)
             susprr.state = constants.RES_STATE_SCHEDULED
             oncomplete = constants.ONCOMPLETE_SUSPEND
@@ -669,7 +678,7 @@ class SlotTable(object):
         canfit = None
         mustsuspend = None
         suspendthreshold = self.rm.config.getSuspendThreshold()
-        
+
         for p in changepoints:
             self.availabilitywindow.initWindow(p[0], resreq, p[1], canpreempt = False)
             self.availabilitywindow.printContents()
@@ -717,6 +726,8 @@ class SlotTable(object):
             vmrr.realend = vmrr.end
             
         vmrr.oncomplete = constants.ONCOMPLETE_SUSPEND
+        
+        self.updateReservation(vmrr)
        
         if susprr != None:
             lease.removeRR(susprr)
@@ -731,7 +742,7 @@ class SlotTable(object):
             r[constants.RES_NETIN] = 0
             r[constants.RES_NETOUT] = 0
             r[constants.RES_DISK] = vmrr.res[n].res[constants.RES_DISK]
-            suspres[n] = ds.ResourceTuple(r)
+            suspres[n] = ds.ResourceTuple.fromList(r)
         
         newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, suspres, mappings)
         newsusprr.state = constants.RES_STATE_SCHEDULED
