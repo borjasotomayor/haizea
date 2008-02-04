@@ -1,4 +1,3 @@
-from sets import Set
 from mx.DateTime import ISO, TimeDelta
 from operator import attrgetter, itemgetter
 import workspace.haizea.common.constants as constants
@@ -7,6 +6,7 @@ from workspace.haizea.common.log import info, debug, warning, edebug
 import workspace.haizea.common.log as log
 from workspace.haizea.common.utils import roundDateTimeDelta
 import bisect
+import copy
 
 class SlotFittingException(Exception):
     pass
@@ -205,11 +205,22 @@ class SlotTable(object):
         bisect.insort(self.reservationsByEnd, enditem)
         self.dirty()
 
+    # If the slot table keys are not modified (start / end time)
+    # Just remove and reinsert.
     def updateReservation(self, rr):
-        # Remove and reinsert in order
         # TODO: Might be more efficient to resort lists
         self.removeReservation(rr)
         self.addReservation(rr)
+        self.dirty()
+
+    # If the slot table keys are modified (start and/or end time)
+    # provide the old reservation (so we can remove it using
+    # the original keys) and also the new reservation
+    def updateReservationWithKeyChange(self, rrold, rrnew):
+        # TODO: Might be more efficient to resort lists
+        self.removeReservation(rrold)
+        self.addReservation(rrnew)
+        rrold.lease.replaceRR(rrold, rrnew)
         self.dirty()
 
 
@@ -224,9 +235,13 @@ class SlotTable(object):
                 pos += 1
         return pos
 
-    def removeReservation(self, rr):
-        posstart = self.getIndexOfReservation(self.reservationsByStart, rr, rr.start)
-        posend = self.getIndexOfReservation(self.reservationsByEnd, rr, rr.end)
+    def removeReservation(self, rr, start=None, end=None):
+        if start == None:
+            start = rr.start
+        if end == None:
+            end = rr.start
+        posstart = self.getIndexOfReservation(self.reservationsByStart, rr, start)
+        posend = self.getIndexOfReservation(self.reservationsByEnd, rr, end)
         self.reservationsByStart.pop(posstart)
         self.reservationsByEnd.pop(posend)
         self.dirty()
@@ -717,17 +732,18 @@ class SlotTable(object):
 
     def suspend(self, lease, time):
         (vmrr, susprr) = lease.getLastVMRR()
+        vmrrnew = copy.copy(vmrr)
         
         suspendtime = self.getSuspendTime(lease.resreq.res[constants.RES_MEM])
-        if vmrr.end != vmrr.realend:
-            vmrr.end = time - suspendtime
+        if vmrrnew.end != vmrrnew.realend:
+            vmrrnew.end = time - suspendtime
         else:
-            vmrr.end = time - suspendtime
-            vmrr.realend = vmrr.end
+            vmrrnew.end = time - suspendtime
+            vmrrnew.realend = vmrrnew.end
             
-        vmrr.oncomplete = constants.ONCOMPLETE_SUSPEND
-        
-        self.updateReservation(vmrr)
+        vmrrnew.oncomplete = constants.ONCOMPLETE_SUSPEND
+
+        self.updateReservationWithKeyChange(vmrr, vmrrnew)
        
         if susprr != None:
             lease.removeRR(susprr)
@@ -759,13 +775,14 @@ class SlotTable(object):
 
     def slideback(self, lease, earliest):
         (vmrr, susprr) = lease.getLastVMRR()
-        nodes = vmrr.nodes.values()
+        vmrrnew = copy.copy(vmrr)
+        nodes = vmrrnew.nodes.values()
         if lease.state == constants.LEASE_STATE_SUSPENDED:
-            resmrr = lease.prevRR(vmrr)
+            resmrr = lease.prevRR(vmrrnew)
             originalstart = resmrr.start
         else:
             resmrr = None
-            originalstart = vmrr.start
+            originalstart = vmrrnew.start
         cp = self.findChangePointsAfter(after=earliest, until=originalstart, nodes=nodes)
         cp = [earliest] + cp
         newstart = None
@@ -784,29 +801,30 @@ class SlotTable(object):
         else:
             diff = originalstart - newstart
             if resmrr != None:
-                resmrr.start -= diff
-                resmrr.end -= diff
-                self.updateReservation(resmrr)
-            vmrr.start -= diff
+                resmrrnew = copy.copy(resmrr)
+                resmrrnew.start -= diff
+                resmrrnew.end -= diff
+                self.updateReservationWithKeyChange(resmrr, resmrrnew)
+            vmrrnew.start -= diff
             if susprr != None:
                 # This lease was going to be suspended. Determine if
                 # we still want to use some of the extra time.
-                if vmrr.end - newstart < lease.remdur:
+                if vmrrnew.end - newstart < lease.remdur:
                     # We still need to run until the end, and suspend there
                     # Don't change the end time or the suspend RR
-                    if newstart + lease.realremdur < vmrr.end:
-                        vmrr.realend = newstart + lease.realremdur
+                    if newstart + lease.realremdur < vmrrnew.end:
+                        vmrrnew.realend = newstart + lease.realremdur
                 else:
                     # No need to suspend any more.
-                    vmrr.end -= diff
-                    vmrr.realend -= diff
-                    vmrr.oncomplete = constants.ONCOMPLETE_ENDLEASE
+                    vmrrnew.end -= diff
+                    vmrrnew.realend -= diff
+                    vmrrnew.oncomplete = constants.ONCOMPLETE_ENDLEASE
                     lease.removeRR(susprr)
                     self.removeReservation(susprr)
             else:
-                vmrr.end -= diff
-                vmrr.realend -= diff
-            self.updateReservation(vmrr)
+                vmrrnew.end -= diff
+                vmrrnew.realend -= diff
+            self.updateReservationWithKeyChange(vmrr, vmrrnew)
             self.dirty()
             edebug("New lease descriptor (after slideback):", constants.ST, self.rm.time)
             lease.printContents()

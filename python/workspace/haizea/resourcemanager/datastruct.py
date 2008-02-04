@@ -132,6 +132,8 @@ class LeaseBase(object):
     def prevRR(self, rr):
         return self.rr[self.rr.index(rr)-1]
 
+    def replaceRR(self, rrold, rrnew):
+        self.rr[self.rr.index(rrold)] = rrnew
     
     def removeRR(self, rr):
         if not rr in self.rr:

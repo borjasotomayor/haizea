@@ -90,6 +90,7 @@ class Scheduler(object):
         for l in ending:
             rrs = l.getEndingReservations(self.rm.time)
             for rr in rrs:
+                self.handleEndRR(l, rr)
                 if isinstance(rr,ds.FileTransferResourceReservation):
                     self.handleEndFileTransfer(l,rr)
                 elif isinstance(rr,ds.VMResourceReservation):
@@ -98,7 +99,6 @@ class Scheduler(object):
                     self.handleEndSuspend(l, rr)
                 elif isinstance(rr,ds.ResumptionResourceReservation):
                     self.handleEndResume(l, rr)
-                self.handleEndRR(l, rr)
         
         for l in starting:
             rrs = l.getStartingReservations(self.rm.time)
@@ -681,10 +681,8 @@ class Scheduler(object):
                 self.slottable.addReservation(t)
                 self.transfersEDF.append(t)
             else:
-                t2 = transfermap[t]
-                t2.start = t.start
-                t2.end = t.end
-                self.slottable.updateReservation(t2)
+                tOld = transfermap[t]
+                self.slottable.updateReservationWithKeyChange(tOld, t)
         
         return newtransfer
     
