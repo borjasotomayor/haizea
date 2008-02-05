@@ -778,7 +778,7 @@ class SlotTable(object):
         vmrrnew = copy.copy(vmrr)
         nodes = vmrrnew.nodes.values()
         if lease.state == constants.LEASE_STATE_SUSPENDED:
-            resmrr = lease.prevRR(vmrrnew)
+            resmrr = lease.prevRR(vmrr)
             originalstart = resmrr.start
         else:
             resmrr = None
