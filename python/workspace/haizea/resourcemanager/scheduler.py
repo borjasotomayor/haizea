@@ -682,6 +682,8 @@ class Scheduler(object):
                 self.transfersEDF.append(t)
             else:
                 tOld = transfermap[t]
+                self.transfersEDF.remove(tOld)
+                self.transfersEDF.append(t)
                 self.slottable.updateReservationWithKeyChange(tOld, t)
         
         return newtransfer
