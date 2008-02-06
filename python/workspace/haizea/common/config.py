@@ -418,7 +418,10 @@ class RMMultiConfig(Config):
             return None
     
     def getGraphSlideshow(self, graphsec):
-        pass
+        if not self.config.has_option(graphsec, constants.SLIDESHOW_OPT):
+            return False
+        else:
+            return self.config.getboolean(graphsec, constants.SLIDESHOW_OPT)
     
         
 class TraceConfig(Config):

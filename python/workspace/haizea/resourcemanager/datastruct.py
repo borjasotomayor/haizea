@@ -140,6 +140,9 @@ class LeaseBase(object):
             raise Exception, "Tried to remove an RR not contained in this lease"
         else:
             self.rr.remove(rr)
+
+    def removeRRs(self):
+        self.rr = []
         
 class ExactLease(LeaseBase):
     def __init__(self, scheduler, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
@@ -173,6 +176,7 @@ class ExactLease(LeaseBase):
 class BestEffortLease(LeaseBase):
     def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
         LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
+        self.reqdur = maxdur
         self.maxdur = maxdur
         self.remdur = maxdur
         self.realremdur = realdur

@@ -181,8 +181,10 @@ GRAPH_STEP_VALUE="step-value"
 GRAPH_POINT_VALUE="point-value"
 GRAPH_POINTLINE_VALUEAVG="point-value+line-avg"
 GRAPH_CUMULATIVE="cumulative"
-GRAPH_NUMNODE_LENGTH_CORRELATION="numnode-length-correlation"
-
+GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE="numnode-length-correlation-insize"
+GRAPH_NUMNODE_LENGTH_CORRELATION_X="numnode-length-correlation-inx"
+GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE="numnode-reqlength-correlation-insize"
+GRAPH_NUMNODE_REQLENGTH_CORRELATION_X="numnode-reqlength-correlation-inx"
 
 # Component names
 RM="RM"

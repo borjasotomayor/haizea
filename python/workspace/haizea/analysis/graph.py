@@ -7,6 +7,18 @@ class Graph(object):
     def __init__(self, xlabel="", ylabel=""):
         self.xlabel=xlabel
         self.ylabel=ylabel
+        self.colors = ['blue', 'green', 'red','cyan', 'magenta','yellow', 
+          'indigo', 'gold', 'firebrick', 'indianred', 'darkolivegreen', 
+          'darkseagreen', 'mediumvioletred', 'mediumorchid', 'chartreuse', 
+          'mediumslateblue', 'springgreen', 'crimson', 'lightsalmon', 
+          'brown', 'turquoise', 'olivedrab', 'skyblue', 
+          'darkturquoise', 'goldenrod', 'darkgreen', 'darkviolet', 
+          'darkgray', 'lightpink', 'teal', 'darkmagenta', 
+          'lightgoldenrodyellow', 'lavender', 'yellowgreen', 'thistle', 
+          'violet', 'navy', 'orchid', 'blue', 'ghostwhite', 'honeydew', 
+          'cornflowerblue', 'darkblue', 'darkkhaki', 'mediumpurple', 
+          'cornsilk', 'red', 'bisque', 'slategray', 'darkcyan', 'khaki', 
+          'wheat', 'deepskyblue', 'darkred', 'steelblue', 'aliceblue']
     
     def plot(self):
         pylab.xlabel(self.xlabel)
@@ -98,19 +110,7 @@ class PointAndLineGraph(Graph):
         print "Generating graph %s" % graphfile
         Graph.plot(self)        
         largestY = None
-        colors = ['blue', 'green', 'red','cyan', 'magenta','yellow', 
-                  'indigo', 'gold', 'firebrick', 'indianred', 'darkolivegreen', 
-                  'darkseagreen', 'mediumvioletred', 'mediumorchid', 'chartreuse', 
-                  'mediumslateblue', 'springgreen', 'crimson', 'lightsalmon', 
-                  'brown', 'turquoise', 'olivedrab', 'skyblue', 
-                  'darkturquoise', 'goldenrod', 'darkgreen', 'darkviolet', 
-                  'darkgray', 'lightpink', 'teal', 'darkmagenta', 
-                  'lightgoldenrodyellow', 'lavender', 'yellowgreen', 'thistle', 
-                  'violet', 'navy', 'orchid', 'blue', 'ghostwhite', 'honeydew', 
-                  'cornflowerblue', 'darkblue', 'darkkhaki', 'mediumpurple', 
-                  'cornsilk', 'red', 'bisque', 'slategray', 'darkcyan', 'khaki', 
-                  'wheat', 'deepskyblue', 'darkred', 'steelblue', 'aliceblue']
-        colors = iter(colors)
+        colors = iter(self.colors)
         for dataset in self.data:
             x = [p[0] for p in dataset]
             y1 = [p[1] for p in dataset]
@@ -178,7 +178,7 @@ class CumulativeGraph(Graph):
         
 # TODO
 class ScatterGraph(Graph):
-    def __init__(self, data, xlabel="", ylabel="", legends=[]):
+    def __init__(self, data, xlabel="", ylabel="", legends=None):
         Graph.__init__(self,xlabel,ylabel)
         self.data = data
         self.legends = legends
@@ -187,19 +187,35 @@ class ScatterGraph(Graph):
         print "Generating graph %s" % graphfile
         Graph.plot(self)
         
+        smallestX = 100000000000000 #Arbitrary
+        smallestY = 100000000000000
+        largestX = None
+        largestY = None
+        colors = iter(self.colors)
+        legendpolys = []
+        pylab.gca().set_yscale('log')
         for dataset in self.data:
             x = [p[0] for p in dataset]
             y = [p[1] for p in dataset]
             size = [p[2] for p in dataset]
-            # TODO
-        
+            smallestX = min(smallestX,min(x))
+            smallestY = min(smallestY,min(y))
+            largestX = max(largestX,max(x))
+            largestY = max(largestY,max(y))
+            color=colors.next()
+            poly = pylab.scatter(x,y,s=size, c=color, linewidths=(0.4,), alpha=0.75)
+            # kluge suggested on matplotlib mailing list, since scatter does not
+            # support having legends
+            legendpolys.append(pylab.Rectangle( (0,0), 1,1, facecolor=color))
 
-        pylab.ylim(0, largestY * 1.05)
+        pylab.xlim(smallestX - 5, largestX + 5)
+        pylab.ylim(smallestY - 5, largestY + 5)
         pylab.gca().xaxis.set_major_formatter(FormatStrFormatter('%d'))
-        pylab.legend(self.legends, loc='lower right')
+        if self.legends != None:
+            pylab.legend(legendpolys, self.legends, loc='lower right')
         
         pylab.savefig(graphfile)
-        pylab.gcf().clear()
+        pylab.clf()
         
         if thumbfile != None:
             print "Generating thumbnail %s" % thumbfile

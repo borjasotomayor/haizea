@@ -7,10 +7,22 @@ from pickle import Unpickler
 from mx.DateTime import now
 from operator import itemgetter, or_
 import shutil
+import gc
 
+leasescache = {}
+
+def getleases(dir):
+    if not leasescache.has_key(dir):
+        print "Loading lease data from %s" % dir
+        file = open (dir + "/" + constants.LEASESFILE, "r")
+        u = Unpickler(file)
+        leases = u.load()
+        file.close()
+        leasescache[dir] = leases
+    return leasescache[dir]
 
 class Section(object):
-    def __init__(self, title, datafile, graphtype, tablefinal = None, clip = None, slideshow = None):
+    def __init__(self, title, datafile, graphtype, tablefinal = None, clip = None, slideshow = False):
         self.title = title
         self.filename = datafile
         self.graphtype = graphtype
@@ -19,6 +31,8 @@ class Section(object):
         self.final = {}
         self.data = {}
         self.clip = clip
+        self.leases = {}
+        self.slideshow = slideshow
         if clip != None: clipstr = "noclip"
         else: clipstr = "clip"
         self.graphfile = self.filename + "_" + str(graphtype) + "_" + clipstr + ".png"
@@ -32,15 +46,15 @@ class Section(object):
             self.profiles = profilenames
         for p in self.profiles:
             dir = dirs[p]
-            file = open (dir + "/" + self.filename, "r")
+            
+            f = dir + "/" + self.filename
+            print "Loading %s" % f
+            file = open (f, "r")
             u = Unpickler(file)
             data = u.load()
             file.close()
             
-            file = open (dir + "/" + constants.LEASESFILE, "r")
-            u = Unpickler(file)
-            leases = u.load()
-            file.close()
+            leases = getleases(dir)
 
             if self.clip != None:
                 startclip = self.clip[0]
@@ -77,7 +91,7 @@ class Section(object):
                     newdata.append((v[0], v[1], value, avg))
                 data = newdata
             self.data[p] = data
-            file.close()
+            self.leases[p] = leases
             
         # If we are going to produce a table, create it now
         if self.tablefinal == constants.TABLE_FINALTIME:
@@ -109,7 +123,26 @@ class Section(object):
             values = [[(v[0],v[3]) for v in self.data[p]] for p in self.profiles]
         elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
             values = [[(v[0],v[2],v[3]) for v in self.data[p]] for p in self.profiles]
-
+        elif self.graphtype in [constants.GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE, constants.GRAPH_NUMNODE_LENGTH_CORRELATION_X, constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE, constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_X]:
+            values = []
+            for p in self.profiles:
+                pvalues = []
+                for v in self.data[p]:
+                    lease = self.leases[p].getLease(v[1])
+                    numnodes = lease.numnodes
+                    length = (lease.maxdur - lease.remdur).seconds
+                    reqlength = lease.reqdur
+                    if self.graphtype == constants.GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE:
+                        pvalues.append((numnodes, length, v[2]))
+                    elif self.graphtype == constants.GRAPH_NUMNODE_LENGTH_CORRELATION_X:
+                        pvalues.append((v[2], length, numnodes))
+                    elif self.graphtype == constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE:
+                        pvalues.append((numnodes, reqlength, v[2]))
+                    elif self.graphtype == constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_X:
+                        pvalues.append((v[2], reqlength, numnodes))
+                    
+                values.append(pvalues)
+        
         if sum([len(l) for l in values]) == 0:
             pass
             # TODO: print out an error message
@@ -129,20 +162,53 @@ class Section(object):
                 for l in self.profiles:
                     legends.append(l)
                     legends.append(l + " (avg)")
+            elif self.graphtype in [constants.GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE]:
+                graph = graphs.ScatterGraph
+                legends = self.profiles
+                titlex = "Number of nodes"
+                titley = "Length of lease (s)"
+            elif self.graphtype in [constants.GRAPH_NUMNODE_LENGTH_CORRELATION_X]:
+                graph = graphs.ScatterGraph
+                legends = self.profiles
+                titlex = self.title
+                titley = "Length of lease (s)"
+            elif self.graphtype in [constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE]:
+                graph = graphs.ScatterGraph
+                legends = self.profiles
+                titlex = "Number of nodes"
+                titley = "Requested length of lease (s)"
+            elif self.graphtype in [constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_X]:
+                graph = graphs.ScatterGraph
+                legends = self.profiles
+                titlex = self.title
+                titley = "Requested length of lease (s)"
                 
             if titlex==None:
                 titlex = "Time (s)"
             if titley==None:
                 titley = self.title
             
-            g = graph(values, titlex, titley, legends)
-            if filename==None:
-                graphfile = outdir + "/" + self.graphfile
-                thumbfile = outdir + "/" + self.thumbfile
+
+
+            if self.slideshow:
+                for p, v in zip(self.profiles, values):
+                    g = graph([v], titlex, titley, None)
+                    if filename==None:
+                        graphfile = outdir + "/s_" + p + "-" + self.graphfile
+                        thumbfile = outdir + "/s_" + p + "-" + self.thumbfile
+                    else:
+                        graphfile = outdir + "/s_" + p + "-" + filename + ".png"
+                        thumbfile = outdir + "/s_" + p + "-" + filename + "-thumb.png"                    
+                    g.plotToFile(graphfile, thumbfile)
             else:
-                graphfile = outdir + "/" + filename + ".png"
-                thumbfile = outdir + "/" + filename + "-thumb.png"
-            g.plotToFile(graphfile, thumbfile)
+                g = graph(values, titlex, titley, legends)
+                if filename==None:
+                    graphfile = outdir + "/" + self.graphfile
+                    thumbfile = outdir + "/" + self.thumbfile
+                else:
+                    graphfile = outdir + "/" + filename + ".png"
+                    thumbfile = outdir + "/" + filename + "-thumb.png"                    
+                g.plotToFile(graphfile, thumbfile)
         
     def generateHTML(self):
         html  = "<div class='image'>"
@@ -196,15 +262,12 @@ class Report(object):
         self.sections = []
         graphs = self.config.getGraphSections()
         for g in graphs:
-            print g
             title = self.config.getGraphTitle(g)
             datafile = self.config.getGraphDatafile(g)
             graphtype = self.config.getGraphType(g)
             tablefinal = self.config.getGraphTable(g)
             clip = self.config.getGraphClip(g)
             slideshow = self.config.getGraphSlideshow(g)
-            
-            print title, datafile, graphtype, tablefinal, clip, slideshow
             
             s = Section(title = title, datafile = datafile, graphtype = graphtype,
                         tablefinal = tablefinal, clip = clip, slideshow = slideshow)

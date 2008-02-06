@@ -1,6 +1,7 @@
 import os
 import os.path
 import workspace.haizea.resourcemanager.rm as rm
+import workspace.haizea.resourcemanager.datastruct as ds
 import workspace.haizea.traces.readers as tracereaders
 import workspace.haizea.common.constants as constants
 import workspace.haizea.common.utils as utils
@@ -69,7 +70,10 @@ def writeDataToDisk(resourcemanager, dir):
     utilratio = resourcemanager.stats.getUtilizationRatio()
     diskusage = resourcemanager.stats.getDiskUsage()
     boundedslowdown = resourcemanager.stats.getBoundedSlowdown()
-    leases = resourcemanager.scheduler.completedleases
+    leases = ds.LeaseTable(None)
+    leases.entries = resourcemanager.scheduler.completedleases.entries
+    for l in leases.entries.values():
+        l.removeRRs()
 
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     pickle(exactaccepted, dir, constants.ACCEPTEDFILE)
