@@ -360,6 +360,7 @@ class LeaseTable(object):
         else:
             return [e for e in self.entries.values() if isinstance(e,type)]
     
+    # TODO: Should be moved to slottable module
     def getNextLeasesScheduledInNodes(self, time, nodes):
         nodes = set(nodes)
         leases = []
@@ -383,4 +384,16 @@ class LeaseTable(object):
                 l = [l for l in leases if n in l.rr[-1].nodes.values() and l.rr[-1].start < end]
                 leases2.update(l)
         return list(leases2)
+    
+    def getPercentSubmittedTime(self, percent, leasetype=None):
+        leases = self.entries.values()
+        leases.sort(key=attrgetter("tSubmit"))
+        if leasetype != None:
+            leases = [l for l in leases if isinstance(l, leasetype)]
+        pos = int((len(leases) * (percent / 100.0)) - 1)
+        firstsubmission = leases[0].tSubmit
+        pctsubmission = leases[pos].tSubmit
+        return (pctsubmission - firstsubmission).seconds
 
+    def getLastSubmissionTime(self, leasetype=None):
+        return self.getPercentSubmittedTime(100, leasetype)

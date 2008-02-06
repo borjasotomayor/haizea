@@ -119,6 +119,8 @@ MAXPOOL_OPT="maxpool"
 REPORTING_SEC="reporting"
 CSS_OPT="css"
 REPORTDIR_OPT="reportdir"
+TABLE_OPT="table"
+SLIDESHOW_OPT="slideshow"
 CLIPSTART_OPT="clip-start"
 CLIPEND_OPT="clip-end"
 
@@ -168,17 +170,18 @@ TITLE_OPT="title"
 DATAFILE_OPT="datafile"
 TITLEX_OPT="title-x"
 TITLEY_OPT="title-y"
-GRAPHTYPE_OPT="graph"
+GRAPHTYPE_OPT="graphtype"
 PROFILE_OPT="profile"
 TRACE_OPT="trace"
 INJ_OPT="injection"
 
-GRAPHNAME_LINE_VALUE="line-value"
-GRAPHNAME_LINE_AVG="line-average"
-GRAPHNAME_STEP_VALUE="step-value"
-GRAPHNAME_POINT_VALUE="point-value"
-GRAPHNAME_POINTLINE_VALUEAVG="point-value+line-avg"
-GRAPHNAME_CUMULATIVE="cumulative"
+GRAPH_LINE_VALUE="line-value"
+GRAPH_LINE_AVG="line-average"
+GRAPH_STEP_VALUE="step-value"
+GRAPH_POINT_VALUE="point-value"
+GRAPH_POINTLINE_VALUEAVG="point-value+line-avg"
+GRAPH_CUMULATIVE="cumulative"
+GRAPH_NUMNODE_LENGTH_CORRELATION="numnode-length-correlation"
 
 
 # Component names
@@ -218,25 +221,9 @@ LEASESFILE="leases.dat"
 
 
 # Types of final tables in report generation
-TABLE_FINALVALUE=0
-TABLE_FINALTIME=1
-TABLE_FINALAVG=2
-
-# Types of graphs
-GRAPH_LINE_VALUE=0
-GRAPH_LINE_AVG=1
-GRAPH_STEP_VALUE=2
-GRAPH_POINT_VALUE=3
-GRAPH_POINTLINE_VALUEAVG=4
-GRAPH_CUMULATIVE=5
-
-graphtype = dict([(GRAPHNAME_LINE_VALUE,GRAPH_LINE_VALUE),
-                (GRAPHNAME_LINE_AVG,GRAPH_LINE_AVG),
-                (GRAPHNAME_STEP_VALUE,GRAPH_STEP_VALUE),
-                (GRAPHNAME_POINT_VALUE,GRAPH_POINT_VALUE),
-                (GRAPHNAME_POINTLINE_VALUEAVG,GRAPH_POINTLINE_VALUEAVG),
-                (GRAPHNAME_CUMULATIVE,GRAPH_CUMULATIVE)])
-
+TABLE_FINALVALUE="final-value"
+TABLE_FINALTIME="final-time"
+TABLE_FINALAVG="final-avg"
 
 # Trace config file secs and opts
 INTERVAL_SEC = "interval"
@@ -270,7 +257,8 @@ DISTRIBUTION_OPT="distribution"
 LENGTH_OPT="filelength"
 SIZE_SEC="size"
 
-CLIP_BYTIME = 0
-CLIP_BYLEASE = 1
+CLIP_PERCENTSUBMITTED = "percent"
+CLIP_TIMESTAMP = "timestamp"
+CLIP_LASTSUBMISSION = "last-submission"
 
 POOL_UNLIMITED = -1

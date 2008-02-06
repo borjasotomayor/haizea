@@ -176,3 +176,36 @@ class CumulativeGraph(Graph):
     def show(self):
         pylab.show()
         
+# TODO
+class ScatterGraph(Graph):
+    def __init__(self, data, xlabel="", ylabel="", legends=[]):
+        Graph.__init__(self,xlabel,ylabel)
+        self.data = data
+        self.legends = legends
+
+    def plotToFile(self, graphfile, thumbfile=None):
+        print "Generating graph %s" % graphfile
+        Graph.plot(self)
+        
+        for dataset in self.data:
+            x = [p[0] for p in dataset]
+            y = [p[1] for p in dataset]
+            size = [p[2] for p in dataset]
+            # TODO
+        
+
+        pylab.ylim(0, largestY * 1.05)
+        pylab.gca().xaxis.set_major_formatter(FormatStrFormatter('%d'))
+        pylab.legend(self.legends, loc='lower right')
+        
+        pylab.savefig(graphfile)
+        pylab.gcf().clear()
+        
+        if thumbfile != None:
+            print "Generating thumbnail %s" % thumbfile
+            im = Image.open(graphfile)
+            im.thumbnail((640, 480), Image.ANTIALIAS)
+            im.save(thumbfile)
+    
+    def show(self):
+        pylab.show()

@@ -380,21 +380,46 @@ class RMMultiConfig(Config):
                 confs.append(c)
                 
         return confs
+    
+    def getGraphSections(self):
+        secs = [s for s in self.config.sections() if s.startswith("graph-")]
+        secs.sort()
+        return secs
         
-    def isClipping(self):
-        clips = self.getClips()
-        if clips == None:
-            return False
-        else:
-            return True
-        
-    def getClips(self):
-        if self.config.has_option(constants.REPORTING_SEC, constants.CLIPSTART_OPT):
-            start = self.config.getint(constants.REPORTING_SEC, constants.CLIPSTART_OPT)
-            end = self.config.getint(constants.REPORTING_SEC, constants.CLIPEND_OPT)
-            return start, end
+    def getGraphTitle(self, graphsec):
+        return self.config.get(graphsec, constants.TITLE_OPT)
+    
+    def getGraphDatafile(self, graphsec):
+        return self.config.get(graphsec, constants.DATAFILE_OPT)
+    
+    def getGraphType(self, graphsec):
+        return self.config.get(graphsec, constants.GRAPHTYPE_OPT)
+    
+    def getGraphTable(self, graphsec):
+        if self.config.has_option(graphsec, constants.TABLE_OPT):
+            return self.config.get(graphsec, constants.TABLE_OPT)
         else:
             return None
+    
+    def getGraphClip(self, graphsec):
+        def parseClip(clip):
+            if clip[-1] == "%":
+                return (constants.CLIP_PERCENTSUBMITTED, int(clip[:-1]))
+            elif clip[-1] == "s":
+                return (constants.CLIP_TIMESTAMP, int(clip[:-1]))
+            elif clip == constants.CLIP_LASTSUBMISSION:
+                return (constants.CLIP_LASTSUBMISSION, None)
+        
+        if self.config.has_option(graphsec, constants.CLIPSTART_OPT) and self.config.has_option(graphsec, constants.CLIPEND_OPT):
+            clipstart = self.config.get(graphsec, constants.CLIPSTART_OPT)
+            clipend = self.config.get(graphsec, constants.CLIPEND_OPT)
+            return (parseClip(clipstart), parseClip(clipend))
+        else:
+            return None
+    
+    def getGraphSlideshow(self, graphsec):
+        pass
+    
         
 class TraceConfig(Config):
     def __init__(self, c):
