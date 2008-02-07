@@ -123,7 +123,7 @@ class Section(object):
             values = [[(v[0],v[3]) for v in self.data[p]] for p in self.profiles]
         elif self.graphtype in [constants.GRAPH_POINTLINE_VALUEAVG]:
             values = [[(v[0],v[2],v[3]) for v in self.data[p]] for p in self.profiles]
-        elif self.graphtype in [constants.GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE, constants.GRAPH_NUMNODE_LENGTH_CORRELATION_X, constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE, constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_X]:
+        elif self.graphtype in [constants.GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE, constants.GRAPH_NUMNODE_LENGTH_CORRELATION_Y, constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE, constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_Y]:
             values = []
             for p in self.profiles:
                 pvalues = []
@@ -133,13 +133,13 @@ class Section(object):
                     length = (lease.maxdur - lease.remdur).seconds
                     reqlength = lease.reqdur
                     if self.graphtype == constants.GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE:
-                        pvalues.append((numnodes, length, v[2]))
-                    elif self.graphtype == constants.GRAPH_NUMNODE_LENGTH_CORRELATION_X:
-                        pvalues.append((v[2], length, numnodes))
+                        pvalues.append((length, numnodes, v[2]))
+                    elif self.graphtype == constants.GRAPH_NUMNODE_LENGTH_CORRELATION_Y:
+                        pvalues.append((length, v[2], numnodes))
                     elif self.graphtype == constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE:
-                        pvalues.append((numnodes, reqlength, v[2]))
-                    elif self.graphtype == constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_X:
-                        pvalues.append((v[2], reqlength, numnodes))
+                        pvalues.append((reqlength, numnodes, v[2]))
+                    elif self.graphtype == constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_Y:
+                        pvalues.append((reqlength, v[2], numnodes))
                     
                 values.append(pvalues)
         
@@ -165,23 +165,23 @@ class Section(object):
             elif self.graphtype in [constants.GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE]:
                 graph = graphs.ScatterGraph
                 legends = self.profiles
-                titlex = "Number of nodes"
-                titley = "Length of lease (s)"
-            elif self.graphtype in [constants.GRAPH_NUMNODE_LENGTH_CORRELATION_X]:
+                titlex = "Length of lease (s)"
+                titley = "Number of nodes"
+            elif self.graphtype in [constants.GRAPH_NUMNODE_LENGTH_CORRELATION_Y]:
                 graph = graphs.ScatterGraph
                 legends = self.profiles
-                titlex = self.title
-                titley = "Length of lease (s)"
+                titlex = "Length of lease (s)"
+                titley = self.title
             elif self.graphtype in [constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE]:
                 graph = graphs.ScatterGraph
                 legends = self.profiles
-                titlex = "Number of nodes"
-                titley = "Requested length of lease (s)"
-            elif self.graphtype in [constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_X]:
+                titlex = "Requested length of lease (s)"
+                titley = "Number of nodes"
+            elif self.graphtype in [constants.GRAPH_NUMNODE_REQLENGTH_CORRELATION_Y]:
                 graph = graphs.ScatterGraph
                 legends = self.profiles
-                titlex = self.title
-                titley = "Requested length of lease (s)"
+                titlex = "Requested length of lease (s)"
+                titley = self.title
                 
             if titlex==None:
                 titlex = "Time (s)"
@@ -211,9 +211,17 @@ class Section(object):
                 g.plotToFile(graphfile, thumbfile)
         
     def generateHTML(self):
-        html  = "<div class='image'>"
-        html += "<a href='%s'><img src='%s' border='0'/></a>" % (self.graphfile, self.thumbfile)
-        html += "</div>"
+        if self.slideshow:
+            html = ""
+            for p in self.profiles:
+                html += "<div class='image'>"
+                html += "<a href='%s'><img src='%s' border='0'/></a>" % ("s_" + p + "-" + self.graphfile, "s_" + p + "-" + self.thumbfile)
+                html += "<br/><b>%s</b>" % p
+                html += "</div>"
+        else:
+            html  = "<div class='image'>"
+            html += "<a href='%s'><img src='%s' border='0'/></a>" % (self.graphfile, self.thumbfile)
+            html += "</div>"
         
         if self.tablefinal != None:
             html += "<table align='center' border='1' cellpadding='5'>"

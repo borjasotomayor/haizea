@@ -193,7 +193,7 @@ class ScatterGraph(Graph):
         largestY = None
         colors = iter(self.colors)
         legendpolys = []
-        pylab.gca().set_yscale('log')
+        pylab.gca().set_xscale('log')
         for dataset in self.data:
             x = [p[0] for p in dataset]
             y = [p[1] for p in dataset]
@@ -210,7 +210,6 @@ class ScatterGraph(Graph):
 
         pylab.xlim(smallestX - 5, largestX + 5)
         pylab.ylim(smallestY - 5, largestY + 5)
-        pylab.gca().xaxis.set_major_formatter(FormatStrFormatter('%d'))
         if self.legends != None:
             pylab.legend(legendpolys, self.legends, loc='lower right')
         

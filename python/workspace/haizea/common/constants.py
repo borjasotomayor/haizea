@@ -182,9 +182,9 @@ GRAPH_POINT_VALUE="point-value"
 GRAPH_POINTLINE_VALUEAVG="point-value+line-avg"
 GRAPH_CUMULATIVE="cumulative"
 GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE="numnode-length-correlation-insize"
-GRAPH_NUMNODE_LENGTH_CORRELATION_X="numnode-length-correlation-inx"
+GRAPH_NUMNODE_LENGTH_CORRELATION_Y="numnode-length-correlation-iny"
 GRAPH_NUMNODE_REQLENGTH_CORRELATION_SIZE="numnode-reqlength-correlation-insize"
-GRAPH_NUMNODE_REQLENGTH_CORRELATION_X="numnode-reqlength-correlation-inx"
+GRAPH_NUMNODE_REQLENGTH_CORRELATION_Y="numnode-reqlength-correlation-iny"
 
 # Component names
 RM="RM"
