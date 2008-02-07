@@ -144,15 +144,17 @@ class Scheduler(object):
         if prematureend:
             info("LEASE-%i This is a premature end." % l.leaseID, constants.SCHED, self.rm.time)
         if isinstance(l,ds.BestEffortLease):
-            l.remdur -= self.rm.time - rr.start
-            l.realremdur -= self.rm.time - rr.start
-        if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE:
+            diff = self.rm.time - rr.start
+            l.remdur -= diff
+            l.realremdur -= diff
+            l.accumdur += diff
+        rr.state = constants.RES_STATE_DONE
+        if not prematureend:
+            rr.realend = rr.end
+        else:
+            rr.end = rr.realend
+        if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE or (rr.oncomplete == constants.ONCOMPLETE_SUSPEND and prematureend):
             l.state = constants.LEASE_STATE_DONE
-            rr.state = constants.RES_STATE_DONE
-            if not prematureend:
-                rr.realend = rr.end
-            else:
-                rr.end = rr.realend
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
             for vnode,pnode in l.vmimagemap.items():
@@ -160,25 +162,12 @@ class Scheduler(object):
             if isinstance(l,ds.BestEffortLease):
                 self.rm.stats.incrBestEffortCompleted(l.leaseID)
                 self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time))        
-        elif rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
-            if isinstance(l,ds.BestEffortLease):
-                if not prematureend:
-                    rr.realend = rr.end
-                    rr.state = constants.RES_STATE_DONE
-                else:
-                    l.state = constants.LEASE_STATE_DONE
-                    rr.state = constants.RES_STATE_DONE
-                    rrs = l.nextRRs(rr)
-                    for r in rrs:
-                        l.removeRR(r)
-                        self.slottable.removeReservation(r)
-                    self.completedleases.add(l)
-                    self.scheduledleases.remove(l)
-                    for vnode,pnode in l.vmimagemap.items():
-                        self.rm.enactment.removeImage(pnode, l.leaseID, vnode)
-                    self.rm.stats.incrBestEffortCompleted(l.leaseID)   
-                    self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.time))         
-        
+            if rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
+                rrs = l.nextRRs(rr)
+                for r in rrs:
+                    l.removeRR(r)
+                    self.slottable.removeReservation(r)
+       
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
                 self.numbesteffortres -= 1

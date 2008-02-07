@@ -176,11 +176,11 @@ class ExactLease(LeaseBase):
 class BestEffortLease(LeaseBase):
     def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
         LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
-        self.reqdur = maxdur
-        self.maxdur = maxdur
-        self.remdur = maxdur
-        self.realremdur = realdur
-        self.realdur = realdur
+        self.maxdur = maxdur   # Maximum duration the lease can run for (this value is not modified)
+        self.realdur = realdur # Real duration (this value is not modified)
+        self.remdur = maxdur   # Remaining duration (until maximum). This value is decreased as the lease runs.
+        self.realremdur = realdur # REAL remaining duration (until reaching realdur).
+        self.accumdur = TimeDelta()   # How much duration the lease has accumulated
         self.maxqueuetime = maxqueuetime
         self.timeOnDedicated = timeOnDedicated
         self.imagesavail = None        
