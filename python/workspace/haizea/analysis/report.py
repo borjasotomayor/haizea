@@ -7,7 +7,6 @@ from pickle import Unpickler
 from mx.DateTime import now
 from operator import itemgetter, or_
 import shutil
-import gc
 
 leasescache = {}
 
@@ -33,8 +32,8 @@ class Section(object):
         self.clip = clip
         self.leases = {}
         self.slideshow = slideshow
-        if clip != None: clipstr = "noclip"
-        else: clipstr = "clip"
+        if clip != None: clipstr = "clip"
+        else: clipstr = "noclip"
         self.graphfile = self.filename + "_" + str(graphtype) + "_" + clipstr + ".png"
         self.thumbfile = self.filename + "_" + str(graphtype) + "_" + clipstr + "-thumb.png"
         
@@ -131,7 +130,7 @@ class Section(object):
                     lease = self.leases[p].getLease(v[1])
                     numnodes = lease.numnodes
                     length = (lease.maxdur - lease.remdur).seconds
-                    reqlength = lease.reqdur
+                    reqlength = lease.maxdur
                     if self.graphtype == constants.GRAPH_NUMNODE_LENGTH_CORRELATION_SIZE:
                         pvalues.append((length, numnodes, v[2]))
                     elif self.graphtype == constants.GRAPH_NUMNODE_LENGTH_CORRELATION_Y:
@@ -191,8 +190,14 @@ class Section(object):
 
 
             if self.slideshow:
+                smallestX = min([min([p[0] for p in l]) for l in values])
+                largestX = max([max([p[0] for p in l]) for l in values])
+                limx=(smallestX,largestX)
+                smallestY = min([min([p[1] for p in l]) for l in values])
+                largestY = max([max([p[1] for p in l]) for l in values])
+                limy=(smallestY,largestY)
                 for p, v in zip(self.profiles, values):
-                    g = graph([v], titlex, titley, None)
+                    g = graph([v], titlex, titley, None, limx=limx, limy=limy)
                     if filename==None:
                         graphfile = outdir + "/s_" + p + "-" + self.graphfile
                         thumbfile = outdir + "/s_" + p + "-" + self.thumbfile
@@ -212,12 +217,21 @@ class Section(object):
         
     def generateHTML(self):
         if self.slideshow:
+            graphfile = "s_" + self.profiles[0] + "-" + self.graphfile
+            thumbfile = "s_" + self.profiles[0] + "-" + self.thumbfile
             html = ""
+            html += "<div class='image'>"
+            html += "<a href='%s'><img src='%s' id='graph%i' border='0'/></a>" % (graphfile, thumbfile, id(self))
+            html += "<br/><b><span id='graphtitle%i'>%s</span></b><br/>" % (id(self), self.profiles[0])
             for p in self.profiles:
-                html += "<div class='image'>"
-                html += "<a href='%s'><img src='%s' border='0'/></a>" % ("s_" + p + "-" + self.graphfile, "s_" + p + "-" + self.thumbfile)
-                html += "<br/><b>%s</b>" % p
-                html += "</div>"
+                graphfile = "s_" + p + "-" + self.graphfile
+                thumbfile = "s_" + p + "-" + self.thumbfile
+                html+= "[<a href='#' onclick=\"document.getElementById('graph%i').src='%s';" % (id(self), thumbfile)
+                html+= "document.getElementById('graph%i').href='%s';" % (id(self), graphfile)
+                html+= "document.getElementById('graphtitle%i').innerHTML='%s';" % (id(self), p)
+                html+= "return false"
+                html+= "\">%s</a>]&nbsp;&nbsp;&nbsp;" % p
+            html += "</div>"
         else:
             html  = "<div class='image'>"
             html += "<a href='%s'><img src='%s' border='0'/></a>" % (self.graphfile, self.thumbfile)

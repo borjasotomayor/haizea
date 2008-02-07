@@ -175,41 +175,43 @@ class CumulativeGraph(Graph):
     
     def show(self):
         pylab.show()
+
         
-# TODO
 class ScatterGraph(Graph):
-    def __init__(self, data, xlabel="", ylabel="", legends=None):
+    def __init__(self, data, xlabel="", ylabel="", legends=None, limx=None, limy=None):
         Graph.__init__(self,xlabel,ylabel)
         self.data = data
         self.legends = legends
+        self.limx = limx
+        self.limy = limy
+        if self.limx==None:
+            smallestX = min([min([p[0] for p in l]) for l in self.data])
+            largestX = max([max([p[0] for p in l]) for l in self.data])
+            self.limx=(smallestX,largestX)
+        if limy==None:
+            smallestY = min([min([p[1] for p in l]) for l in self.data])
+            largestY = max([max([p[1] for p in l]) for l in self.data])
+            self.limy=(smallestY,largestY)
 
     def plotToFile(self, graphfile, thumbfile=None):
         print "Generating graph %s" % graphfile
         Graph.plot(self)
         
-        smallestX = 100000000000000 #Arbitrary
-        smallestY = 100000000000000
-        largestX = None
-        largestY = None
         colors = iter(self.colors)
         legendpolys = []
-        pylab.gca().set_xscale('log')
         for dataset in self.data:
+            pylab.gca().set_xscale('log')
             x = [p[0] for p in dataset]
             y = [p[1] for p in dataset]
             size = [p[2] for p in dataset]
-            smallestX = min(smallestX,min(x))
-            smallestY = min(smallestY,min(y))
-            largestX = max(largestX,max(x))
-            largestY = max(largestY,max(y))
             color=colors.next()
             poly = pylab.scatter(x,y,s=size, c=color, linewidths=(0.4,), alpha=0.75)
             # kluge suggested on matplotlib mailing list, since scatter does not
             # support having legends
             legendpolys.append(pylab.Rectangle( (0,0), 1,1, facecolor=color))
 
-        pylab.xlim(smallestX - 5, largestX + 5)
-        pylab.ylim(smallestY - 5, largestY + 5)
+        pylab.xlim(self.limx[0] - 5, self.limx[1] + 5)
+        pylab.ylim(self.limy[0] - 5, self.limy[1] + 5)
         if self.legends != None:
             pylab.legend(legendpolys, self.legends, loc='lower right')
         
