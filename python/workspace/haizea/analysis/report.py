@@ -3,7 +3,7 @@ import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.datastruct as ds
 import workspace.haizea.analysis.graph as graphs
 from workspace.haizea.common.utils import genDataDirName, genTraceInjName
-from pickle import Unpickler
+from cPickle import load
 from mx.DateTime import now
 from operator import itemgetter, or_
 import shutil
@@ -14,8 +14,7 @@ def getleases(dir):
     if not leasescache.has_key(dir):
         print "Loading lease data from %s" % dir
         file = open (dir + "/" + constants.LEASESFILE, "r")
-        u = Unpickler(file)
-        leases = u.load()
+        leases = load(file)
         file.close()
         leasescache[dir] = leases
     return leasescache[dir]
@@ -49,8 +48,7 @@ class Section(object):
             f = dir + "/" + self.filename
             print "Loading %s" % f
             file = open (f, "r")
-            u = Unpickler(file)
-            data = u.load()
+            data = load(file)
             file.close()
             
             leases = getleases(dir)

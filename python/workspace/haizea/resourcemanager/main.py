@@ -7,7 +7,7 @@ import workspace.haizea.common.constants as constants
 import workspace.haizea.common.utils as utils
 from workspace.haizea.common.config import RMConfig
 from workspace.haizea.common.log import log, loglevel, setED
-from pickle import Pickler, Unpickler
+from cPickle import load, dump, HIGHEST_PROTOCOL
 import operator
 
 def simulate(config, statsdir):
@@ -59,7 +59,7 @@ def simulate(config, statsdir):
 def writeDataToDisk(resourcemanager, dir):
     if not os.path.exists(dir):
         os.makedirs(dir)
-        
+
     cpuutilization = resourcemanager.stats.getUtilization()
     exactaccepted = resourcemanager.stats.getExactAccepted()
     exactrejected = resourcemanager.stats.getExactRejected()
@@ -72,8 +72,12 @@ def writeDataToDisk(resourcemanager, dir):
     boundedslowdown = resourcemanager.stats.getBoundedSlowdown()
     leases = ds.LeaseTable(None)
     leases.entries = resourcemanager.scheduler.completedleases.entries
+    
+    # Remove some data that won't be necessary in the reporting tools
     for l in leases.entries.values():
         l.removeRRs()
+        l.scheduler = None
+    
 
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     pickle(exactaccepted, dir, constants.ACCEPTEDFILE)
@@ -90,8 +94,7 @@ def writeDataToDisk(resourcemanager, dir):
         
 def pickle(data, dir, file):
     f = open (dir + "/" + file, "w")
-    p = Pickler(f)
-    p.dump(data)
+    dump(data, f, protocol = HIGHEST_PROTOCOL)
     f.close()
 
 
