@@ -55,20 +55,8 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
     condor = open(dir + "/condor_submit", "w")
     sh = open(dir + "/run.sh", "w")
     reportsh = open(dir + "/report.sh", "w")
-    
-    exclude = ["sox", "nefarious", "cuckoo", "admiral", "fledermaus-2", "microbe", "merry", "berkshire"]
 
-    condor.write("Universe   = vanilla\n")
-    condor.write("Executable = /home/borja/bin/python2.5\n")
-    condor.write("transfer_executable = false\n")
-    condor.write("getenv = true\n")
-    req = "requirements = Mips >= 2000"
-    for h in exclude:
-        req += " && Machine != \"%s.cs.uchicago.edu\"" % h
-    condor.write("%s\n" % req)
-    condor.write("Log        = experiment-indiv.log\n")
-    condor.write("Output     = experiment-indiv.$(Process).out\n")
-    condor.write("Error      = experiment-indiv.$(Process).error\n\n")
+    condor.write(generateCondorHeader(fastonly=True))
     
     sh.write("#!/bin/bash\n\n")
     
@@ -84,9 +72,7 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
         
         command = "/home/borja/bin/vw/haizea-simulate -c %s -s /home/borja/docs/uchicago/research/experiments/haizea/data" % configfile
         
-        condor.write("remote_initialdir=%s\n" % dir)
-        condor.write("Arguments  = %s\n" % command)
-        condor.write("Queue\n\n")
+        condor.write(generateCondorQueueEntry(command=command, dir = dir))
         
         sh.write("echo Running profile=%s trace=%s\n" % (profile, name))
         sh.write("python2.5 %s\n" % command)
@@ -96,6 +82,34 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
     condor.close()
     sh.close()
     reportsh.close()
+    
+
+def generateCondorHeader(fastonly=False, logname="experiment"):
+    exclude = ["sox", "nefarious", "cuckoo", "admiral", "fledermaus-2", "microbe", "merry", "berkshire"]
+    condor = ""
+    condor += "Universe   = vanilla\n"
+    condor += "Executable = /home/borja/bin/python2.5\n"
+    condor += "transfer_executable = false\n"
+    condor += "getenv = true\n"
+    req = ""
+    if fastonly:
+        req += "requirements = Mips >= 2000"
+    for h in exclude:
+        req += " && Machine != \"%s.cs.uchicago.edu\"" % h
+    condor += "%s\n" % req
+    condor += "Log        = %s.log\n" % logname
+    condor += "Output     = %s.$(Process).out\n" % logname
+    condor += "Error      = %s.$(Process).error\n\n" % logname
+    
+    return condor
+
+def generateCondorQueueEntry(command, dir):    
+    condor  = ""
+    condor += "remote_initialdir=%s\n" % dir
+    condor += "Arguments  = %s\n" % command
+    condor += "Queue\n\n"
+    return condor
+    
     
 def roundDateTimeDelta(d):
     return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))

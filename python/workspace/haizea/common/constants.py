@@ -264,3 +264,9 @@ CLIP_TIMESTAMP = "timestamp"
 CLIP_LASTSUBMISSION = "last-submission"
 
 POOL_UNLIMITED = -1
+
+REPORT_ALL="all"
+REPORT_BASH="bash"
+REPORT_CONDOR="condor"
+REPORT_SINGLE_PROFILE="singletrace"
+REPORT_SINGLE_TRACE="singleprofile"

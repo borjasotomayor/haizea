@@ -14,22 +14,54 @@ class Report(object):
         pass
     
     def run(self, argv):
-        from workspace.haizea.analysis.main import report
+        from workspace.haizea.analysis.report import Report
 
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
         p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
         p.add_option(Option("-t", "--html-only", action="store_true", dest="htmlonly"))
+        p.add_option(Option("-m", "--mode", action="store", type="string", dest="mode", default="all"))
 
         opt, args = p.parse_args(argv)
         
         configfile=opt.conf
-        multiconfig = RMMultiConfig.fromFile(configfile)
+        statsdir = opt.statsdir
+        
+        r = Report(configfile, statsdir, opt.htmlonly, opt.mode)
+        r.generate()
+        
+class ReportSingle(object):
+    def __init__(self, mode):
+        self.mode = mode
+    
+    def run(self, argv):
+        from workspace.haizea.analysis.report import Report
+        from workspace.haizea.common.utils import genTraceInjName
+        
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
+        p.add_option(Option("-t", "--html-only", action="store_true", dest="htmlonly"))
+        p.add_option(Option("-p", "--profile", action="store", type="string", dest="profile"))
+        p.add_option(Option("-r", "--trace", action="store", type="string", dest="trace"))
+        p.add_option(Option("-i", "--inj", action="store", type="string", dest="inj"))
+
+        opt, args = p.parse_args(argv)
+        
+        configfile=opt.conf
             
         statsdir = opt.statsdir
-
-        report(multiconfig, statsdir, opt.htmlonly)
         
+        if p.has_option("trace"):
+            inj = opt.inj
+            if inj == "None": inj = None
+            trace = (opt.trace, inj, genTraceInjName(opt.trace,inj))
+        else:
+            trace = None
+        
+        r = Report(configfile, statsdir, opt.htmlonly, mode = self.mode)
+        r.generate(onlyprofile=opt.profile, onlytrace=trace, configfilename = configfile)
+                
 class Graph(object):
     def __init__(self):
         pass

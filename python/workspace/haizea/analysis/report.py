@@ -2,7 +2,8 @@ import os
 import workspace.haizea.common.constants as constants
 import workspace.haizea.resourcemanager.datastruct as ds
 import workspace.haizea.analysis.graph as graphs
-from workspace.haizea.common.utils import genDataDirName, genTraceInjName
+from workspace.haizea.common.config import RMMultiConfig
+from workspace.haizea.common.utils import genDataDirName, genTraceInjName, generateCondorHeader, generateCondorQueueEntry
 from cPickle import load
 from mx.DateTime import now
 from operator import itemgetter, or_
@@ -258,10 +259,12 @@ class Section(object):
         return html
 
 class Report(object):
-    def __init__(self, config, statsdir, htmlonly):
-        self.config = config
+    def __init__(self, configfile, statsdir, htmlonly, mode=constants.REPORT_ALL):
+        self.configfile = configfile
+        self.config = RMMultiConfig.fromFile(self.configfile)
         self.statsdir = statsdir
         self.htmlonly = htmlonly
+        self.mode = mode
 
         confs = self.config.getConfigsToReport()
 
@@ -300,20 +303,65 @@ class Report(object):
         
 
 
-    def generate(self):
-        self.generateIndex()
-        for t in self.traces:
-            print "Generating report for trace %s" % t[2]
+    def generate(self, onlyprofile=None, onlytrace=None, configfilename=None):
+        def getProfilesDirs(t):
             profilesdirs = [(p, self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for p in self.profiles]
             profilesdirs = dict([(p,d) for p,d in profilesdirs if os.path.exists(d)])
-            if len(profilesdirs) > 0:
-                self.generateReport(t[2],profilesdirs)
-        for p in self.profiles:
-            print "Generating report for profile %s" % p
+            return profilesdirs
+
+        def getTracesDirs(p):
             tracesdirs = [(t[2], self.statsdir + "/" + genDataDirName(p,t[0],t[1])) for t in self.traces]
-            tracesdirs = dict([(t,d) for t,d in tracesdirs if os.path.exists(d)])
+            tracesdirs = dict([(p,d) for p,d in tracesdirs if os.path.exists(d)])
+            return tracesdirs
+        
+        if self.mode == constants.REPORT_ALL:
+            self.generateIndex()
+            for t in self.traces:
+                print "Generating report for trace %s" % t[2]
+                profilesdirs = getProfilesDirs(t)
+                if len(profilesdirs) > 0:
+                    self.generateReport(t[2],profilesdirs)
+            for p in self.profiles:
+                print "Generating report for profile %s" % p
+                tracesdirs = getTracesDirs(p)
+                if len(tracesdirs) > 0:
+                    self.generateReport(p, tracesdirs)
+        elif self.mode == constants.REPORT_BASH or self.mode == constants.REPORT_CONDOR:
+            self.generateIndex()
+            if self.mode == constants.REPORT_CONDOR:
+                print generateCondorHeader(logname="report")
+            elif self.mode == constants.REPORT_BASH:
+                print "#!/bin/bash\n\n"
+            for t in self.traces:
+                profilesdirs = getProfilesDirs(t)
+                if len(profilesdirs) > 0:
+                    command  = "/home/borja/bin/vw/haizea-report-single-trace -c %s -s %s" % (self.configfile, self.statsdir)
+                    command += " --trace %s" % t[0]
+                    command += " --inj %s" % t[1]
+                    if self.mode == constants.REPORT_CONDOR:
+                        print generateCondorQueueEntry(command=command, dir="./")
+                    elif self.mode == constants.REPORT_BASH:
+                        print command
+            for p in self.profiles:
+                tracesdirs = getTracesDirs(p)
+                if len(tracesdirs) > 0:
+                    command  = "/home/borja/bin/vw/haizea-report-single-profile -c %s -s %s" % (self.configfile, self.statsdir)
+                    command += " --profile %s" % p
+                    if self.mode == constants.REPORT_CONDOR:
+                        print generateCondorQueueEntry(command=command, dir="./")
+                    elif self.mode == constants.REPORT_BASH:
+                        print command
+        elif self.mode == constants.REPORT_SINGLE_TRACE:
+            print "Generating report for trace %s" % onlytrace[2]
+            profilesdirs = getProfilesDirs(onlytrace)
+            if len(profilesdirs) > 0:
+                self.generateReport(onlytrace[2],profilesdirs)
+        elif self.mode == constants.REPORT_SINGLE_PROFILE:
+            print "Generating report for profile %s" % onlyprofile
+            tracesdirs = getTracesDirs(onlyprofile)
             if len(tracesdirs) > 0:
-                self.generateReport(p, tracesdirs)
+                self.generateReport(onlyprofile,tracesdirs)
+            
 
     def generateIndex(self):
         indexfile = open(self.outdir + "/index.html", "w")

@@ -1,0 +1,11 @@
+#!/usr/bin/python
+
+from workspace.haizea import clients
+from workspace.haizea.common.constants import REPORT_SINGLE_TRACE
+import sys
+import psyco
+
+psyco.full()
+
+c = clients.ReportSingle(mode=REPORT_SINGLE_TRACE)
+c.run(sys.argv)
