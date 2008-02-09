@@ -91,11 +91,9 @@ def generateCondorHeader(fastonly=False, logname="experiment"):
     condor += "Executable = /home/borja/bin/python2.5\n"
     condor += "transfer_executable = false\n"
     condor += "getenv = true\n"
-    req = ""
+    req = "requirements = " + " && ".join(["Machine != \"%s.cs.uchicago.edu\"" % h for h in exclude])
     if fastonly:
-        req += "requirements = Mips >= 2000"
-    for h in exclude:
-        req += " && Machine != \"%s.cs.uchicago.edu\"" % h
+        req += " && Mips >= 2000"
     condor += "%s\n" % req
     condor += "Log        = %s.log\n" % logname
     condor += "Output     = %s.$(Process).out\n" % logname

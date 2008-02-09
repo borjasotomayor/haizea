@@ -341,7 +341,7 @@ class Report(object):
                     if self.mode == constants.REPORT_CONDOR:
                         print generateCondorQueueEntry(command=command, dir="./")
                     elif self.mode == constants.REPORT_BASH:
-                        print command
+                        print "python2.5", command
             for p in self.profiles:
                 tracesdirs = getTracesDirs(p)
                 if len(tracesdirs) > 0:
@@ -350,7 +350,7 @@ class Report(object):
                     if self.mode == constants.REPORT_CONDOR:
                         print generateCondorQueueEntry(command=command, dir="./")
                     elif self.mode == constants.REPORT_BASH:
-                        print command
+                        print "python2.5", command
         elif self.mode == constants.REPORT_SINGLE_TRACE:
             print "Generating report for trace %s" % onlytrace[2]
             profilesdirs = getProfilesDirs(onlytrace)

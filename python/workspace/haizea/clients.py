@@ -5,7 +5,7 @@ from workspace.haizea.common.utils import Option, OptionParser, generateScripts
 from workspace.haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig, ImageConfig
 from workspace.haizea.analysis.traces import analyzeExactLeaseInjection
 from workspace.haizea.analysis.misc import genpercentiles
-
+import os.path
 
 
 
@@ -24,7 +24,8 @@ class Report(object):
 
         opt, args = p.parse_args(argv)
         
-        configfile=opt.conf
+        configfile=os.path.abspath(opt.conf)
+        
         statsdir = opt.statsdir
         
         r = Report(configfile, statsdir, opt.htmlonly, opt.mode)
@@ -48,11 +49,11 @@ class ReportSingle(object):
 
         opt, args = p.parse_args(argv)
         
-        configfile=opt.conf
+        configfile= os.path.abspath(opt.conf)
             
         statsdir = opt.statsdir
         
-        if p.has_option("trace"):
+        if p.has_option("--trace"):
             inj = opt.inj
             if inj == "None": inj = None
             trace = (opt.trace, inj, genTraceInjName(opt.trace,inj))
