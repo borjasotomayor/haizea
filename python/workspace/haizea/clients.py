@@ -44,7 +44,7 @@ class ReportSingle(object):
         p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
         p.add_option(Option("-t", "--html-only", action="store_true", dest="htmlonly"))
         p.add_option(Option("-p", "--profile", action="store", type="string", dest="profile"))
-        p.add_option(Option("-r", "--trace", action="store", type="string", dest="trace"))
+        p.add_option(Option("-r", "--trace", action="store", type="string", dest="trace", default=None))
         p.add_option(Option("-i", "--inj", action="store", type="string", dest="inj"))
 
         opt, args = p.parse_args(argv)
@@ -53,7 +53,7 @@ class ReportSingle(object):
             
         statsdir = opt.statsdir
         
-        if p.has_option("--trace"):
+        if opt.trace != None:
             inj = opt.inj
             if inj == "None": inj = None
             trace = (opt.trace, inj, genTraceInjName(opt.trace,inj))
