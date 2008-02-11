@@ -182,6 +182,7 @@ class GenScripts(object):
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
         p.add_option(Option("-d", "--dir", action="store", type="string", dest="dir", required=True))
+        p.add_option(Option("-m", "--only-missing", action="store_true",  dest="onlymissing"))
 
         opt, args = p.parse_args(argv)
         
@@ -190,7 +191,7 @@ class GenScripts(object):
         
         dir = opt.dir
 
-        generateScripts(configfile, multiconfig, dir)
+        generateScripts(configfile, multiconfig, dir, onlymissing=opt.onlymissing)
         
 class InjectionAnalyzer(object):
     def __init__(self):

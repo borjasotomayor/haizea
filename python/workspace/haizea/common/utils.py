@@ -49,9 +49,10 @@ def genDataDirName(profile, tracefile, injectedfile):
     name = genTraceInjName(tracefile, injectedfile)
     return profile + "/" + name + "/"
 
-def generateScripts(multiconfigfilename, multiconfig, dir):
+def generateScripts(multiconfigfilename, multiconfig, dir, onlymissing = False):
     configs = multiconfig.getConfigsToRun()
     dir = os.path.abspath(dir)    
+    basedatadir = "/home/borja/docs/uchicago/research/experiments/haizea/data"
     condor = open(dir + "/condor_submit", "w")
     sh = open(dir + "/run.sh", "w")
     reportsh = open(dir + "/report.sh", "w")
@@ -65,17 +66,19 @@ def generateScripts(multiconfigfilename, multiconfig, dir):
         tracefile = c.getTracefile()
         injfile = c.getInjectfile()
         name = genTraceInjName(tracefile, injfile)
-        configfile = dir + "/%s_%s.conf" % (profile, name)
-        fc = open(configfile, "w")
-        c.config.write(fc)
-        fc.close()
-        
-        command = "/home/borja/bin/vw/haizea-simulate -c %s -s /home/borja/docs/uchicago/research/experiments/haizea/data" % configfile
-        
-        condor.write(generateCondorQueueEntry(command=command, dir = dir))
-        
-        sh.write("echo Running profile=%s trace=%s\n" % (profile, name))
-        sh.write("python2.5 %s\n" % command)
+        datadir = "%s/%s/%s" % (basedatadir, profile, name)
+        if not onlymissing or not os.path.exists(datadir):
+            configfile = dir + "/%s_%s.conf" % (profile, name)
+            fc = open(configfile, "w")
+            c.config.write(fc)
+            fc.close()
+            
+            command = "/home/borja/bin/vw/haizea-simulate -c %s -s %s" % (configfile, datadir)
+            
+            condor.write(generateCondorQueueEntry(command=command, dir = dir))
+            
+            sh.write("echo Running profile=%s trace=%s\n" % (profile, name))
+            sh.write("python2.5 %s\n" % command)
     
     reportsh.write("python2.5 /home/borja/bin/vw/haizea-report -c %s -s /home/borja/docs/uchicago/research/experiments/haizea/data\n" % multiconfigfilename)
     
