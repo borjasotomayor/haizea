@@ -36,6 +36,11 @@ class Scheduler(object):
         
         self.processReservations()
         
+        if self.rm.config.getNodeSelectionPolicy() == constants.NODESELECTION_AVOIDPREEMPT:
+            avoidpreempt = True
+        else:
+            avoidpreempt = False
+        
         # Process exact requests
         for r in requests:
             info("LEASE-%i Processing request (EXACT)" % r.leaseID, constants.SCHED, self.rm.time)
@@ -44,12 +49,26 @@ class Scheduler(object):
             info("LEASE-%i RealEnd %s" % (r.leaseID, r.prematureend), constants.SCHED, self.rm.time)
             info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED, self.rm.time)
             try:
-                self.scheduleExactLease(r)
+                self.scheduleExactLease(r, avoidpreempt=avoidpreempt)
                 self.scheduledleases.add(r)
                 self.rm.stats.incrAccepted(r.leaseID)
             except SchedException, msg:
-                self.rm.stats.incrRejected(r.leaseID)
-                info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
+                # If our first try avoided preemption, try again
+                # without avoiding preemption.
+                # TODO: Roll this into the exact slot fitting algorithm
+                if avoidpreempt:
+                    try:
+                        info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
+                        info("LEASE-%i Trying again without avoiding preemption" % r.leaseID, constants.SCHED, self.rm.time)
+                        self.scheduleExactLease(r, avoidpreempt=False)
+                        self.scheduledleases.add(r)
+                        self.rm.stats.incrAccepted(r.leaseID)
+                    except SchedException, msg:
+                        self.rm.stats.incrRejected(r.leaseID)
+                        info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
+                else:
+                    self.rm.stats.incrRejected(r.leaseID)
+                    info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED, self.rm.time)
                
         done = False
         newqueue = ds.Queue(self)
@@ -260,9 +279,9 @@ class Scheduler(object):
     def handleEndRR(self, l, rr):
         self.slottable.removeReservation(rr)
     
-    def scheduleExactLease(self, req):
+    def scheduleExactLease(self, req, avoidpreempt=True):
         try:
-            (nodeassignment, res, preemptions) = self.slottable.fitExact(req, preemptible=False, canpreempt=True)
+            (nodeassignment, res, preemptions) = self.slottable.fitExact(req, preemptible=False, canpreempt=True, avoidpreempt=avoidpreempt)
             if len(preemptions) > 0:
                 info("Must preempt the following: %s" % preemptions, constants.SCHED, self.rm.time)
                 leases = self.slottable.findLeasesToPreempt(preemptions, req.start, req.end)

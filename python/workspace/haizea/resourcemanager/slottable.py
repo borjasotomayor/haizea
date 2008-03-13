@@ -281,7 +281,7 @@ class SlotTable(object):
             self.changepointcache.pop()
         return p
     
-    def fitExact(self, leasereq, preemptible=False, canpreempt=True):
+    def fitExact(self, leasereq, preemptible=False, canpreempt=True, avoidpreempt=True):
         leaseID = leasereq.leaseID
         start = leasereq.start
         end = leasereq.end
@@ -345,7 +345,7 @@ class SlotTable(object):
             else:
                 canfit[node] = [0, vnodes]
 
-        orderednodes = self.prioritizenodes(canfit, vmimage, start, canpreempt)
+        orderednodes = self.prioritizenodes(canfit, vmimage, start, canpreempt, avoidpreempt)
             
         info("Node ordering: %s" % orderednodes, constants.ST, self.rm.time)
         
@@ -358,23 +358,24 @@ class SlotTable(object):
         # physnode -> how many vnodes
         preemptions = {}
         
-        # First pass, without preemption
         vnode = 1
-        for physnode in orderednodes:
-            canfitinnode = canfit[physnode][0]
-            for i in range(1, canfitinnode+1):
-                nodeassignment[vnode] = physnode
-                res[physnode] = resreq
-                canfit[physnode][0] -= 1
-                canfit[physnode][1] -= 1
-                vnode += 1
+        if avoidpreempt:
+            # First pass, without preemption
+            for physnode in orderednodes:
+                canfitinnode = canfit[physnode][0]
+                for i in range(1, canfitinnode+1):
+                    nodeassignment[vnode] = physnode
+                    res[physnode] = resreq
+                    canfit[physnode][0] -= 1
+                    canfit[physnode][1] -= 1
+                    vnode += 1
+                    if vnode > numnodes:
+                        break
                 if vnode > numnodes:
                     break
-            if vnode > numnodes:
-                break
             
         # Second pass, with preemption
-        if mustpreempt:
+        if mustpreempt or not avoidpreempt:
             for physnode in orderednodes:
                 canfitinnode = canfit[physnode][1]
                 for i in range(1, canfitinnode+1):
@@ -382,10 +383,14 @@ class SlotTable(object):
                     res[physnode] = resreq
                     canfit[physnode][1] -= 1
                     vnode += 1
-                    if preemptions.has_key(physnode):
-                        preemptions[physnode].incr(resreq)
+                    # Check if this will actually result in a preemption
+                    if canfit[physnode][0] == 0:
+                        if preemptions.has_key(physnode):
+                            preemptions[physnode].incr(resreq)
+                        else:
+                            preemptions[physnode] = ds.ResourceTuple.copy(resreq)
                     else:
-                        preemptions[physnode] = ds.ResourceTuple.copy(resreq)
+                        canfit[physnode][0] -= 1
                     if vnode > numnodes:
                         break
                 if vnode > numnodes:
@@ -830,7 +835,7 @@ class SlotTable(object):
             lease.printContents()
 
 
-    def prioritizenodes(self,canfit, vmimage,start,canpreempt):
+    def prioritizenodes(self,canfit, vmimage,start,canpreempt, avoidpreempt):
         # TODO2: Choose appropriate prioritizing function based on a
         # config file, instead of hardcoding it)
         #
@@ -860,33 +865,62 @@ class SlotTable(object):
             canfitnopreemptionY = canfit[y][0]
             canfitpreemptionY = canfit[y][1]
             hasPreemptibleY = canfitpreemptionY > canfitnopreemptionY
-          
-            if hasPreemptibleX and not hasPreemptibleY:
-                return constants.WORSE
-            elif not hasPreemptibleX and hasPreemptibleY:
-                return constants.BETTER
-            elif not hasPreemptibleX and not hasPreemptibleY:
+
+            # TODO: Factor out common code
+            if avoidpreempt:
+                if hasPreemptibleX and not hasPreemptibleY:
+                    return constants.WORSE
+                elif not hasPreemptibleX and hasPreemptibleY:
+                    return constants.BETTER
+                elif not hasPreemptibleX and not hasPreemptibleY:
+                    if hasimgX and not hasimgY: 
+                        return constants.BETTER
+                    elif not hasimgX and hasimgY: 
+                        return constants.WORSE
+                    else:
+                        if canfitnopreemptionX > canfitnopreemptionY: return constants.BETTER
+                        elif canfitnopreemptionX < canfitnopreemptionY: return constants.WORSE
+                        else: return constants.EQUAL
+                elif hasPreemptibleX and hasPreemptibleY:
+                    # If both have (some) preemptible resources, we prefer those
+                    # that involve the less preemptions
+                    preemptX = canfitpreemptionX - canfitnopreemptionX
+                    preemptY = canfitpreemptionY - canfitnopreemptionY
+                    if preemptX < preemptY:
+                        return constants.BETTER
+                    elif preemptX > preemptY:
+                        return constants.WORSE
+                    else:
+                        if hasimgX and not hasimgY: return constants.BETTER
+                        elif not hasimgX and hasimgY: return constants.WORSE
+                        else: return constants.EQUAL
+            elif not avoidpreempt:
+                # First criteria: Can we reuse image?
                 if hasimgX and not hasimgY: 
                     return constants.BETTER
                 elif not hasimgX and hasimgY: 
                     return constants.WORSE
                 else:
-                    if canfitnopreemptionX > canfitnopreemptionY: return constants.BETTER
-                    elif canfitnopreemptionX < canfitnopreemptionY: return constants.WORSE
-                    else: return constants.EQUAL
-            elif hasPreemptibleX and hasPreemptibleY:
-                # If both have (some) preemptible resources, we prefer those
-                # that involve the less preemptions
-                preemptX = canfitpreemptionX - canfitnopreemptionX
-                preemptY = canfitpreemptionY - canfitnopreemptionY
-                if preemptX < preemptY:
-                    return constants.BETTER
-                elif preemptX > preemptY:
-                    return constants.WORSE
-                else:
-                    if hasimgX and not hasimgY: return constants.BETTER
-                    elif not hasimgX and hasimgY: return constants.WORSE
-                    else: return constants.EQUAL
+                    # Now we just want to avoid preemption
+                    if hasPreemptibleX and not hasPreemptibleY:
+                        return constants.WORSE
+                    elif not hasPreemptibleX and hasPreemptibleY:
+                        return constants.BETTER
+                    elif hasPreemptibleX and hasPreemptibleY:
+                        # If both have (some) preemptible resources, we prefer those
+                        # that involve the less preemptions
+                        preemptX = canfitpreemptionX - canfitnopreemptionX
+                        preemptY = canfitpreemptionY - canfitnopreemptionY
+                        if preemptX < preemptY:
+                            return constants.BETTER
+                        elif preemptX > preemptY:
+                            return constants.WORSE
+                        else:
+                            if hasimgX and not hasimgY: return constants.BETTER
+                            elif not hasimgX and hasimgY: return constants.WORSE
+                            else: return constants.EQUAL
+                    else:
+                        return constants.EQUAL
         
         # Order nodes
         nodes.sort(comparenodes)

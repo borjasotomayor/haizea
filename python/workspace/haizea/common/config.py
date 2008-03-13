@@ -192,6 +192,12 @@ class RMConfig(Config):
         else:
             return self.config.getboolean(constants.GENERAL_SEC, constants.AVOIDREDUNDANT_OPT)
 
+    def getNodeSelectionPolicy(self):
+        if not self.config.has_option(constants.GENERAL_SEC, constants.NODESELECTION_OPT):
+            return constants.NODESELECTION_AVOIDPREEMPT
+        else:
+            return self.config.get(constants.GENERAL_SEC, constants.NODESELECTION_OPT)
+
     def getForceTransferTime(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.FORCETRANSFERT_OPT):
             return None
@@ -209,7 +215,6 @@ class RMConfig(Config):
             return 0
         else:
             return self.config.getint(constants.SIMULATION_SEC, constants.BOOTOVERHEAD_OPT)
-
 
     def overheadOnlyBestEffort(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT):
@@ -409,6 +414,8 @@ class RMMultiConfig(Config):
                 return (constants.CLIP_TIMESTAMP, int(clip[:-1]))
             elif clip == constants.CLIP_LASTSUBMISSION:
                 return (constants.CLIP_LASTSUBMISSION, None)
+            elif clip == constants.CLIP_NOCLIP:
+                return (constants.CLIP_NOCLIP, None)
         
         if self.config.has_option(graphsec, constants.CLIPSTART_OPT) and self.config.has_option(graphsec, constants.CLIPEND_OPT):
             clipstart = self.config.get(graphsec, constants.CLIPSTART_OPT)

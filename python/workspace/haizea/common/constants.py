@@ -115,6 +115,7 @@ INJFILE_OPT="injectionfile"
 IMGFILE_OPT="imagefile"
 REUSE_OPT="reuse"
 MAXPOOL_OPT="maxpool"
+NODESELECTION_OPT="nodeselection"
 
 REPORTING_SEC="reporting"
 CSS_OPT="css"
@@ -164,6 +165,9 @@ STOPWHEN_BEDONE="best-effort-done"
 REUSE_NONE="none"
 REUSE_POOL="pool"
 REUSE_COWPOOL="cowpool"
+
+NODESELECTION_AVOIDPREEMPT="avoid-preemption"
+NODESELECTION_PREFERREUSE="prefer-imagereuse"
 
 # Graph configfile sections and options
 TITLE_OPT="title"
@@ -262,6 +266,7 @@ SIZE_SEC="size"
 CLIP_PERCENTSUBMITTED = "percent"
 CLIP_TIMESTAMP = "timestamp"
 CLIP_LASTSUBMISSION = "last-submission"
+CLIP_NOCLIP = "noclip"
 
 POOL_UNLIMITED = -1
 
