@@ -504,31 +504,25 @@ class SlotTable(object):
         if mustresume and not canmigrate:
             vmrr, susprr = lease.getLastVMRR()
             curnodes = set(vmrr.nodes.values())
+            suspendthreshold = lease.getSuspendThreshold(initial=False, migrating=False)
         
         if mustresume and canmigrate:
             # If we have to resume this lease, make sure that
             # we have enough time to transfer the images.
-            whattomigrate = self.rm.config.getMustMigrate()
-            if whattomigrate != constants.MIGRATE_NONE:
-                if whattomigrate == constants.MIGRATE_MEM:
-                    mbtotransfer = resreq.res[constants.RES_MEM]
-                elif whattomigrate == constants.MIGRATE_MEMVM:
-                    mbtotransfer = lease.vmimagesize + resreq.res[constants.RES_MEM]
-            
-                migratetime = float(mbtotransfer) / self.rm.config.getBandwidth()
-                migratetime = roundDateTimeDelta(TimeDelta(seconds=migratetime))
-                earliesttransfer = self.rm.time + migratetime
+            migratetime = lease.estimateMigrationTime()
+            earliesttransfer = self.rm.time + migratetime
 
-                for n in earliest:
-                    earliest[n][0] = max(earliest[n][0],earliesttransfer)
+            for n in earliest:
+                earliest[n][0] = max(earliest[n][0],earliesttransfer)
+            suspendthreshold = lease.getSuspendThreshold(initial=False, migrating=True)
                     
         if mustresume:
-            resumerate = self.rm.config.getSuspendResumeRate()
-            resumetime = float(resreq.res[constants.RES_MEM]) / resumerate
-            resumetime = roundDateTimeDelta(TimeDelta(seconds = resumetime))
+            resumetime = lease.estimateSuspendResumeTime()
             # Must allocate time for resumption too
             remdur += resumetime
             realdur += resumetime
+        else:
+            suspendthreshold = lease.getSuspendThreshold(initial=True)
 
 
         #
@@ -573,7 +567,7 @@ class SlotTable(object):
         #
 
         # First, assuming we can't make reservations in the future
-        start, end, realend, canfit, mustsuspend = self.fitBestEffortInChangepoints(changepoints, numnodes, resreq, remdur, realdur, suspendable)
+        start, end, realend, canfit, mustsuspend = self.fitBestEffortInChangepoints(changepoints, numnodes, resreq, remdur, realdur, suspendable, suspendthreshold)
 
         if not canreserve:
             if start == None:
@@ -589,7 +583,7 @@ class SlotTable(object):
         # If we haven't been able to fit the lease, check if we can
         # reserve it in the future
         if start == None and canreserve:
-            start, end, realend, canfit, mustsuspend = self.fitBestEffortInChangepoints(futurecp, numnodes, resreq, remdur, realdur, suspendable)
+            start, end, realend, canfit, mustsuspend = self.fitBestEffortInChangepoints(futurecp, numnodes, resreq, remdur, realdur, suspendable, suspendthreshold)
 
         if mustsuspend and not suspendable:
             raise SlotFittingException, "Scheduling this lease would require preempting it, which is not allowed"
@@ -626,7 +620,7 @@ class SlotTable(object):
 
         # Adjust times in case the lease has to be suspended/resumed
         if mustsuspend:
-            suspendtime = self.getSuspendTime(resreq.res[constants.RES_MEM])
+            suspendtime = lease.estimateSuspendResumeTime()
             if end != realend:
                 end -= suspendtime
             else:
@@ -691,13 +685,12 @@ class SlotTable(object):
 
         return resmrr, vmrr, susprr, reservation
 
-    def fitBestEffortInChangepoints(self, changepoints, numnodes, resreq, remdur, realdur, suspendable):
+    def fitBestEffortInChangepoints(self, changepoints, numnodes, resreq, remdur, realdur, suspendable, suspendthreshold):
         start = None
         end = None
         realend = None
         canfit = None
         mustsuspend = None
-        suspendthreshold = self.rm.config.getSuspendThreshold()
 
         for p in changepoints:
             self.availabilitywindow.initWindow(p[0], resreq, p[1], canpreempt = False)
@@ -739,7 +732,7 @@ class SlotTable(object):
         (vmrr, susprr) = lease.getLastVMRR()
         vmrrnew = copy.copy(vmrr)
         
-        suspendtime = self.getSuspendTime(lease.resreq.res[constants.RES_MEM])
+        suspendtime = lease.estimateSuspendResumeTime()
         if vmrrnew.end != vmrrnew.realend:
             vmrrnew.end = time - suspendtime
         else:
@@ -769,14 +762,7 @@ class SlotTable(object):
         newsusprr.state = constants.RES_STATE_SCHEDULED
         lease.appendRR(newsusprr)
         self.addReservation(newsusprr)
-            
-    def getSuspendTime(self, memsize):
-        suspendrate = self.rm.config.getSuspendResumeRate()
-        suspendtime = float(memsize) / suspendrate
-        suspendtime = roundDateTimeDelta(TimeDelta(seconds = suspendtime))
-        return suspendtime
-
-
+        
 
     def slideback(self, lease, earliest):
         (vmrr, susprr) = lease.getLastVMRR()

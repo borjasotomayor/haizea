@@ -135,6 +135,12 @@ class RMConfig(Config):
         else:
             return TimeDelta(seconds=self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLD_OPT))
 
+    def getSuspendThresholdFactor(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT):
+            return None
+        else:
+            return self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT)
+
     def getTracefile(self):
         return self.config.get(constants.GENERAL_SEC, constants.TRACEFILE_OPT)
 
@@ -212,9 +218,10 @@ class RMConfig(Config):
 
     def getBootOverhead(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.BOOTOVERHEAD_OPT):
-            return 0
+            time = 0
         else:
-            return self.config.getint(constants.SIMULATION_SEC, constants.BOOTOVERHEAD_OPT)
+            time = self.config.getint(constants.SIMULATION_SEC, constants.BOOTOVERHEAD_OPT)
+        return TimeDelta(seconds=time)
 
     def overheadOnlyBestEffort(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT):

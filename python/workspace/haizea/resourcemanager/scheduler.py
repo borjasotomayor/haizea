@@ -493,7 +493,9 @@ class Scheduler(object):
         else:
             susptype = self.rm.config.getSuspensionType()
             timebeforesuspend = time - vmrr.start
-            suspendthreshold = self.rm.config.getSuspendThreshold()
+            # TODO: Determine if it is in fact the initial VMRR or not. Right now
+            # we conservatively overestimate
+            suspendthreshold = req.getSuspendThreshold(initial=False, migrating=True)
             # We can't suspend if we're under the suspend threshold
             suspendable = timebeforesuspend >= suspendthreshold
             if suspendable and (susptype == constants.SUSPENSION_ALL or (req.numnodes == 1 and susptype == constants.SUSPENSION_SERIAL)):
@@ -545,7 +547,7 @@ class Scheduler(object):
         transfertype = self.rm.config.getTransferType()        
         reusealg = self.rm.config.getReuseAlg()
         avoidredundant = self.rm.config.isAvoidingRedundantTransfers()
-        imgTransferTime=self.estimateTransferTime(req.vmimagesize)
+        imgTransferTime=req.estimateImageTransferTime()
         
         # Figure out starting time assuming we have to transfer the image
         nextfifo = self.getNextFIFOTransferTime()
@@ -595,7 +597,7 @@ class Scheduler(object):
 
     def scheduleImageTransferEDF(self, req, vnodes):
         # Estimate image transfer time 
-        imgTransferTime=self.estimateTransferTime(req.vmimagesize)
+        imgTransferTime=req.estimateImageTransferTime()
         bandwidth = self.rm.config.getBandwidth()
 
         # Determine start time
@@ -702,7 +704,7 @@ class Scheduler(object):
     
     def scheduleImageTransferFIFO(self, req, reqtransfers):
         # Estimate image transfer time 
-        imgTransferTime=self.estimateTransferTime(req.vmimagesize)
+        imgTransferTime=req.estimateImageTransferTime()
         startTime = self.getNextFIFOTransferTime()
         transfertype = self.rm.config.getTransferType()        
         bandwidth = self.rm.config.getBandwidth()
@@ -775,17 +777,6 @@ class Scheduler(object):
                 toremove.append(t)
         for t in toremove:
             self.transfersFIFO.remove(t)
-    
-    def estimateTransferTime(self, imgsize):
-        forceTransferTime = self.rm.config.getForceTransferTime()
-        if forceTransferTime != None:
-            return forceTransferTime
-        else:      
-            bandwidth = self.rm.config.getBandwidth()
-            bandwidthMBs = bandwidth / 8
-            seconds = imgsize / bandwidthMBs
-            return TimeDelta(seconds=seconds)    
-
     
     def existsScheduledLeases(self):
         return not self.scheduledleases.isEmpty()

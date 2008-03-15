@@ -1,4 +1,4 @@
-from workspace.haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE
+from workspace.haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
 from workspace.haizea.common.log import edebug
 import workspace.haizea.common.log as log
 from workspace.haizea.common.utils import roundDateTimeDelta
@@ -147,6 +147,63 @@ class LeaseBase(object):
     def removeRRs(self):
         self.rr = []
         
+    def estimateSuspendResumeTime(self):
+        rate = self.scheduler.rm.config.getSuspendResumeRate()
+        time = float(self.resreq.res[RES_MEM]) / rate
+        time = roundDateTimeDelta(TimeDelta(seconds = time))
+        return time
+    
+    # TODO: Should be in common package
+    def estimateTransferTime(self, size):
+        bandwidth = self.scheduler.rm.config.getBandwidth()
+        bandwidthMBs = float(bandwidth) / 8
+        seconds = size / bandwidthMBs
+        return roundDateTimeDelta(TimeDelta(seconds = seconds)) 
+    
+    def estimateImageTransferTime(self):
+        forceTransferTime = self.scheduler.rm.config.getForceTransferTime()
+        if forceTransferTime != None:
+            return forceTransferTime
+        else:      
+            return self.estimateTransferTime(self.vmimagesize)
+        
+    def estimateMigrationTime(self):
+        whattomigrate = self.scheduler.rm.config.getMustMigrate()
+        if whattomigrate == MIGRATE_NONE:
+            return TimeDelta(seconds=0)
+        else:
+            if whattomigrate == MIGRATE_MEM:
+                mbtotransfer = self.resreq.res[RES_MEM]
+            elif whattomigrate == MIGRATE_MEMVM:
+                mbtotransfer = self.vmimagesize + self.resreq.res[RES_MEM]
+            return self.estimateTransferTime(mbtotransfer)
+        
+    def getSuspendThreshold(self, initial, migrating=False):
+        threshold = self.scheduler.rm.config.getSuspendThreshold()
+        if threshold != None:
+            # If there is a hard-coded threshold, use that
+            return threshold
+        else:
+            transfertype = self.scheduler.rm.config.getTransferType()
+            if transfertype == TRANSFER_NONE:
+                deploytime = TimeDelta(seconds=0)
+            else: 
+                deploytime = self.estimateImageTransferTime()
+            # The threshold will be a multiple of the overhead
+            if not initial:
+                # Overestimating, just in case (taking into account that the lease may be
+                # resumed, but also suspended again)
+                if migrating:
+                    threshold = self.estimateMigrationTime() + self.estimateSuspendResumeTime() * 2
+                else:
+                    threshold = self.estimateSuspendResumeTime() * 2
+            else:
+                threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime()
+            factor = self.scheduler.rm.config.getSuspendThresholdFactor() + 1
+            return threshold * factor
+            
+      
+        
 class ExactLease(LeaseBase):
     def __init__(self, scheduler, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
         LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
@@ -173,8 +230,8 @@ class ExactLease(LeaseBase):
         self.prematureend = self.start + roundDateTimeDelta(realduration * factor)
         
     def addBootOverhead(self, t):
-        self.end += TimeDelta(seconds=t)
-        self.prematureend += TimeDelta(seconds=t)
+        self.end += t
+        self.prematureend += t
         
 class BestEffortLease(LeaseBase):
     def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
@@ -209,10 +266,10 @@ class BestEffortLease(LeaseBase):
         self.realdur = roundDateTimeDelta(self.realdur * factor)
 
     def addBootOverhead(self, t):
-        self.maxdur += TimeDelta(seconds=t)
-        self.remdur += TimeDelta(seconds=t)
-        self.realremdur += TimeDelta(seconds=t)
-        self.realdur += TimeDelta(seconds=t)
+        self.maxdur += t
+        self.remdur += t
+        self.realremdur += t
+        self.realdur += t
         
     def mustBeCancelled(self, t):
         if self.maxqueuetime == None:
