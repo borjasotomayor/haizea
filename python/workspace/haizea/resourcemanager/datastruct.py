@@ -23,6 +23,9 @@ def prettyNodemap(nodes):
     s = "   ".join([", ".join(["V"+`y` for y in x[0]])+" -> P" + `x[1]` for x in normmap])
     return s
 
+def prettyRes(res):
+    return "  ".join([res_str(i) + ": " + `x` for i,x in enumerate(res.res)])
+
 class ResourceTuple(object):
     def __init__(self, res):
         self.res = res
@@ -90,7 +93,7 @@ class LeaseBase(object):
         logfun("VM image       : %s" % self.vmimage, DS, None)
         logfun("VM image size  : %s" % self.vmimagesize, DS, None)
         logfun("Num nodes      : %s" % self.numnodes, DS, None)
-        logfun("Resource req   : %s" % "  ".join([res_str(i) + ": " + `x` for i,x in enumerate(self.resreq.res)]), DS, None)
+        logfun("Resource req   : %s" % prettyRes(self.resreq), DS, None)
         logfun("VM image map   : %s" % prettyNodemap(self.vmimagemap), DS, None)
         logfun("Mem image map  : %s" % prettyNodemap(self.memimagemap), DS, None)
 
@@ -241,7 +244,7 @@ class ResourceReservationBase(object):
         logfun("End            : %s" % self.end, DS, None)
         logfun("Real End       : %s" % self.realend, DS, None)
         logfun("State          : %s" % rstate_str(self.state), DS, None)
-        logfun("Resources      : %s" % self.res, DS, None)
+        logfun("Resources      : \n%s" % "\n".join(["N%i: %s" %(i,prettyRes(x)) for i,x in self.res.items()]), DS, None)
                 
 class FileTransferResourceReservation(ResourceReservationBase):
     def __init__(self, lease, res, start=None, end=None):
