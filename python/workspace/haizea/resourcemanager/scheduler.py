@@ -492,7 +492,11 @@ class Scheduler(object):
             self.rm.stats.incrQueueSize(req.leaseID)
         else:
             susptype = self.rm.config.getSuspensionType()
-            if susptype == constants.SUSPENSION_ALL or (req.numnodes == 1 and susptype == constants.SUSPENSION_SERIAL):
+            timebeforesuspend = time - vmrr.start
+            suspendthreshold = self.rm.config.getSuspendThreshold()
+            # We can't suspend if we're under the suspend threshold
+            suspendable = timebeforesuspend >= suspendthreshold
+            if suspendable and (susptype == constants.SUSPENSION_ALL or (req.numnodes == 1 and susptype == constants.SUSPENSION_SERIAL)):
                 debug("The lease will be suspended while running.", constants.SCHED, self.rm.time)
                 self.slottable.suspend(req, time)
             else:
