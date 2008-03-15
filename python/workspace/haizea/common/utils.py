@@ -73,7 +73,7 @@ def generateScripts(multiconfigfilename, multiconfig, dir, onlymissing = False):
             c.config.write(fc)
             fc.close()
             
-            command = "/home/borja/bin/vw/haizea-simulate -c %s -s %s" % (configfile, datadir)
+            command = "/home/borja/bin/vw/haizea-simulate -c %s -s %s" % (configfile, basedatadir)
             
             condor.write(generateCondorQueueEntry(command=command, dir = dir))
             
