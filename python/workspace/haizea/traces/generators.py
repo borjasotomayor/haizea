@@ -19,9 +19,9 @@ def generateTrace(config, file, guaranteeAvg = False):
 
     while not good:
         entries = []
-        time = 0
+        time = - deadlineavg
         accumdur = 0
-        while time < tracedur:
+        while time + deadlineavg + config.durationdist.getAvg() < tracedur:
             entry = LWFEntry()
             entry.reqTime = time
             entry.startTime = time + config.deadlinedist.get()
@@ -48,6 +48,10 @@ def generateTrace(config, file, guaranteeAvg = False):
                 good = True
             else:
                 print "Deviation is too big: %.3f. Generating again." % dev
+
+    for e in entries:
+        if e.reqTime < 0:
+            e.reqTime = 0
 
     lwf = LWF(entries)
     lwf.toFile(file)
