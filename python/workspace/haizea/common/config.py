@@ -139,7 +139,7 @@ class RMConfig(Config):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT):
             return None
         else:
-            return self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT)
+            return self.config.getfloat(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT)
 
     def getTracefile(self):
         return self.config.get(constants.GENERAL_SEC, constants.TRACEFILE_OPT)

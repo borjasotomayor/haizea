@@ -200,7 +200,7 @@ class LeaseBase(object):
             else:
                 threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime()
             factor = self.scheduler.rm.config.getSuspendThresholdFactor() + 1
-            return threshold * factor
+            return roundDateTimeDelta(threshold * factor)
             
       
         
