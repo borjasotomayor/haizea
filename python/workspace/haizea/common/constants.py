@@ -225,6 +225,7 @@ CLIPTIMESFILE="cliptimes.dat"
 DISKUSAGEFILE="diskusage.dat"
 SLOWDOWNFILE="slowdown.dat"
 LEASESFILE="leases.dat"
+DOINGFILE="doing.dat"
 
 
 # Types of final tables in report generation
@@ -276,3 +277,10 @@ REPORT_BASH="bash"
 REPORT_CONDOR="condor"
 REPORT_SINGLE_PROFILE="singletrace"
 REPORT_SINGLE_TRACE="singleprofile"
+
+DOING_IDLE=0
+DOING_TRANSFER=1
+DOING_VM_SUSPEND=99
+DOING_VM_RUN=100
+DOING_VM_RESUME=101
+DOING_TRANSFER_NOVM=666
