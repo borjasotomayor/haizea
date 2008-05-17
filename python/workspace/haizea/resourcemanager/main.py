@@ -78,6 +78,7 @@ def writeDataToDisk(resourcemanager, dir):
         l.removeRRs()
         l.scheduler = None
     
+    doing = resourcemanager.stats.getNodesDoing()
 
     pickle(cpuutilization, dir, constants.CPUUTILFILE)
     pickle(exactaccepted, dir, constants.ACCEPTEDFILE)
@@ -90,6 +91,7 @@ def writeDataToDisk(resourcemanager, dir):
     pickle(diskusage, dir, constants.DISKUSAGEFILE)
     pickle(boundedslowdown, dir, constants.SLOWDOWNFILE)
     pickle(leases, dir, constants.LEASESFILE)
+    pickle(doing, dir, constants.DOINGFILE)
 
         
 def pickle(data, dir, file):
@@ -100,7 +102,7 @@ def pickle(data, dir, file):
 
 if __name__ == "__main__":
     configfile="../configfiles/test.conf"
-    tracefile="../traces/examples/test_simple.csv"
+    tracefile="../traces/examples/test_preempt1.csv"
     imagefile="../traces/examples/1GBfiles.images"
     injectedfile="None"
     #tracefile="../traces/examples/test_inject.csv"

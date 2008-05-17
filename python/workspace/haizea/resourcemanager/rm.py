@@ -72,6 +72,7 @@ class ResourceManager(object):
                 raise
             util = self.scheduler.slottable.getUtilization(self.time)
             self.stats.addUtilization(util)
+            self.stats.addNodeStats()
             debug("Ending iteration", constants.RM, self.time)
             if (self.time - prevstatustime).minutes >= 15:
                 status("STATUS ---Begin---", constants.RM, self.time)
@@ -131,8 +132,7 @@ class ResourceManager(object):
         
         status("Stopping resource manager", constants.RM, self.time)
         for l in self.scheduler.completedleases.entries.values():
-            l.printContents()
-            
+            l.printContents()            
         
     def printStats(self, logfun, nextcp="NONE", nextreqtime="NONE", verbose=False):
         logfun("Next change point (in slot table): %s" % nextcp,constants.RM, nextcp)

@@ -1,3 +1,5 @@
+import workspace.haizea.common.constants as constants
+
 class Stats(object):
     def __init__(self, rm):
         self.rm = rm
@@ -23,6 +25,8 @@ class Stats(object):
         
         self.queuewaittimes = {}
         self.startendtimes = {}
+        
+        self.nodes=dict([(i+1,[]) for i in range(self.rm.config.getNumPhysicalNodes())])
  
     def addUtilization(self,util):
         self.utilization.append((self.rm.time,None,util))
@@ -33,12 +37,22 @@ class Stats(object):
         self.exactrejected.append((time,None,0))
         self.queuesize.append((time,None,0))
         self.diskusage.append((time,None,0))
+        
+        for node in self.nodes:
+            self.nodes[node].append((time,constants.DOING_IDLE))
 
     def addFinalMarker(self):
         time = self.rm.time
         self.exactaccepted.append((time,None,self.exactacceptedcount))
         self.exactrejected.append((time,None,self.exactrejectedcount))
         self.queuesize.append((time,None,self.queuesizecount))
+        
+        for node in self.rm.enactment.nodes:
+            nodenum = node.nod_id
+            doing = node.vm_doing
+            (lasttime,lastdoing) = self.nodes[nodenum][-1]
+            if time != lasttime:
+                self.nodes[nodenum].append((time, doing))
 
     def incrAccepted(self, leaseID):
         time = self.rm.time
@@ -110,6 +124,21 @@ class Stats(object):
     def addDiskUsage(self, usage):
         time = self.rm.time
         self.diskusage.append((time,None,usage))
+        
+    def addNodeStats(self):
+        time = self.rm.time
+        for node in self.rm.enactment.nodes:
+            nodenum = node.nod_id
+            doing = node.getState()
+            (lasttime,lastdoing) = self.nodes[nodenum][-1]
+            if doing == lastdoing:
+                # No need to update
+                pass
+            else:
+                if lasttime == time:
+                        self.nodes[nodenum][-1] = (time,doing)
+                else:
+                    self.nodes[nodenum].append((time,doing))
         
     def normalizeTimes(self, data):
         return [((v[0] - self.rm.starttime).seconds,v[1],v[2]) for v in data]
@@ -194,3 +223,20 @@ class Stats(object):
         l = self.normalizeTimes(self.boundedslowdown)
         l = self.addAverage(l)
         return l
+    
+    def getNodesDoing(self):
+        starttime = self.rm.starttime
+        nodes=dict([(i+1,[]) for i in range(self.rm.config.getNumPhysicalNodes())])
+        for n in self.nodes:
+            nodes[n] = []
+            prevtime = None
+            prevdoing = None
+            for (time,doing) in self.nodes[n]:
+                if prevtime != None:
+                    difftime = (time-prevtime).seconds
+                    nodes[n].append((difftime,prevdoing))
+                prevtime = time
+                prevdoing = doing
+        return nodes
+                
+            

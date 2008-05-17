@@ -130,6 +130,15 @@ class Scheduler(object):
                     self.handleStartSuspend(l, rr)
                 elif isinstance(rr,ds.ResumptionResourceReservation):
                     self.handleStartResume(l, rr)
+                    
+    def updateNodeVMState(self, nodes, state):
+        for n in nodes:
+            self.rm.enactment.getNode(n).vm_doing = state
+
+    def updateNodeTransferState(self, nodes, state):
+        for n in nodes:
+            self.rm.enactment.getNode(n).transfer_doing = state
+
 
     def handleStartVM(self, l, rr):
         info("LEASE-%i Start of handleStartVM" % l.leaseID, constants.SCHED, self.rm.time)
@@ -154,6 +163,7 @@ class Scheduler(object):
             l.state = constants.LEASE_STATE_ACTIVE
             rr.state = constants.RES_STATE_ACTIVE
         l.printContents()
+        self.updateNodeVMState(rr.nodes, constants.DOING_VM_RUN)
         debug("LEASE-%i End of handleStartVM" % l.leaseID, constants.SCHED, self.rm.time)
 
     def handleEndVM(self, l, rr):
@@ -193,6 +203,7 @@ class Scheduler(object):
         if prematureend and self.rm.config.isBackfilling():
             self.reevaluateSchedule(l, rr.nodes.values(), self.rm.time, [])
         l.printContents()
+        self.updateNodeVMState(rr.nodes, constants.DOING_IDLE)
         debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED, self.rm.time)
         
     def handleStartFileTransfer(self, l, rr):
@@ -206,6 +217,7 @@ class Scheduler(object):
             pass
             # TODO: Migrating
         l.printContents()
+        self.updateNodeTransferState(rr.transfers.keys(), constants.DOING_TRANSFER)
         debug("LEASE-%i End of handleStartFileTransfer" % l.leaseID, constants.SCHED, self.rm.time)
 
     def handleEndFileTransfer(self, l, rr):
@@ -236,6 +248,7 @@ class Scheduler(object):
             pass
             # TODO: Migrating
         l.printContents()
+        self.updateNodeTransferState(rr.transfers.keys(), constants.DOING_IDLE)
         debug("LEASE-%i End of handleEndFileTransfer" % l.leaseID, constants.SCHED, self.rm.time)
 
 
@@ -247,6 +260,7 @@ class Scheduler(object):
             self.rm.enactment.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq.res[constants.RES_MEM])
             l.memimagemap[vnode] = pnode
         l.printContents()
+        self.updateNodeVMState(rr.nodes, constants.DOING_VM_SUSPEND)
         debug("LEASE-%i End of handleStartSuspend" % l.leaseID, constants.SCHED, self.rm.time)
 
     def handleEndSuspend(self, l, rr):
@@ -258,6 +272,7 @@ class Scheduler(object):
         self.queue.enqueueInOrder(l)
         self.rm.stats.incrQueueSize(l.leaseID)
         l.printContents()
+        self.updateNodeVMState(rr.nodes, constants.DOING_IDLE)
         debug("LEASE-%i End of handleEndSuspend" % l.leaseID, constants.SCHED, self.rm.time)
 
     def handleStartResume(self, l, rr):
@@ -265,6 +280,7 @@ class Scheduler(object):
         l.printContents()
         rr.state = constants.RES_STATE_ACTIVE
         l.printContents()
+        self.updateNodeVMState(rr.nodes, constants.DOING_VM_RESUME)
         debug("LEASE-%i End of handleStartResume" % l.leaseID, constants.SCHED, self.rm.time)
 
     def handleEndResume(self, l, rr):
@@ -274,6 +290,7 @@ class Scheduler(object):
         for vnode,pnode in rr.nodes.items():
             self.rm.enactment.removeRAMFileFromNode(pnode, l.leaseID, vnode)
         l.printContents()
+        self.updateNodeVMState(rr.nodes, constants.DOING_IDLE)
         debug("LEASE-%i End of handleEndResume" % l.leaseID, constants.SCHED, self.rm.time)
 
     def handleEndRR(self, l, rr):

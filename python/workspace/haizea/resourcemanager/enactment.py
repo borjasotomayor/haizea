@@ -28,6 +28,9 @@ class BaseNode(object):
         self.nod_id = nod_id
         self.files = []
         self.workingspacesize = 0
+        # Kludgy way of keeping track of utilization
+        self.transfer_doing = constants.DOING_IDLE
+        self.vm_doing = constants.DOING_IDLE
            
     def addFile(self, f):
         self.files.append(f)
@@ -131,6 +134,12 @@ class BaseNode(object):
             images = ", ".join([str(img) for img in self.files])
         info("Node %i has %iMB %s" % (self.nod_id,self.getTotalFileSize(),images), constants.ENACT, None)
 
+    def getState(self):
+        if self.vm_doing == constants.DOING_IDLE and self.transfer_doing == constants.DOING_TRANSFER:
+            return constants.DOING_TRANSFER_NOVM
+        else:
+            return self.vm_doing
+            
                 
 class SimulatedEnactment(BaseEnactment):
     def __init__(self, rm):
