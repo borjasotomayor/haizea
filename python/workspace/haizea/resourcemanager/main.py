@@ -8,6 +8,7 @@ import workspace.haizea.common.utils as utils
 from workspace.haizea.common.config import RMConfig
 from workspace.haizea.common.log import log, loglevel, setED
 from cPickle import load, dump, HIGHEST_PROTOCOL
+from errno import EEXIST
 import operator
 
 def simulate(config, statsdir):
@@ -57,8 +58,12 @@ def simulate(config, statsdir):
     writeDataToDisk(resourceManager, dir)
     
 def writeDataToDisk(resourcemanager, dir):
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    try:
+        if not os.path.exists(dir):
+            os.makedirs(dir)
+    except OSError, e:
+        if e.errno != EEXIST:
+            raise e
 
     cpuutilization = resourcemanager.stats.getUtilization()
     exactaccepted = resourcemanager.stats.getExactAccepted()
