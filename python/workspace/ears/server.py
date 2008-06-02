@@ -105,9 +105,11 @@ def createEARS(config, tracefile):
                 duration = int(int(v.fields["duration"]) * adjust)
                 trace.entries[i].fields["duration"] = `duration`
                 
-                if self.usingRealEndTimes():
-                    realduration = int(int(v.fields["realduration"]) * adjust)
-                    trace.entries[i].fields["realduration"] = `realduration`
+                #TODO: Can't call self here. Fix before we start running
+                #      simulations that use real times
+                #if self.usingRealEndTimes():
+                #    realduration = int(int(v.fields["realduration"]) * adjust)
+                #    trace.entries[i].fields["realduration"] = `realduration`
     
         return SimulatingServer(config, resDB, trace, commit=True)
     elif config.get(GENERAL_SEC,TYPE_OPT) == "real":
@@ -325,9 +327,10 @@ class BaseServer(object):
             numnodes = int(r.fields["numNodes"])
             if r.fields["deadline"] == "NULL":
                 reqtime = int(r.fields["time"])
-                realstarttime = int(r.fields["realstart"])
-                realduration = int(r.fields["realduration"])
-                deadline = realstarttime - reqtime
+                if realstart in ("parallel", "all"):
+                    realstarttime = int(r.fields["realstart"])
+                    realduration = int(r.fields["realduration"])
+                    deadline = realstarttime - reqtime
                 if realstart=="parallel":
                     if numnodes > 1:
                         r.fields["deadline"] = `deadline`
@@ -1697,6 +1700,7 @@ class BaseServer(object):
             #print "Stop respart %i of %i (%s)" % (respart_id, row["RES_ID"], self.batchreservations.keys())
             if self.batchreservations.has_key(row["RES_ID"]):
                 #print row["RSP_NAME"]
+                srvlog.debug( "%s: Reservation part %i '%s' of reservation %s is a batch VM" % (self.getTime(), respart_id, row["RSP_NAME"], resname))
                 self.batchvmcompletednum += 1
                 self.batchvmcompleted.append((self.getTime(), self.batchvmcompletednum))
                 
@@ -1818,7 +1822,7 @@ class SimulatingServer(BaseServer):
         nextTime = self.time
         prevTime = self.time
         srvlog.info("Starting")          
-        td = TimeDelta(minutes=1)
+        td = TimeDelta(seconds=1)
         self.accepted.append((self.startTime, self.acceptednum))
         self.rejected.append((self.startTime, self.rejectednum))
         self.batchcompleted.append((self.startTime, self.batchcompletednum))

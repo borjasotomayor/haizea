@@ -181,7 +181,7 @@ class ReservationDB(object):
         return next
             
     def peekNextChangePoint(self, time):
-        if not self.changePointCacheDirty:
+        if False: #not self.changePointCacheDirty:
             if len(self.nextChangePoints)>0:
                 return ISO.ParseDateTime(self.nextChangePoints[-1])
             else:
