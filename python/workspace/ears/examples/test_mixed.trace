@@ -1,8 +1,0 @@
-0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;2700;7200;AR
-0;nfs:///var/workspace/images/600M_0.img;600;2;512;50;RW;6300;1800;AR
-0;nfs:///var/workspace/images/600M_0.img;600;3;512;50;RW;9000;1800;AR
-900;nfs:///var/workspace/images/600M_0.img;600;2;512;50;RW;NULL;2700;BATCH
-2700;nfs:///var/workspace/images/600M_0.img;600;2;512;50;RW;NULL;1800;BATCH
-3600;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;NULL;5400;BATCH
-7200;nfs:///var/workspace/images/600M_0.img;600;3;512;50;RW;NULL;3600;BATCH
-10800;nfs:///var/workspace/images/600M_0.img;600;3;512;50;RW;900;900;AR

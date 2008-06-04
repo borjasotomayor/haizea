@@ -1,8 +1,0 @@
-# First batch job ends early.
-# Second and third request represent a batch job that is scheduled to
-# be suspended before the AR, but actually ends before the AR. We have
-# to make sure that the time after the end is not counted towards the stats
-# (i.e. clean up entries in DB)
-0;0;NONE;0;8;100;100;RW;NULL;600;60;BATCH
-0;1800;NONE;0;8;100;100;RW;1800;3600;3600;BATCH
-900;900;NONE;0;4;100;100;RW;NULL;3600;600;BATCH

@@ -1,7 +1,0 @@
-# A batch job will end earlier if it is scheduled after an AR
-# that is running at the time the batch job is requested (instead of
-# suspend/resuming
-0;900;NONE;0;7;100;100;RW;900;2700;2700;AR
-0;2700;NONE;0;1;100;100;RW;2700;3600;3600;AR
-0;3600;NONE;0;7;100;100;RW;3600;900;900;AR
-1800;1800;NONE;0;1;100;100;RW;NULL;1800;1800;BATCH

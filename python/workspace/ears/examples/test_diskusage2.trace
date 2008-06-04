@@ -1,5 +1,0 @@
-# Four overlapping ARs 
-0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;2700;2700;AR
-0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;3000;2700;AR
-0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;3300;2700;AR
-0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;3600;2700;AR

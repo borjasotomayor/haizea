@@ -1,4 +1,0 @@
-# Three non-overlapping single-node ARs 
-0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;2700;1800;AR
-0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;6300;1800;AR
-0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;9000;1800;AR

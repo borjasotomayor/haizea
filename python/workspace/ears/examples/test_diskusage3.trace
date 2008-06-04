@@ -1,9 +1,0 @@
-# Pathological case
-0;nfs:///var/workspace/images/600M_0.img;600;2;512;50;RW;9000;300;AR
-0;nfs:///var/workspace/images/600M_1.img;600;2;512;50;RW;9000;600;AR
-0;nfs:///var/workspace/images/600M_2.img;600;2;512;50;RW;9300;600;AR
-0;nfs:///var/workspace/images/600M_0.img;600;2;512;50;RW;9600;900;AR
-0;nfs:///var/workspace/images/600M_1.img;600;2;512;50;RW;9900;900;AR
-0;nfs:///var/workspace/images/600M_2.img;600;2;512;50;RW;10500;600;AR
-0;nfs:///var/workspace/images/600M_0.img;600;2;512;50;RW;10800;900;AR
-0;nfs:///var/workspace/images/600M_3.img;600;2;512;50;RW;11100;900;AR
