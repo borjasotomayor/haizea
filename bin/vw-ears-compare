@@ -1,7 +1,0 @@
-#!/usr/bin/python
-
-from workspace import clients
-import sys
-
-c = clients.EARSCompare()
-c.run(sys.argv)

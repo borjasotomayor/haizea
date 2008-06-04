@@ -1,9 +1,0 @@
-#!/bin/bash
-#Creates the all caches
-
-for node in $(cat /usr/workspace/etc/nodes);
-do
-    echo "Creating cache in node $node"
-    ssh root@$node /usr/workspace/bin/vw-cache-create
-done
-

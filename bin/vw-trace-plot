@@ -1,7 +1,0 @@
-#!/usr/bin/python
-
-import workspace.clients
-import sys
-
-tg = clients.TraceGraph()
-tg.run(sys.argv)

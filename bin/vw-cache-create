@@ -1,6 +1,0 @@
-#!/bin/bash
-#Creates local cache
-
-mkdir /tmp/workspace/
-mkdir /tmp/workspace/image_cache
-mkdir /tmp/workspace/image_local

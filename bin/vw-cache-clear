@@ -1,6 +1,0 @@
-#!/bin/bash
-#Clears the local cache
-
-rm /var/workspace/image_cache/*
-rm /var/workspace/image_local/*
-rm /var/workspace/image_cache_db

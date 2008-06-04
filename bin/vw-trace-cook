@@ -1,9 +1,0 @@
-#!/usr/bin/python
-
-from workspace import clients
-import sys
-
-c = clients.Cooker()
-errno = c.run(sys.argv)
-
-sys.exit(errno)
