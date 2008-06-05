@@ -1,0 +1,5 @@
+# Exact lease should preempt the third lease, as it has lower priority
+0;0;nfs:///var/workspace/images/600M_0.img;600;1;256;100;RW;NULL;5400;5400;BATCH
+900;0;nfs:///var/workspace/images/600M_0.img;600;1;256;100;RW;NULL;4500;4500;BATCH
+1800;0;nfs:///var/workspace/images/600M_0.img;600;1;256;100;RW;NULL;3600;3600;BATCH
+2700;0;nfs:///var/workspace/images/600M_0.img;600;1;512;50;RW;900;900;900;AR

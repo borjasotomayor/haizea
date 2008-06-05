@@ -1,0 +1,4 @@
+# A simple trace where an AR lease preempts a
+# best-effort lease that is already running. 
+0;0;NONE;600;1;1024;100;RW;NULL;3600;3600;NONE
+900;0;NONE;600;4;1024;100;RW;900;900;900;NONE

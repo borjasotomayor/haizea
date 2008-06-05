@@ -1,0 +1,4 @@
+0;0;nfs:///var/workspace/images/600M_0.img;640;4;512;100;RW;900;3600;3600;AR
+0;0;nfs:///var/workspace/images/600M_0.img;640;4;512;100;RW;NULL;900;900;AR
+900;0;nfs:///var/workspace/images/600M_0.img;640;4;512;100;RW;3600;1800;1800;AR
+2700;0;nfs:///var/workspace/images/600M_0.img;640;4;512;100;RW;3600;1800;1800;AR
