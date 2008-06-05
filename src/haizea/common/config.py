@@ -131,7 +131,7 @@ class RMConfig(Config):
 
     def getSuspendThreshold(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLD_OPT):
-            return None
+            return 0
         else:
             return TimeDelta(seconds=self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLD_OPT))
 
