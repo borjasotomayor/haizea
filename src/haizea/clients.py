@@ -1,10 +1,10 @@
-import workspace.haizea.common.constants as constants
-from workspace.haizea.resourcemanager.main import simulate
-from workspace.haizea.traces.generators import generateTrace, generateImages
-from workspace.haizea.common.utils import Option, OptionParser, generateScripts
-from workspace.haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig, ImageConfig
-from workspace.haizea.analysis.traces import analyzeExactLeaseInjection
-from workspace.haizea.analysis.misc import genpercentiles
+import haizea.common.constants as constants
+from haizea.resourcemanager.main import simulate
+from haizea.traces.generators import generateTrace, generateImages
+from haizea.common.utils import Option, OptionParser, generateScripts
+from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig, ImageConfig
+from haizea.analysis.traces import analyzeExactLeaseInjection
+from haizea.analysis.misc import genpercentiles
 import os.path
 
 class Report(object):
@@ -12,7 +12,7 @@ class Report(object):
         pass
     
     def run(self, argv):
-        from workspace.haizea.analysis.report import Report
+        from haizea.analysis.report import Report
 
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
@@ -34,8 +34,8 @@ class ReportSingle(object):
         self.mode = mode
     
     def run(self, argv):
-        from workspace.haizea.analysis.report import Report
-        from workspace.haizea.common.utils import genTraceInjName
+        from haizea.analysis.report import Report
+        from haizea.common.utils import genTraceInjName
         
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
@@ -66,7 +66,7 @@ class Graph(object):
         pass
     
     def run(self, argv):
-        from workspace.haizea.analysis.report import Section
+        from haizea.analysis.report import Section
         
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
@@ -102,7 +102,7 @@ class GenPercentiles(object):
         pass
     
     def run(self, argv):
-        from workspace.haizea.analysis.main import report
+        from haizea.analysis.main import report
 
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))

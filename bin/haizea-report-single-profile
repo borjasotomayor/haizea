@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-from workspace.haizea import clients
-from workspace.haizea.common.constants import REPORT_SINGLE_PROFILE
+from haizea import clients
+from haizea.common.constants import REPORT_SINGLE_PROFILE
 import sys
 import psyco
 

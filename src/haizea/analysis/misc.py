@@ -1,8 +1,8 @@
 import math
 import os
-from workspace.haizea.common.utils import genDataDirName, genTraceInjName
+from haizea.common.utils import genDataDirName, genTraceInjName
 from pickle import Unpickler
-import workspace.haizea.common.constants as constants
+import haizea.common.constants as constants
 
 def percentile(N, percent, key=lambda x:x):
     """

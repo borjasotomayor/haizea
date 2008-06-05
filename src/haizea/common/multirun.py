@@ -1,8 +1,8 @@
-from workspace.haizea.resourcemanager.main import simulate
-from workspace.haizea.analysis.main import report
-from workspace.haizea.common.config import MultiConfig
-from workspace.haizea.resourcemanager.datastruct import resetLeaseID
-import workspace.haizea.common.constants as constants
+from haizea.resourcemanager.main import simulate
+from haizea.analysis.main import report
+from haizea.common.config import MultiConfig
+from haizea.resourcemanager.datastruct import resetLeaseID
+import haizea.common.constants as constants
 
 def multirun(multiconfig, tracefile, tracetype, injectedfile, statsdir, reportdir):
     configs = multiconfig.getConfigs()

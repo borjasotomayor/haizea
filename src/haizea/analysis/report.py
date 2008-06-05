@@ -1,9 +1,9 @@
 import os
-import workspace.haizea.common.constants as constants
-import workspace.haizea.resourcemanager.datastruct as ds
-import workspace.haizea.analysis.graph as graphs
-from workspace.haizea.common.config import RMMultiConfig
-from workspace.haizea.common.utils import genDataDirName, genTraceInjName, generateCondorHeader, generateCondorQueueEntry
+import haizea.common.constants as constants
+import haizea.resourcemanager.datastruct as ds
+import haizea.analysis.graph as graphs
+from haizea.common.config import RMMultiConfig
+from haizea.common.utils import genDataDirName, genTraceInjName, generateCondorHeader, generateCondorQueueEntry
 from cPickle import load
 from mx.DateTime import now
 from operator import itemgetter, or_

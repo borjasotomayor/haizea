@@ -1,10 +1,10 @@
 from mx.DateTime import ISO, TimeDelta
 from operator import attrgetter, itemgetter
-import workspace.haizea.common.constants as constants
-import workspace.haizea.resourcemanager.datastruct as ds
-from workspace.haizea.common.log import info, debug, warning, edebug
-import workspace.haizea.common.log as log
-from workspace.haizea.common.utils import roundDateTimeDelta
+import haizea.common.constants as constants
+import haizea.resourcemanager.datastruct as ds
+from haizea.common.log import info, debug, warning, edebug
+import haizea.common.log as log
+from haizea.common.utils import roundDateTimeDelta
 import bisect
 import copy
 

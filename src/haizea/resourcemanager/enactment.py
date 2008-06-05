@@ -1,6 +1,6 @@
-from workspace.haizea.common.log import info, debug, edebug, warning, error
-from workspace.haizea.common.utils import vnodemapstr
-import workspace.haizea.common.constants as constants
+from haizea.common.log import info, debug, edebug, warning, error
+from haizea.common.utils import vnodemapstr
+import haizea.common.constants as constants
 
 class BaseEnactment(object):
     def __init__(self, rm, nodes):

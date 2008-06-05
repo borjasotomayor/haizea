@@ -1,12 +1,12 @@
 import os
 import os.path
-import workspace.haizea.resourcemanager.rm as rm
-import workspace.haizea.resourcemanager.datastruct as ds
-import workspace.haizea.traces.readers as tracereaders
-import workspace.haizea.common.constants as constants
-import workspace.haizea.common.utils as utils
-from workspace.haizea.common.config import RMConfig
-from workspace.haizea.common.log import log, loglevel, setED
+import haizea.resourcemanager.rm as rm
+import haizea.resourcemanager.datastruct as ds
+import haizea.traces.readers as tracereaders
+import haizea.common.constants as constants
+import haizea.common.utils as utils
+from haizea.common.config import RMConfig
+from haizea.common.log import log, loglevel, setED
 from cPickle import load, dump, HIGHEST_PROTOCOL
 from errno import EEXIST
 import operator

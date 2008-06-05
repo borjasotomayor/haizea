@@ -1,10 +1,10 @@
-import workspace.haizea.resourcemanager.interface as interface
-import workspace.haizea.resourcemanager.scheduler as scheduler
-import workspace.haizea.resourcemanager.enactment as enactment
-import workspace.haizea.resourcemanager.stats as stats
-import workspace.haizea.common.constants as constants
-from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
-from workspace.haizea.common.log import info, debug, status, error
+import haizea.resourcemanager.interface as interface
+import haizea.resourcemanager.scheduler as scheduler
+import haizea.resourcemanager.enactment as enactment
+import haizea.resourcemanager.stats as stats
+import haizea.common.constants as constants
+from haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
+from haizea.common.log import info, debug, status, error
 
 class ResourceManager(object):
     def __init__(self, requests, config):

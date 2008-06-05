@@ -1,7 +1,7 @@
-from workspace.haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
-from workspace.haizea.common.log import edebug
-import workspace.haizea.common.log as log
-from workspace.haizea.common.utils import roundDateTimeDelta
+from haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
+from haizea.common.log import edebug
+import haizea.common.log as log
+from haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
 from mx.DateTime import TimeDelta
 leaseID = 1

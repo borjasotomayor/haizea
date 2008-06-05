@@ -1,4 +1,4 @@
-import workspace.haizea.traces.readers as tracereaders
+import haizea.traces.readers as tracereaders
 
 def analyzeExactLeaseInjection(tracefile):
     injectedleases = tracereaders.LWF(tracefile)

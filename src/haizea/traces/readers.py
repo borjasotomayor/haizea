@@ -1,9 +1,9 @@
 from mx.DateTime import TimeDelta, DateTimeDelta
 from mx.DateTime import ISO
 from mx.DateTime import now
-from workspace.haizea.resourcemanager.datastruct import ExactLease, BestEffortLease, ResourceTuple
-import workspace.haizea.common.constants as constants
-import workspace.haizea.traces.formats as formats
+from haizea.resourcemanager.datastruct import ExactLease, BestEffortLease, ResourceTuple
+import haizea.common.constants as constants
+import haizea.traces.formats as formats
 
 def CSV(tracefile, config):
     file = open (tracefile, "r")

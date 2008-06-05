@@ -1,5 +1,5 @@
-from workspace.haizea.common.config import TraceConfig, ImageConfig
-from workspace.haizea.traces.formats import LWF, LWFEntry
+from haizea.common.config import TraceConfig, ImageConfig
+from haizea.traces.formats import LWF, LWFEntry
 
 def generateTrace(config, file, guaranteeAvg = False):
     tracedur = config.getTraceDuration()

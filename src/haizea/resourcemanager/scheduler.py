@@ -1,7 +1,7 @@
-import workspace.haizea.resourcemanager.datastruct as ds
-from workspace.haizea.resourcemanager.slottable import SlotTable, SlotFittingException
-from workspace.haizea.common.log import info, debug, warning, edebug
-import workspace.haizea.common.constants as constants
+import haizea.resourcemanager.datastruct as ds
+from haizea.resourcemanager.slottable import SlotTable, SlotFittingException
+from haizea.common.log import info, debug, warning, edebug
+import haizea.common.constants as constants
 import copy
 from mx.DateTime import TimeDelta
 

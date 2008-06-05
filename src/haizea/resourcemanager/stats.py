@@ -1,4 +1,4 @@
-import workspace.haizea.common.constants as constants
+import haizea.common.constants as constants
 
 class Stats(object):
     def __init__(self, rm):

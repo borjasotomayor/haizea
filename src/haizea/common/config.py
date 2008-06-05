@@ -1,10 +1,10 @@
 import ConfigParser
 from mx.DateTime import ISO
 from mx.DateTime import TimeDelta
-import workspace.haizea.common.constants as constants
-import workspace.haizea.common.stats as stats
+import haizea.common.constants as constants
+import haizea.common.stats as stats
 import os.path
-from workspace.haizea.common.utils import genDataDirName
+from haizea.common.utils import genDataDirName
 
 class Config(object):
     def __init__(self, config):
