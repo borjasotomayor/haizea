@@ -329,9 +329,9 @@ class SlotTable(object):
         # At this point we know if the lease is feasible, and if
         # will require preemption.
         if not mustpreempt:
-            info("The VM reservations for this lease are feasible without preemption.", constants.ST, self.rm.time)
+            info("The VM reservations for this lease are feasible without preemption.", constants.ST, self.rm.clock.getTime())
         else:
-            info("The VM reservations for this lease are feasible but will require preemption.", constants.ST, self.rm.time)
+            info("The VM reservations for this lease are feasible but will require preemption.", constants.ST, self.rm.clock.getTime())
 
         # merge canfitnopreempt and canfitpreempt
         canfit = {}
@@ -347,7 +347,7 @@ class SlotTable(object):
 
         orderednodes = self.prioritizenodes(canfit, vmimage, start, canpreempt, avoidpreempt)
             
-        info("Node ordering: %s" % orderednodes, constants.ST, self.rm.time)
+        info("Node ordering: %s" % orderednodes, constants.ST, self.rm.clock.getTime())
         
         # vnode -> pnode
         nodeassignment = {}
@@ -510,7 +510,7 @@ class SlotTable(object):
             # If we have to resume this lease, make sure that
             # we have enough time to transfer the images.
             migratetime = lease.estimateMigrationTime()
-            earliesttransfer = self.rm.time + migratetime
+            earliesttransfer = self.rm.clock.getTime() + migratetime
 
             for n in earliest:
                 earliest[n][0] = max(earliest[n][0],earliesttransfer)
@@ -702,11 +702,11 @@ class SlotTable(object):
                 realend = start + realdur
                 end, canfit = self.availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
         
-                info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.time)
+                info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.clock.getTime())
                 
                 if end < maxend:
                     mustsuspend=True
-                    info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.time)
+                    info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.clock.getTime())
                     
                     if suspendable:
                         # It the lease is suspendable...
@@ -714,7 +714,7 @@ class SlotTable(object):
                             if end-start > suspendthreshold:
                                 break
                             else:
-                                info("This starting time does not meet the suspend threshold (%s < %s)" % (end-start, suspendthreshold), constants.ST, self.rm.time)
+                                info("This starting time does not meet the suspend threshold (%s < %s)" % (end-start, suspendthreshold), constants.ST, self.rm.clock.getTime())
                                 start = None
                         else:
                             pass
@@ -783,7 +783,7 @@ class SlotTable(object):
             if self.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
                 (end, canfit) = self.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
                 if end == originalstart and set(nodes) <= set(canfit.keys()):
-                    info("Can slide back to %s" % p, constants.ST, self.rm.time)
+                    info("Can slide back to %s" % p, constants.ST, self.rm.clock.getTime())
                     newstart = p
                     break
         if newstart == None:
@@ -817,7 +817,7 @@ class SlotTable(object):
                 vmrrnew.realend -= diff
             self.updateReservationWithKeyChange(vmrr, vmrrnew)
             self.dirty()
-            edebug("New lease descriptor (after slideback):", constants.ST, self.rm.time)
+            edebug("New lease descriptor (after slideback):", constants.ST, self.rm.clock.getTime())
             lease.printContents()
 
 

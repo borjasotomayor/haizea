@@ -2,6 +2,8 @@ import optparse
 import os.path
 from mx import DateTime
 from math import ceil
+from cPickle import load, dump, HIGHEST_PROTOCOL
+from errno import EEXIST
 
 class Option (optparse.Option):
     ATTRS = optparse.Option.ATTRS + ['required']
@@ -120,3 +122,14 @@ def vnodemapstr(vnodes):
         return "UNUSED"
     else:
         return ",".join(["L"+`l`+"V"+`v` for (l,v) in vnodes])
+    
+# Based on http://norvig.com/python-iaq.html
+def abstract():
+    import inspect
+    caller = inspect.stack()[1][3]
+    raise NotImplementedError(caller + ' must be implemented in subclass')
+
+def pickle(data, dir, file):
+    f = open (dir + "/" + file, "w")
+    dump(data, f, protocol = HIGHEST_PROTOCOL)
+    f.close()

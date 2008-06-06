@@ -1,9 +1,18 @@
+import os
+import os.path
 import haizea.common.constants as constants
+import haizea.resourcemanager.datastruct as ds
+from haizea.common.utils import pickle
 
 class Stats(object):
     def __init__(self, rm):
         self.rm = rm
         
+        # TODO: Datadir
+        # Write data to disk
+        #profile = config.getProfile()
+        #dir = statsdir + "/" + utils.genDataDirName(profile, tracefile, injectfile)
+    
         self.utilization = []
         self.exactaccepted = []
         self.exactrejected = []
@@ -29,10 +38,10 @@ class Stats(object):
         self.nodes=dict([(i+1,[]) for i in range(self.rm.config.getNumPhysicalNodes())])
  
     def addUtilization(self,util):
-        self.utilization.append((self.rm.time,None,util))
+        self.utilization.append((self.rm.clock.getTime(),None,util))
         
     def addInitialMarker(self):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.exactaccepted.append((time,None,0))
         self.exactrejected.append((time,None,0))
         self.queuesize.append((time,None,0))
@@ -42,7 +51,7 @@ class Stats(object):
             self.nodes[node].append((time,constants.DOING_IDLE))
 
     def addFinalMarker(self):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.exactaccepted.append((time,None,self.exactacceptedcount))
         self.exactrejected.append((time,None,self.exactrejectedcount))
         self.queuesize.append((time,None,self.queuesizecount))
@@ -55,17 +64,17 @@ class Stats(object):
                 self.nodes[nodenum].append((time, doing))
 
     def incrAccepted(self, leaseID):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.exactacceptedcount += 1
         self.exactaccepted.append((time, leaseID, self.exactacceptedcount))
 
     def incrRejected(self, leaseID):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.exactrejectedcount += 1
         self.exactrejected.append((time, leaseID, self.exactrejectedcount))
 
     def incrBestEffortCompleted(self, leaseID):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.besteffortcompletedcount += 1
         self.besteffortcompleted.append((time,leaseID,self.besteffortcompletedcount))
         
@@ -79,26 +88,26 @@ class Stats(object):
         
 
     def incrQueueSize(self, leaseID):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.queuesizecount += 1
         if self.queuesize[-1][0] == time:
             self.queuesize.pop()        
         self.queuesize.append((time,leaseID,self.queuesizecount))
 
     def decrQueueSize(self, leaseID):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.queuesizecount -= 1
         if self.queuesize[-1][0] == time:
             self.queuesize.pop()
         self.queuesize.append((time, leaseID, self.queuesizecount))
         
     def startQueueWait(self, leaseID):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         if not self.queuewaittimes.has_key(leaseID):
             self.queuewaittimes[leaseID] = [time, None, None]
 
     def stopQueueWait(self, leaseID):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         if self.queuewaittimes[leaseID][1] == None:
             self.queuewaittimes[leaseID][1] = time
             start = self.queuewaittimes[leaseID][0]
@@ -107,7 +116,7 @@ class Stats(object):
             self.queuewait.append((time,leaseID,wait))
 
     def startExec(self, leaseID):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         if not self.startendtimes.has_key(leaseID):
             self.startendtimes[leaseID] = [time, None]
         if self.queuewaittimes[leaseID][2] == None:
@@ -118,15 +127,15 @@ class Stats(object):
             self.execwait.append((time,leaseID,wait))
             
     def addBoundedSlowdown(self, leaseID, slowdown):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.boundedslowdown.append((time,leaseID,slowdown))
         
     def addDiskUsage(self, usage):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         self.diskusage.append((time,None,usage))
         
     def addNodeStats(self):
-        time = self.rm.time
+        time = self.rm.clock.getTime()
         for node in self.rm.enactment.nodes:
             nodenum = node.nod_id
             doing = node.getState()
@@ -141,7 +150,7 @@ class Stats(object):
                     self.nodes[nodenum].append((time,doing))
         
     def normalizeTimes(self, data):
-        return [((v[0] - self.rm.starttime).seconds,v[1],v[2]) for v in data]
+        return [((v[0] - self.rm.clock.getStartTime()).seconds,v[1],v[2]) for v in data]
         
     def addNoAverage(self, data):
         return [(v[0],v[1],v[2],None) for v in data]
@@ -225,7 +234,7 @@ class Stats(object):
         return l
     
     def getNodesDoing(self):
-        starttime = self.rm.starttime
+        starttime = self.rm.clock.getStartTime()
         nodes=dict([(i+1,[]) for i in range(self.rm.config.getNumPhysicalNodes())])
         for n in self.nodes:
             nodes[n] = []
@@ -238,5 +247,47 @@ class Stats(object):
                 prevtime = time
                 prevdoing = doing
         return nodes
+    
+    def dumpStatsToDisk(self, dir):
+        try:
+            if not os.path.exists(dir):
+                os.makedirs(dir)
+        except OSError, e:
+            if e.errno != EEXIST:
+                raise e
+    
+        cpuutilization = self.getUtilization()
+        exactaccepted = self.getExactAccepted()
+        exactrejected = self.getExactRejected()
+        besteffortcompleted = self.getBestEffortCompleted()
+        queuesize = self.getQueueSize()
+        queuewait = self.getQueueWait()
+        execwait = self.getExecWait()
+        utilratio = self.getUtilizationRatio()
+        diskusage = self.getDiskUsage()
+        boundedslowdown = self.getBoundedSlowdown()
+        leases = ds.LeaseTable(None)
+        leases.entries = self.rm.scheduler.completedleases.entries
+        
+        # Remove some data that won't be necessary in the reporting tools
+        for l in leases.entries.values():
+            l.removeRRs()
+            l.scheduler = None
+        
+        doing = self.getNodesDoing()
+    
+        pickle(cpuutilization, dir, constants.CPUUTILFILE)
+        pickle(exactaccepted, dir, constants.ACCEPTEDFILE)
+        pickle(exactrejected, dir, constants.REJECTEDFILE)
+        pickle(besteffortcompleted, dir, constants.COMPLETEDFILE)
+        pickle(queuesize, dir, constants.QUEUESIZEFILE)
+        pickle(queuewait, dir, constants.QUEUEWAITFILE)
+        pickle(execwait, dir, constants.EXECWAITFILE)
+        pickle(utilratio, dir, constants.UTILRATIOFILE)
+        pickle(diskusage, dir, constants.DISKUSAGEFILE)
+        pickle(boundedslowdown, dir, constants.SLOWDOWNFILE)
+        pickle(leases, dir, constants.LEASESFILE)
+        pickle(doing, dir, constants.DOINGFILE)
+
                 
             
