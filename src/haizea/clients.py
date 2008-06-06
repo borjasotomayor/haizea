@@ -1,11 +1,35 @@
 import haizea.common.constants as constants
-from haizea.resourcemanager.main import simulate
+from haizea.resourcemanager.rm import ResourceManager
 from haizea.traces.generators import generateTrace, generateImages
 from haizea.common.utils import Option, OptionParser, generateScripts
 from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig, ImageConfig
 from haizea.analysis.traces import analyzeExactLeaseInjection
 from haizea.analysis.misc import genpercentiles
 import os.path
+
+class Haizea(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        # Keeping this parameter for backwards compatibility
+        # The preferred way of specifying the stats dir is through
+        # the configuration file.
+        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir"))
+
+        opt, args = p.parse_args(argv)
+        
+        configfile=opt.conf
+        config = RMConfig.fromFile(configfile)
+      
+        # TODO: If has option, override in RM
+        statsdir = opt.statsdir
+        
+        rm = ResourceManager(config)
+    
+        rm.start()
 
 class Report(object):
     def __init__(self):
@@ -117,23 +141,7 @@ class GenPercentiles(object):
 
         genpercentiles(multiconfig, statsdir)
 
-class Simulate(object):
-    def __init__(self):
-        pass
-    
-    def run(self, argv):
-        p = OptionParser()
-        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
 
-        opt, args = p.parse_args(argv)
-        
-        configfile=opt.conf
-        config = RMConfig.fromFile(configfile)
-      
-        statsdir = opt.statsdir
-        
-        simulate(config, statsdir)
      
 class TraceGenerator(object):
     def __init__(self):
