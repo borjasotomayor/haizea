@@ -2,9 +2,9 @@
 
 from haizea import clients
 import sys
-import psyco
+#import psyco
 
-psyco.full()
+#psyco.full()
 
-c = clients.Simulate()
+c = clients.Haizea()
 c.run(sys.argv)
