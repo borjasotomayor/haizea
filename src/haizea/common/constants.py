@@ -143,6 +143,10 @@ FORCETRANSFERT_OPT="force-transfer-time"
 REUSE_OPT="reuse"
 AVOIDREDUNDANT_OPT="avoid-redundant-transfers"
 
+SCHEDULING_SEC="scheduling"
+TRACEFILE_SEC="tracefile"
+
+
 BACKFILLING_OFF="off"
 BACKFILLING_AGGRESSIVE="aggressive"
 BACKFILLING_CONSERVATIVE="conservative"

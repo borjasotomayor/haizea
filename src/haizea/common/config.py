@@ -80,42 +80,23 @@ class RMConfig(Config):
     def __init__(self, config):
         Config.__init__(self, config)
         
-    def getInitialTime(self):
-        timeopt = self.config.get(constants.SIMULATION_SEC,constants.STARTTIME_OPT)
-        return ISO.ParseDateTime(timeopt)
-    
+    #
+    # GENERAL OPTIONS
+    #
+
     def getLogLevel(self):
         return self.config.get(constants.GENERAL_SEC, constants.LOGLEVEL_OPT)
     
     def getProfile(self):
         return self.config.get(constants.GENERAL_SEC, constants.PROFILE_OPT)
 
-    def getSuspensionType(self):
-        return self.config.get(constants.GENERAL_SEC, constants.SUSPENSION_OPT)
-
-    def isMigrationAllowed(self):
-        return self.config.getboolean(constants.GENERAL_SEC, constants.MIGRATION_OPT)
-
-    def getMustMigrate(self):
-        return self.config.get(constants.GENERAL_SEC, constants.MIGRATE_OPT)
-
-
-    def getMaxReservations(self):
-        if self.getBackfillingType() == constants.BACKFILLING_OFF:
-            return 0
-        elif self.getBackfillingType() == constants.BACKFILLING_AGGRESSIVE:
-            return 1
-        elif self.getBackfillingType() == constants.BACKFILLING_CONSERVATIVE:
-            return 1000000
-        elif self.getBackfillingType() == constants.BACKFILLING_INTERMEDIATE:
-            r = self.config.getint(constants.GENERAL_SEC, constants.RESERVATIONS_OPT)
-            return r
-
-    def getDBTemplate(self):
-        return self.config.get(constants.SIMULATION_SEC, constants.TEMPLATEDB_OPT)
-    
-    def getTargetDB(self):
-        return self.config.get(constants.SIMULATION_SEC, constants.TARGETDB_OPT)
+    #
+    # SIMULATION OPTIONS
+    #
+        
+    def getInitialTime(self):
+        timeopt = self.config.get(constants.SIMULATION_SEC,constants.STARTTIME_OPT)
+        return ISO.ParseDateTime(timeopt)
     
     def getNumPhysicalNodes(self):
         return self.config.getint(constants.SIMULATION_SEC, constants.NODES_OPT)
@@ -128,81 +109,12 @@ class RMConfig(Config):
 
     def getSuspendResumeRate(self):
         return self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDRATE_OPT)
-
-    def getSuspendThreshold(self):
-        if not self.config.has_option(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLD_OPT):
-            return 0
-        else:
-            return TimeDelta(seconds=self.config.getint(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLD_OPT))
-
-    def getSuspendThresholdFactor(self):
-        if not self.config.has_option(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT):
-            return None
-        else:
-            return self.config.getfloat(constants.SIMULATION_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT)
-
-    def getTracefile(self):
-        return self.config.get(constants.GENERAL_SEC, constants.TRACEFILE_OPT)
-
-    def getInjectfile(self):
-        injfile = self.config.get(constants.GENERAL_SEC, constants.INJFILE_OPT)
-        if injfile == "None":
-            return None
-        else:
-            return injfile
-
-    def getImagefile(self):
-        imgfile = self.config.get(constants.GENERAL_SEC, constants.IMGFILE_OPT)
-        if imgfile == "None":
-            return None
-        else:
-            return imgfile
-
-        
-    def isBackfilling(self):
-        if self.getBackfillingType() == constants.BACKFILLING_OFF:
-            return False
-        else:
-            return True
-        
-    def getBackfillingType(self):
-        return self.config.get(constants.GENERAL_SEC, constants.BACKFILLING_OPT)
     
     def stopWhen(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.STOPWHEN_OPT):
             return None
         else:
             return self.config.get(constants.SIMULATION_SEC, constants.STOPWHEN_OPT)
-
-    def getTransferType(self):
-        if not self.config.has_option(constants.GENERAL_SEC, constants.TRANSFER_OPT):
-            return constants.TRANSFER_NONE
-        else:
-            return self.config.get(constants.GENERAL_SEC, constants.TRANSFER_OPT)
-
-    def getReuseAlg(self):
-        if not self.config.has_option(constants.GENERAL_SEC, constants.REUSE_OPT):
-            return constants.REUSE_NONE
-        else:
-            return self.config.get(constants.GENERAL_SEC, constants.REUSE_OPT)
-        
-    def getMaxPoolSize(self):
-        if not self.config.has_option(constants.GENERAL_SEC, constants.MAXPOOL_OPT):
-            return constants.POOL_UNLIMITED
-        else:
-            return self.config.getint(constants.GENERAL_SEC, constants.MAXPOOL_OPT)        
-        
-    def isAvoidingRedundantTransfers(self):
-        if not self.config.has_option(constants.GENERAL_SEC, constants.AVOIDREDUNDANT_OPT):
-            return False
-        else:
-            return self.config.getboolean(constants.GENERAL_SEC, constants.AVOIDREDUNDANT_OPT)
-
-    def getNodeSelectionPolicy(self):
-        if not self.config.has_option(constants.GENERAL_SEC, constants.NODESELECTION_OPT):
-            return constants.NODESELECTION_AVOIDPREEMPT
-        else:
-            return self.config.get(constants.GENERAL_SEC, constants.NODESELECTION_OPT)
 
     def getForceTransferTime(self):
         if not self.config.has_option(constants.SIMULATION_SEC, constants.FORCETRANSFERT_OPT):
@@ -228,6 +140,103 @@ class RMConfig(Config):
             return False
         else:
             return self.config.getboolean(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT)
+
+    #
+    # SCHEDULING OPTIONS
+    #
+
+    def getSuspensionType(self):
+        return self.config.get(constants.SCHEDULING_SEC, constants.SUSPENSION_OPT)
+
+    def isMigrationAllowed(self):
+        return self.config.getboolean(constants.SCHEDULING_SEC, constants.MIGRATION_OPT)
+
+    def getMustMigrate(self):
+        return self.config.get(constants.SCHEDULING_SEC, constants.MIGRATE_OPT)
+
+    def getMaxReservations(self):
+        if self.getBackfillingType() == constants.BACKFILLING_OFF:
+            return 0
+        elif self.getBackfillingType() == constants.BACKFILLING_AGGRESSIVE:
+            return 1
+        elif self.getBackfillingType() == constants.BACKFILLING_CONSERVATIVE:
+            return 1000000
+        elif self.getBackfillingType() == constants.BACKFILLING_INTERMEDIATE:
+            r = self.config.getint(constants.SCHEDULING_SEC, constants.RESERVATIONS_OPT)
+            return r
+
+    def getSuspendThreshold(self):
+        if not self.config.has_option(constants.SCHEDULING_SEC, constants.SUSPENDTHRESHOLD_OPT):
+            return 0
+        else:
+            return TimeDelta(seconds=self.config.getint(constants.SCHEDULING_SEC, constants.SUSPENDTHRESHOLD_OPT))
+
+    def getSuspendThresholdFactor(self):
+        if not self.config.has_option(constants.SCHEDULING_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT):
+            return None
+        else:
+            return self.config.getfloat(constants.SCHEDULING_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT)
+
+    def isBackfilling(self):
+        if self.getBackfillingType() == constants.BACKFILLING_OFF:
+            return False
+        else:
+            return True
+        
+    def getBackfillingType(self):
+        return self.config.get(constants.SCHEDULING_SEC, constants.BACKFILLING_OPT)
+
+    def getTransferType(self):
+        if not self.config.has_option(constants.SCHEDULING_SEC, constants.TRANSFER_OPT):
+            return constants.TRANSFER_NONE
+        else:
+            return self.config.get(constants.SCHEDULING_SEC, constants.TRANSFER_OPT)
+
+    def getReuseAlg(self):
+        if not self.config.has_option(constants.SCHEDULING_SEC, constants.REUSE_OPT):
+            return constants.REUSE_NONE
+        else:
+            return self.config.get(constants.SCHEDULING_SEC, constants.REUSE_OPT)
+        
+    def getMaxPoolSize(self):
+        if not self.config.has_option(constants.SCHEDULING_SEC, constants.MAXPOOL_OPT):
+            return constants.POOL_UNLIMITED
+        else:
+            return self.config.getint(constants.SCHEDULING_SEC, constants.MAXPOOL_OPT)        
+        
+    def isAvoidingRedundantTransfers(self):
+        if not self.config.has_option(constants.SCHEDULING_SEC, constants.AVOIDREDUNDANT_OPT):
+            return False
+        else:
+            return self.config.getboolean(constants.SCHEDULING_SEC, constants.AVOIDREDUNDANT_OPT)
+
+    def getNodeSelectionPolicy(self):
+        if not self.config.has_option(constants.SCHEDULING_SEC, constants.NODESELECTION_OPT):
+            return constants.NODESELECTION_AVOIDPREEMPT
+        else:
+            return self.config.get(constants.SCHEDULING_SEC, constants.NODESELECTION_OPT)
+
+
+    #
+    # TRACEFILE OPTIONS
+    #
+    def getTracefile(self):
+        return self.config.get(constants.TRACEFILE_SEC, constants.TRACEFILE_OPT)
+
+    def getInjectfile(self):
+        injfile = self.config.get(constants.TRACEFILE_SEC, constants.INJFILE_OPT)
+        if injfile == "None":
+            return None
+        else:
+            return injfile
+
+    def getImagefile(self):
+        imgfile = self.config.get(constants.TRACEFILE_SEC, constants.IMGFILE_OPT)
+        if imgfile == "None":
+            return None
+        else:
+            return imgfile
+
 
 class GraphDataEntry(object):
     def __init__(self, title, profile, trace, inject):
