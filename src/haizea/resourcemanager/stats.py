@@ -56,7 +56,7 @@ class Stats(object):
         self.exactrejected.append((time,None,self.exactrejectedcount))
         self.queuesize.append((time,None,self.queuesizecount))
         
-        for node in self.rm.enactment.nodes:
+        for node in self.rm.resourcepool.nodes:
             nodenum = node.nod_id
             doing = node.vm_doing
             (lasttime,lastdoing) = self.nodes[nodenum][-1]
@@ -136,7 +136,7 @@ class Stats(object):
         
     def addNodeStats(self):
         time = self.rm.clock.getTime()
-        for node in self.rm.enactment.nodes:
+        for node in self.rm.resourcepool.nodes:
             nodenum = node.nod_id
             doing = node.getState()
             (lasttime,lastdoing) = self.nodes[nodenum][-1]

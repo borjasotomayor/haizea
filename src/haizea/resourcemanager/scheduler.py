@@ -138,11 +138,11 @@ class Scheduler(object):
                     
     def updateNodeVMState(self, nodes, state):
         for n in nodes:
-            self.rm.enactment.getNode(n).vm_doing = state
+            self.rm.resourcepool.getNode(n).vm_doing = state
 
     def updateNodeTransferState(self, nodes, state):
         for n in nodes:
-            self.rm.enactment.getNode(n).transfer_doing = state
+            self.rm.resourcepool.getNode(n).transfer_doing = state
 
 
     def handleStartVM(self, l, rr):
@@ -161,7 +161,7 @@ class Scheduler(object):
             if self.rm.config.getTransferType() != constants.TRANSFER_NONE:
                 for (vnode,pnode) in rr.nodes.items():
                     # TODO: Add some error checking here
-                    self.rm.enactment.checkImage(pnode, l.leaseID, vnode, l.vmimage)
+                    self.rm.resourcepool.checkImage(pnode, l.leaseID, vnode, l.vmimage)
                     l.vmimagemap[vnode] = pnode
 
         elif l.state == constants.LEASE_STATE_SUSPENDED:
@@ -192,7 +192,7 @@ class Scheduler(object):
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
             for vnode,pnode in l.vmimagemap.items():
-                self.rm.enactment.removeImage(pnode, l.leaseID, vnode)
+                self.rm.resourcepool.removeImage(pnode, l.leaseID, vnode)
             if isinstance(l,ds.BestEffortLease):
                 self.rm.stats.incrBestEffortCompleted(l.leaseID)
                 self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.clock.getTime()))        
@@ -248,7 +248,7 @@ class Scheduler(object):
                     end = l.getEnd()
                     if maxend==None or end>maxend:
                         maxend=end
-                self.rm.enactment.addImageToNode(physnode, rr.file, l.vmimagesize, vnodes, timeout=maxend)
+                self.rm.resourcepool.addImageToNode(physnode, rr.file, l.vmimagesize, vnodes, timeout=maxend)
         elif l.state == constants.LEASE_STATE_SUSPENDED:
             pass
             # TODO: Migrating
@@ -262,7 +262,7 @@ class Scheduler(object):
         l.printContents()
         rr.state = constants.RES_STATE_ACTIVE
         for vnode,pnode in rr.nodes.items():
-            self.rm.enactment.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq.res[constants.RES_MEM])
+            self.rm.resourcepool.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq.res[constants.RES_MEM])
             l.memimagemap[vnode] = pnode
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_VM_SUSPEND)
@@ -293,7 +293,7 @@ class Scheduler(object):
         l.printContents()
         rr.state = constants.RES_STATE_DONE
         for vnode,pnode in rr.nodes.items():
-            self.rm.enactment.removeRAMFileFromNode(pnode, l.leaseID, vnode)
+            self.rm.resourcepool.removeRAMFileFromNode(pnode, l.leaseID, vnode)
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_IDLE)
         debug("LEASE-%i End of handleEndResume" % l.leaseID, constants.SCHED, self.rm.clock.getTime())
@@ -331,7 +331,7 @@ class Scheduler(object):
                     info("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (req.vmimage, vnode, pnode), constants.SCHED, self.rm.clock.getTime())
 
                     if reusealg == constants.REUSE_COWPOOL:
-                        if self.rm.enactment.isInPool(pnode,req.vmimage, req.start):
+                        if self.rm.resourcepool.isInPool(pnode,req.vmimage, req.start):
                             info("No need to schedule an image transfer (reusing an image in pool)", constants.SCHED, self.rm.clock.getTime())
                             mustpool[vnode] = pnode                            
                         else:
@@ -366,7 +366,7 @@ class Scheduler(object):
             # to add entries to the pools
             if reusealg == constants.REUSE_COWPOOL:
                 for (vnode,pnode) in mustpool.items():
-                    self.rm.enactment.addToPool(pnode, req.vmimage, leaseID, vnode, req.start)
+                    self.rm.resourcepool.addToPool(pnode, req.vmimage, leaseID, vnode, req.start)
  
             # Add resource reservations
             vmrr = ds.VMResourceReservation(req, req.start, req.end, req.prematureend, nodeassignment, res, constants.ONCOMPLETE_ENDLEASE, False)
@@ -429,7 +429,7 @@ class Scheduler(object):
                         if reqtransfer == constants.REQTRANSFER_COWPOOL:
                             # Add to pool
                             info("Reusing image for V%i->P%i." % (vnode, pnode), constants.SCHED, self.rm.clock.getTime())
-                            self.rm.enactment.addToPool(pnode, req.vmimage, req.leaseID, vnode, vmrr.end)
+                            self.rm.resourcepool.addToPool(pnode, req.vmimage, req.leaseID, vnode, vmrr.end)
                         elif reqtransfer == constants.REQTRANSFER_PIGGYBACK:
                             # We can piggyback on an existing transfer
                             transferRR = earliest[pnode][2]
@@ -463,15 +463,15 @@ class Scheduler(object):
                 # Update VM image mappings, since we might be resuming
                 # in different nodes.
                 for vnode,pnode in req.vmimagemap.items():
-                    self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
+                    self.rm.resourcepool.removeImage(pnode, req.leaseID, vnode)
                 req.vmimagemap = vmrr.nodes
                 for vnode,pnode in req.vmimagemap.items():
-                    self.rm.enactment.addTaintedImageToNode(pnode, req.vmimage, req.vmimagesize, req.leaseID, vnode)
+                    self.rm.resourcepool.addTaintedImageToNode(pnode, req.vmimage, req.vmimagesize, req.leaseID, vnode)
                 # Update RAM file mappings
                 for vnode,pnode in req.memimagemap.items():
-                    self.rm.enactment.removeRAMFileFromNode(pnode, req.leaseID, vnode)
+                    self.rm.resourcepool.removeRAMFileFromNode(pnode, req.leaseID, vnode)
                 for vnode,pnode in vmrr.nodes.items():
-                    self.rm.enactment.addRAMFileToNode(pnode, req.leaseID, vnode, req.resreq.res[constants.RES_MEM])
+                    self.rm.resourcepool.addRAMFileToNode(pnode, req.leaseID, vnode, req.resreq.res[constants.RES_MEM])
                     req.memimagemap[vnode] = pnode
                     
             # Add resource reservations
@@ -506,7 +506,7 @@ class Scheduler(object):
                 req.removeRR(susprr)
                 self.slottable.removeReservation(susprr)
             for vnode,pnode in req.vmimagemap.items():
-                self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
+                self.rm.resourcepool.removeImage(pnode, req.leaseID, vnode)
             self.removeFromFIFOTransfers(req.leaseID)
             req.vmimagemap = {}
             self.scheduledleases.remove(req)
@@ -538,7 +538,7 @@ class Scheduler(object):
                     req.removeRR(resmrr)
                     self.slottable.removeReservation(resmrr)
                 for vnode,pnode in req.vmimagemap.items():
-                    self.rm.enactment.removeImage(pnode, req.leaseID, vnode)
+                    self.rm.resourcepool.removeImage(pnode, req.leaseID, vnode)
                 self.removeFromFIFOTransfers(req.leaseID)
                 req.vmimagemap = {}
                 self.scheduledleases.remove(req)
@@ -594,7 +594,7 @@ class Scheduler(object):
             
             # Check if we can reuse images
             if reusealg==constants.REUSE_COWPOOL:
-                nodeswithimg = self.rm.enactment.getNodesWithImgInPool(req.vmimage)
+                nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(req.vmimage)
                 for node in nodeswithimg:
                     earliest[node] = [self.rm.clock.getTime(), constants.REQTRANSFER_COWPOOL]
             

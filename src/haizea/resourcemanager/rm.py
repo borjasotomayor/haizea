@@ -2,6 +2,7 @@ import haizea.resourcemanager.interface as interface
 import haizea.resourcemanager.scheduler as scheduler
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.enactment import SimulatedEnactment
+from haizea.resourcemanager.resourcepool.simulated import SimulatedResourcePool
 import haizea.resourcemanager.stats as stats
 import haizea.common.constants as constants
 from haizea.common.log import info, debug, status, error, log, loglevel, setED
@@ -29,6 +30,9 @@ class ResourceManager(object):
         # Logger
         #self.logger = Logger(self)
         
+        # Resource pool
+        self.resourcepool = SimulatedResourcePool(self)
+
         # Scheduler
         self.scheduler = scheduler.Scheduler(self)
 
@@ -38,10 +42,7 @@ class ResourceManager(object):
         # Enactment backends
         #self.enactVM = enactment.vm.simulated.SimulatedVMEnactment(self)
         #self.enactStorage = enactment.storage.simulated.SimulatedStorageEnactment(self)
-        self.enactment = SimulatedEnactment(self)
 
-        # Resource monitoring
-        #self.resourcepool = monitoring.simulated.SimulatedMonitoring(self)
         
         
         # Statistics collection 
@@ -219,3 +220,11 @@ class SimulatedClock(Clock):
 class RealClock(Clock):
     def __init__(self, rm):
         Clock.__init__(self,rm)
+        
+
+if __name__ == "__main__":
+    from haizea.common.config import RMConfig
+    configfile="../../../etc/sample.conf"
+    config = RMConfig.fromFile(configfile)
+    rm = ResourceManager(config)
+    rm.start()

@@ -16,9 +16,15 @@ class CriticalSlotFittingException(Exception):
 
 
 class Node(object):
-    def __init__(self, capacity, capacitywithpreemption):
+    def __init__(self, capacity, capacitywithpreemption, resourcepoolnode):
         self.capacity = ds.ResourceTuple.copy(capacity)
         self.capacitywithpreemption = ds.ResourceTuple.copy(capacitywithpreemption)
+        self.resourcepoolnode = resourcepoolnode
+        
+    @classmethod
+    def fromResourcePoolNode(cls, node):
+        capacity = node.getCapacity()
+        return cls(capacity, capacity, node)
 
 class NodeList(object):
     def __init__(self):
@@ -33,14 +39,14 @@ class NodeList(object):
     def copy(self):
         nodelist = NodeList()
         for n in self.nodelist:
-            nodelist.add(Node(n.capacity, n.capacitywithpreemption))
+            nodelist.add(Node(n.capacity, n.capacitywithpreemption, n.resourcepoolnode))
         return nodelist
 
     def toPairList(self, onlynodes=None):
         nodelist = []
         for i,n in enumerate(self.nodelist):
             if onlynodes == None or (onlynodes != None and i+1 in onlynodes):
-                nodelist.append((i+1,Node(n.capacity, n.capacitywithpreemption)))
+                nodelist.append((i+1,Node(n.capacity, n.capacitywithpreemption, n.resourcepoolnode)))
         return nodelist
     
     def toDict(self):
@@ -59,40 +65,28 @@ class SlotTable(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.rm = scheduler.rm
+        self.resourcepool = scheduler.rm.resourcepool
         self.nodes = NodeList()
         self.reservations = []
         self.reservationsByStart = []
         self.reservationsByEnd = []
         self.availabilitycache = {}
         self.changepointcache = None
-            
-        numnodes = self.rm.config.getNumPhysicalNodes()
-        resources = self.rm.config.getResourcesPerPhysNode()
-        bandwidth = self.rm.config.getBandwidth()
         
-        capacity = [None, None, None, None, None] # TODO: Hardcoding == bad
-        for r in resources:
-            resourcename = r.split(",")[0]
-            resourcecapacity = r.split(",")[1]
-            capacity[constants.str_res(resourcename)] = int(resourcecapacity)
-        capacity = ds.ResourceTuple.fromList(capacity)
         # Create nodes
-        for n in range(numnodes):
-            self.nodes.add(Node(capacity, capacity))
+        for n in self.resourcepool.getNodes():
+            self.nodes.add(Node.fromResourcePoolNode(n))
                 
         # Create image nodes
-        imgcapacity = [None, None, None, None, None] # TODO: Hardcoding == bad
-        imgcapacity[constants.RES_CPU]=0
-        imgcapacity[constants.RES_MEM]=0
-        imgcapacity[constants.RES_NETIN]=0
-        imgcapacity[constants.RES_NETOUT]=bandwidth
-        imgcapacity[constants.RES_DISK]=0
-        imgcapacity = ds.ResourceTuple.fromList(imgcapacity)
-        self.nodes.add(Node(imgcapacity, imgcapacity))
-        self.FIFOnode = numnodes + 1
-        self.nodes.add(Node(imgcapacity, imgcapacity))
-        self.EDFnode = numnodes + 2
+        FIFOnode = self.resourcepool.getFIFORepositoryNode()
+        EDFnode = self.resourcepool.getEDFRepositoryNode()
+                
+        self.nodes.add(Node.fromResourcePoolNode(FIFOnode))
+        self.nodes.add(Node.fromResourcePoolNode(EDFnode))
         
+        self.FIFOnode = FIFOnode.nod_id
+        self.EDFnode = EDFnode.nod_id
+
         self.availabilitywindow = AvailabilityWindow(self)
 
     def dirty(self):
