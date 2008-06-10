@@ -273,6 +273,7 @@ class Stats(object):
         for l in leases.entries.values():
             l.removeRRs()
             l.scheduler = None
+            l.logger = None
         
         doing = self.getNodesDoing()
     

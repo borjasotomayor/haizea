@@ -54,7 +54,7 @@ class TracefileFrontend(RequestFrontend):
 
         # Make the scheduler reachable from the lease request
         for r in self.requests:
-            r.scheduler = rm.scheduler
+            r.setScheduler(rm.scheduler)
         
         
     def getAccumulatedRequests(self):

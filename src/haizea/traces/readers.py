@@ -72,14 +72,14 @@ def CSV(tracefile, config):
                     start = tSubmit + TimeDelta(seconds=int(fields[8])) # 8: deadline
                     end = start + TimeDelta(seconds=int(fields[9])) # 9: duration
                     prematureend = start + TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = ExactLease(None, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend)
+                    req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend)
                 else:
                     if fields[9]=="INF":
                         maxdur = DateTimeDelta(30) # 30 days
                     else:
                         maxdur = TimeDelta(seconds=int(fields[9])) # 9: duration
                     realdur = TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur, timeOnDedicated=realdur)
+                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur, timeOnDedicated=realdur)
             req.state = constants.LEASE_STATE_PENDING
             requests.append(req)
     return requests

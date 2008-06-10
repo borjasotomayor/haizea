@@ -1,6 +1,4 @@
 from haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
-from haizea.common.log import edebug
-import haizea.common.log as log
 from haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
 from mx.DateTime import TimeDelta
@@ -73,7 +71,7 @@ class ResourceTuple(object):
         return sum([v for v in self.res]) <= 0
 
 class LeaseBase(object):
-    def __init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq):
+    def __init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq):
         self.leaseID = getLeaseID()
         self.tSubmit = tSubmit
         self.state = None
@@ -84,25 +82,28 @@ class LeaseBase(object):
         self.vmimagemap = {}
         self.memimagemap = {}
         self.rr = []
-        self.scheduler = scheduler
         
-    def printContents(self, logfun=edebug):
-        logfun("Lease ID       : %i" % self.leaseID, DS, None)
-        logfun("Submission time: %s" % self.tSubmit, DS, None)
-        logfun("State          : %s" % state_str(self.state), DS, None)
-        logfun("VM image       : %s" % self.vmimage, DS, None)
-        logfun("VM image size  : %s" % self.vmimagesize, DS, None)
-        logfun("Num nodes      : %s" % self.numnodes, DS, None)
-        logfun("Resource req   : %s" % prettyRes(self.resreq), DS, None)
-        logfun("VM image map   : %s" % prettyNodemap(self.vmimagemap), DS, None)
-        logfun("Mem image map  : %s" % prettyNodemap(self.memimagemap), DS, None)
+    def setScheduler(self, scheduler):
+        self.scheduler = scheduler
+        self.logger = scheduler.rm.logger
+        
+    def printContents(self, loglevel="EXTREMEDEBUG"):
+        self.logger.log(loglevel, "Lease ID       : %i" % self.leaseID, DS)
+        self.logger.log(loglevel, "Submission time: %s" % self.tSubmit, DS)
+        self.logger.log(loglevel, "State          : %s" % state_str(self.state), DS)
+        self.logger.log(loglevel, "VM image       : %s" % self.vmimage, DS)
+        self.logger.log(loglevel, "VM image size  : %s" % self.vmimagesize, DS)
+        self.logger.log(loglevel, "Num nodes      : %s" % self.numnodes, DS)
+        self.logger.log(loglevel, "Resource req   : %s" % prettyRes(self.resreq), DS)
+        self.logger.log(loglevel, "VM image map   : %s" % prettyNodemap(self.vmimagemap), DS)
+        self.logger.log(loglevel, "Mem image map  : %s" % prettyNodemap(self.memimagemap), DS)
 
-    def printRR(self, logfun=edebug):
-        logfun("RESOURCE RESERVATIONS", DS, None)
-        logfun("~~~~~~~~~~~~~~~~~~~~~", DS, None)
+    def printRR(self, loglevel="EXTREMEDEBUG"):
+        self.logger.log(loglevel, "RESOURCE RESERVATIONS", DS)
+        self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~", DS)
         for r in self.rr:
-            r.printContents(logfun)
-            logfun("##", DS, None)
+            r.printContents(loglevel)
+            self.logger.log(loglevel, "##", DS)
             
     def appendRR(self, rr):
         self.rr.append(rr)
@@ -205,23 +206,22 @@ class LeaseBase(object):
       
         
 class ExactLease(LeaseBase):
-    def __init__(self, scheduler, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
-        LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
+    def __init__(self, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
+        LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq)
         self.start = start
         self.end = end
         self.prematureend = prematureend
         
-    def printContents(self, logfun=edebug):
-        if not (logfun == edebug and not log.extremedebug):
-            logfun("__________________________________________________", DS, None)
-            LeaseBase.printContents(self, logfun)
-            logfun("Type           : EXACT", DS, None)
-            logfun("Start time     : %s" % self.start, DS, None)
-            logfun("End time       : %s" % self.end, DS, None)
-            logfun("Early end time : %s" % self.prematureend, DS, None)
-            self.printRR(logfun)
-            logfun("--------------------------------------------------", DS, None)
-        
+    def printContents(self, loglevel="EXTREMEDEBUG"):
+        self.logger.log(loglevel, "__________________________________________________", DS)
+        LeaseBase.printContents(self, loglevel)
+        self.logger.log(loglevel, "Type           : EXACT", DS)
+        self.logger.log(loglevel, "Start time     : %s" % self.start, DS)
+        self.logger.log(loglevel, "End time       : %s" % self.end, DS)
+        self.logger.log(loglevel, "Early end time : %s" % self.prematureend, DS)
+        self.printRR(loglevel)
+        self.logger.log(loglevel, "--------------------------------------------------", DS)
+    
     def addRuntimeOverhead(self, percent):
         factor = 1 + float(percent)/100
         duration = self.end - self.start
@@ -234,8 +234,8 @@ class ExactLease(LeaseBase):
         self.prematureend += t
         
 class BestEffortLease(LeaseBase):
-    def __init__(self, scheduler, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
-        LeaseBase.__init__(self, scheduler, tSubmit, vmimage, vmimagesize, numnodes, resreq)
+    def __init__(self, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
+        LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq)
         self.maxdur = maxdur   # Maximum duration the lease can run for (this value is not modified)
         self.realdur = realdur # Real duration (this value is not modified)
         self.remdur = maxdur   # Remaining duration (until maximum). This value is decreased as the lease runs.
@@ -245,18 +245,17 @@ class BestEffortLease(LeaseBase):
         self.timeOnDedicated = timeOnDedicated
         self.imagesavail = None        
 
-    def printContents(self, logfun=edebug):
-        if not (logfun == edebug and not log.extremedebug):
-            logfun("__________________________________________________", DS, None)
-            LeaseBase.printContents(self, logfun)
-            logfun("Type           : BEST-EFFORT", DS, None)
-            logfun("Max duration   : %s" % self.maxdur, DS, None)
-            logfun("Rem duration   : %s" % self.remdur, DS, None)
-            logfun("Real duration  : %s" % self.realremdur, DS, None)
-            logfun("Max queue time : %s" % self.maxqueuetime, DS, None)
-            logfun("Images Avail @ : %s" % self.imagesavail, DS, None)
-            self.printRR(logfun)
-            logfun("--------------------------------------------------", DS, None)
+    def printContents(self, loglevel="EXTREMEDEBUG"):
+        self.logger.log(loglevel, "__________________________________________________", DS)
+        LeaseBase.printContents(self, loglevel)
+        self.logger.log(loglevel, "Type           : BEST-EFFORT", DS)
+        self.logger.log(loglevel, "Max duration   : %s" % self.maxdur, DS)
+        self.logger.log(loglevel, "Rem duration   : %s" % self.remdur, DS)
+        self.logger.log(loglevel, "Real duration  : %s" % self.realremdur, DS)
+        self.logger.log(loglevel, "Max queue time : %s" % self.maxqueuetime, DS)
+        self.logger.log(loglevel, "Images Avail @ : %s" % self.imagesavail, DS)
+        self.printRR(loglevel)
+        self.logger.log(loglevel, "--------------------------------------------------", DS)
 
     def addRuntimeOverhead(self, percent):
         factor = 1 + float(percent)/100
@@ -295,13 +294,14 @@ class ResourceReservationBase(object):
         self.lease = lease
         self.state = None
         self.res = res
+        self.logger = lease.scheduler.rm.logger
         
-    def printContents(self, logfun=edebug):
-        logfun("Start          : %s" % self.start, DS, None)
-        logfun("End            : %s" % self.end, DS, None)
-        logfun("Real End       : %s" % self.realend, DS, None)
-        logfun("State          : %s" % rstate_str(self.state), DS, None)
-        logfun("Resources      : \n%s" % "\n".join(["N%i: %s" %(i,prettyRes(x)) for i,x in self.res.items()]), DS, None)
+    def printContents(self, loglevel="EXTREMEDEBUG"):
+        self.logger.log(loglevel, "Start          : %s" % self.start, DS)
+        self.logger.log(loglevel, "End            : %s" % self.end, DS)
+        self.logger.log(loglevel, "Real End       : %s" % self.realend, DS)
+        self.logger.log(loglevel, "State          : %s" % rstate_str(self.state), DS)
+        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i,prettyRes(x)) for i,x in self.res.items()]), DS)
                 
 class FileTransferResourceReservation(ResourceReservationBase):
     def __init__(self, lease, res, start=None, end=None):
@@ -311,12 +311,12 @@ class FileTransferResourceReservation(ResourceReservationBase):
         # Dictionary of  physnode -> [ (leaseID, vnode)* ]
         self.transfers = {}
 
-    def printContents(self, logfun=edebug):
-        ResourceReservationBase.printContents(self, logfun)
-        logfun("Type           : FILE TRANSFER", DS, None)
-        logfun("Deadline       : %s" % self.deadline, DS, None)
-        logfun("File           : %s" % self.file, DS, None)
-        logfun("Transfers      : %s" % self.transfers, DS, None)
+    def printContents(self, loglevel="EXTREMEDEBUG"):
+        ResourceReservationBase.printContents(self, loglevel)
+        self.logger.log(loglevel, "Type           : FILE TRANSFER", DS)
+        self.logger.log(loglevel, "Deadline       : %s" % self.deadline, DS)
+        self.logger.log(loglevel, "File           : %s" % self.file, DS)
+        self.logger.log(loglevel, "Transfers      : %s" % self.transfers, DS)
         
     def piggyback(self, leaseID, vnode, physnode):
         if self.transfers.has_key(physnode):
@@ -334,11 +334,11 @@ class VMResourceReservation(ResourceReservationBase):
         self.oncomplete = oncomplete
         self.backfillres = backfillres
 
-    def printContents(self, logfun=edebug):
-        ResourceReservationBase.printContents(self, logfun)
-        logfun("Type           : VM", DS, None)
-        logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
-        logfun("On Complete    : %s" % self.oncomplete, DS, None)
+    def printContents(self, loglevel="EXTREMEDEBUG"):
+        ResourceReservationBase.printContents(self, loglevel)
+        self.logger.log(loglevel, "Type           : VM", DS)
+        self.logger.log(loglevel, "Nodes          : %s" % prettyNodemap(self.nodes), DS)
+        self.logger.log(loglevel, "On Complete    : %s" % self.oncomplete, DS)
         
     def isPreemptible(self):
         if isinstance(self.lease,BestEffortLease):
@@ -351,10 +351,10 @@ class SuspensionResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
-    def printContents(self, logfun=edebug):
-        ResourceReservationBase.printContents(self, logfun)
-        logfun("Type           : SUSPEND", DS, None)
-        logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
+    def printContents(self, loglevel="EXTREMEDEBUG"):
+        ResourceReservationBase.printContents(self, loglevel)
+        self.logger.log(loglevel, "Type           : SUSPEND", DS)
+        self.logger.log(loglevel, "Nodes          : %s" % prettyNodemap(self.nodes), DS)
         
     def isPreemptible(self):
         return False        
@@ -364,10 +364,10 @@ class ResumptionResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
-    def printContents(self, logfun=edebug):
-        ResourceReservationBase.printContents(self, logfun)
-        logfun("Type           : RESUME", DS, None)
-        logfun("Nodes          : %s" % prettyNodemap(self.nodes), DS, None)
+    def printContents(self, loglevel="EXTREMEDEBUG"):
+        ResourceReservationBase.printContents(self, loglevel)
+        self.logger.log(loglevel, "Type           : RESUME", DS)
+        self.logger.log(loglevel, "Nodes          : %s" % prettyNodemap(self.nodes), DS)
 
     def isPreemptible(self):
         return False        

@@ -1,4 +1,3 @@
-from haizea.common.log import info, debug, edebug, warning, error
 from haizea.common.utils import vnodemapstr
 import haizea.common.constants as constants
 from haizea.common.utils import abstract
@@ -32,7 +31,7 @@ class ResourcePool(object):
             self.vm = enact.vm(self)
             self.storage = enact.storage(self)
         except Exception, msg:
-            error("Unable to load enactment modules for mode '%s'" % mode ,constants.RM, self.rm.clock.getTime())
+            self.rm.logger.error("Unable to load enactment modules for mode '%s'" % mode ,constants.RM)
             raise                
         
     def getNodes(self):
@@ -54,7 +53,7 @@ class ResourcePool(object):
         return self.EDFnode
         
     def addImageToNode(self,nod_id,imagefile,imagesize,vnodes,timeout=None):
-        info("Adding image for leases=%s in nod_id=%i" % (vnodes,nod_id), constants.ENACT, None)
+        self.rm.logger.info("Adding image for leases=%s in nod_id=%i" % (vnodes,nod_id), constants.ENACT)
         self.getNode(nod_id).printFiles()
 
         if self.reusealg == constants.REUSE_NONE:
@@ -79,11 +78,11 @@ class ResourcePool(object):
                     reqsize = poolsize + imagesize
                     if reqsize > self.maxpoolsize:
                         desiredsize = self.maxpoolsize - imagesize
-                        info("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize), constants.ENACT, None)
+                        self.rm.logger.info("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize), constants.ENACT)
                         self.getNode(nod_id).printFiles()
                         success = self.getNode(nod_id).purgePoolDownTo(self.maxpoolsize)
                         if not success:
-                            info("Unable to add to pool. Creating tainted image instead.", constants.ENACT, None)
+                            self.rm.logger.info("Unable to add to pool. Creating tainted image instead.", constants.ENACT)
                             # If unsuccessful, this just means we couldn't add the image
                             # to the pool. We will have to create tainted images to be used
                             # only by these leases
@@ -101,7 +100,7 @@ class ResourcePool(object):
         self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
         
     def addTaintedImageToNode(self,pnode,imagefile,imagesize,lease,vnode):
-        info("Adding tainted image for L%iV%i in pnode=%i" % (lease,vnode,pnode), constants.ENACT, None)
+        self.rm.logger.info("Adding tainted image for L%iV%i in pnode=%i" % (lease,vnode,pnode), constants.ENACT)
         self.getNode(pnode).printFiles()
         img = VMImageFile(imagefile, imagesize, masterimg=False)
         img.addMapping(lease,vnode)
@@ -112,7 +111,7 @@ class ResourcePool(object):
         node = self.getNode(pnode)
         if self.reusealg == constants.REUSE_NONE:
             if not node.hasTaintedImage(leaseID, vnode, imagefile):
-                error("ERROR: Image for L%iV%i is not deployed on node %i" % (leaseID, vnode, pnode), constants.ENACT, None)
+                self.rm.logger.error("ERROR: Image for L%iV%i is not deployed on node %i" % (leaseID, vnode, pnode), constants.ENACT)
         elif self.reusealg == constants.REUSE_COWPOOL:
             poolentry = node.getPoolEntry(imagefile, leaseID=leaseID, vnode=vnode)
             if poolentry == None:
@@ -120,10 +119,10 @@ class ResourcePool(object):
                 # we had to fall back on creating a tainted image right
                 # when the image was transferred. We have to check this.
                 if not node.hasTaintedImage(leaseID, vnode, imagefile):
-                    error("ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (leaseID, vnode, pnode), constants.ENACT, None)
+                    self.rm.logger.error("ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (leaseID, vnode, pnode), constants.ENACT)
             else:
                 # Create tainted image
-                info("Adding tainted image for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT, None)
+                self.rm.logger.info("Adding tainted image for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT)
                 node.printFiles()
                 img = VMImageFile(imagefile, poolentry.filesize, masterimg=False)
                 img.addMapping(leaseID,vnode)
@@ -144,7 +143,7 @@ class ResourcePool(object):
         node = self.getNode(pnode)
         node.printFiles()
         if self.reusealg == constants.REUSE_COWPOOL:
-            info("Removing pooled images for L%iV%i in node %i" % (lease,vnode,pnode), constants.ENACT, None)
+            self.rm.logger.info("Removing pooled images for L%iV%i in node %i" % (lease,vnode,pnode), constants.ENACT)
             toremove = []
             for img in node.getPoolImages():
                 if (lease,vnode) in img.mappings:
@@ -158,7 +157,7 @@ class ResourcePool(object):
                 node.files.remove(img)
             node.printFiles()
 
-        info("Removing tainted images for L%iV%i in node %i" % (lease,vnode,pnode), constants.ENACT, None)
+        self.rm.logger.info("Removing tainted images for L%iV%i in node %i" % (lease,vnode,pnode), constants.ENACT)
         node.removeTainted(lease,vnode)
 
         node.printFiles()
@@ -167,7 +166,7 @@ class ResourcePool(object):
         
     def addRAMFileToNode(self, pnode, leaseID, vnode, size):
         node = self.getNode(pnode)
-        info("Adding RAM file for L%iV%i in node %i" % (leaseID,vnode,pnode), constants.ENACT, None)
+        self.rm.logger.info("Adding RAM file for L%iV%i in node %i" % (leaseID,vnode,pnode), constants.ENACT)
         node.printFiles()
         f = RAMImageFile("RAM_L%iV%i" % (leaseID,vnode), size, leaseID,vnode)
         node.addFile(f)        
@@ -176,7 +175,7 @@ class ResourcePool(object):
 
     def removeRAMFileFromNode(self, pnode, leaseID, vnode):
         node = self.getNode(pnode)
-        info("Removing RAM file for L%iV%i in node %i" % (leaseID,vnode,pnode), constants.ENACT, None)
+        self.rm.logger.info("Removing RAM file for L%iV%i in node %i" % (leaseID,vnode,pnode), constants.ENACT)
         node.printFiles()
         node.removeRAMFile(leaseID, vnode)
         node.printFiles()
@@ -188,6 +187,7 @@ class ResourcePool(object):
 class Node(object):
     def __init__(self, resourcepool, nod_id, hostname, capacity):
         self.resourcepool = resourcepool
+        self.logger = resourcepool.rm.logger
         self.nod_id = nod_id
         self.hostname = hostname
         self.files = []
@@ -227,7 +227,7 @@ class Node(object):
         elif len(image) == 1:
             return True
         elif len(image) > 1:
-            warning("More than one tainted image for L%iV%i on node %i" % (leaseID, vnode, self.nod_id), constants.ENACT, None)
+            self.rm.logger.warning("More than one tainted image for L%iV%i on node %i" % (leaseID, vnode, self.nod_id), constants.ENACT)
             return True
         
     def addToPool(self, imagefile, leaseID, vnode, timeout):
@@ -300,7 +300,7 @@ class Node(object):
         images = ""
         if len(self.files) > 0:
             images = ", ".join([str(img) for img in self.files])
-        info("Node %i has %iMB %s" % (self.nod_id,self.getTotalFileSize(),images), constants.ENACT, None)
+        self.logger.info("Node %i has %iMB %s" % (self.nod_id,self.getTotalFileSize(),images), constants.ENACT)
 
     def getState(self):
         if self.vm_doing == constants.DOING_IDLE and self.transfer_doing == constants.DOING_TRANSFER:

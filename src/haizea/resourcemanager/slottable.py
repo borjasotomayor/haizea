@@ -2,8 +2,6 @@ from mx.DateTime import ISO, TimeDelta
 from operator import attrgetter, itemgetter
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
-from haizea.common.log import info, debug, warning, edebug
-import haizea.common.log as log
 from haizea.common.utils import roundDateTimeDelta
 import bisect
 import copy
@@ -323,9 +321,9 @@ class SlotTable(object):
         # At this point we know if the lease is feasible, and if
         # will require preemption.
         if not mustpreempt:
-            info("The VM reservations for this lease are feasible without preemption.", constants.ST, self.rm.clock.getTime())
+           self.rm.logger.info("The VM reservations for this lease are feasible without preemption.", constants.ST)
         else:
-            info("The VM reservations for this lease are feasible but will require preemption.", constants.ST, self.rm.clock.getTime())
+           self.rm.logger.info("The VM reservations for this lease are feasible but will require preemption.", constants.ST)
 
         # merge canfitnopreempt and canfitpreempt
         canfit = {}
@@ -341,7 +339,7 @@ class SlotTable(object):
 
         orderednodes = self.prioritizenodes(canfit, vmimage, start, canpreempt, avoidpreempt)
             
-        info("Node ordering: %s" % orderednodes, constants.ST, self.rm.clock.getTime())
+        self.rm.logger.info("Node ordering: %s" % orderednodes, constants.ST)
         
         # vnode -> pnode
         nodeassignment = {}
@@ -472,8 +470,8 @@ class SlotTable(object):
                     if preemptedEnough(amountToPreempt):
                         break
             
-        info("Preempting leases (at start of reservation): %s" % [r.lease.leaseID for r in atstart], constants.ST, None)
-        info("Preempting leases (in middle of reservation): %s" % [r.lease.leaseID for r in atmiddle], constants.ST, None)
+        self.rm.logger.info("Preempting leases (at start of reservation): %s" % [r.lease.leaseID for r in atstart], constants.ST)
+        self.rm.logger.info("Preempting leases (in middle of reservation): %s" % [r.lease.leaseID for r in atmiddle], constants.ST)
         
         leases = [r.lease for r in atstart|atmiddle]
         
@@ -696,11 +694,11 @@ class SlotTable(object):
                 realend = start + realdur
                 end, canfit = self.availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
         
-                info("This lease can be scheduled from %s to %s" % (start, end), constants.ST, self.rm.clock.getTime())
+                self.rm.logger.info("This lease can be scheduled from %s to %s" % (start, end), constants.ST)
                 
                 if end < maxend:
                     mustsuspend=True
-                    info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST, self.rm.clock.getTime())
+                    self.rm.logger.info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST)
                     
                     if suspendable:
                         # It the lease is suspendable...
@@ -708,7 +706,7 @@ class SlotTable(object):
                             if end-start > suspendthreshold:
                                 break
                             else:
-                                info("This starting time does not meet the suspend threshold (%s < %s)" % (end-start, suspendthreshold), constants.ST, self.rm.clock.getTime())
+                                self.rm.logger.info("This starting time does not meet the suspend threshold (%s < %s)" % (end-start, suspendthreshold), constants.ST)
                                 start = None
                         else:
                             pass
@@ -777,7 +775,7 @@ class SlotTable(object):
             if self.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
                 (end, canfit) = self.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
                 if end == originalstart and set(nodes) <= set(canfit.keys()):
-                    info("Can slide back to %s" % p, constants.ST, self.rm.clock.getTime())
+                    self.rm.logger.info("Can slide back to %s" % p, constants.ST)
                     newstart = p
                     break
         if newstart == None:
@@ -811,7 +809,7 @@ class SlotTable(object):
                 vmrrnew.realend -= diff
             self.updateReservationWithKeyChange(vmrr, vmrrnew)
             self.dirty()
-            edebug("New lease descriptor (after slideback):", constants.ST, self.rm.clock.getTime())
+            self.rm.logger.edebug("New lease descriptor (after slideback):", constants.ST)
             lease.printContents()
 
 
@@ -939,6 +937,7 @@ class AvailEntry(object):
 class AvailabilityWindow(object):
     def __init__(self, slottable):
         self.slottable = slottable
+        self.logger = slottable.rm.logger
         self.time = None
         self.resreq = None
         self.onlynodes = None
@@ -1042,7 +1041,7 @@ class AvailabilityWindow(object):
             
                     
     def printContents(self, nodes = None, withpreemption = False):
-        if log.extremedebug:
+        if self.logger.extremedebug:
             if nodes == None:
                 physnodes = self.avail.keys()
             else:
@@ -1052,7 +1051,7 @@ class AvailabilityWindow(object):
                 p = "(with preemption)"
             else:
                 p = "(without preemption)"
-            edebug("AVAILABILITY WINDOW (time=%s, nodes=%s) %s"%(self.time, nodes, p), constants.ST, None)
+            self.logger.edebug("AVAILABILITY WINDOW (time=%s, nodes=%s) %s"%(self.time, nodes, p), constants.ST)
             for n in physnodes:
                 contents = "Node %i --- " % n
                 for x in self.avail[n]:
@@ -1070,7 +1069,7 @@ class AvailabilityWindow(object):
                         for i,x in enumerate(res):
                             contents += "%s:%.2f " % (constants.res_str(i),x)
                     contents += "} (Fits: %i) ]  " % canfit
-                edebug(contents, constants.ST, None)
+                self.logger.edebug(contents, constants.ST)
                 
 
                 

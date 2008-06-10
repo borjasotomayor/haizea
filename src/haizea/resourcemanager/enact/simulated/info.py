@@ -19,7 +19,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
             capacity[constants.str_res(resourcename)] = int(resourcecapacity)
         capacity = ds.ResourceTuple.fromList(capacity)
         
-        self.nodes = [Node(self, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
+        self.nodes = [Node(self.resourcepool, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
         
         # Image repository nodes
         imgcapacity = [None, None, None, None, None] # TODO: Hardcoding == bad
@@ -30,8 +30,8 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         imgcapacity[constants.RES_DISK]=0
         imgcapacity = ds.ResourceTuple.fromList(imgcapacity)
 
-        self.FIFOnode = Node(self, numnodes+1, "FIFOnode", imgcapacity)
-        self.EDFnode = Node(self, numnodes+2, "EDFnode", imgcapacity)
+        self.FIFOnode = Node(self.resourcepool, numnodes+1, "FIFOnode", imgcapacity)
+        self.EDFnode = Node(self.resourcepool, numnodes+2, "EDFnode", imgcapacity)
         
     def getNodes(self):
         return self.nodes
