@@ -1,8 +1,7 @@
 import haizea.resourcemanager.interface as interface
 import haizea.resourcemanager.scheduler as scheduler
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
-from haizea.resourcemanager.enactment import SimulatedEnactment
-from haizea.resourcemanager.resourcepool.simulated import SimulatedResourcePool
+from haizea.resourcemanager.resourcepool import ResourcePool
 import haizea.resourcemanager.stats as stats
 import haizea.common.constants as constants
 from haizea.common.log import info, debug, status, error, log, loglevel, setED
@@ -31,7 +30,7 @@ class ResourceManager(object):
         #self.logger = Logger(self)
         
         # Resource pool
-        self.resourcepool = SimulatedResourcePool(self)
+        self.resourcepool = ResourcePool(self)
 
         # Scheduler
         self.scheduler = scheduler.Scheduler(self)

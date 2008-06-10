@@ -103,6 +103,7 @@ INJS_OPT="injections"
 
 GENERAL_SEC="general"
 LOGLEVEL_OPT="loglevel"
+MODE_OPT="mode"
 PROFILE_OPT="profile"
 SUSPENSION_OPT="suspension"
 MIGRATION_OPT="migration"
@@ -146,6 +147,8 @@ AVOIDREDUNDANT_OPT="avoid-redundant-transfers"
 SCHEDULING_SEC="scheduling"
 TRACEFILE_SEC="tracefile"
 
+MODE_SIMULATION="simulation"
+MODE_OPENNEBULA="opennebula"
 
 BACKFILLING_OFF="off"
 BACKFILLING_AGGRESSIVE="aggressive"
@@ -288,3 +291,5 @@ DOING_VM_SUSPEND=99
 DOING_VM_RUN=100
 DOING_VM_RESUME=101
 DOING_TRANSFER_NOVM=666
+
+ENACT_PACKAGE="haizea.resourcemanager.enact"

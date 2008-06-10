@@ -90,6 +90,9 @@ class RMConfig(Config):
     def getProfile(self):
         return self.config.get(constants.GENERAL_SEC, constants.PROFILE_OPT)
 
+    def getMode(self):
+        return self.config.get(constants.GENERAL_SEC, constants.MODE_OPT)
+
     #
     # SIMULATION OPTIONS
     #
