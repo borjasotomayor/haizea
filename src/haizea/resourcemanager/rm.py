@@ -163,7 +163,6 @@ class SimulatedClock(Clock):
         tracefrontend = self.getTraceFrontend()
         nextchangepoint = self.rm.getNextChangePoint()
         nextreqtime = tracefrontend.getNextReqTime()
-        nextcancelpoint = self.rm.scheduler.queue.getNextCancelPoint()
         self.rm.printStats("DEBUG", nextchangepoint, nextreqtime)
         
         prevtime = self.time
@@ -175,9 +174,6 @@ class SimulatedClock(Clock):
             newtime = nextreqtime
         elif nextchangepoint != None and nextreqtime != None:
             newtime = min(nextchangepoint, nextreqtime)
-            
-        if nextcancelpoint != None:
-            newtime = min(nextcancelpoint, newtime)
             
         if nextchangepoint == newtime:
             newtime = self.rm.scheduler.slottable.getNextChangePoint(newtime)

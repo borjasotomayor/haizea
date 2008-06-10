@@ -26,14 +26,6 @@ class Scheduler(object):
         self.endcliplease = None
         
     def schedule(self, requests):
-        # Cancel best-effort requests that have to be cancelled
-        # TODO: Move to frontend layer
-        cancelled = self.queue.purgeCancelled()
-        if len(cancelled) > 0:
-            self.rm.logger.info("Cancelled leases %s" % cancelled, constants.SCHED)
-            for leaseID in cancelled:
-                self.rm.stats.decrQueueSize(leaseID)
-        
         self.processReservations()
         
         if self.rm.config.getNodeSelectionPolicy() == constants.NODESELECTION_AVOIDPREEMPT:
@@ -405,10 +397,6 @@ class Scheduler(object):
             mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
             canreserve = self.canReserveBestEffort()
             (resmrr, vmrr, susprr, reservation) = self.slottable.fitBestEffort(req, earliest, canreserve, suspendable=suspendable, preemptible=preemptible, canmigrate=canmigrate, mustresume=mustresume)
-            if req.maxqueuetime != None:
-                msg = "Lease %i is being scheduled, but is meant to be cancelled at %s" % (req.leaseID, req.maxqueuetime)
-                self.rm.logger.warning(msg, constants.SCHED)
-                raise CancelException, msg
             
             # Schedule image transfers
             transfertype = self.rm.config.getTransferType()
