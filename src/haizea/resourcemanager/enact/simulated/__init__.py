@@ -3,5 +3,5 @@ from haizea.resourcemanager.enact.simulated.vm import VMEnactment
 from haizea.resourcemanager.enact.simulated.storage import StorageEnactment
 
 info=ResourcePoolInfo
-storage=VMEnactment
-vm=StorageEnactment
+storage=StorageEnactment
+vm=VMEnactment

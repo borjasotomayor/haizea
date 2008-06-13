@@ -33,3 +33,11 @@ class StorageEnactmentBase(object):
 class VMEnactmentBase(object):
     def __init__(self, resourcepool):
         self.resourcepool = resourcepool
+        
+    def start(self, vms): abstract()
+    
+    def stop(self, vms): abstract()
+    
+    def suspend(self, vms): abstract()
+    
+    def resume(self, vms): abstract()
