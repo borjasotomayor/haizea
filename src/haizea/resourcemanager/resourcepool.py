@@ -34,6 +34,169 @@ class ResourcePool(object):
             self.rm.logger.error("Unable to load enactment modules for mode '%s'" % mode ,constants.RM)
             raise                
         
+        
+    def startVMs(self, lease, rr):
+        # List of VMs that have to be started. Each entry contains:
+        # (lease id, vnode, hostname, image file, resources)
+        starts = []
+        
+        # Check that all the required tainted images are available,
+        # and determine what their physical filenames are.
+        # Note that it is the enactment module's responsibility to
+        # mark an image as correctly deployed. The check we do here
+        # is (1) to catch scheduling errors (i.e., the image transfer
+        # was not scheduled) and (2) to create tainted images if
+        # we can reuse a master image in the node's image pool.
+        # TODO: However, we're assuming CoW, which means the enactment
+        # must support it too. If we can't assume CoW, we would have to
+        # make a copy of the master image (which takes time), and should
+        # be scheduled.
+        for (vnode,pnode) in rr.nodes.items():
+            node = self.getNode(pnode)
+            
+            taintedImage = None
+            if self.rm.config.getTransferType() == constants.TRANSFER_NONE:
+                # If we assume predeployment, we mark that there is a new
+                # tainted image, but there is no need to go to the enactment
+                # module (we trust that the image is predeployed, or that
+                # the VM enactment is taking care of this, e.g., by making
+                # a copy right before the VM starts; this is a Bad Thing
+                # but out of our control if we assume predeployment).
+                # TODO: It might make sense to consider two cases:
+                #       "no image management at all" and "assume master image
+                #       is predeployed, but we still have to make a copy".
+                taintedImage = self.addTaintedImageToNode(pnode,lease.diskImageID,lease.diskImageSize,lease.leaseID,vnode)
+            else:
+                taintedImage = node.getTaintedImage(lease.leaseID, vnode, lease.diskImageID)
+                if self.reusealg == constants.REUSE_NONE:
+                    if taintedImage == None:
+                        raise Exception, "ERROR: No image for L%iV%i is on node %i" % (leaseID, vnode, pnode)
+                elif self.reusealg == constants.REUSE_COWPOOL:
+                    poolentry = node.getPoolEntry(imagefile, leaseID=lease.leaseID, vnode=vnode)
+                    if poolentry == None:
+                        # Not necessarily an error. Maybe the pool was full, and
+                        # we had to fall back on creating a tainted image right
+                        # when the image was transferred. We have to check this.
+                        if taintedImage == None:
+                            raise Exception, "ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (leaseID, vnode, pnode)
+                    else:
+                        # Create tainted image
+                        taintedImage = self.addTaintedImageToNode(pnode, lease.diskImageID, lease.diskImageSize, lease, vnode)
+                        # ENACTMENT
+                        # self.storage.createCopyFromCache(pnode, lease.diskImageSize)
+            start = (lease.leaseID, vnode, node.hostname, taintedImage.filename, rr.res)
+            starts += start
+
+        self.vm.start(starts)
+        
+    def stopVMs(self, lease, rr):
+        # List of VMs that have to be started. Each entry contains:
+        # (lease id, vnode, hostname)
+        stops = []
+        for (vnode,pnode) in rr.nodes.items():
+            node = self.getNode(pnode)
+            stops += (lease.leaseID, vnode, node.hostname)
+            
+        self.vm.stop(stops)
+        
+    def transferFiles(self):
+        pass
+    
+    def verifyImageTransfer(self):
+        pass
+    
+    def createTaintedImage(self):
+        pass
+
+    def addImageToCache(self):
+        pass
+    
+    # TODO: This has to be divided into the above three functions.
+    def addImageToNode(self,nod_id,imagefile,imagesize,vnodes,timeout=None):
+        self.rm.logger.info("Adding image for leases=%s in nod_id=%i" % (vnodes,nod_id), constants.ENACT)
+        self.getNode(nod_id).printFiles()
+
+        if self.reusealg == constants.REUSE_NONE:
+            for (leaseID, vnode) in vnodes:
+                img = VMImageFile(imagefile, imagesize, masterimg=False)
+                img.addMapping(leaseID,vnode)
+                self.getNode(nod_id).addFile(img)
+        elif self.reusealg == constants.REUSE_COWPOOL:
+            # Sometimes we might find that the image is already deployed
+            # (although unused). In that case, don't add another copy to
+            # the pool. Just "reactivate" it.
+            if self.getNode(nod_id).isInPool(imagefile):
+                for (leaseID, vnode) in vnodes:
+                    self.getNode(nod_id).addToPool(imagefile, leaseID, vnode, timeout)
+            else:
+                img = VMImageFile(imagefile, imagesize, masterimg=True)
+                img.timeout = timeout
+                for (leaseID, vnode) in vnodes:
+                    img.addMapping(leaseID,vnode)
+                if self.maxpoolsize != constants.POOL_UNLIMITED:
+                    poolsize = self.getNode(nod_id).getPoolSize()
+                    reqsize = poolsize + imagesize
+                    if reqsize > self.maxpoolsize:
+                        desiredsize = self.maxpoolsize - imagesize
+                        self.rm.logger.info("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize), constants.ENACT)
+                        self.getNode(nod_id).printFiles()
+                        success = self.getNode(nod_id).purgePoolDownTo(self.maxpoolsize)
+                        if not success:
+                            self.rm.logger.info("Unable to add to pool. Creating tainted image instead.", constants.ENACT)
+                            # If unsuccessful, this just means we couldn't add the image
+                            # to the pool. We will have to create tainted images to be used
+                            # only by these leases
+                            for (leaseID, vnode) in vnodes:
+                                img = VMImageFile(imagefile, imagesize, masterimg=False)
+                                img.addMapping(leaseID,vnode)
+                                self.getNode(nod_id).addFile(img)
+                        else:
+                            self.getNode(nod_id).addFile(img)
+                    else:
+                        self.getNode(nod_id).addFile(img)
+            
+        self.getNode(nod_id).printFiles()
+        
+        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+    
+    def verifyFileTransfer(self):
+        pass
+    
+    def suspendVMs(self, lease, rr):
+        # List of VMs that have to be suspended. Each entry contains:
+        # (lease id, vnode, hostname)
+        suspends = []
+        for (vnode,pnode) in rr.nodes.items():
+            node = self.getNode(pnode)
+            suspends += (lease.leaseID, vnode, node.hostname)
+            
+        self.vm.suspend(suspends)
+    
+    def suspendDone(self):
+        pass
+    
+    def verifySuspend(self):
+        pass
+    
+    def resumeVMs(self, lease, rr):
+        # List of VMs that have to be suspended. Each entry contains:
+        # (lease id, vnode, hostname)
+        resumes = []
+        for (vnode,pnode) in rr.nodes.items():
+            node = self.getNode(pnode)
+            resumes += (lease.leaseID, vnode, node.hostname)
+            
+        self.vm.resume(resumes)
+    
+    def resumeDone(self):
+        pass
+    
+    def verifyResume(self):
+        pass
+    
+    
+    
+    
     def getNodes(self):
         return self.nodes
         
@@ -99,17 +262,21 @@ class ResourcePool(object):
         
         self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
         
-    def addTaintedImageToNode(self,pnode,imagefile,imagesize,lease,vnode):
-        self.rm.logger.info("Adding tainted image for L%iV%i in pnode=%i" % (lease,vnode,pnode), constants.ENACT)
+    def addTaintedImageToNode(self,pnode,imagefile,imagesize,leaseID,vnode):
+        self.rm.logger.info("Adding tainted image for L%iV%i in pnode=%i" % (leaseID,vnode,pnode), constants.ENACT)
         self.getNode(pnode).printFiles()
         img = VMImageFile(imagefile, imagesize, masterimg=False)
-        img.addMapping(lease,vnode)
+        img.addMapping(leaseID,vnode)
         self.getNode(pnode).addFile(img)
         self.getNode(pnode).printFiles()
+        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+        return img
         
     def checkImage(self, pnode, leaseID, vnode, imagefile):
         node = self.getNode(pnode)
-        if self.reusealg == constants.REUSE_NONE:
+        if self.rm.config.getTransferType() == constants.TRANSFER_NONE:
+            self.rm.logger.info("Adding tainted image for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT)
+        elif self.reusealg == constants.REUSE_NONE:
             if not node.hasTaintedImage(leaseID, vnode, imagefile):
                 self.rm.logger.error("ERROR: Image for L%iV%i is not deployed on node %i" % (leaseID, vnode, pnode), constants.ENACT)
         elif self.reusealg == constants.REUSE_COWPOOL:
@@ -219,16 +386,16 @@ class Node(object):
             self.files.remove(img)
             self.workingspacesize -= img.filesize
         
-    def hasTaintedImage(self, leaseID, vnode, imagefile):
+    def getTaintedImage(self, leaseID, vnode, imagefile):
         images = self.getTaintedImages()
         image = [i for i in images if i.filename == imagefile and i.hasMapping(leaseID, vnode)]
         if len(image) == 0:
-            return False
+            return None
         elif len(image) == 1:
-            return True
+            return image[0]
         elif len(image) > 1:
             self.rm.logger.warning("More than one tainted image for L%iV%i on node %i" % (leaseID, vnode, self.nod_id), constants.ENACT)
-            return True
+            return image[0]
         
     def addToPool(self, imagefile, leaseID, vnode, timeout):
         for f in self.files:
@@ -315,8 +482,9 @@ class File(object):
         self.filesize = filesize
         
 class VMImageFile(File):
-    def __init__(self, filename, filesize, masterimg = False):
+    def __init__(self, filename, filesize, diskImageID=None, masterimg = False):
         File.__init__(self, filename, filesize)
+        self.diskImageID = diskImageID
         self.mappings = set([])
         self.masterimg = masterimg
         self.timeout = None
