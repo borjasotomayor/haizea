@@ -202,9 +202,9 @@ GRAPH_NUMNODE_REQLENGTH_CORRELATION_Y="numnode-reqlength-correlation-iny"
 RM="RM"
 SCHED="SCHED"
 ST="SLOT"
-DB="DB"
 DS="STRUCT"
 ENACT="ENACT"
+CLOCK="CLOCK"
 
 # Transfer required in deployment
 REQTRANSFER_NO = 0

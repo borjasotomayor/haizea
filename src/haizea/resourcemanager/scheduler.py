@@ -25,9 +25,7 @@ class Scheduler(object):
         self.numbesteffortres = 0
         self.endcliplease = None
         
-    def schedule(self, requests):
-        self.processReservations()
-        
+    def schedule(self, requests, nexttime):        
         if self.rm.config.getNodeSelectionPolicy() == constants.NODESELECTION_AVOIDPREEMPT:
             avoidpreempt = True
         else:
@@ -51,8 +49,8 @@ class Scheduler(object):
                 if avoidpreempt:
                     try:
                         self.rm.logger.info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED)
-                        info("LEASE-%i Trying again without avoiding preemption" % r.leaseID, constants.SCHED, self.rm.clock.getTime())
-                        self.scheduleExactLease(r, avoidpreempt=False)
+                        self.rm.logger.info("LEASE-%i Trying again without avoiding preemption" % r.leaseID, constants.SCHED)
+                        self.scheduleExactLease(r, nexttime, avoidpreempt=False)
                         self.scheduledleases.add(r)
                         self.rm.stats.incrAccepted(r.leaseID)
                     except SchedException, msg:
@@ -65,7 +63,7 @@ class Scheduler(object):
         done = False
         newqueue = ds.Queue(self)
         while not done and not self.isQueueEmpty():
-            if self.numbesteffortres == self.maxres and self.slottable.isFull(self.rm.clock.getTime()):
+            if self.numbesteffortres == self.maxres and self.slottable.isFull(nexttime):
                 self.rm.logger.info("Used up all reservations and slot table is full. Skipping rest of queue.", constants.SCHED)
                 done = True
             else:
@@ -76,7 +74,7 @@ class Scheduler(object):
                     self.rm.logger.info("LEASE-%i Remdur  %s" % (r.leaseID, r.remdur), constants.SCHED)
                     self.rm.logger.info("LEASE-%i Realdur %s" % (r.leaseID, r.realremdur), constants.SCHED)
                     self.rm.logger.info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED)
-                    self.scheduleBestEffortLease(r)
+                    self.scheduleBestEffortLease(r, nexttime)
                     self.scheduledleases.add(r)
                     self.rm.stats.decrQueueSize(r.leaseID)
                     self.rm.stats.stopQueueWait(r.leaseID)
@@ -91,19 +89,13 @@ class Scheduler(object):
                     self.rm.stats.decrQueueSize(r.leaseID)
                     
         newqueue.q += self.queue.q 
-        self.queue = newqueue
-
-        self.processReservations()
-        
-        util = self.slottable.getUtilization(self.rm.clock.getTime())
-        self.rm.stats.addUtilization(util)
-        self.rm.stats.addNodeStats()    
+        self.queue = newqueue 
     
-    def processReservations(self):
-        starting = [l for l in self.scheduledleases.entries.values() if l.hasStartingReservations(self.rm.clock.getTime())]
-        ending = [l for l in self.scheduledleases.entries.values() if l.hasEndingReservations(self.rm.clock.getTime())]
+    def processReservations(self, nowtime):
+        starting = [l for l in self.scheduledleases.entries.values() if l.hasStartingReservations(nowtime)]
+        ending = [l for l in self.scheduledleases.entries.values() if l.hasEndingReservations(nowtime)]
         for l in ending:
-            rrs = l.getEndingReservations(self.rm.clock.getTime())
+            rrs = l.getEndingReservations(nowtime)
             for rr in rrs:
                 self.handleEndRR(l, rr)
                 if isinstance(rr,ds.FileTransferResourceReservation):
@@ -116,7 +108,7 @@ class Scheduler(object):
                     self.handleEndResume(l, rr)
         
         for l in starting:
-            rrs = l.getStartingReservations(self.rm.clock.getTime())
+            rrs = l.getStartingReservations(nowtime)
             for rr in rrs:
                 if isinstance(rr,ds.FileTransferResourceReservation):
                     self.handleStartFileTransfer(l,rr)
@@ -126,6 +118,10 @@ class Scheduler(object):
                     self.handleStartSuspend(l, rr)
                 elif isinstance(rr,ds.ResumptionResourceReservation):
                     self.handleStartResume(l, rr)
+
+        util = self.slottable.getUtilization(nowtime)
+        self.rm.stats.addUtilization(util)
+        self.rm.stats.addNodeStats()   
                     
     def updateNodeVMState(self, nodes, state):
         for n in nodes:
@@ -142,22 +138,27 @@ class Scheduler(object):
         if l.state == constants.LEASE_STATE_DEPLOYED:
             l.state = constants.LEASE_STATE_ACTIVE
             rr.state = constants.RES_STATE_ACTIVE
+            
+            # TODO: Should be moved from stats to the lease
+            # descriptor
             if isinstance(l,ds.BestEffortLease):
                 self.rm.stats.startExec(l.leaseID)            
-            # TODO: More enactment
-            
-            # Check that the image is available
-            # If we're reusing images, this might require creating
-            # a tainted copy
-            if self.rm.config.getTransferType() != constants.TRANSFER_NONE:
+
+            try:
+                self.rm.resourcepool.startVMs(l, rr)
+                # The next two lines have to be moved somewhere more
+                # appropriate inside the resourcepool module
                 for (vnode,pnode) in rr.nodes.items():
-                    # TODO: Add some error checking here
-                    self.rm.resourcepool.checkImage(pnode, l.leaseID, vnode, l.vmimage)
                     l.vmimagemap[vnode] = pnode
+            except Exception, e:
+                self.rm.logger.error("ERROR when starting VMs.", constants.SCHED)
+                raise
 
         elif l.state == constants.LEASE_STATE_SUSPENDED:
             l.state = constants.LEASE_STATE_ACTIVE
             rr.state = constants.RES_STATE_ACTIVE
+            # No enactment to do here, since all the suspend/resume actions are
+            # handled during the suspend/resume RRs
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_VM_RUN)
         self.rm.logger.debug("LEASE-%i End of handleStartVM" % l.leaseID, constants.SCHED)
@@ -179,6 +180,7 @@ class Scheduler(object):
         else:
             rr.end = rr.realend
         if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE or (rr.oncomplete == constants.ONCOMPLETE_SUSPEND and prematureend):
+            self.rm.resourcepool.stopVMs(l, rr)
             l.state = constants.LEASE_STATE_DONE
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
@@ -196,8 +198,13 @@ class Scheduler(object):
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
                 self.numbesteffortres -= 1
+        # The following has to be factored out, because premature end is an
+        # asynchronous event, and shouldn't be processed as a slot table event.
+        # The following will work in simulation and in OpenNebula,
+        # BUT WILL PROBABLY BREAK HORRIBLY LATER ON.
+        nexttime = self.rm.clock.getNextSchedulableTime()
         if prematureend and self.rm.config.isBackfilling():
-            self.reevaluateSchedule(l, rr.nodes.values(), self.rm.clock.getTime(), [])
+            self.reevaluateSchedule(l, rr.nodes.values(), nexttime, [])
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_IDLE)
         self.rm.logger.debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED)
@@ -239,7 +246,8 @@ class Scheduler(object):
                     end = l.getEnd()
                     if maxend==None or end>maxend:
                         maxend=end
-                self.rm.resourcepool.addImageToNode(physnode, rr.file, l.vmimagesize, vnodes, timeout=maxend)
+                # TODO: ENACTMENT: Verify the image was transferred correctly
+                self.rm.resourcepool.addImageToNode(physnode, rr.file, l.diskImageSize, vnodes, timeout=maxend)
         elif l.state == constants.LEASE_STATE_SUSPENDED:
             pass
             # TODO: Migrating
@@ -292,7 +300,7 @@ class Scheduler(object):
     def handleEndRR(self, l, rr):
         self.slottable.removeReservation(rr)
     
-    def scheduleExactLease(self, req, avoidpreempt=True):
+    def scheduleExactLease(self, req, nexttime, avoidpreempt=True):
         try:
             (nodeassignment, res, preemptions) = self.slottable.fitExact(req, preemptible=False, canpreempt=True, avoidpreempt=avoidpreempt)
             if len(preemptions) > 0:
@@ -322,7 +330,7 @@ class Scheduler(object):
                     self.rm.logger.info("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (req.vmimage, vnode, pnode), constants.SCHED)
 
                     if reusealg == constants.REUSE_COWPOOL:
-                        if self.rm.resourcepool.isInPool(pnode,req.vmimage, req.start):
+                        if self.rm.resourcepool.isInPool(pnode,req.diskImageID, req.start):
                             self.rm.logger.info("No need to schedule an image transfer (reusing an image in pool)", constants.SCHED)
                             mustpool[vnode] = pnode                            
                         else:
@@ -346,18 +354,18 @@ class Scheduler(object):
                                 transferRR = transferRR[physnode]
                                 transferRR.piggyback(leaseID, vnode, physnode, req.end)
                             else:
-                                filetransfer = self.scheduleImageTransferEDF(req, {vnode:physnode})                 
+                                filetransfer = self.scheduleImageTransferEDF(req, {vnode:physnode}, nexttime)                 
                                 transferRRs[physnode] = filetransfer
                                 req.appendRR(filetransfer)
                     elif transfertype == constants.TRANSFER_MULTICAST:
-                        filetransfer = self.scheduleImageTransferEDF(req, musttransfer)
+                        filetransfer = self.scheduleImageTransferEDF(req, musttransfer, nexttime)
                         req.appendRR(filetransfer)
  
             # No chance of scheduling exception at this point. It's safe
             # to add entries to the pools
             if reusealg == constants.REUSE_COWPOOL:
                 for (vnode,pnode) in mustpool.items():
-                    self.rm.resourcepool.addToPool(pnode, req.vmimage, leaseID, vnode, req.start)
+                    self.rm.resourcepool.addToPool(pnode, req.diskImageID, leaseID, vnode, req.start)
  
             # Add resource reservations
             vmrr = ds.VMResourceReservation(req, req.start, req.end, req.prematureend, nodeassignment, res, constants.ONCOMPLETE_ENDLEASE, False)
@@ -367,16 +375,16 @@ class Scheduler(object):
         except SlotFittingException, msg:
             raise SchedException, "The requested exact lease is infeasible. Reason: %s" % msg
 
-    def scheduleBestEffortLease(self, req):
+    def scheduleBestEffortLease(self, req, nexttime):
         # Determine earliest start time in each node
         if req.state == constants.LEASE_STATE_PENDING:
             # Figure out earliest start times based on
             # image schedule and reusable images
-            earliest = self.findEarliestStartingTimes(req)
+            earliest = self.findEarliestStartingTimes(req, nexttime)
         elif req.state == constants.LEASE_STATE_SUSPENDED:
             # No need to transfer images from repository
             # (only intra-node transfer)
-            earliest = dict([(node+1, [self.rm.clock.getTime(),constants.REQTRANSFER_NO, None]) for node in range(req.numnodes)])
+            earliest = dict([(node+1, [nexttime,constants.REQTRANSFER_NO, None]) for node in range(req.numnodes)])
             
         susptype = self.rm.config.getSuspensionType()
         if susptype == constants.SUSPENSION_NONE:
@@ -416,7 +424,7 @@ class Scheduler(object):
                         if reqtransfer == constants.REQTRANSFER_COWPOOL:
                             # Add to pool
                             self.rm.logger.info("Reusing image for V%i->P%i." % (vnode, pnode), constants.SCHED)
-                            self.rm.resourcepool.addToPool(pnode, req.vmimage, req.leaseID, vnode, vmrr.end)
+                            self.rm.resourcepool.addToPool(pnode, req.diskImageID, req.leaseID, vnode, vmrr.end)
                         elif reqtransfer == constants.REQTRANSFER_PIGGYBACK:
                             # We can piggyback on an existing transfer
                             transferRR = earliest[pnode][2]
@@ -442,7 +450,7 @@ class Scheduler(object):
                         req.imagesavail = max(endtimes)
                     if len(musttransfer)==0 and len(piggybacking)==0:
                         req.state = constants.LEASE_STATE_DEPLOYED
-                        req.imagesavail = self.rm.clock.getTime()
+                        req.imagesavail = nexttime
                     for rr in transferRRs:
                         req.appendRR(rr)
             elif req.state == constants.LEASE_STATE_SUSPENDED:
@@ -453,7 +461,7 @@ class Scheduler(object):
                     self.rm.resourcepool.removeImage(pnode, req.leaseID, vnode)
                 req.vmimagemap = vmrr.nodes
                 for vnode,pnode in req.vmimagemap.items():
-                    self.rm.resourcepool.addTaintedImageToNode(pnode, req.vmimage, req.vmimagesize, req.leaseID, vnode)
+                    self.rm.resourcepool.addTaintedImageToNode(pnode, req.diskImageID, req.diskImageSize, req.leaseID, vnode)
                 # Update RAM file mappings
                 for vnode,pnode in req.memimagemap.items():
                     self.rm.resourcepool.removeRAMFileFromNode(pnode, req.leaseID, vnode)
@@ -534,16 +542,16 @@ class Scheduler(object):
         self.rm.logger.edebug("Lease after preemption:", constants.SCHED)
         req.printContents()
         
-    def reevaluateSchedule(self, endinglease, nodes, endtime, checkedleases):
+    def reevaluateSchedule(self, endinglease, nodes, nexttime, checkedleases):
         self.rm.logger.debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,endtime), constants.SCHED) 
-        leases = self.scheduledleases.getNextLeasesScheduledInNodes(endtime, nodes)
+        leases = self.scheduledleases.getNextLeasesScheduledInNodes(nexttime, nodes)
         leases = [l for l in leases if isinstance(l,ds.BestEffortLease) and not l in checkedleases]
         for l in leases:
             self.rm.logger.debug("Found lease %i" % l.leaseID, constants.SCHED)
             l.printContents()
             # Earliest time can't be earlier than time when images will be
             # available in node
-            earliest = max(endtime, l.imagesavail)
+            earliest = max(nexttime, l.imagesavail)
             self.slottable.slideback(l, earliest)
             checkedleases.append(l)
         #for l in leases:
@@ -551,7 +559,7 @@ class Scheduler(object):
         #    self.reevaluateSchedule(l, vmrr.nodes.values(), vmrr.end, checkedleases)
             
         
-    def findEarliestStartingTimes(self, req):
+    def findEarliestStartingTimes(self, req, nexttime):
         numnodes = self.rm.config.getNumPhysicalNodes()
         transfertype = self.rm.config.getTransferType()        
         reusealg = self.rm.config.getReuseAlg()
@@ -559,10 +567,10 @@ class Scheduler(object):
         imgTransferTime=req.estimateImageTransferTime()
         
         # Figure out starting time assuming we have to transfer the image
-        nextfifo = self.getNextFIFOTransferTime()
+        nextfifo = self.getNextFIFOTransferTime(nexttime)
         
         if transfertype == constants.TRANSFER_NONE:
-            earliest = dict([(node+1, [self.rm.clock.getTime(),constants.REQTRANSFER_NO, None]) for node in range(numnodes)])
+            earliest = dict([(node+1, [nexttime,constants.REQTRANSFER_NO, None]) for node in range(numnodes)])
         else:
             # Find worst-case earliest start time
             if req.numnodes == 1:
@@ -581,9 +589,9 @@ class Scheduler(object):
             
             # Check if we can reuse images
             if reusealg==constants.REUSE_COWPOOL:
-                nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(req.vmimage)
+                nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(req.diskImageID)
                 for node in nodeswithimg:
-                    earliest[node] = [self.rm.clock.getTime(), constants.REQTRANSFER_COWPOOL]
+                    earliest[node] = [nexttime, constants.REQTRANSFER_COWPOOL]
             
                     
             # Check if we can avoid redundant transfers
@@ -595,16 +603,16 @@ class Scheduler(object):
                     # We can only piggyback on transfers that haven't started yet
                     transfers = [t for t in self.transfersFIFO if t.state == constants.RES_STATE_SCHEDULED]
                     for t in transfers:
-                        if t.file == req.vmimage:
+                        if t.file == req.diskImageID:
                             startTime = t.end
-                            if startTime > self.rm.clock.getTime():
+                            if startTime > nexttime:
                                 for n in earliest:
                                     if startTime < earliest[n]:
                                         earliest[n] = [startTime, constants.REQTRANSFER_PIGGYBACK, t]
 
         return earliest
 
-    def scheduleImageTransferEDF(self, req, vnodes):
+    def scheduleImageTransferEDF(self, req, vnodes, nexttime):
         # Estimate image transfer time 
         imgTransferTime=req.estimateImageTransferTime()
         bandwidth = self.rm.config.getBandwidth()
@@ -614,7 +622,7 @@ class Scheduler(object):
         if len(activetransfers) > 0:
             startTime = activetransfers[-1].end
         else:
-            startTime = self.rm.clock.getTime()
+            startTime = nexttime
         
         transfermap = dict([(copy.copy(t), t) for t in self.transfersEDF if t.state == constants.RES_STATE_SCHEDULED])
         newtransfers = transfermap.keys()
@@ -641,7 +649,7 @@ class Scheduler(object):
         newtransfer = ds.FileTransferResourceReservation(req, res)
         newtransfer.deadline = req.start
         newtransfer.state = constants.RES_STATE_SCHEDULED
-        newtransfer.file = req.vmimage
+        newtransfer.file = req.diskImageID
         for vnode,pnode in vnodes.items():
             newtransfer.piggyback(req.leaseID, vnode, pnode)
         newtransfers.append(newtransfer)
@@ -711,10 +719,10 @@ class Scheduler(object):
         
         return newtransfer
     
-    def scheduleImageTransferFIFO(self, req, reqtransfers):
+    def scheduleImageTransferFIFO(self, req, reqtransfers, nexttime):
         # Estimate image transfer time 
         imgTransferTime=req.estimateImageTransferTime()
-        startTime = self.getNextFIFOTransferTime()
+        startTime = self.getNextFIFOTransferTime(nexttime)
         transfertype = self.rm.config.getTransferType()        
         bandwidth = self.rm.config.getBandwidth()
         
@@ -750,7 +758,7 @@ class Scheduler(object):
             newtransfer.end = startTime+imgTransferTime
             newtransfer.deadline = None
             newtransfer.state = constants.RES_STATE_SCHEDULED
-            newtransfer.file = req.vmimage
+            newtransfer.file = req.diskImageID
             for vnode in reqtransfers:
                 physnode = reqtransfers[vnode]
                 newtransfer.piggyback(req.leaseID, vnode, physnode)
@@ -761,12 +769,12 @@ class Scheduler(object):
         
         return newtransfers
     
-    def getNextFIFOTransferTime(self):
+    def getNextFIFOTransferTime(self, nexttime):
         transfers = [t for t in self.transfersFIFO if t.state != constants.RES_STATE_DONE]
         if len(transfers) > 0:
             startTime = transfers[-1].end
         else:
-            startTime = self.rm.clock.getTime()
+            startTime = nexttime
         return startTime
 
     def removeFromFIFOTransfers(self, leaseID):

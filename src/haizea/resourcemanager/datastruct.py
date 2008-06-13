@@ -70,13 +70,28 @@ class ResourceTuple(object):
     def isZeroOrLess(self):
         return sum([v for v in self.res]) <= 0
 
+class DateTime(object):
+    def __init__(self, requested):
+        self.requested = requested
+        self.scheduled = None
+        self.actual = None
+        
+class Duration(object):
+    def __init__(self, requested, known=None):
+        self.requested = requested
+        self.accumulated = TimeDelta()
+        self.actual = None
+        # The following two are ONLY used in simulation
+        self.known = known
+        self.accumknown = TimeDelta()
+
 class LeaseBase(object):
-    def __init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq):
+    def __init__(self, tSubmit, diskImageID, diskImageSize, numnodes, resreq):
         self.leaseID = getLeaseID()
         self.tSubmit = tSubmit
         self.state = None
-        self.vmimage = vmimage
-        self.vmimagesize = vmimagesize
+        self.diskImageID = diskImageID
+        self.diskImageSize = diskImageSize
         self.numnodes = numnodes
         self.resreq = resreq
         self.vmimagemap = {}
@@ -91,8 +106,8 @@ class LeaseBase(object):
         self.logger.log(loglevel, "Lease ID       : %i" % self.leaseID, DS)
         self.logger.log(loglevel, "Submission time: %s" % self.tSubmit, DS)
         self.logger.log(loglevel, "State          : %s" % state_str(self.state), DS)
-        self.logger.log(loglevel, "VM image       : %s" % self.vmimage, DS)
-        self.logger.log(loglevel, "VM image size  : %s" % self.vmimagesize, DS)
+        self.logger.log(loglevel, "VM image       : %s" % self.diskImageID, DS)
+        self.logger.log(loglevel, "VM image size  : %s" % self.diskImageSize, DS)
         self.logger.log(loglevel, "Num nodes      : %s" % self.numnodes, DS)
         self.logger.log(loglevel, "Resource req   : %s" % prettyRes(self.resreq), DS)
         self.logger.log(loglevel, "VM image map   : %s" % prettyNodemap(self.vmimagemap), DS)
@@ -115,10 +130,10 @@ class LeaseBase(object):
         return len(self.getEndingReservations(time)) > 0
 
     def getStartingReservations(self, time):
-        return [r for r in self.rr if r.start == time and r.state == RES_STATE_SCHEDULED]
+        return [r for r in self.rr if r.start <= time and r.state == RES_STATE_SCHEDULED]
 
     def getEndingReservations(self, time):
-        return [r for r in self.rr if (r.end == time or r.realend == time) and r.state == RES_STATE_ACTIVE]
+        return [r for r in self.rr if (r.end <= time or r.realend <= time) and r.state == RES_STATE_ACTIVE]
     
     def getLastVMRR(self):
         if isinstance(self.rr[-1],VMResourceReservation):
@@ -166,7 +181,7 @@ class LeaseBase(object):
         if forceTransferTime != None:
             return forceTransferTime
         else:      
-            return self.estimateTransferTime(self.vmimagesize)
+            return self.estimateTransferTime(self.diskImageSize)
         
     def estimateMigrationTime(self):
         whattomigrate = self.scheduler.rm.config.getMustMigrate()
@@ -176,7 +191,7 @@ class LeaseBase(object):
             if whattomigrate == MIGRATE_MEM:
                 mbtotransfer = self.resreq.res[RES_MEM]
             elif whattomigrate == MIGRATE_MEMVM:
-                mbtotransfer = self.vmimagesize + self.resreq.res[RES_MEM]
+                mbtotransfer = self.diskImageSize + self.resreq.res[RES_MEM]
             return self.estimateTransferTime(mbtotransfer)
         
     def getSuspendThreshold(self, initial, migrating=False):
@@ -206,8 +221,8 @@ class LeaseBase(object):
       
         
 class ExactLease(LeaseBase):
-    def __init__(self, tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend = None):
-        LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq)
+    def __init__(self, tSubmit, start, end, diskImageID, diskImageSize, numnodes, resreq, prematureend = None):
+        LeaseBase.__init__(self, tSubmit, diskImageID, diskImageSize, numnodes, resreq)
         self.start = start
         self.end = end
         self.prematureend = prematureend
@@ -234,8 +249,8 @@ class ExactLease(LeaseBase):
         self.prematureend += t
         
 class BestEffortLease(LeaseBase):
-    def __init__(self, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
-        LeaseBase.__init__(self, tSubmit, vmimage, vmimagesize, numnodes, resreq)
+    def __init__(self, tSubmit, maxdur, diskImageID, diskImageSize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
+        LeaseBase.__init__(self, tSubmit, diskImageID, diskImageSize, numnodes, resreq)
         self.maxdur = maxdur   # Maximum duration the lease can run for (this value is not modified)
         self.realdur = realdur # Real duration (this value is not modified)
         self.remdur = maxdur   # Remaining duration (until maximum). This value is decreased as the lease runs.

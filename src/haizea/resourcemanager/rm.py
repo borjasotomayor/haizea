@@ -8,6 +8,9 @@ import haizea.common.constants as constants
 from haizea.common.utils import abstract
 from haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
 import operator
+from mx.DateTime import now, TimeDelta
+from haizea.common.utils import roundDateTime
+import time
 
 class ResourceManager(object):
     def __init__(self, config):
@@ -22,6 +25,7 @@ class ResourceManager(object):
         # The clock
         starttime = config.getInitialTime()
         self.clock = SimulatedClock(self, starttime)
+        #self.clock = RealClock(self, 5)
                 
         # Resource pool
         self.resourcepool = ResourcePool(self)
@@ -30,7 +34,7 @@ class ResourceManager(object):
         self.scheduler = scheduler.Scheduler(self)
 
         # Lease request frontends
-        self.frontends = [TracefileFrontend(self)]
+        self.frontends = [TracefileFrontend(self, self.clock.getStartTime())]
 
         # Enactment backends
         #self.enactVM = enactment.vm.simulated.SimulatedVMEnactment(self)
@@ -56,9 +60,7 @@ class ResourceManager(object):
             l.printContents()
         self.stats.dumpStatsToDisk(statsdir)
         
-    def manageResources(self):
-        self.logger.status("Waking up to manage resources", constants.RM)
-        
+    def processRequests(self, nexttime):        
         requests = []
         for f in self.frontends:
             requests += f.getAccumulatedRequests()
@@ -71,16 +73,24 @@ class ResourceManager(object):
             self.scheduler.enqueue(r)
         
         try:
-            self.scheduler.schedule(exact)
+            self.scheduler.schedule(exact, nexttime)
         except Exception, msg:
             self.logger.error("Exception in scheduling function. Dumping state..." ,constants.RM)
             self.printStats("ERROR", verbose=True)
             raise      
+
+    def processReservations(self, time):                
+        try:
+            self.scheduler.processReservations(time)
+        except Exception, msg:
+            self.logger.error("Exception when processing reservations. Dumping state..." ,constants.RM)
+            self.printStats("ERROR", verbose=True)
+            raise      
+
         
-    def printStats(self, loglevel, nextcp="NONE", nextreqtime="NONE", verbose=False):
-        time = self.clock.getTime()
-        self.logger.log(loglevel, "Next change point (in slot table): %s" % nextcp,constants.RM)
-        self.logger.log(loglevel, "Next request time: %s" % nextreqtime,constants.RM)
+    def printStats(self, loglevel, verbose=False):
+        self.clock.printStats(loglevel)
+        self.logger.log(loglevel, "Next change point (in slot table): %s" % self.getNextChangePoint(),constants.RM)
         scheduled = self.scheduler.scheduledleases.entries.keys()
         self.logger.log(loglevel, "Scheduled requests: %i" % len(scheduled),constants.RM)
         if verbose and len(scheduled)>0:
@@ -89,12 +99,6 @@ class ResourceManager(object):
                 lease = self.scheduler.scheduledleases.getLease(k)
                 lease.printContents(loglevel=loglevel)
             self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM)
-#        logfun("Pending requests: %i" % len(self.requests),constants.RM, time)
-#        if verbose and len(self.requests)>0:
-#            logfun("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",constants.RM, None)
-#            for lease in self.requests:
-#                lease.printContents(logfun=error)
-#            logfun("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM, None)
         self.logger.log(loglevel, "Queue size: %i" % len(self.scheduler.queue.q),constants.RM)
         if verbose and len(self.scheduler.queue.q)>0:
             self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",constants.RM)
@@ -103,7 +107,6 @@ class ResourceManager(object):
             self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM)
             
     def printStatus(self):
-        time = self.clock.getTime()
         self.logger.status("STATUS ---Begin---", constants.RM)
         self.logger.status("STATUS Completed best-effort leases: %i" % self.stats.besteffortcompletedcount, constants.RM)
         self.logger.status("STATUS Queue size: %i" % self.stats.queuesizecount, constants.RM)
@@ -127,7 +130,15 @@ class Clock(object):
 
     def getStartTime(self): abstract()
     
-    def run(self): abstract()            
+    # Remove this once premature end handling is taken
+    # out of handleEndVM 
+    def getNextSchedulableTime(self): abstract()
+    
+    def run(self): abstract()     
+    
+    def printStats(self, loglevel):
+        pass       
+    
         
 class SimulatedClock(Clock):
     def __init__(self, rm, starttime):
@@ -137,17 +148,28 @@ class SimulatedClock(Clock):
        
     def getTime(self):
         return self.time
+
+    def getPreciseTime(self):
+        return self.time
     
     def getStartTime(self):
         return self.starttime
+
+    # Remove this once premature end handling is taken
+    # out of handleEndVM 
+    def getNextSchedulableTime(self):
+        return self.time    
     
     def run(self):
-        self.rm.logger.status("Starting simulated clock", constants.RM)
+        self.rm.logger.status("Starting simulated clock", constants.CLOCK)
         prevstatustime = self.time
         self.prevtime = None
         done = False
         while not done:
-            self.rm.manageResources()
+            self.rm.processReservations(self.time)
+            self.rm.processRequests(self.time)
+            # Since...
+            self.rm.processReservations(self.time)
             if (self.time - prevstatustime).minutes >= 15:
                 self.rm.printStatus()
                 prevstatustime = self.time
@@ -155,7 +177,7 @@ class SimulatedClock(Clock):
             self.time, done = self.getNextTime()
                     
         self.rm.printStatus()
-        self.rm.logger.status("Stopping simulated clock", constants.RM)
+        self.rm.logger.status("Stopping simulated clock", constants.CLOCK)
         self.rm.stop()
     
     def getNextTime(self):
@@ -163,7 +185,8 @@ class SimulatedClock(Clock):
         tracefrontend = self.getTraceFrontend()
         nextchangepoint = self.rm.getNextChangePoint()
         nextreqtime = tracefrontend.getNextReqTime()
-        self.rm.printStats("DEBUG", nextchangepoint, nextreqtime)
+        self.rm.logger.debug("Next change point (in slot table): %s" % nextchangepoint,constants.CLOCK)
+        self.rm.logger.debug("Next request time: %s" % nextreqtime,constants.CLOCK)
         
         prevtime = self.time
         newtime = self.time
@@ -192,8 +215,8 @@ class SimulatedClock(Clock):
                 done = True
                 
         if newtime == prevtime and done != True:
-            self.rm.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." ,constants.RM)
-            self.rm.printStats(error, nextchangepoint, nextreqtime, verbose=True)
+            self.rm.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." ,constants.CLOCK)
+            self.rm.printStats("ERROR", verbose=True)
             raise Exception, "Simulated clock has fallen into an infinite loop."
         
         return newtime, done
@@ -205,15 +228,49 @@ class SimulatedClock(Clock):
             raise Exception, "The simulated clock can only work with a tracefile request frontend."
         else:
             return tracef[0] 
-
-class RealClock(Clock):
-    def __init__(self, rm):
-        Clock.__init__(self,rm)
         
+class RealClock(Clock):
+    def __init__(self, rm, quantum):
+        Clock.__init__(self,rm)
+        self.starttime = self.getTime()
+        self.lastwakeup = None
+        self.nextwakeup = None
+        self.quantum = TimeDelta(seconds=quantum)
+               
+    def getTime(self):
+        return now()
+    
+    def getStartTime(self):
+        return self.starttime
+
+    # Remove this once premature end handling is taken
+    # out of handleEndVM 
+    def getNextSchedulableTime(self):
+        return self.nextwakeup    
+    
+    def run(self):
+        self.rm.logger.status("Starting simulated clock", constants.CLOCK)
+        # TODO: Add signal capturing so we can stop gracefully
+        done = False
+        while not done:
+            self.rm.logger.status("Waking up to manage resources", constants.CLOCK)
+            self.lastwakeup = self.getTime()
+            self.nextwakeup = self.lastwakeup + self.quantum
+            self.rm.logger.status("Wake-up time recorded as %s" % self.lastwakeup, constants.CLOCK)
+            self.rm.processReservations(self.lastwakeup)
+            self.rm.processRequests(self.nextwakeup)
+            self.rm.logger.status("Going back to sleep", constants.CLOCK)
+            time.sleep((self.nextwakeup - now()).seconds)
+
+                    
+        self.rm.printStatus()
+        self.rm.logger.status("Stopping simulated clock", constants.CLOCK)
+        self.rm.stop()
+          
 
 if __name__ == "__main__":
     from haizea.common.config import RMConfig
-    configfile="../../../etc/sample.conf"
+    configfile="../../../etc/sample_opennebula.conf"
     config = RMConfig.fromFile(configfile)
     rm = ResourceManager(config)
     rm.start()

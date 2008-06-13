@@ -1,7 +1,7 @@
 import optparse
 import os.path
 from mx import DateTime
-from math import ceil
+from math import ceil, floor
 from cPickle import load, dump, HIGHEST_PROTOCOL
 from errno import EEXIST
 
@@ -116,6 +116,9 @@ def generateCondorQueueEntry(command, dir):
     
 def roundDateTimeDelta(d):
     return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))
+
+def roundDateTime(d):
+    return DateTime.DateTime(d.year, d.month, d.day, d.hour, d.minute, int(floor(d.second)))
 
 def vnodemapstr(vnodes):
     if len(vnodes) == 0:
