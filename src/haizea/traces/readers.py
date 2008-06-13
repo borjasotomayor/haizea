@@ -176,18 +176,19 @@ def IMG(imgfile):
             images.append(line.strip())
     return imagesizes, images
 
-def LWF(tracefile, config = None):
+def LWF(tracefile, inittime):
     file = formats.LWF.fromFile(tracefile)
-    if config != None:
-        inittime = config.getInitialTime()
-    else:
-        inittime = now()
     requests = []
     for entry in file.entries:
         tSubmit = inittime + TimeDelta(seconds=entry.reqTime) 
-        tStart = inittime + TimeDelta(seconds=entry.startTime)
-        tEnd = tStart + TimeDelta(seconds=entry.duration)
-        tRealEnd = tStart + TimeDelta(seconds=entry.realDuration)
+        if entry.startTime == -1:
+            tStart = None
+            duration = TimeDelta(seconds=entry.duration)
+            realduration = TimeDelta(seconds=entry.realDuration)
+        else:
+            tStart = inittime + TimeDelta(seconds=entry.startTime)
+            tEnd = tStart + TimeDelta(seconds=entry.duration)
+            tRealEnd = tStart + TimeDelta(seconds=entry.realDuration)
         vmimage = entry.vmImage
         vmimagesize = entry.vmImageSize
         numnodes = entry.numNodes
@@ -198,7 +199,10 @@ def LWF(tracefile, config = None):
         resreq[constants.RES_NETOUT] = 0
         resreq[constants.RES_DISK] = vmimagesize + entry.disk
         resreq = ResourceTuple.fromList(resreq)
-        req = ExactLease(None, tSubmit, tStart, tEnd, vmimage, vmimagesize, numnodes, resreq, tRealEnd)
+        if tStart == None:
+            req = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, realduration, timeOnDedicated=realduration)
+        else:
+            req = ExactLease(None, tSubmit, tStart, tEnd, vmimage, vmimagesize, numnodes, resreq, tRealEnd)
         req.state = constants.LEASE_STATE_PENDING
         requests.append(req)
     return requests

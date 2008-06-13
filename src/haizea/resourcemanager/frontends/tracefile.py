@@ -6,7 +6,7 @@ import operator
 
 
 class TracefileFrontend(RequestFrontend):
-    def __init__(self, rm):
+    def __init__(self, rm, starttime):
         RequestFrontend.__init__(self, rm)
         
         config = rm.config
@@ -24,9 +24,11 @@ class TracefileFrontend(RequestFrontend):
             self.requests = tracereaders.SWF(tracefile, config)
         elif tracefile.endswith(".gwf"):
             self.requests = tracereaders.GWF(tracefile, config)
+        elif tracefile.endswith(".lwf"):
+            self.requests = tracereaders.LWF(tracefile, starttime)
     
         if injectfile != None:
-            injectedleases = tracereaders.LWF(injectfile, config)
+            injectedleases = tracereaders.LWF(injectfile, starttime)
             self.requests += injectedleases
             self.requests.sort(key=operator.attrgetter("tSubmit"))
 
