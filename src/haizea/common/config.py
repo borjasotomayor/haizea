@@ -145,6 +145,13 @@ class RMConfig(Config):
             return self.config.getboolean(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT)
 
     #
+    # OPENNEBULA OPTIONS
+    #
+    def getONEDB(self):
+        return self.config.get(constants.OPENNEBULA_SEC, constants.DB_OPT)
+
+
+    #
     # SCHEDULING OPTIONS
     #
 

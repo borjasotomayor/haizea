@@ -144,6 +144,9 @@ FORCETRANSFERT_OPT="force-transfer-time"
 REUSE_OPT="reuse"
 AVOIDREDUNDANT_OPT="avoid-redundant-transfers"
 
+OPENNEBULA_SEC="opennebula"
+DB_OPT="db"
+
 SCHEDULING_SEC="scheduling"
 TRACEFILE_SEC="tracefile"
 
@@ -205,6 +208,7 @@ ST="SLOT"
 DS="STRUCT"
 ENACT="ENACT"
 CLOCK="CLOCK"
+ONE="ONE"
 
 # Transfer required in deployment
 REQTRANSFER_NO = 0

@@ -79,11 +79,12 @@ class SlotTable(object):
         FIFOnode = self.resourcepool.getFIFORepositoryNode()
         EDFnode = self.resourcepool.getEDFRepositoryNode()
                 
-        self.nodes.add(Node.fromResourcePoolNode(FIFOnode))
-        self.nodes.add(Node.fromResourcePoolNode(EDFnode))
-        
-        self.FIFOnode = FIFOnode.nod_id
-        self.EDFnode = EDFnode.nod_id
+        if FIFOnode != None and EDFnode != None:
+            self.nodes.add(Node.fromResourcePoolNode(FIFOnode))
+            self.nodes.add(Node.fromResourcePoolNode(EDFnode))
+            
+            self.FIFOnode = FIFOnode.nod_id
+            self.EDFnode = EDFnode.nod_id
 
         self.availabilitywindow = AvailabilityWindow(self)
 
@@ -135,29 +136,6 @@ class SlotTable(object):
         total = sum([n.capacity.get(restype) for n in self.nodes.nodelist])
         avail = sum([n.capacity.get(restype) for n in nodes.values()])
         return 1.0 - (float(avail)/total)
-            
-#    def getReservationsAt(self, time):
-#        res = [rr for rr in self.reservations if rr.start <= time and rr.end > time]
-#        return res
-#    
-#    def getReservationsStartingBetween(self, start, end):
-#        res = [rr for rr in self.reservations if rr.start >= start and rr.start < end]
-#        return res    
-#    
-#    def addReservation(self, rr):
-#        self.reservations.append(rr)
-#        self.dirty()
-#
-#    def removeReservation(self, rr):
-#        self.reservations.remove(rr)
-#        self.dirty()
-#
-#    def getReservationsWithChangePointsAfter(self, after, includereal):
-#        if includereal:
-#            res = [r for r in self.reservations if r.start > after or r.end > after or r.realend > after]
-#        else:
-#            res = [r for r in self.reservations  if r.start > after or r.end > after]
-#        return res
 
     def getReservationsAt(self, time):
         item = KeyValueWrapper(time, None)
@@ -184,7 +162,7 @@ class SlotTable(object):
         else:
             item = KeyValueWrapper(after, None)
             startpos = bisect.bisect_right(self.reservationsByStart, item)
-            bystart = set([x.value for x in self.reservationsByStart[:startpos]])
+            bystart = set([x.value for x in self.reservationsByStart[startpos:]])
             endpos = bisect.bisect_right(self.reservationsByEnd, item)
             byend = set([x.value for x in self.reservationsByEnd[endpos:]])
             res = bystart | byend
@@ -277,7 +255,7 @@ class SlotTable(object):
         leaseID = leasereq.leaseID
         start = leasereq.start
         end = leasereq.end
-        vmimage = leasereq.vmimage
+        diskImageID = leasereq.diskImageID
         numnodes = leasereq.numnodes
         resreq = leasereq.resreq
         prematureend = leasereq.prematureend
@@ -337,7 +315,7 @@ class SlotTable(object):
             else:
                 canfit[node] = [0, vnodes]
 
-        orderednodes = self.prioritizenodes(canfit, vmimage, start, canpreempt, avoidpreempt)
+        orderednodes = self.prioritizenodes(canfit, diskImageID, start, canpreempt, avoidpreempt)
             
         self.rm.logger.info("Node ordering: %s" % orderednodes, constants.ST)
         
@@ -813,7 +791,7 @@ class SlotTable(object):
             lease.printContents()
 
 
-    def prioritizenodes(self,canfit, vmimage,start,canpreempt, avoidpreempt):
+    def prioritizenodes(self,canfit, diskImageID,start,canpreempt, avoidpreempt):
         # TODO2: Choose appropriate prioritizing function based on a
         # config file, instead of hardcoding it)
         #
@@ -826,7 +804,7 @@ class SlotTable(object):
         reusealg = self.rm.config.getReuseAlg()
         nodeswithimg=[]
         if reusealg==constants.REUSE_COWPOOL:
-            nodeswithimg = self.rm.enactment.getNodesWithImgInPool(vmimage, start)
+            nodeswithimg = self.rm.enactment.getNodesWithImgInPool(diskImageID, start)
 
         # Compares node x and node y. 
         # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)

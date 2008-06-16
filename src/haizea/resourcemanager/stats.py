@@ -35,7 +35,7 @@ class Stats(object):
         self.queuewaittimes = {}
         self.startendtimes = {}
         
-        self.nodes=dict([(i+1,[]) for i in range(self.rm.config.getNumPhysicalNodes())])
+        self.nodes=dict([(i+1,[]) for i in range(self.rm.resourcepool.getNumNodes())])
  
     def addUtilization(self,util):
         self.utilization.append((self.rm.clock.getTime(),None,util))

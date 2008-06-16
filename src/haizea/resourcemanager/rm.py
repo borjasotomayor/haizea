@@ -17,30 +17,42 @@ class ResourceManager(object):
         self.config = config
         
         # Create the RM components
-        # TODO: Make configurable
-        
-        # Start logging
+
+        # Common components
         self.logger = Logger(self)
         
-        # The clock
-        starttime = config.getInitialTime()
-        self.clock = SimulatedClock(self, starttime)
-        #self.clock = RealClock(self, 5)
-                
-        # Resource pool
-        self.resourcepool = ResourcePool(self)
+        # Mode-specific components
+        mode = config.getMode()
 
-        # Scheduler
-        self.scheduler = scheduler.Scheduler(self)
+        if mode == "simulation":
+            # The clock
+            starttime = config.getInitialTime()
+            self.clock = SimulatedClock(self, starttime)
 
-        # Lease request frontends
-        self.frontends = [TracefileFrontend(self, self.clock.getStartTime())]
-
-        # Enactment backends
-        #self.enactVM = enactment.vm.simulated.SimulatedVMEnactment(self)
-        #self.enactStorage = enactment.storage.simulated.SimulatedStorageEnactment(self)
-
+            # Resource pool
+            self.resourcepool = ResourcePool(self)
         
+            # Scheduler
+            self.scheduler = scheduler.Scheduler(self)
+    
+            # Lease request frontends
+            # In simulation, we can only use the tracefile frontend
+            self.frontends = [TracefileFrontend(self, self.clock.getStartTime())]
+        elif mode == "opennebula":
+            # The clock
+            self.clock = RealClock(self, 5)
+    
+            # Resource pool
+            self.resourcepool = ResourcePool(self)
+    
+            # Scheduler
+            self.scheduler = scheduler.Scheduler(self)
+
+            # Lease request frontends
+            # TODO: Get this from config file
+            self.frontends = [TracefileFrontend(self, self.clock.getStartTime())]
+
+
         
         # Statistics collection 
         self.stats = stats.Stats(self)

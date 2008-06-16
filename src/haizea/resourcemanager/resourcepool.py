@@ -84,18 +84,19 @@ class ResourcePool(object):
                         taintedImage = self.addTaintedImageToNode(pnode, lease.diskImageID, lease.diskImageSize, lease, vnode)
                         # ENACTMENT
                         # self.storage.createCopyFromCache(pnode, lease.diskImageSize)
-            start = (lease.leaseID, vnode, node.hostname, taintedImage.filename, rr.res)
-            starts += start
+            start = (lease.leaseID, vnode, node.enactID, taintedImage.filename, rr.res[pnode])
+            starts.append(start)
 
-        self.vm.start(starts)
+        enactID = self.vm.start(starts)
+        lease.enactID = enactID
         
     def stopVMs(self, lease, rr):
         # List of VMs that have to be started. Each entry contains:
-        # (lease id, vnode, hostname)
+        # (lease id, vnode, host, lease.enactID)
         stops = []
         for (vnode,pnode) in rr.nodes.items():
             node = self.getNode(pnode)
-            stops += (lease.leaseID, vnode, node.hostname)
+            stops.append((lease.leaseID, vnode, node.enactID, lease.enactID))
             
         self.vm.stop(stops)
         
@@ -199,6 +200,9 @@ class ResourcePool(object):
     
     def getNodes(self):
         return self.nodes
+
+    def getNumNodes(self):
+        return len(self.nodes)
         
     def getNode(self,nod_id):
         return self.nodes[nod_id-1]
@@ -262,10 +266,11 @@ class ResourcePool(object):
         
         self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
         
-    def addTaintedImageToNode(self,pnode,imagefile,imagesize,leaseID,vnode):
+    def addTaintedImageToNode(self,pnode,diskImageID,imagesize,leaseID,vnode):
         self.rm.logger.info("Adding tainted image for L%iV%i in pnode=%i" % (leaseID,vnode,pnode), constants.ENACT)
         self.getNode(pnode).printFiles()
-        img = VMImageFile(imagefile, imagesize, masterimg=False)
+        imagefile = self.storage.resolveToFile(leaseID, vnode, diskImageID)
+        img = VMImageFile(imagefile, imagesize, masterimg=diskImageID)
         img.addMapping(leaseID,vnode)
         self.getNode(pnode).addFile(img)
         self.getNode(pnode).printFiles()
@@ -360,6 +365,8 @@ class Node(object):
         self.files = []
         self.workingspacesize = 0
         self.capacity = capacity
+        # enactment-specific ID
+        self.enactID = None
         # Kludgy way of keeping track of utilization
         self.transfer_doing = constants.DOING_IDLE
         self.vm_doing = constants.DOING_IDLE

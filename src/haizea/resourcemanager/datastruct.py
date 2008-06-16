@@ -88,6 +88,7 @@ class Duration(object):
 class LeaseBase(object):
     def __init__(self, tSubmit, diskImageID, diskImageSize, numnodes, resreq):
         self.leaseID = getLeaseID()
+        self.enactID = None
         self.tSubmit = tSubmit
         self.state = None
         self.diskImageID = diskImageID

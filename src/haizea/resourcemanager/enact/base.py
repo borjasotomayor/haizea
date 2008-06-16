@@ -3,6 +3,7 @@ from haizea.common.utils import abstract
 class ResourcePoolInfoBase(object):
     def __init__(self, resourcepool):
         self.resourcepool = resourcepool
+        self.logger = resourcepool.rm.logger
         
     def getNodes(self): 
         """ Returns the nodes in the resource pool. """
@@ -29,10 +30,12 @@ class ResourcePoolInfoBase(object):
 class StorageEnactmentBase(object):
     def __init__(self, resourcepool):
         self.resourcepool = resourcepool
+        self.logger = resourcepool.rm.logger
     
 class VMEnactmentBase(object):
     def __init__(self, resourcepool):
         self.resourcepool = resourcepool
+        self.logger = resourcepool.rm.logger
         
     def start(self, vms): abstract()
     
