@@ -2,6 +2,7 @@ from haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STAT
 from haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
 from mx.DateTime import TimeDelta
+import haizea.common.constants as constants
 leaseID = 1
 
 def getLeaseID():
@@ -69,6 +70,12 @@ class ResourceTuple(object):
         
     def isZeroOrLess(self):
         return sum([v for v in self.res]) <= 0
+    
+    def __repr__(self):
+        r=""
+        for i,x in enumerate(self.res):
+            r += "%s:%.2f " % (constants.res_str(i),x)
+        return r
 
 class DateTime(object):
     def __init__(self, requested):
