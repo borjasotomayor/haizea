@@ -1,6 +1,7 @@
 import optparse
 import os.path
 from mx import DateTime
+from datetime import datetime
 from math import ceil, floor
 from cPickle import load, dump, HIGHEST_PROTOCOL
 from errno import EEXIST
@@ -120,6 +121,11 @@ def roundDateTimeDelta(d):
 def roundDateTime(d):
     return DateTime.DateTime(d.year, d.month, d.day, d.hour, d.minute, int(floor(d.second)))
 
+def UNIX2DateTime(t):
+    d = datetime.fromtimestamp(t)
+    return DateTime.DateTime(d.year,d.month,d.day,d.hour,d.minute,d.second)
+
+    
 def vnodemapstr(vnodes):
     if len(vnodes) == 0:
         return "UNUSED"
