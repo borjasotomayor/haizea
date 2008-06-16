@@ -17,24 +17,9 @@ class VMEnactment(VMEnactmentBase):
         image = vm[3]
         cpu = vm[4].get(constants.RES_CPU)
         memory = vm[4].get(constants.RES_MEM)
+        vmid = vm[5]
         self.logger.debug("Received request to start VM for lease %i on host %i, image=%s, cpu=%i, mem=%i"
                      % (leaseID, hostID, image, cpu, memory), constants.ONE)
-        
-        # Create template
-        # TODO: We're using template files for now
-        template = ""
-        
-        self.logger.debug("Template that will be submitted is:", constants.ONE)
-        self.logger.debug(template, constants.ONE)
-        cmd = "%s submit %s.one" % (self.onevm, image)
-        self.logger.debug("Running command: %s" % cmd, constants.ONE)
-        (status, output) = commands.getstatusoutput(cmd)
-        self.logger.debug("Returned status=%i, output='%s'" % (status, output), constants.ONE)
-        if status == 0:
-            vmid = int(output.split(" ")[1])
-            self.logger.debug("Command returned succesfully. Got vm_id=%i" % vmid, constants.ONE)
-        else:
-            raise Exception, "Error when running onevm submit"
         
         cmd = "%s deploy %i %i" % (self.onevm, vmid, hostID)
         self.logger.debug("Running command: %s" % cmd, constants.ONE)

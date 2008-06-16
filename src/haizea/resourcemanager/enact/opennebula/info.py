@@ -27,7 +27,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
             enactID = int(host["hid"])
             hostname = host["host_name"]
             capacity = [None, None, None, None, None] # TODO: Hardcoding == bad
-            capacity[constants.RES_DISK] = 20000 # OpenNebula currently doesn't provide this
+            capacity[constants.RES_DISK] = 80000 # OpenNebula currently doesn't provide this
             capacity[constants.RES_NETIN] = 100 # OpenNebula currently doesn't provide this
             capacity[constants.RES_NETOUT] = 100 # OpenNebula currently doesn't provide this
             cur.execute("select name, value from host_attributes where id=%i" % enactID)
@@ -36,6 +36,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
                 name = attr["name"]
                 if oneattr2haizea.has_key(name):
                     capacity[oneattr2haizea[name]] = int(attr["value"])
+            capacity[constants.RES_CPU] /= 100.0
             capacity = ds.ResourceTuple.fromList(capacity)
             node = Node(self.resourcepool, nod_id, hostname, capacity)
             node.enactID = enactID

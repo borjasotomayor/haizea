@@ -567,7 +567,7 @@ class Scheduler(object):
         nextfifo = self.getNextFIFOTransferTime(nexttime)
         
         if transfertype == constants.TRANSFER_NONE:
-            earliest = dict([(node+1, [nexttime,constants.REQTRANSFER_NO, None]) for node in nodIDs])
+            earliest = dict([(node, [nexttime,constants.REQTRANSFER_NO, None]) for node in nodIDs])
         else:
             imgTransferTime=req.estimateImageTransferTime()
             reusealg = self.rm.config.getReuseAlg()
@@ -576,7 +576,7 @@ class Scheduler(object):
             # Find worst-case earliest start time
             if req.numnodes == 1:
                 startTime = nextfifo + imgTransferTime
-                earliest = dict([(node+1, [startTime,constants.REQTRANSFER_YES]) for node in nodIDs])                
+                earliest = dict([(node, [startTime,constants.REQTRANSFER_YES]) for node in nodIDs])                
             else:
                 # Unlike the previous case, we may have to find a new start time
                 # for all the nodes.
@@ -586,7 +586,7 @@ class Scheduler(object):
                     # make determining what images can be reused more complicated.
                 if transfertype == constants.TRANSFER_MULTICAST:
                     startTime = nextfifo + imgTransferTime
-                    earliest = dict([(node+1, [startTime,constants.REQTRANSFER_YES]) for node in nodIDs])                                    # TODO: Take into account reusable images
+                    earliest = dict([(node, [startTime,constants.REQTRANSFER_YES]) for node in nodIDs])                                    # TODO: Take into account reusable images
             
             # Check if we can reuse images
             if reusealg==constants.REUSE_COWPOOL:

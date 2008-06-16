@@ -84,11 +84,10 @@ class ResourcePool(object):
                         taintedImage = self.addTaintedImageToNode(pnode, lease.diskImageID, lease.diskImageSize, lease, vnode)
                         # ENACTMENT
                         # self.storage.createCopyFromCache(pnode, lease.diskImageSize)
-            start = (lease.leaseID, vnode, node.enactID, taintedImage.filename, rr.res[pnode])
+            start = (lease.leaseID, vnode, node.enactID, taintedImage.filename, rr.res[pnode], lease.enactID)
             starts.append(start)
 
-        enactID = self.vm.start(starts)
-        lease.enactID = enactID
+        self.vm.start(starts)
         
     def stopVMs(self, lease, rr):
         # List of VMs that have to be started. Each entry contains:
