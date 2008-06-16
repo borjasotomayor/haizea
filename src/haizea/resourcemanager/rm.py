@@ -1,6 +1,6 @@
-import haizea.resourcemanager.interface as interface
 import haizea.resourcemanager.scheduler as scheduler
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
+from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.resourcepool import ResourcePool
 from haizea.resourcemanager.log import Logger
 import haizea.resourcemanager.stats as stats
@@ -50,7 +50,7 @@ class ResourceManager(object):
 
             # Lease request frontends
             # TODO: Get this from config file
-            self.frontends = [TracefileFrontend(self, self.clock.getStartTime())]
+            self.frontends = [OpenNebulaFrontend(self)]
 
 
         
