@@ -18,12 +18,8 @@ class TracefileFrontend(RequestFrontend):
         # Read trace file
         # Requests is a list of lease requests
         self.requests = None
-        if tracefile.endswith(".csv"):
-            self.requests = tracereaders.CSV(tracefile, config)
-        elif tracefile.endswith(".swf"):
+        if tracefile.endswith(".swf"):
             self.requests = tracereaders.SWF(tracefile, config)
-        elif tracefile.endswith(".gwf"):
-            self.requests = tracereaders.GWF(tracefile, config)
         elif tracefile.endswith(".lwf"):
             self.requests = tracereaders.LWF(tracefile, starttime)
     
