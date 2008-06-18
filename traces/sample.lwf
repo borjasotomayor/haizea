@@ -1,0 +1,67 @@
+# This file is a collection of sample workloads to
+# test the scheduler. They are not meant to be all run
+# one after the other. Rather, just uncomment the
+# workload you want to test (and make sure you
+# comment it out before trying out another one).
+#
+# The format used in this file is specific to Haizea. Time
+# is measured in seconds and starts at second 0. Each line
+# is a lease request. Each field is separated by whitespace 
+# The meaning of each field is:
+#
+#  0  Request time  : The time at which the lease is requested
+#  1  Start time    : The time at which the lease must start. 
+#                     -1 denotes that no start time is requestes
+#                     (i.e., best-effort start time)
+#  2  Duration      : Requested duration
+#  3  Real duration : Real duration. This field is used to 
+#                     simulate leases that end prematurely
+#  4  # of nodes    : Number of nodes in the lease
+#  5  CPU           : Number of CPUs, per node.
+#  6  Memory        : Memory per node, in MB.
+#  7  Disk          : Additional disk space (not counting the VM image)
+#                     In MB, per node
+#  8  Disk Image    : Disk image identifier
+#  9  Image size    : Size of disk image
+#
+# Note: These workloads were written with the
+# simulator in mind, so they might require some
+# tweaking if you want to run them with OpenNebula;
+# more specifically, the durations may be unrealistically
+# short or long, and the VM images will have to be changed.
+
+# Name: PREEMPT
+# Description: A simple trace where an AR lease 
+# preempts a best-effort lease that is already
+# running. 
+#0   -1   3600 3600 1 1 1024 0 foobar.img 1024
+#900 1800 900  900  4 1 1024 0 foobar.img 1024
+
+# Name: PREEMPT-PREMATUREEND
+# Description: Same as PREEMPT, but with 
+# premature end time for the best-effort lease.
+#0   -1   3600 2700 1 1 1024 0 foobar.img 1024
+#900 1800 900  900  4 1 1024 0 foobar.img 1024
+
+# Name: PREEMPT-PREMATUREEND2
+# Description: Same as PREEMPT, but with 
+# premature end time for both leases.
+0   -1   3600 2700 1 1 1024 0 foobar.img 1024
+900 1800 900  600  4 1 1024 0 foobar.img 1024
+
+# Name: RESERVATION
+# Description: Two best-effort leases. The first one is a long
+# single-node lease, while the second one is a short wide lease
+# using up all the nodes. With backfilling, the scheduler
+# should make a future reservation for the second lease.
+#0   -1   3600 3600 1 1 1024 0 foobar.img 1024
+#900 -1   900  900  4 1 1024 0 foobar.img 1024
+
+# Name: RESERVATION-PREMATUREEND
+# Description: Same as RESERVATION. However, the first lease
+# ends prematurely, freeing up resources earlier than
+# expected. The scheduler should reschedule the second lease
+# (for which a reservation was made in the future)
+# since it can now start earlier
+#0   -1   3600 1800 1 1 1024 0 foobar.img 1024
+#900 -1   900  900  4 1 1024 0 foobar.img 1024
