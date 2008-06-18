@@ -24,7 +24,7 @@ class ResourceManager(object):
         # Mode-specific components
         mode = config.getMode()
 
-        if mode == "simulation":
+        if mode == "simulated":
             # The clock
             starttime = config.getInitialTime()
             self.clock = SimulatedClock(self, starttime)
@@ -70,7 +70,7 @@ class ResourceManager(object):
         statsdir="/home/borja/docs/uchicago/research/haizea/results"
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()
-        self.stats.dumpStatsToDisk(statsdir)
+        #self.stats.dumpStatsToDisk(statsdir)
         
     def processRequests(self, nexttime):        
         requests = []
@@ -132,7 +132,9 @@ class ResourceManager(object):
    
     def existsLeasesInRM(self):
        return self.scheduler.existsScheduledLeases() or not self.scheduler.isQueueEmpty()
- 
+    
+    def notifyEndVM(self, l, rr):
+        self.scheduler.handlePrematureEndVM(l, rr)
             
 class Clock(object):
     def __init__(self, rm):
@@ -178,6 +180,9 @@ class SimulatedClock(Clock):
         self.prevtime = None
         done = False
         while not done:
+            prematureends = self.rm.scheduler.slottable.getPrematurelyEndingRes(self.time)
+            for rr in prematureends:
+                self.rm.notifyEndVM(rr.lease, rr)
             self.rm.processReservations(self.time)
             self.rm.processRequests(self.time)
             # Since...
@@ -196,9 +201,11 @@ class SimulatedClock(Clock):
         done = False
         tracefrontend = self.getTraceFrontend()
         nextchangepoint = self.rm.getNextChangePoint()
+        nextprematureend = self.rm.scheduler.slottable.getNextPrematureEnd(self.time)
         nextreqtime = tracefrontend.getNextReqTime()
         self.rm.logger.debug("Next change point (in slot table): %s" % nextchangepoint,constants.CLOCK)
         self.rm.logger.debug("Next request time: %s" % nextreqtime,constants.CLOCK)
+        self.rm.logger.debug("Next premature end: %s" % nextprematureend,constants.CLOCK)
         
         prevtime = self.time
         newtime = self.time
@@ -209,6 +216,9 @@ class SimulatedClock(Clock):
             newtime = nextreqtime
         elif nextchangepoint != None and nextreqtime != None:
             newtime = min(nextchangepoint, nextreqtime)
+            
+        if nextprematureend != None:
+            newtime = min(nextprematureend, newtime)
             
         if nextchangepoint == newtime:
             newtime = self.rm.scheduler.slottable.getNextChangePoint(newtime)
@@ -282,7 +292,7 @@ class RealClock(Clock):
 
 if __name__ == "__main__":
     from haizea.common.config import RMConfig
-    configfile="../../../etc/sample_opennebula.conf"
+    configfile="../../../etc/sample.conf"
     config = RMConfig.fromFile(configfile)
     rm = ResourceManager(config)
     rm.start()

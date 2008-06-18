@@ -154,19 +154,29 @@ class SlotTable(object):
         res = [x.value for x in self.reservationsByStart[startpos:endpos]]
         return res
     
-    def getReservationsWithChangePointsAfter(self, after, includereal):
-        if includereal:
-            # Inefficient, but ok since this query seldom happens
-            res = [i.value for i in self.reservationsByStart if i.value.start > after or i.value.end > after or i.value.realend > after]
-            return res
+    # ONLY for simulation
+    def getNextPrematureEnd(self, after):
+        # Inefficient, but ok since this query seldom happens
+        res = [i.value for i in self.reservationsByEnd if isinstance(i.value, ds.VMResourceReservation) and i.value.prematureend > after]
+        if len(res) > 0:
+            res.sort()
+            return res[0].prematureend
         else:
-            item = KeyValueWrapper(after, None)
-            startpos = bisect.bisect_right(self.reservationsByStart, item)
-            bystart = set([x.value for x in self.reservationsByStart[startpos:]])
-            endpos = bisect.bisect_right(self.reservationsByEnd, item)
-            byend = set([x.value for x in self.reservationsByEnd[endpos:]])
-            res = bystart | byend
-            return list(res)    
+            return None
+    
+    # ONLY for simulation
+    def getPrematurelyEndingRes(self, t):
+        return [i.value for i in self.reservationsByEnd if isinstance(i.value, ds.VMResourceReservation) and i.value.prematureend == t]
+
+    
+    def getReservationsWithChangePointsAfter(self, after):
+        item = KeyValueWrapper(after, None)
+        startpos = bisect.bisect_right(self.reservationsByStart, item)
+        bystart = set([x.value for x in self.reservationsByStart[startpos:]])
+        endpos = bisect.bisect_right(self.reservationsByEnd, item)
+        byend = set([x.value for x in self.reservationsByEnd[endpos:]])
+        res = bystart | byend
+        return list(res)    
     
     def addReservation(self, rr):
         startitem = KeyValueWrapper(rr.start, rr)
@@ -217,17 +227,15 @@ class SlotTable(object):
         self.dirty()
 
     
-    def findChangePointsAfter(self, after, until=None, includereal = False, nodes=None):
+    def findChangePointsAfter(self, after, until=None, nodes=None):
         changepoints = set()
-        res = self.getReservationsWithChangePointsAfter(after, includereal)
+        res = self.getReservationsWithChangePointsAfter(after)
         for rr in res:
             if nodes == None or (nodes != None and len(set(rr.res.keys()) & set(nodes)) > 0):
                 if rr.start > after:
                     changepoints.add(rr.start)
                 if rr.end > after:
                     changepoints.add(rr.end)
-                if includereal and rr.realend > after:
-                    changepoints.add(rr.realend)
         changepoints = list(changepoints)
         if until != None:
             changepoints =  [c for c in changepoints if c < until]
@@ -237,7 +245,7 @@ class SlotTable(object):
     def peekNextChangePoint(self, time):
         if self.changepointcache == None:
             # Cache is empty
-            changepoints = self.findChangePointsAfter(time, includereal = True)
+            changepoints = self.findChangePointsAfter(time)
             changepoints.reverse()
             self.changepointcache = changepoints
         if len(self.changepointcache) == 0:
@@ -253,12 +261,11 @@ class SlotTable(object):
     
     def fitExact(self, leasereq, preemptible=False, canpreempt=True, avoidpreempt=True):
         leaseID = leasereq.leaseID
-        start = leasereq.start
-        end = leasereq.end
+        start = leasereq.start.requested
+        end = leasereq.start.requested + leasereq.duration.requested
         diskImageID = leasereq.diskImageID
         numnodes = leasereq.numnodes
         resreq = leasereq.resreq
-        prematureend = leasereq.prematureend
 
         self.availabilitywindow.initWindow(start, resreq, canpreempt=canpreempt)
         self.availabilitywindow.printContents(withpreemption = False)
@@ -458,10 +465,9 @@ class SlotTable(object):
 
     def fitBestEffort(self, lease, earliest, canreserve, suspendable, preemptible, canmigrate, mustresume):
         leaseID = lease.leaseID
-        remdur = lease.remdur
+        remdur = lease.duration.getRemainingDuration()
         numnodes = lease.numnodes
         resreq = lease.resreq
-        realdur = lease.realremdur
 
 
         #
@@ -490,7 +496,6 @@ class SlotTable(object):
             resumetime = lease.estimateSuspendResumeTime()
             # Must allocate time for resumption too
             remdur += resumetime
-            realdur += resumetime
         else:
             suspendthreshold = lease.getSuspendThreshold(initial=True)
 
@@ -537,7 +542,7 @@ class SlotTable(object):
         #
 
         # First, assuming we can't make reservations in the future
-        start, end, realend, canfit, mustsuspend = self.fitBestEffortInChangepoints(changepoints, numnodes, resreq, remdur, realdur, suspendable, suspendthreshold)
+        start, end, canfit, mustsuspend = self.fitBestEffortInChangepoints(changepoints, numnodes, resreq, remdur, suspendable, suspendthreshold)
 
         if not canreserve:
             if start == None:
@@ -553,7 +558,7 @@ class SlotTable(object):
         # If we haven't been able to fit the lease, check if we can
         # reserve it in the future
         if start == None and canreserve:
-            start, end, realend, canfit, mustsuspend = self.fitBestEffortInChangepoints(futurecp, numnodes, resreq, remdur, realdur, suspendable, suspendthreshold)
+            start, end, canfit, mustsuspend = self.fitBestEffortInChangepoints(futurecp, numnodes, resreq, remdur, suspendable, suspendthreshold)
 
         if mustsuspend and not suspendable:
             raise SlotFittingException, "Scheduling this lease would require preempting it, which is not allowed"
@@ -562,10 +567,6 @@ class SlotTable(object):
             reservation = True
         else:
             reservation = False
-
-        if realend > end:
-            realend = end
-
 
 
         #
@@ -650,15 +651,14 @@ class SlotTable(object):
             susprr = None
             oncomplete = constants.ONCOMPLETE_ENDLEASE
 
-        vmrr = ds.VMResourceReservation(lease, start, end, realend, mappings, res, oncomplete, reservation)
+        vmrr = ds.VMResourceReservation(lease, start, end, mappings, res, oncomplete, reservation)
         vmrr.state = constants.RES_STATE_SCHEDULED
 
         return resmrr, vmrr, susprr, reservation
 
-    def fitBestEffortInChangepoints(self, changepoints, numnodes, resreq, remdur, realdur, suspendable, suspendthreshold):
+    def fitBestEffortInChangepoints(self, changepoints, numnodes, resreq, remdur, suspendable, suspendthreshold):
         start = None
         end = None
-        realend = None
         canfit = None
         mustsuspend = None
 
@@ -669,7 +669,6 @@ class SlotTable(object):
             if self.availabilitywindow.fitAtStart() >= numnodes:
                 start=p[0]
                 maxend = start + remdur
-                realend = start + realdur
                 end, canfit = self.availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
         
                 self.rm.logger.info("This lease can be scheduled from %s to %s" % (start, end), constants.ST)
@@ -696,18 +695,14 @@ class SlotTable(object):
                     # We've found a satisfactory starting time
                     break        
                 
-        return start, end, realend, canfit, mustsuspend
+        return start, end, canfit, mustsuspend
 
     def suspend(self, lease, time):
         (vmrr, susprr) = lease.getLastVMRR()
         vmrrnew = copy.copy(vmrr)
         
         suspendtime = lease.estimateSuspendResumeTime()
-        if vmrrnew.end != vmrrnew.realend:
-            vmrrnew.end = time - suspendtime
-        else:
-            vmrrnew.end = time - suspendtime
-            vmrrnew.realend = vmrrnew.end
+        vmrrnew.end = time - suspendtime
             
         vmrrnew.oncomplete = constants.ONCOMPLETE_SUSPEND
 
@@ -784,7 +779,9 @@ class SlotTable(object):
                     self.removeReservation(susprr)
             else:
                 vmrrnew.end -= diff
-                vmrrnew.realend -= diff
+                # ONLY for simulation
+                if vmrrnew.prematureend != None:
+                    vmrrnew.prematureend -= diff
             self.updateReservationWithKeyChange(vmrr, vmrrnew)
             self.dirty()
             self.rm.logger.edebug("New lease descriptor (after slideback):", constants.ST)

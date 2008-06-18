@@ -77,35 +77,69 @@ class ResourceTuple(object):
             r += "%s:%.2f " % (constants.res_str(i),x)
         return r
 
-class DateTime(object):
+class Timestamp(object):
     def __init__(self, requested):
         self.requested = requested
         self.scheduled = None
         self.actual = None
+
+    def __repr__(self):
+        return "REQ: %s  |  SCH: %s  |  ACT: %s" % (self.requested, self.scheduled, self.actual)
         
 class Duration(object):
     def __init__(self, requested, known=None):
+        self.original = requested
         self.requested = requested
         self.accumulated = TimeDelta()
         self.actual = None
-        # The following two are ONLY used in simulation
+        # The following is ONLY used in simulation
         self.known = known
-        self.accumknown = TimeDelta()
+        
+    def incr(self, t):
+        self.requested += t
+        if self.known != None:
+            self.known += t
+        
+    def accumulateDuration(self, t):
+        self.accumulated += t
+            
+    def getRemainingDuration(self):
+        return self.requested - self.accumulated
+
+    # ONLY in simulation
+    def getRemainingKnownDuration(self):
+        return self.known - self.accumulated
+            
+    def __repr__(self):
+        return "REQ: %s  |  ACC: %s  |  ACT: %s  |  KNW: %s" % (self.requested, self.accumulated, self.actual,self.known)
 
 class LeaseBase(object):
-    def __init__(self, tSubmit, diskImageID, diskImageSize, numnodes, resreq):
+    def __init__(self, tSubmit, start, duration, diskImageID, diskImageSize, numnodes, resreq):
+        # Lease ID (read only)
         self.leaseID = getLeaseID()
-        self.enactID = None
+        
+        # Request attributes (read only)
         self.tSubmit = tSubmit
-        self.state = None
+        self.start = start
+        self.duration = duration
+        self.end = None
         self.diskImageID = diskImageID
         self.diskImageSize = diskImageSize
+        # TODO: The following assumes homogeneous nodes. Should be modified
+        # to account for heterogeneous nodes.
         self.numnodes = numnodes
         self.resreq = resreq
+
+        # Bookkeeping attributes
+        # (keep track of the lease's state, resource reservations, etc.)
+        self.state = None
         self.vmimagemap = {}
         self.memimagemap = {}
         self.rr = []
         
+        # Enactment ID. Should only be manipulated by enactment module
+        self.enactID = None
+                
     def setScheduler(self, scheduler):
         self.scheduler = scheduler
         self.logger = scheduler.rm.logger
@@ -141,7 +175,7 @@ class LeaseBase(object):
         return [r for r in self.rr if r.start <= time and r.state == RES_STATE_SCHEDULED]
 
     def getEndingReservations(self, time):
-        return [r for r in self.rr if (r.end <= time or r.realend <= time) and r.state == RES_STATE_ACTIVE]
+        return [r for r in self.rr if r.end <= time and r.state == RES_STATE_ACTIVE]
     
     def getLastVMRR(self):
         if isinstance(self.rr[-1],VMResourceReservation):
@@ -170,6 +204,9 @@ class LeaseBase(object):
 
     def removeRRs(self):
         self.rr = []
+        
+    def addBootOverhead(self, t):
+        self.duration.incr(t)        
         
     def estimateSuspendResumeTime(self):
         rate = self.scheduler.rm.config.getSuspendResumeRate()
@@ -229,19 +266,18 @@ class LeaseBase(object):
       
         
 class ExactLease(LeaseBase):
-    def __init__(self, tSubmit, start, end, diskImageID, diskImageSize, numnodes, resreq, prematureend = None):
-        LeaseBase.__init__(self, tSubmit, diskImageID, diskImageSize, numnodes, resreq)
-        self.start = start
-        self.end = end
-        self.prematureend = prematureend
+    def __init__(self, tSubmit, tStart, dur, diskImageID, diskImageSize, numnodes, resreq, realdur = None):
+        start = Timestamp(tStart)
+        duration = Duration(dur)
+        duration.known = realdur # ONLY for simulation
+        LeaseBase.__init__(self, tSubmit, start, duration, diskImageID, diskImageSize, numnodes, resreq)
         
     def printContents(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "__________________________________________________", DS)
         LeaseBase.printContents(self, loglevel)
         self.logger.log(loglevel, "Type           : EXACT", DS)
         self.logger.log(loglevel, "Start time     : %s" % self.start, DS)
-        self.logger.log(loglevel, "End time       : %s" % self.end, DS)
-        self.logger.log(loglevel, "Early end time : %s" % self.prematureend, DS)
+        self.logger.log(loglevel, "Duration       : %s" % self.duration, DS)
         self.printRR(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------", DS)
     
@@ -251,31 +287,22 @@ class ExactLease(LeaseBase):
         realduration = self.prematureend - self.start
         self.end = self.start + roundDateTimeDelta(duration * factor)
         self.prematureend = self.start + roundDateTimeDelta(realduration * factor)
-        
-    def addBootOverhead(self, t):
-        self.end += t
-        self.prematureend += t
+
         
 class BestEffortLease(LeaseBase):
-    def __init__(self, tSubmit, maxdur, diskImageID, diskImageSize, numnodes, resreq, realdur = None, maxqueuetime=None, timeOnDedicated=None):
-        LeaseBase.__init__(self, tSubmit, diskImageID, diskImageSize, numnodes, resreq)
-        self.maxdur = maxdur   # Maximum duration the lease can run for (this value is not modified)
-        self.realdur = realdur # Real duration (this value is not modified)
-        self.remdur = maxdur   # Remaining duration (until maximum). This value is decreased as the lease runs.
-        self.realremdur = realdur # REAL remaining duration (until reaching realdur).
-        self.accumdur = TimeDelta()   # How much duration the lease has accumulated
-        self.maxqueuetime = maxqueuetime
-        self.timeOnDedicated = timeOnDedicated
+    def __init__(self, tSubmit, reqdur, diskImageID, diskImageSize, numnodes, resreq, realdur = None):
+        start = Timestamp(None) # i.e., start on a best-effort bais
+        duration = Duration(reqdur)
+        duration.known = realdur # ONLY for simulation
+        # When the images will be available
         self.imagesavail = None        
+        LeaseBase.__init__(self, tSubmit, start, duration, diskImageID, diskImageSize, numnodes, resreq)
 
     def printContents(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "__________________________________________________", DS)
         LeaseBase.printContents(self, loglevel)
         self.logger.log(loglevel, "Type           : BEST-EFFORT", DS)
-        self.logger.log(loglevel, "Max duration   : %s" % self.maxdur, DS)
-        self.logger.log(loglevel, "Rem duration   : %s" % self.remdur, DS)
-        self.logger.log(loglevel, "Real duration  : %s" % self.realremdur, DS)
-        self.logger.log(loglevel, "Max queue time : %s" % self.maxqueuetime, DS)
+        self.logger.log(loglevel, "Duration       : %s" % self.duration, DS)
         self.logger.log(loglevel, "Images Avail @ : %s" % self.imagesavail, DS)
         self.printRR(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------", DS)
@@ -287,44 +314,32 @@ class BestEffortLease(LeaseBase):
         self.realremdur = roundDateTimeDelta(self.realremdur * factor)
         self.realdur = roundDateTimeDelta(self.realdur * factor)
 
-    def addBootOverhead(self, t):
-        self.maxdur += t
-        self.remdur += t
-        self.realremdur += t
-        self.realdur += t
-        
-    def mustBeCancelled(self, t):
-        if self.maxqueuetime == None:
-            return False
-        else:
-            return t >= self.maxqueuetime
         
     def getSlowdown(self, end, bound=10):
-        timeOnDedicated = self.timeOnDedicated
-        timeOnLoaded = end - self.tSubmit
-        bound = TimeDelta(seconds=bound)
-        if timeOnDedicated < bound:
-            timeOnDedicated = bound
-        return timeOnLoaded / timeOnDedicated
-
+#        timeOnDedicated = self.timeOnDedicated
+#        timeOnLoaded = end - self.tSubmit
+#        bound = TimeDelta(seconds=bound)
+#        if timeOnDedicated < bound:
+#            timeOnDedicated = bound
+#        return timeOnLoaded / timeOnDedicated
+        return 42
 
         
 class ResourceReservationBase(object):
-    def __init__(self, lease, start, end, res, realend = None):
+    def __init__(self, lease, start, end, res):
         self.start = start
         self.end = end
-        self.realend = realend
         self.lease = lease
         self.state = None
         self.res = res
         self.logger = lease.scheduler.rm.logger
-        
+                
     def printContents(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "Start          : %s" % self.start, DS)
         self.logger.log(loglevel, "End            : %s" % self.end, DS)
-        self.logger.log(loglevel, "Real End       : %s" % self.realend, DS)
         self.logger.log(loglevel, "State          : %s" % rstate_str(self.state), DS)
         self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i,prettyRes(x)) for i,x in self.res.items()]), DS)
+        
                 
 class FileTransferResourceReservation(ResourceReservationBase):
     def __init__(self, lease, res, start=None, end=None):
@@ -351,14 +366,27 @@ class FileTransferResourceReservation(ResourceReservationBase):
         return False        
                 
 class VMResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, realend, nodes, res, oncomplete, backfillres):
-        ResourceReservationBase.__init__(self, lease, start, end, res, realend=realend)
+    def __init__(self, lease, start, end, nodes, res, oncomplete, backfillres):
+        ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
         self.oncomplete = oncomplete
         self.backfillres = backfillres
 
+        # ONLY for simulation
+        if lease.duration.known != None:
+            remdur = lease.duration.getRemainingKnownDuration()
+            rrdur = self.end - self.start
+            if remdur < rrdur:
+                self.prematureend = self.start + remdur
+            else:
+                self.prematureend = None
+        else:
+            self.prematureend = None 
+
     def printContents(self, loglevel="EXTREMEDEBUG"):
         ResourceReservationBase.printContents(self, loglevel)
+        if self.prematureend != None:
+            self.logger.log(loglevel, "Premature end  : %s" % self.prematureend, DS)
         self.logger.log(loglevel, "Type           : VM", DS)
         self.logger.log(loglevel, "Nodes          : %s" % prettyNodemap(self.nodes), DS)
         self.logger.log(loglevel, "On Complete    : %s" % self.oncomplete, DS)
@@ -368,6 +396,7 @@ class VMResourceReservation(ResourceReservationBase):
             return True
         elif isinstance(self.lease, ExactLease):
             return False
+
         
 class SuspensionResourceReservation(ResourceReservationBase):
     def __init__(self, lease, start, end, res, nodes):

@@ -23,7 +23,6 @@ class Scheduler(object):
         self.completedTransfers = []
         self.maxres = self.rm.config.getMaxReservations()
         self.numbesteffortres = 0
-        self.endcliplease = None
         
     def schedule(self, requests, nexttime):        
         if self.rm.config.getNodeSelectionPolicy() == constants.NODESELECTION_AVOIDPREEMPT:
@@ -34,12 +33,11 @@ class Scheduler(object):
         # Process exact requests
         for r in requests:
             self.rm.logger.info("LEASE-%i Processing request (EXACT)" % r.leaseID, constants.SCHED)
-            self.rm.logger.info("LEASE-%i Start   %s" % (r.leaseID, r.start), constants.SCHED)
-            self.rm.logger.info("LEASE-%i End     %s" % (r.leaseID, r.end), constants.SCHED)
-            self.rm.logger.info("LEASE-%i RealEnd %s" % (r.leaseID, r.prematureend), constants.SCHED)
-            self.rm.logger.info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED)
+            self.rm.logger.info("LEASE-%i Start    %s" % (r.leaseID, r.start), constants.SCHED)
+            self.rm.logger.info("LEASE-%i Duration %s" % (r.leaseID, r.duration), constants.SCHED)
+            self.rm.logger.info("LEASE-%i ResReq   %s" % (r.leaseID, r.resreq), constants.SCHED)
             try:
-                self.scheduleExactLease(r, avoidpreempt=avoidpreempt)
+                self.scheduleExactLease(r, avoidpreempt=avoidpreempt, nexttime=nexttime)
                 self.scheduledleases.add(r)
                 self.rm.stats.incrAccepted(r.leaseID)
             except SchedException, msg:
@@ -70,9 +68,7 @@ class Scheduler(object):
                 r = self.queue.dequeue()
                 try:
                     self.rm.logger.info("LEASE-%i Processing request (BEST-EFFORT)" % r.leaseID, constants.SCHED)
-                    self.rm.logger.info("LEASE-%i Maxdur  %s" % (r.leaseID, r.maxdur), constants.SCHED)
-                    self.rm.logger.info("LEASE-%i Remdur  %s" % (r.leaseID, r.remdur), constants.SCHED)
-                    self.rm.logger.info("LEASE-%i Realdur %s" % (r.leaseID, r.realremdur), constants.SCHED)
+                    self.rm.logger.info("LEASE-%i Duration: %s" % (r.leaseID, r.duration), constants.SCHED)
                     self.rm.logger.info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED)
                     self.scheduleBestEffortLease(r, nexttime)
                     self.scheduledleases.add(r)
@@ -165,23 +161,15 @@ class Scheduler(object):
 
     def handleEndVM(self, l, rr):
         self.rm.logger.info("LEASE-%i Start of handleEndVM" % l.leaseID, constants.SCHED)
+        self.rm.logger.info("LEASE-%i Before:" % l.leaseID, constants.SCHED)
         l.printContents()
-        prematureend = (rr.realend != None and rr.realend < rr.end)
-        if prematureend:
-            self.rm.logger.info("LEASE-%i This is a premature end." % l.leaseID, constants.SCHED)
-        if isinstance(l,ds.BestEffortLease):
-            diff = self.rm.clock.getTime() - rr.start
-            l.remdur -= diff
-            l.realremdur -= diff
-            l.accumdur += diff
+        diff = self.rm.clock.getTime() - rr.start
+        l.duration.accumulateDuration(diff)
         rr.state = constants.RES_STATE_DONE
-        if not prematureend:
-            rr.realend = rr.end
-        else:
-            rr.end = rr.realend
-        if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE or (rr.oncomplete == constants.ONCOMPLETE_SUSPEND and prematureend):
+        if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE:
             self.rm.resourcepool.stopVMs(l, rr)
             l.state = constants.LEASE_STATE_DONE
+            l.duration.actual = l.duration.accumulated
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
             for vnode,pnode in l.vmimagemap.items():
@@ -198,16 +186,23 @@ class Scheduler(object):
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
                 self.numbesteffortres -= 1
-        # The following has to be factored out, because premature end is an
-        # asynchronous event, and shouldn't be processed as a slot table event.
-        # The following will work in simulation and in OpenNebula,
-        # BUT WILL PROBABLY BREAK HORRIBLY LATER ON.
-        nexttime = self.rm.clock.getNextSchedulableTime()
-        if prematureend and self.rm.config.isBackfilling():
-            self.reevaluateSchedule(l, rr.nodes.values(), nexttime, [])
+        self.rm.logger.info("LEASE-%i After:" % l.leaseID, constants.SCHED)
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_IDLE)
         self.rm.logger.debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED)
+        
+    def handlePrematureEndVM(self, l, rr):
+        self.rm.logger.info("LEASE-%i The VM has ended prematurely." % l.leaseID, constants.SCHED)
+        rrnew = copy.copy(rr)
+        rrnew.end = self.rm.clock.getTime()
+        self.slottable.updateReservationWithKeyChange(rr, rrnew)
+        self.handleEndVM(l, rr)
+        nexttime = self.rm.clock.getNextSchedulableTime()
+        if self.rm.config.isBackfilling():
+            # We need to reevaluate the schedule to see if there are any future
+            # reservations that we can slide back.
+            self.reevaluateSchedule(l, rr.nodes.values(), nexttime, [])
+
         
     def handleStartFileTransfer(self, l, rr):
         self.rm.logger.info("LEASE-%i Start of handleStartFileTransfer" % l.leaseID, constants.SCHED)
@@ -301,13 +296,15 @@ class Scheduler(object):
         self.slottable.removeReservation(rr)
     
     def scheduleExactLease(self, req, nexttime, avoidpreempt=True):
+        start = req.start.requested
+        end = req.start.requested + req.duration.requested
         try:
             (nodeassignment, res, preemptions) = self.slottable.fitExact(req, preemptible=False, canpreempt=True, avoidpreempt=avoidpreempt)
             if len(preemptions) > 0:
                 self.rm.logger.info("Must preempt the following: %s" % preemptions, constants.SCHED)
-                leases = self.slottable.findLeasesToPreempt(preemptions, req.start, req.end)
+                leases = self.slottable.findLeasesToPreempt(preemptions, start, end)
                 for l in leases:
-                    self.preempt(l, time=req.start)
+                    self.preempt(l, time=start)
             
             # Schedule image transfers
             transfertype = self.rm.config.getTransferType()
@@ -330,7 +327,7 @@ class Scheduler(object):
                     self.rm.logger.info("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (req.vmimage, vnode, pnode), constants.SCHED)
 
                     if reusealg == constants.REUSE_COWPOOL:
-                        if self.rm.resourcepool.isInPool(pnode,req.diskImageID, req.start):
+                        if self.rm.resourcepool.isInPool(pnode,req.diskImageID, start):
                             self.rm.logger.info("No need to schedule an image transfer (reusing an image in pool)", constants.SCHED)
                             mustpool[vnode] = pnode                            
                         else:
@@ -352,7 +349,7 @@ class Scheduler(object):
                                 # We've already scheduled a transfer to this node. Reuse it.
                                 self.rm.logger.info("No need to schedule an image transfer (reusing an existing transfer)", constants.SCHED)
                                 transferRR = transferRR[physnode]
-                                transferRR.piggyback(leaseID, vnode, physnode, req.end)
+                                transferRR.piggyback(leaseID, vnode, physnode, end)
                             else:
                                 filetransfer = self.scheduleImageTransferEDF(req, {vnode:physnode}, nexttime)                 
                                 transferRRs[physnode] = filetransfer
@@ -365,10 +362,10 @@ class Scheduler(object):
             # to add entries to the pools
             if reusealg == constants.REUSE_COWPOOL:
                 for (vnode,pnode) in mustpool.items():
-                    self.rm.resourcepool.addToPool(pnode, req.diskImageID, leaseID, vnode, req.start)
+                    self.rm.resourcepool.addToPool(pnode, req.diskImageID, leaseID, vnode, start)
  
             # Add resource reservations
-            vmrr = ds.VMResourceReservation(req, req.start, req.end, req.prematureend, nodeassignment, res, constants.ONCOMPLETE_ENDLEASE, False)
+            vmrr = ds.VMResourceReservation(req, start, end, nodeassignment, res, constants.ONCOMPLETE_ENDLEASE, False)
             vmrr.state = constants.RES_STATE_SCHEDULED
             req.appendRR(vmrr)
             self.slottable.addReservation(vmrr)
@@ -436,7 +433,7 @@ class Scheduler(object):
                             musttransfer[vnode] = pnode
                             self.rm.logger.info("Must transfer V%i->P%i." % (vnode, pnode), constants.SCHED)
                     if len(musttransfer)>0:
-                        transferRRs = self.scheduleImageTransferFIFO(req, musttransfer)
+                        transferRRs = self.scheduleImageTransferFIFO(req, musttransfer, nexttime)
                         endtransfer = transferRRs[-1].end
                         req.imagesavail = endtransfer
                     else:
@@ -543,7 +540,7 @@ class Scheduler(object):
         req.printContents()
         
     def reevaluateSchedule(self, endinglease, nodes, nexttime, checkedleases):
-        self.rm.logger.debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,endtime), constants.SCHED) 
+        self.rm.logger.debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes,nexttime), constants.SCHED) 
         leases = self.scheduledleases.getNextLeasesScheduledInNodes(nexttime, nodes)
         leases = [l for l in leases if isinstance(l,ds.BestEffortLease) and not l in checkedleases]
         for l in leases:
@@ -648,7 +645,7 @@ class Scheduler(object):
             res[n] = resnode
         
         newtransfer = ds.FileTransferResourceReservation(req, res)
-        newtransfer.deadline = req.start
+        newtransfer.deadline = req.start.requested
         newtransfer.state = constants.RES_STATE_SCHEDULED
         newtransfer.file = req.diskImageID
         for vnode,pnode in vnodes.items():
