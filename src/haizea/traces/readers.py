@@ -70,16 +70,16 @@ def CSV(tracefile, config):
                 resreq = ResourceTuple.fromList(resreq)
                 if fields[8] != "NULL": # 8: deadline
                     start = tSubmit + TimeDelta(seconds=int(fields[8])) # 8: deadline
-                    end = start + TimeDelta(seconds=int(fields[9])) # 9: duration
+                    dur = TimeDelta(seconds=int(fields[9])) # 9: duration
                     prematureend = start + TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = ExactLease(tSubmit, start, end, vmimage, vmimagesize, numnodes, resreq, prematureend)
+                    req = ExactLease(tSubmit, start, dur, vmimage, vmimagesize, numnodes, resreq, prematureend)
                 else:
                     if fields[9]=="INF":
                         maxdur = DateTimeDelta(30) # 30 days
                     else:
                         maxdur = TimeDelta(seconds=int(fields[9])) # 9: duration
                     realdur = TimeDelta(seconds=int(fields[10])) # 10: realduration
-                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur, timeOnDedicated=realdur)
+                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur)
             req.state = constants.LEASE_STATE_PENDING
             requests.append(req)
     return requests
@@ -183,12 +183,10 @@ def LWF(tracefile, inittime):
         tSubmit = inittime + TimeDelta(seconds=entry.reqTime) 
         if entry.startTime == -1:
             tStart = None
-            duration = TimeDelta(seconds=entry.duration)
-            realduration = TimeDelta(seconds=entry.realDuration)
         else:
             tStart = inittime + TimeDelta(seconds=entry.startTime)
-            tEnd = tStart + TimeDelta(seconds=entry.duration)
-            tRealEnd = tStart + TimeDelta(seconds=entry.realDuration)
+        duration = TimeDelta(seconds=entry.duration)
+        realduration = TimeDelta(seconds=entry.realDuration)
         vmimage = entry.vmImage
         vmimagesize = entry.vmImageSize
         numnodes = entry.numNodes
@@ -200,9 +198,9 @@ def LWF(tracefile, inittime):
         resreq[constants.RES_DISK] = vmimagesize + entry.disk
         resreq = ResourceTuple.fromList(resreq)
         if tStart == None:
-            req = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, realduration, timeOnDedicated=realduration)
+            req = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, realduration)
         else:
-            req = ExactLease(None, tSubmit, tStart, tEnd, vmimage, vmimagesize, numnodes, resreq, tRealEnd)
+            req = ExactLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq, realduration)
         req.state = constants.LEASE_STATE_PENDING
         requests.append(req)
     return requests

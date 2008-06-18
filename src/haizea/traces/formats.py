@@ -51,7 +51,7 @@ class LWF(object):
         file = open (filename, "r")
         entries = []
         for line in file:
-            if line[0]!='#':
+            if line[0]!='#' and len(line.strip()) != 0:
                 entry = LWFEntry.fromLine(line.strip())
                 entries.append(entry)
         file.close()
