@@ -26,32 +26,22 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
             nod_id = i+1
             enactID = int(host["hid"])
             hostname = host["host_name"]
-            capacity = [None, None, None, None, None] # TODO: Hardcoding == bad
-            capacity[constants.RES_DISK] = 80000 # OpenNebula currently doesn't provide this
-            capacity[constants.RES_NETIN] = 100 # OpenNebula currently doesn't provide this
-            capacity[constants.RES_NETOUT] = 100 # OpenNebula currently doesn't provide this
+            capacity = ds.ResourceTuple.createEmpty()
+            capacity.setByType(constants.RES_DISK, 80000) # OpenNebula currently doesn't provide this
+            capacity.setByType(constants.RES_NETIN, 100) # OpenNebula currently doesn't provide this
+            capacity.setByType(constants.RES_NETOUT, 100) # OpenNebula currently doesn't provide this
             cur.execute("select name, value from host_attributes where id=%i" % enactID)
             attrs = cur.fetchall()
             for attr in attrs:
                 name = attr["name"]
                 if oneattr2haizea.has_key(name):
-                    capacity[oneattr2haizea[name]] = int(attr["value"])
-            capacity[constants.RES_CPU] /= 100.0
-            capacity = ds.ResourceTuple.fromList(capacity)
+                    capacity.setByType(oneattr2haizea[name], int(attr["value"]))
+            capacity.setByType(constants.RES_CPU, capacity.getByType(constants.RES_CPU) / 100.0)
             node = Node(self.resourcepool, nod_id, hostname, capacity)
             node.enactID = enactID
             self.nodes.append(node)
             
         self.logger.info("Fetched %i nodes from ONE db" % len(self.nodes), constants.ONE)
-#        capacity = [None, None, None, None, None] # TODO: Hardcoding == bad
-#        
-#        for r in resources:
-#            resourcename = r.split(",")[0]
-#            resourcecapacity = r.split(",")[1]
-#            capacity[constants.str_res(resourcename)] = int(resourcecapacity)
-#        capacity = ds.ResourceTuple.fromList(capacity)
-#        
-#        self.nodes = [Node(self.resourcepool, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
         
         # Image repository nodes
         # TODO: No image transfers in OpenNebula yet
@@ -66,3 +56,10 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
     
     def getFIFONode(self):
         return self.FIFOnode
+    
+    def getResourceTypes(self):
+        return [(constants.RES_CPU, constants.RESTYPE_FLOAT, "CPU"),
+                (constants.RES_MEM,  constants.RESTYPE_INT, "Mem"),
+                (constants.RES_DISK, constants.RESTYPE_INT, "Disk"),
+                (constants.RES_NETIN, constants.RESTYPE_INT, "Net (in)"),
+                (constants.RES_NETOUT, constants.RESTYPE_INT, "Net (out)")]

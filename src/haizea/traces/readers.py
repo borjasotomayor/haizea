@@ -137,13 +137,10 @@ def SWF(tracefile, config):
                 vmimage = "NOIMAGE"
                 vmimagesize = 600 # Arbitrary
                 numnodes = int(fields[7]) # 7: reqNProcs
-                resreq = [None,None,None,None,None] # TODO: Hardcoding == bad
-                resreq[constants.RES_CPU] = 1 # One CPU per VM
-                resreq[constants.RES_MEM] = 1024 
-                resreq[constants.RES_NETIN] = 0
-                resreq[constants.RES_NETOUT] = 0
-                resreq[constants.RES_DISK] = vmimagesize + 0 # TODO: Make this a config param
-                resreq = ResourceTuple.fromList(resreq)
+                resreq = ResourceTuple.createEmpty()
+                resreq.setByType(constants.RES_CPU, 1) # One CPU per VM, should be configurable
+                resreq.setByType(constants.RES_MEM, 1024) # Should be configurable
+                resreq.setByType(constants.RES_DISK, vmimagesize + 0) # Should be configurable
                 maxdur = TimeDelta(seconds=reqtime)
                 if runtime < 0 and status==5:
                     # This is a job that got cancelled while waiting in the queue
@@ -190,13 +187,10 @@ def LWF(tracefile, inittime):
         vmimage = entry.vmImage
         vmimagesize = entry.vmImageSize
         numnodes = entry.numNodes
-        resreq = [None,None,None,None,None] # TODO: Hardcoding == bad
-        resreq[constants.RES_CPU] = entry.CPU
-        resreq[constants.RES_MEM] = entry.mem
-        resreq[constants.RES_NETIN] = 0
-        resreq[constants.RES_NETOUT] = 0
-        resreq[constants.RES_DISK] = vmimagesize + entry.disk
-        resreq = ResourceTuple.fromList(resreq)
+        resreq = ResourceTuple.createEmpty()
+        resreq.setByType(constants.RES_CPU, entry.CPU)
+        resreq.setByType(constants.RES_MEM, entry.mem)
+        resreq.setByType(constants.RES_DISK, vmimagesize + entry.disk)
         if tStart == None:
             req = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, realduration)
         else:

@@ -133,8 +133,8 @@ class SlotTable(object):
     
     def getUtilization(self, time, restype=constants.RES_CPU):
         nodes = self.getAvailability(time)
-        total = sum([n.capacity.get(restype) for n in self.nodes.nodelist])
-        avail = sum([n.capacity.get(restype) for n in nodes.values()])
+        total = sum([n.capacity.getByType(restype) for n in self.nodes.nodelist])
+        avail = sum([n.capacity.getByType(restype) for n in nodes.values()])
         return 1.0 - (float(avail)/total)
 
     def getReservationsAt(self, time):
@@ -623,13 +623,10 @@ class SlotTable(object):
         if mustresume:
             resmres = {}
             for n in mappings.values():
-                r = [None, None, None, None, None]  # TODO: Hardcoding == bad
-                r[constants.RES_CPU] = 0
-                r[constants.RES_MEM] = resreq.res[constants.RES_MEM]
-                r[constants.RES_NETIN] = 0
-                r[constants.RES_NETOUT] = 0
-                r[constants.RES_DISK] = resreq.res[constants.RES_DISK]
-                resmres[n] = ds.ResourceTuple.fromList(r)
+                r = ds.ResourceTuple.createEmpty()
+                r.setByType(constants.RES_MEM, resreq.getByType(constants.RES_MEM))
+                r.setByType(constants.RES_DISK, resreq.getByType(constants.RES_DISK))
+                resmres[n] = r
             resmrr = ds.ResumptionResourceReservation(lease, start-resumetime, start, resmres, mappings)
             resmrr.state = constants.RES_STATE_SCHEDULED
         else:
@@ -637,13 +634,10 @@ class SlotTable(object):
         if mustsuspend:
             suspres = {}
             for n in mappings.values():
-                r = [None, None, None, None, None]  # TODO: Hardcoding == bad
-                r[constants.RES_CPU] = 0
-                r[constants.RES_MEM] = resreq.res[constants.RES_MEM]
-                r[constants.RES_NETIN] = 0
-                r[constants.RES_NETOUT] = 0
-                r[constants.RES_DISK] = resreq.res[constants.RES_DISK]
-                suspres[n] = ds.ResourceTuple.fromList(r)
+                r = ds.ResourceTuple.createEmtpy()
+                r.setByType(constants.RES_MEM, resreq.getByType(constants.RES_MEM))
+                r.setByType(constants.RES_DISK, resreq.getByType(constants.RES_DISK))
+                suspres[n] = r
             susprr = ds.SuspensionResourceReservation(lease, end, end + suspendtime, suspres, mappings)
             susprr.state = constants.RES_STATE_SCHEDULED
             oncomplete = constants.ONCOMPLETE_SUSPEND
@@ -715,13 +709,10 @@ class SlotTable(object):
         mappings = vmrr.nodes
         suspres = {}
         for n in mappings.values():
-            r = [None, None, None, None, None] # TODO: Hardcoding == bad
-            r[constants.RES_CPU] = 0
-            r[constants.RES_MEM] = vmrr.res[n].res[constants.RES_MEM]
-            r[constants.RES_NETIN] = 0
-            r[constants.RES_NETOUT] = 0
-            r[constants.RES_DISK] = vmrr.res[n].res[constants.RES_DISK]
-            suspres[n] = ds.ResourceTuple.fromList(r)
+            r = ds.ResourceTuple.createEmpty()
+            r.setByType(constants.RES_MEM, vmrr.res[n].getByType(constants.RES_MEM))
+            r.setByType(constants.RES_DISK, vmrr.res[n].getByType(constants.RES_DISK))
+            suspres[n] = r
         
         newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, suspres, mappings)
         newsusprr.state = constants.RES_STATE_SCHEDULED
@@ -881,7 +872,7 @@ class SlotTable(object):
         
     def isFull(self, time):
         nodes = self.getAvailability(time)
-        avail = sum([node.capacity.res[constants.RES_CPU] for node in nodes.values()])
+        avail = sum([node.capacity.res.getByType(RES_CPU) for node in nodes.values()])
         return (avail == 0)
     
 
@@ -1036,13 +1027,12 @@ class AvailabilityWindow(object):
                         contents += "END "
                     else:
                         if withpreemption:
-                            res = x.availpreempt.res
+                            res = x.availpreempt
                             canfit = x.canfitpreempt
                         else:
-                            res = x.avail.res
+                            res = x.avail
                             canfit = x.canfit
-                        for i,x in enumerate(res):
-                            contents += "%s:%.2f " % (constants.res_str(i),x)
+                        contents += "%s" % res
                     contents += "} (Fits: %i) ]  " % canfit
                 self.logger.edebug(contents, constants.ST)
                 

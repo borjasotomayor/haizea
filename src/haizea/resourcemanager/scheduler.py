@@ -23,7 +23,7 @@ class Scheduler(object):
         self.completedTransfers = []
         self.maxres = self.rm.config.getMaxReservations()
         self.numbesteffortres = 0
-        
+                
     def schedule(self, requests, nexttime):        
         if self.rm.config.getNodeSelectionPolicy() == constants.NODESELECTION_AVOIDPREEMPT:
             avoidpreempt = True
@@ -256,7 +256,7 @@ class Scheduler(object):
         l.printContents()
         rr.state = constants.RES_STATE_ACTIVE
         for vnode,pnode in rr.nodes.items():
-            self.rm.resourcepool.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq.res[constants.RES_MEM])
+            self.rm.resourcepool.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq.getByType(constants.RES_MEM))
             l.memimagemap[vnode] = pnode
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_VM_SUSPEND)
@@ -463,7 +463,7 @@ class Scheduler(object):
                 for vnode,pnode in req.memimagemap.items():
                     self.rm.resourcepool.removeRAMFileFromNode(pnode, req.leaseID, vnode)
                 for vnode,pnode in vmrr.nodes.items():
-                    self.rm.resourcepool.addRAMFileToNode(pnode, req.leaseID, vnode, req.resreq.res[constants.RES_MEM])
+                    self.rm.resourcepool.addRAMFileToNode(pnode, req.leaseID, vnode, req.resreq.getByType(constants.RES_MEM))
                     req.memimagemap[vnode] = pnode
                     
             # Add resource reservations
@@ -626,20 +626,10 @@ class Scheduler(object):
         newtransfers = transfermap.keys()
         
         res = {}
-        resimgnode = [None, None, None, None, None] # TODO: Hardcoding == bad
-        resimgnode[constants.RES_CPU]=0
-        resimgnode[constants.RES_MEM]=0
-        resimgnode[constants.RES_NETIN]=0
-        resimgnode[constants.RES_NETOUT]=bandwidth
-        resimgnode[constants.RES_DISK]=0
-        resimgnode = ds.ResourceTuple.fromList(resimgnode)
-        resnode = [None, None, None, None, None] # TODO: Hardcoding == bad
-        resnode[constants.RES_CPU]=0
-        resnode[constants.RES_MEM]=0
-        resnode[constants.RES_NETIN]=bandwidth
-        resnode[constants.RES_NETOUT]=0
-        resnode[constants.RES_DISK]=0
-        resnode = ds.ResourceTuple.fromList(resnode)
+        resimgnode = ds.ResourceTuple.createEmpty()
+        resimgnode.setByType(RES_NETOUT, bandwidth)
+        resnode = ds.ResourceTuple.createEmpty()
+        resnode.setByType(RES_NETIN, bandwidth)
         res[self.slottable.FIFOnode] = resimgnode
         for n in vnodes.values():
             res[n] = resnode
@@ -734,20 +724,10 @@ class Scheduler(object):
             # Time to transfer is imagesize / bandwidth, regardless of 
             # number of nodes
             res = {}
-            resimgnode = [None, None, None, None, None] # TODO: Hardcoding == bad
-            resimgnode[constants.RES_CPU]=0
-            resimgnode[constants.RES_MEM]=0
-            resimgnode[constants.RES_NETIN]=0
-            resimgnode[constants.RES_NETOUT]=bandwidth
-            resimgnode[constants.RES_DISK]=0
-            resimgnode = ds.ResourceTuple.fromList(resimgnode)
-            resnode = [None, None, None, None, None] # TODO: Hardcoding == bad
-            resnode[constants.RES_CPU]=0
-            resnode[constants.RES_MEM]=0
-            resnode[constants.RES_NETIN]=bandwidth
-            resnode[constants.RES_NETOUT]=0
-            resnode[constants.RES_DISK]=0
-            resnode = ds.ResourceTuple.fromList(resnode)
+            resimgnode = ds.ResourceTuple.createEmpty()
+            resimgnode.setByType(RES_NETOUT, bandwidth)
+            resnode = ds.ResourceTuple.createEmpty()
+            resnode.setByType(RES_NETIN, bandwidth)
             res[self.slottable.FIFOnode] = resimgnode
             for n in reqtransfers.values():
                 res[n] = resnode

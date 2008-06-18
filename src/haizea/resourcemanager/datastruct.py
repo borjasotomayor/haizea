@@ -1,4 +1,4 @@
-from haizea.common.constants import res_str, state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
+from haizea.common.constants import state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
 from haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
 from mx.DateTime import TimeDelta
@@ -20,10 +20,7 @@ def prettyNodemap(nodes):
     normmap = [([y[0] for y in nodes.items() if y[1]==x], x) for x in pnodes]
     for m in normmap: m[0].sort()
     s = "   ".join([", ".join(["V"+`y` for y in x[0]])+" -> P" + `x[1]` for x in normmap])
-    return s
-
-def prettyRes(res):
-    return "  ".join([res_str(i) + ": " + `x` for i,x in enumerate(res.res)])
+    return s    
 
 class ResourceTuple(object):
     def __init__(self, res):
@@ -36,6 +33,16 @@ class ResourceTuple(object):
     @classmethod
     def copy(cls, rt):
         return cls(rt.res[:])
+    
+    @classmethod
+    def setResourceTypes(cls, resourcetypes):
+        cls.type2pos = dict([(x[0],i) for i,x in enumerate(resourcetypes)])
+        cls.descriptions = dict([(i,x[2]) for i,x in enumerate(resourcetypes)])
+        cls.tuplelength = len(resourcetypes)
+
+    @classmethod
+    def createEmpty(cls):
+        return cls([0 for x in range(cls.tuplelength)])
         
     def fitsIn(self, res2):
         fits = True
@@ -61,12 +68,12 @@ class ResourceTuple(object):
     def incr(self, res2):
         for slottype in xrange(len(self.res)):
             self.res[slottype] += res2.res[slottype]
-            
-    def get(self, slottype):
-        return self.res[slottype]
+        
+    def getByType(self, resourcetype):
+        return self.res[self.type2pos[resourcetype]]
 
-    def set(self, slottype, value):
-        self.res[slottype] = value
+    def setByType(self, resourcetype, value):
+        self.res[self.type2pos[resourcetype]] = value        
         
     def isZeroOrLess(self):
         return sum([v for v in self.res]) <= 0
@@ -74,7 +81,7 @@ class ResourceTuple(object):
     def __repr__(self):
         r=""
         for i,x in enumerate(self.res):
-            r += "%s:%.2f " % (constants.res_str(i),x)
+            r += "%s:%.2f " % (self.descriptions[i],x)
         return r
 
 class Timestamp(object):
@@ -151,7 +158,7 @@ class LeaseBase(object):
         self.logger.log(loglevel, "VM image       : %s" % self.diskImageID, DS)
         self.logger.log(loglevel, "VM image size  : %s" % self.diskImageSize, DS)
         self.logger.log(loglevel, "Num nodes      : %s" % self.numnodes, DS)
-        self.logger.log(loglevel, "Resource req   : %s" % prettyRes(self.resreq), DS)
+        self.logger.log(loglevel, "Resource req   : %s" % self.resreq, DS)
         self.logger.log(loglevel, "VM image map   : %s" % prettyNodemap(self.vmimagemap), DS)
         self.logger.log(loglevel, "Mem image map  : %s" % prettyNodemap(self.memimagemap), DS)
 
@@ -210,7 +217,7 @@ class LeaseBase(object):
         
     def estimateSuspendResumeTime(self):
         rate = self.scheduler.rm.config.getSuspendResumeRate()
-        time = float(self.resreq.res[RES_MEM]) / rate
+        time = float(self.resreq.getByType(RES_MEM)) / rate
         time = roundDateTimeDelta(TimeDelta(seconds = time))
         return time
     
@@ -234,9 +241,9 @@ class LeaseBase(object):
             return TimeDelta(seconds=0)
         else:
             if whattomigrate == MIGRATE_MEM:
-                mbtotransfer = self.resreq.res[RES_MEM]
+                mbtotransfer = self.resreq.getByType(RES_MEM)
             elif whattomigrate == MIGRATE_MEMVM:
-                mbtotransfer = self.diskImageSize + self.resreq.res[RES_MEM]
+                mbtotransfer = self.diskImageSize + self.resreq.getByType(RES_MEM)
             return self.estimateTransferTime(mbtotransfer)
         
     def getSuspendThreshold(self, initial, migrating=False):
@@ -338,7 +345,7 @@ class ResourceReservationBase(object):
         self.logger.log(loglevel, "Start          : %s" % self.start, DS)
         self.logger.log(loglevel, "End            : %s" % self.end, DS)
         self.logger.log(loglevel, "State          : %s" % rstate_str(self.state), DS)
-        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i,prettyRes(x)) for i,x in self.res.items()]), DS)
+        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i,x) for i,x in self.res.items()]), DS)
         
                 
 class FileTransferResourceReservation(ResourceReservationBase):

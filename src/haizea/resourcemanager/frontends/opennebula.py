@@ -52,14 +52,10 @@ class OpenNebulaFrontend(RequestFrontend):
         vmimage = diskattrs[DISK_IMAGE]
         vmimagesize = 0
         numnodes = 1
-        resreq = [None,None,None,None,None] # TODO: Hardcoding == bad
-        resreq[constants.RES_CPU] = float(attrs[RES_CPU]) / 100.0
-        resreq[constants.RES_MEM] = int(attrs[RES_MEM])
-        resreq[constants.RES_NETIN] = 0
-        resreq[constants.RES_NETOUT] = 0
-        resreq[constants.RES_DISK] = 0
-        resreq = ResourceTuple.fromList(resreq)
-        leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, realduration, timeOnDedicated=duration)
+        resreq = ResourceTuple.createEmpty()
+        resreq.setByType(constants.RES_CPU, float(attrs[RES_CPU]))
+        resreq.setByType(constants.RES_MEM, int(attrs[RES_MEM]))
+        leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq)
         leasereq.state = constants.LEASE_STATE_PENDING
         leasereq.enactID = req["oid"]
         leasereq.setScheduler(self.rm.scheduler)

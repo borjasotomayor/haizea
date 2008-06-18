@@ -14,29 +14,9 @@ RES_NETIN = 2
 RES_NETOUT = 3
 RES_DISK = 4
 
-def res_str(s):
-    if s == RES_CPU:
-        return "CPU"
-    elif s == RES_MEM:
-        return "Mem"
-    elif s == RES_NETIN:
-        return "Net (in)"
-    elif s == RES_NETOUT:
-        return "Net (out)"
-    elif s == RES_DISK:
-        return "Disk"
-
-def str_res(s):
-    if s == "CPU":
-        return RES_CPU
-    elif s == "Mem":
-        return RES_MEM
-    elif s == "Net (in)":
-        return RES_NETIN
-    elif s == "Net (out)":
-        return RES_NETOUT
-    elif s == "Disk":
-        return RES_DISK
+# Types of types of resources
+RESTYPE_FLOAT = 0
+RESTYPE_INT = 1
 
 # Types of file transfers
 TRANSFER_DEPLOY = 0

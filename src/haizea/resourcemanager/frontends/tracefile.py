@@ -37,7 +37,7 @@ class TracefileFrontend(RequestFrontend):
             for r,i in zip(self.requests,images):
                 r.vmimage = i
                 r.vmimagesize = imagesizes[i]
-                r.resreq.set(constants.RES_DISK, imagesizes[i] + r.resreq.get(constants.RES_MEM))
+                r.resreq.setByType(constants.RES_DISK, imagesizes[i] + r.resreq.getByType(constants.RES_MEM))
         
         # Add runtime overhead, if necessary
         overhead = config.getRuntimeOverhead()

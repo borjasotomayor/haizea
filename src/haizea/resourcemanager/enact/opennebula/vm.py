@@ -15,8 +15,8 @@ class VMEnactment(VMEnactmentBase):
         leaseID = vm[0]
         hostID = vm[2]
         image = vm[3]
-        cpu = vm[4].get(constants.RES_CPU)
-        memory = vm[4].get(constants.RES_MEM)
+        cpu = vm[4].getByType(constants.RES_CPU)
+        memory = vm[4].getByType(constants.RES_MEM)
         vmid = vm[5]
         self.logger.debug("Received request to start VM for lease %i on host %i, image=%s, cpu=%i, mem=%i"
                      % (leaseID, hostID, image, cpu, memory), constants.ONE)

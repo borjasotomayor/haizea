@@ -9,26 +9,15 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         config = self.resourcepool.rm.config
         
         numnodes = config.getNumPhysicalNodes()
-        resources = config.getResourcesPerPhysNode()
         bandwidth = config.getBandwidth()        
 
-        capacity = [None, None, None, None, None] # TODO: Hardcoding == bad
-        for r in resources:
-            resourcename = r.split(",")[0]
-            resourcecapacity = r.split(",")[1]
-            capacity[constants.str_res(resourcename)] = int(resourcecapacity)
-        capacity = ds.ResourceTuple.fromList(capacity)
+        capacity = self.parseResourcesString(config.getResourcesPerPhysNode())
         
         self.nodes = [Node(self.resourcepool, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
         
         # Image repository nodes
-        imgcapacity = [None, None, None, None, None] # TODO: Hardcoding == bad
-        imgcapacity[constants.RES_CPU]=0
-        imgcapacity[constants.RES_MEM]=0
-        imgcapacity[constants.RES_NETIN]=0
-        imgcapacity[constants.RES_NETOUT]=bandwidth
-        imgcapacity[constants.RES_DISK]=0
-        imgcapacity = ds.ResourceTuple.fromList(imgcapacity)
+        imgcapacity = ds.ResourceTuple.createEmpty()
+        imgcapacity.setByType(constants.RES_NETOUT, bandwidth)
 
         self.FIFOnode = Node(self.resourcepool, numnodes+1, "FIFOnode", imgcapacity)
         self.EDFnode = Node(self.resourcepool, numnodes+2, "EDFnode", imgcapacity)
@@ -41,3 +30,20 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
     
     def getFIFONode(self):
         return self.FIFOnode
+    
+    def getResourceTypes(self):
+        return [(constants.RES_CPU, constants.RESTYPE_FLOAT, "CPU"),
+                (constants.RES_MEM,  constants.RESTYPE_INT, "Mem"),
+                (constants.RES_DISK, constants.RESTYPE_INT, "Disk"),
+                (constants.RES_NETIN, constants.RESTYPE_INT, "Net (in)"),
+                (constants.RES_NETOUT, constants.RESTYPE_INT, "Net (out)")]
+        
+    def parseResourcesString(self, resources):
+        desc2type = dict([(x[2],x[0]) for x in self.getResourceTypes()])
+        capacity=ds.ResourceTuple.createEmpty()
+        for r in resources:
+            resourcename = r.split(",")[0]
+            resourcecapacity = r.split(",")[1]
+            capacity.setByType(desc2type[resourcename], int(resourcecapacity))
+        return capacity
+
