@@ -12,7 +12,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         ResourcePoolInfoBase.__init__(self, resourcepool)
         config = self.resourcepool.rm.config
         self.logger = self.resourcepool.rm.logger
-
+        self.suspendresumerate = config.getONESuspendResumeRate()
 
         # Get information about nodes from DB
         conn = sqlite.connect(config.getONEDB())
@@ -20,7 +20,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         
         self.nodes = []
         cur = conn.cursor()
-        cur.execute("select hid, host_name from hostpool")
+        cur.execute("select hid, host_name from hostpool where state != 4")
         hosts = cur.fetchall()
         for (i,host) in enumerate(hosts):
             nod_id = i+1
@@ -63,3 +63,6 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
                 (constants.RES_DISK, constants.RESTYPE_INT, "Disk"),
                 (constants.RES_NETIN, constants.RESTYPE_INT, "Net (in)"),
                 (constants.RES_NETOUT, constants.RESTYPE_INT, "Net (out)")]
+        
+    def getSuspendResumeRate(self):
+        return self.suspendresumerate
