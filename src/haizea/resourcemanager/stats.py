@@ -81,10 +81,10 @@ class Stats(object):
         self.startendtimes[leaseID][1] = time
         start = self.startendtimes[leaseID][0]
         end = self.startendtimes[leaseID][1]
-        dur = self.rm.scheduler.completedleases.getLease(leaseID).realdur
+        #dur = self.rm.scheduler.completedleases.getLease(leaseID).duration.
         
-        ratio = dur / (end - start)
-        self.utilratio.append((time, leaseID, ratio))
+        #ratio = dur / (end - start)
+        #self.utilratio.append((time, leaseID, ratio))
         
 
     def incrQueueSize(self, leaseID):
