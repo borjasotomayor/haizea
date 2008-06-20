@@ -3,6 +3,7 @@ from haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
 from mx.DateTime import TimeDelta
 import haizea.common.constants as constants
+from math import floor
 leaseID = 1
 
 def getLeaseID():
@@ -59,7 +60,7 @@ class ResourceTuple(object):
                 f = res2.res[i] / self.res[i]
                 if f < canfit:
                     canfit = f
-        return canfit
+        return int(floor(canfit))
     
     def decr(self, res2):
         for slottype in xrange(len(self.res)):
