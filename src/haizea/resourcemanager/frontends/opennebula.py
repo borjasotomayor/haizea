@@ -5,7 +5,8 @@ from haizea.resourcemanager.datastruct import ExactLease, BestEffortLease, Resou
 import operator
 from haizea.common.utils import UNIX2DateTime
 from pysqlite2 import dbapi2 as sqlite
-from mx.DateTime import TimeDelta
+from mx.DateTime import TimeDelta, ISO
+from haizea.common.utils import roundDateTime
 
 RES_CPU="CPU"
 RES_MEM="MEMORY"
@@ -40,22 +41,48 @@ class OpenNebulaFrontend(RequestFrontend):
         return True
     
     def ONEreq2lease(self, req, attrs):
-        return self.createBestEffortLease(req, attrs)
+        if attrs.has_key("HAIZEA_START"):
+            return self.createExactLease(req, attrs)
+        else:
+            return self.createBestEffortLease(req, attrs)
     
-    
-    def createBestEffortLease(self, req, attrs):
+    def getCommonAttrs(self,req, attrs):
         disk = attrs[RES_DISK]
         diskattrs = dict([n.split("=") for n in disk.split(",")])
         tSubmit = UNIX2DateTime(req["stime"])
-        duration = TimeDelta(seconds=60)
-        realduration = duration
         vmimage = diskattrs[DISK_IMAGE]
         vmimagesize = 0
         numnodes = 1
         resreq = ResourceTuple.createEmpty()
         resreq.setByType(constants.RES_CPU, float(attrs[RES_CPU]))
         resreq.setByType(constants.RES_MEM, int(attrs[RES_MEM]))
+        return tSubmit, vmimage, vmimagesize, numnodes, resreq
+    
+    def createBestEffortLease(self, req, attrs):
+        tSubmit, vmimage, vmimagesize, numnodes, resreq = self.getCommonAttrs(req, attrs)
+        if attrs.has_key("HAIZEA_DURATION"):
+            duration = ISO.ParseTime(attrs["HAIZEA_DURATION"])
+        else:
+            # TODO: Just for testing. Should be unlimited duration.
+            duration = TimeDelta(seconds=60) 
         leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq)
+        leasereq.state = constants.LEASE_STATE_PENDING
+        leasereq.enactID = req["oid"]
+        leasereq.setScheduler(self.rm.scheduler)
+        return leasereq
+    
+    def createExactLease(self, req, attrs):
+        tSubmit, vmimage, vmimagesize, numnodes, resreq = self.getCommonAttrs(req, attrs)
+        duration = ISO.ParseTime(attrs["HAIZEA_DURATION"])
+        tStart = attrs["HAIZEA_START"]
+        if tStart[0] == "+":
+            # Relative time
+            # For testing, should be:
+            # tStart = tSubmit + ISO.ParseTime(tStart[1:])
+            tStart = roundDateTime(self.rm.clock.getTime() + ISO.ParseTime(tStart[1:]))
+        else:
+            tStart = ISO.ParseDateTime(tStart)
+        leasereq = ExactLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq)
         leasereq.state = constants.LEASE_STATE_PENDING
         leasereq.enactID = req["oid"]
         leasereq.setScheduler(self.rm.scheduler)
