@@ -252,15 +252,22 @@ class SimulatedClock(Clock):
             return tracef[0] 
         
 class RealClock(Clock):
-    def __init__(self, rm, quantum):
+    def __init__(self, rm, quantum, fastforward = False):
         Clock.__init__(self,rm)
+        self.fastforward = fastforward
+        if not self.fastforward:
+            self.lastwakeup = None
+        else:
+            self.lastwakeup = roundDateTime(now())
         self.starttime = self.getTime()
-        self.lastwakeup = None
-        self.nextwakeup = None
+        self.nextperiodicwakeup = None
         self.quantum = TimeDelta(seconds=quantum)
                
     def getTime(self):
-        return now()
+        if not self.fastforward:
+            return now()
+        else:
+            return self.lastwakeup
     
     def getStartTime(self):
         return self.starttime
@@ -268,7 +275,7 @@ class RealClock(Clock):
     # Remove this once premature end handling is taken
     # out of handleEndVM 
     def getNextSchedulableTime(self):
-        return self.nextwakeup    
+        return self.nextperiodicwakeup    
     
     def run(self):
         self.rm.logger.status("Starting simulated clock", constants.CLOCK)
@@ -276,23 +283,36 @@ class RealClock(Clock):
         done = False
         while not done:
             self.rm.logger.status("Waking up to manage resources", constants.CLOCK)
-            self.lastwakeup = self.getTime()
-            self.nextwakeup = self.lastwakeup + self.quantum
+            if not self.fastforward:
+                self.lastwakeup = roundDateTime(self.getTime())
+            self.nextperiodicwakeup = roundDateTime(self.lastwakeup + self.quantum)
             self.rm.logger.status("Wake-up time recorded as %s" % self.lastwakeup, constants.CLOCK)
             self.rm.processReservations(self.lastwakeup)
-            self.rm.processRequests(self.nextwakeup)
-            self.rm.logger.status("Going back to sleep", constants.CLOCK)
-            time.sleep((self.nextwakeup - now()).seconds)
+            self.rm.processRequests(self.nextperiodicwakeup)
+            
+            nextchangepoint = self.rm.getNextChangePoint()
+            if nextchangepoint != None and nextchangepoint <= self.nextperiodicwakeup:
+                nextwakeup = nextchangepoint
+                self.rm.scheduler.slottable.getNextChangePoint(self.lastwakeup)
+                self.rm.logger.status("Going back to sleep. Waking up at %s to handle slot table event." % nextwakeup, constants.CLOCK)
+            else:
+                nextwakeup = self.nextperiodicwakeup
+                self.rm.logger.status("Going back to sleep. Waking up at %s to see if something interesting has happened by then." % nextwakeup, constants.CLOCK)
+            
+            if not self.fastforward:
+                time.sleep((nextwakeup - now()).seconds)
+            else:
+                self.lastwakeup = nextwakeup
 
                     
         self.rm.printStatus()
-        self.rm.logger.status("Stopping simulated clock", constants.CLOCK)
+        self.rm.logger.status("Stopping clock", constants.CLOCK)
         self.rm.stop()
           
 
 if __name__ == "__main__":
     from haizea.common.config import RMConfig
-    configfile="../../../etc/sample.conf"
+    configfile="../../../etc/sample_opennebula.conf"
     config = RMConfig.fromFile(configfile)
     rm = ResourceManager(config)
     rm.start()

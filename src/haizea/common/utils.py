@@ -119,7 +119,7 @@ def roundDateTimeDelta(d):
     return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))
 
 def roundDateTime(d):
-    return DateTime.DateTime(d.year, d.month, d.day, d.hour, d.minute, int(floor(d.second)))
+    return DateTime.DateTime(d.year, d.month, d.day, d.hour, d.minute, int(floor(d.second+0.5)))
 
 def UNIX2DateTime(t):
     d = datetime.fromtimestamp(t)
