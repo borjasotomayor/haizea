@@ -161,7 +161,7 @@ class Scheduler(object):
 
     def handleEndVM(self, l, rr):
         self.rm.logger.info("LEASE-%i Start of handleEndVM" % l.leaseID, constants.SCHED)
-        self.rm.logger.info("LEASE-%i Before:" % l.leaseID, constants.SCHED)
+        self.rm.logger.edebug("LEASE-%i Before:" % l.leaseID, constants.SCHED)
         l.printContents()
         diff = self.rm.clock.getTime() - rr.start
         l.duration.accumulateDuration(diff)
@@ -186,7 +186,7 @@ class Scheduler(object):
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
                 self.numbesteffortres -= 1
-        self.rm.logger.info("LEASE-%i After:" % l.leaseID, constants.SCHED)
+        self.rm.logger.edebug("LEASE-%i After:" % l.leaseID, constants.SCHED)
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_IDLE)
         self.rm.logger.debug("LEASE-%i End of handleEndVM" % l.leaseID, constants.SCHED)
@@ -493,6 +493,8 @@ class Scheduler(object):
         self.rm.logger.edebug("Lease before preemption:", constants.SCHED)
         req.printContents()
         vmrr, susprr  = req.getLastVMRR()
+        suspendresumerate = self.rm.resourcepool.info.getSuspendResumeRate()
+        
         if vmrr.state == constants.RES_STATE_SCHEDULED and vmrr.start >= time:
             self.rm.logger.debug("The lease has not yet started. Removing reservation and resubmitting to queue.", constants.SCHED)
             req.state = constants.LEASE_STATE_PENDING
@@ -515,7 +517,7 @@ class Scheduler(object):
             timebeforesuspend = time - vmrr.start
             # TODO: Determine if it is in fact the initial VMRR or not. Right now
             # we conservatively overestimate
-            suspendthreshold = req.getSuspendThreshold(initial=False, migrating=True)
+            suspendthreshold = req.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=True)
             # We can't suspend if we're under the suspend threshold
             suspendable = timebeforesuspend >= suspendthreshold
             if suspendable and (susptype == constants.SUSPENSION_ALL or (req.numnodes == 1 and susptype == constants.SUSPENSION_SERIAL)):

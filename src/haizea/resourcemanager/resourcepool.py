@@ -488,7 +488,7 @@ class Node(object):
         images = ""
         if len(self.files) > 0:
             images = ", ".join([str(img) for img in self.files])
-        self.logger.info("Node %i has %iMB %s" % (self.nod_id,self.getTotalFileSize(),images), constants.ENACT)
+        self.logger.edebug("Node %i has %iMB %s" % (self.nod_id,self.getTotalFileSize(),images), constants.ENACT)
 
     def getState(self):
         if self.vm_doing == constants.DOING_IDLE and self.transfer_doing == constants.DOING_TRANSFER:
