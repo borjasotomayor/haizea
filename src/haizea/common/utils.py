@@ -120,7 +120,7 @@ def roundDateTimeDelta(d):
 
 def roundDateTime(d):
     d += DateTime.TimeDelta(seconds=0.5)
-    return DateTime.DateTime(d.year, d.month, d.day, d.hour, d.minute, int(floor(d.second+0.5)))
+    return DateTime.DateTime(d.year, d.month, d.day, d.hour, d.minute, int(floor(d.second)))
 
 def UNIX2DateTime(t):
     return DateTime.TimestampFromTicks(t)
