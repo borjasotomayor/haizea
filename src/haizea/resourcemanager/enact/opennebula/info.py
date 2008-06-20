@@ -38,7 +38,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
                     capacity.setByType(oneattr2haizea[name], int(attr["value"]))
             capacity.setByType(constants.RES_CPU, capacity.getByType(constants.RES_CPU) / 100.0)
             node = Node(self.resourcepool, nod_id, hostname, capacity)
-            node.enactID = enactID
+            node.enactmentInfo = int(enactID)
             self.nodes.append(node)
             
         self.logger.info("Fetched %i nodes from ONE db" % len(self.nodes), constants.ONE)

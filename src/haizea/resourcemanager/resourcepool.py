@@ -2,7 +2,7 @@ from haizea.common.utils import vnodemapstr
 import haizea.common.constants as constants
 from haizea.common.utils import abstract
 import haizea.resourcemanager.datastruct as ds
-
+import haizea.resourcemanager.enact.actions as actions
 
 class ResourcePool(object):
     def __init__(self, rm):
@@ -36,9 +36,8 @@ class ResourcePool(object):
         
         
     def startVMs(self, lease, rr):
-        # List of VMs that have to be started. Each entry contains:
-        # (lease id, vnode, hostname, image file, resources)
-        starts = []
+        startAction = actions.VMEnactmentStartAction()
+        startAction.fromRR(rr)
         
         # Check that all the required tainted images are available,
         # and determine what their physical filenames are.
@@ -84,20 +83,16 @@ class ResourcePool(object):
                         taintedImage = self.addTaintedImageToNode(pnode, lease.diskImageID, lease.diskImageSize, lease, vnode)
                         # ENACTMENT
                         # self.storage.createCopyFromCache(pnode, lease.diskImageSize)
-            start = (lease.leaseID, vnode, node.enactID, taintedImage.filename, rr.res[pnode], lease.enactID)
-            starts.append(start)
+            startAction.vnodes[vnode].pnode = node.enactmentInfo
+            startAction.vnodes[vnode].diskimage = taintedImage.filename
+            startAction.vnodes[vnode].res = rr.res[pnode]
 
-        self.vm.start(starts)
+        self.vm.start(startAction)
         
     def stopVMs(self, lease, rr):
-        # List of VMs that have to be started. Each entry contains:
-        # (lease id, vnode, host, lease.enactID)
-        stops = []
-        for (vnode,pnode) in rr.nodes.items():
-            node = self.getNode(pnode)
-            stops.append((lease.leaseID, vnode, node.enactID, lease.enactID))
-            
-        self.vm.stop(stops)
+        stopAction = actions.VMEnactmentStopAction()
+        stopAction.fromRR(rr)
+        self.vm.stop(stopAction)
         
     def transferFiles(self):
         pass
@@ -138,11 +133,11 @@ class ResourcePool(object):
                     reqsize = poolsize + imagesize
                     if reqsize > self.maxpoolsize:
                         desiredsize = self.maxpoolsize - imagesize
-                        self.rm.logger.info("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize), constants.ENACT)
+                        self.rm.logger.debug("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize), constants.ENACT)
                         self.getNode(nod_id).printFiles()
                         success = self.getNode(nod_id).purgePoolDownTo(self.maxpoolsize)
                         if not success:
-                            self.rm.logger.info("Unable to add to pool. Creating tainted image instead.", constants.ENACT)
+                            self.rm.logger.debug("Unable to add to pool. Creating tainted image instead.", constants.ENACT)
                             # If unsuccessful, this just means we couldn't add the image
                             # to the pool. We will have to create tainted images to be used
                             # only by these leases
@@ -163,22 +158,14 @@ class ResourcePool(object):
         pass
     
     def suspendVMs(self, lease, rr):
-        # List of VMs that have to be suspended. Each entry contains:
-        # (lease id, vnode, host, lease.enactID)
-        suspends = []
-        for (vnode,pnode) in rr.nodes.items():
-            node = self.getNode(pnode)
-            suspends.append((lease.leaseID, vnode, node.enactID, lease.enactID))
-            
-        self.vm.suspend(suspends)
+        suspendAction = actions.VMEnactmentStopAction()
+        suspendAction.fromRR(rr)
+        self.vm.suspend(suspendAction)
     
     def verifySuspend(self, lease, rr):
-        suspends = []
-        for (vnode,pnode) in rr.nodes.items():
-            node = self.getNode(pnode)
-            suspends.append((lease.leaseID, vnode, node.enactID, lease.enactID))
-            
-        self.vm.verifySuspend(suspends)
+        verifySuspendAction = actions.VMEnactmentStopAction()
+        verifySuspendAction.fromRR(rr)
+        self.vm.verifySuspend(verifySuspendAction)
     
     # TODO
     # The following should be implemented to handle asynchronous
@@ -187,23 +174,15 @@ class ResourcePool(object):
     #    pass
     
     def resumeVMs(self, lease, rr):
-        # List of VMs that have to be resumed. Each entry contains:
-        # (lease id, vnode, hostname)
-        resumes = []
-        for (vnode,pnode) in rr.nodes.items():
-            node = self.getNode(pnode)
-            resumes.append((lease.leaseID, vnode, node.enactID, lease.enactID))
-            
-        self.vm.resume(resumes)
-        
-    def verifyResume(self, lease, rr):
-        resumes = []
-        for (vnode,pnode) in rr.nodes.items():
-            node = self.getNode(pnode)
-            resumes.append((lease.leaseID, vnode, node.enactID, lease.enactID))
-            
-        self.vm.verifyResume(resumes)
+        resumeAction = actions.VMEnactmentStopAction()
+        resumeAction.fromRR(rr)
+        self.vm.resume(resumeAction)
     
+    def verifyResume(self, lease, rr):
+        verifyResumeAction = actions.VMEnactmentStopAction()
+        verifyResumeAction.fromRR(rr)
+        self.vm.verifyResume(verifyResumeAction)    
+        
     # TODO
     # The following should be implemented to handle asynchronous
     # notifications of a resume completing.
@@ -259,11 +238,11 @@ class ResourcePool(object):
                     reqsize = poolsize + imagesize
                     if reqsize > self.maxpoolsize:
                         desiredsize = self.maxpoolsize - imagesize
-                        self.rm.logger.info("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize), constants.ENACT)
+                        self.rm.logger.debug("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize), constants.ENACT)
                         self.getNode(nod_id).printFiles()
                         success = self.getNode(nod_id).purgePoolDownTo(self.maxpoolsize)
                         if not success:
-                            self.rm.logger.info("Unable to add to pool. Creating tainted image instead.", constants.ENACT)
+                            self.rm.logger.debug("Unable to add to pool. Creating tainted image instead.", constants.ENACT)
                             # If unsuccessful, this just means we couldn't add the image
                             # to the pool. We will have to create tainted images to be used
                             # only by these leases
@@ -379,8 +358,8 @@ class Node(object):
         self.files = []
         self.workingspacesize = 0
         self.capacity = capacity
-        # enactment-specific ID
-        self.enactID = None
+        # enactment-specific information
+        self.enactmentInfo = None
         # Kludgy way of keeping track of utilization
         self.transfer_doing = constants.DOING_IDLE
         self.vm_doing = constants.DOING_IDLE

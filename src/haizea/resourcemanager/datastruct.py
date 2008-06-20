@@ -145,8 +145,10 @@ class LeaseBase(object):
         self.memimagemap = {}
         self.rr = []
         
-        # Enactment ID. Should only be manipulated by enactment module
-        self.enactID = None
+        # Enactment information. Should only be manipulated by enactment module
+        self.enactmentInfo = None
+        self.vnodeEnactmentInfo = None
+
                 
     def setScheduler(self, scheduler):
         self.scheduler = scheduler
@@ -340,7 +342,7 @@ class ResourceReservationBase(object):
         self.state = None
         self.res = res
         self.logger = lease.scheduler.rm.logger
-                
+                        
     def printContents(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "Start          : %s" % self.start, DS)
         self.logger.log(loglevel, "End            : %s" % self.end, DS)

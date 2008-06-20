@@ -12,101 +12,94 @@ class VMEnactment(VMEnactmentBase):
         self.conn.row_factory = sqlite.Row
 
         
-    def start(self, vms):
-        print vms
-        if len(vms) > 1:
-            raise Exception, "OpenNebula doesn't support more than 1 VM"
-        vm = vms[0]
-        leaseID = vm[0]
-        hostID = vm[2]
-        image = vm[3]
-        cpu = vm[4].getByType(constants.RES_CPU)
-        memory = vm[4].getByType(constants.RES_MEM)
-        vmid = vm[5]
-        self.logger.debug("Received request to start VM for lease %i on host %i, image=%s, cpu=%i, mem=%i"
-                     % (leaseID, hostID, image, cpu, memory), constants.ONE)
-        
-        cmd = "%s deploy %i %i" % (self.onevm, vmid, hostID)
+    def runCommand(self, cmd):
         self.logger.debug("Running command: %s" % cmd, constants.ONE)
         (status, output) = commands.getstatusoutput(cmd)
         self.logger.debug("Returned status=%i, output='%s'" % (status, output), constants.ONE)
-        if status == 0:
-            self.logger.debug("Command returned succesfully.", constants.ONE)
-        else:
-            raise Exception, "Error when running onevm deploy"
-        
-        return vmid
-    
-    def stop(self, vms):
-        if len(vms) > 1:
-            raise Exception, "OpenNebula doesn't support more than 1 VM"
-        vm = vms[0]
-        enactID = vm[3]
-        cmd = "%s shutdown %i" % (self.onevm, enactID)
-        self.logger.debug("Running command: %s" % cmd, constants.ONE)
-        (status, output) = commands.getstatusoutput(cmd)
-        self.logger.debug("Returned status=%i, output='%s'" % (status, output), constants.ONE)
-        if status == 0:
-            self.logger.debug("Command returned succesfully.", constants.ONE)
-        else:
-            raise Exception, "Error when running onevm shutdown"
+        return status
 
-    def suspend(self, vms):
-        if len(vms) > 1:
-            raise Exception, "OpenNebula doesn't support more than 1 VM"
-        vm = vms[0]
-        enactID = vm[3]
-        cmd = "%s suspend %i" % (self.onevm, enactID)
-        self.logger.debug("Running command: %s" % cmd, constants.ONE)
-        (status, output) = commands.getstatusoutput(cmd)
-        self.logger.debug("Returned status=%i, output='%s'" % (status, output), constants.ONE)
-        if status == 0:
-            self.logger.debug("Command returned succesfully.", constants.ONE)
-        else:
-            raise Exception, "Error when running onevm shutdown"
+    def start(self, action):
+        for vnode in action.vnodes:
+            # Unpack action
+            vmid = action.vnodes[vnode].enactmentInfo
+            hostID = action.vnodes[vnode].pnode
+            image = action.vnodes[vnode].diskimage
+            cpu = action.vnodes[vnode].res.getByType(constants.RES_CPU)
+            memory = action.vnodes[vnode].res.getByType(constants.RES_MEM)
+            
+            self.logger.debug("Received request to start VM for L%iV%i on host %i, image=%s, cpu=%i, mem=%i"
+                         % (action.leaseHaizeaID, vnode, hostID, image, cpu, memory), constants.ONE)
+            cmd = "%s deploy %i %i" % (self.onevm, vmid, hostID)
+            status = self.runCommand(cmd)
+            if status == 0:
+                self.logger.debug("Command returned succesfully.", constants.ONE)
+            else:
+                raise Exception, "Error when running onevm deploy"
+            
+    def stop(self, action):
+        for vnode in action.vnodes:
+            # Unpack action
+            vmid = action.vnodes[vnode].enactmentInfo
+            cmd = "%s shutdown %i" % (self.onevm, vmid)
+            status = self.runCommand(cmd)
+            if status == 0:
+                self.logger.debug("Command returned succesfully.", constants.ONE)
+            else:
+                raise Exception, "Error when running onevm shutdown"
 
-    def resume(self, vms):
-        if len(vms) > 1:
-            raise Exception, "OpenNebula doesn't support more than 1 VM"
-        vm = vms[0]
-        enactID = vm[3]
-        cmd = "%s resume %i" % (self.onevm, enactID)
-        self.logger.debug("Running command: %s" % cmd, constants.ONE)
-        (status, output) = commands.getstatusoutput(cmd)
-        self.logger.debug("Returned status=%i, output='%s'" % (status, output), constants.ONE)
-        if status == 0:
-            self.logger.debug("Command returned succesfully.", constants.ONE)
-        else:
-            raise Exception, "Error when running onevm shutdown"
-
-    def verifySuspend(self, vms):
-        if len(vms) > 1:
-            raise Exception, "OpenNebula doesn't support more than 1 VM"
-        vm = vms[0]
-        enactID = vm[3]
-        cur = self.conn.cursor()
-        cur.execute("select state from vmpool where oid = %i" % enactID)
-        onevm = cur.fetchone()        
-        state = onevm["state"]
-        if state == 5:
-            self.logger.debug("Suspend correct.", constants.ONE)
-            return 0
-        else:
-            self.logger.warning("ONE did not complete suspend on time. State is %i" % state, constants.ONE)
-            return 1
+    def suspend(self, action):
+        for vnode in action.vnodes:
+            # Unpack action
+            vmid = action.vnodes[vnode].enactmentInfo
+            cmd = "%s suspend %i" % (self.onevm, vmid)
+            status = self.runCommand(cmd)
+            if status == 0:
+                self.logger.debug("Command returned succesfully.", constants.ONE)
+            else:
+                raise Exception, "Error when running onevm suspend"
         
-    def verifyResume(self, vms):
-        if len(vms) > 1:
-            raise Exception, "OpenNebula doesn't support more than 1 VM"
-        vm = vms[0]
-        enactID = vm[3]
-        cur = self.conn.cursor()
-        cur.execute("select state from vmpool where oid = %i" % enactID)
-        vm = cur.fetchone()        
-        state = vm["state"]
-        if state == 3:
-            self.logger.debug("Resume correct.", constants.ONE)
-            return 0
-        else:
-            self.logger.warning("ONE did not complete resume on time. State is %i" % state, constants.ONE)
-            return 1
+    def resume(self, action):
+        for vnode in action.vnodes:
+            # Unpack action
+            vmid = action.vnodes[vnode].enactmentInfo
+            cmd = "%s resume %i" % (self.onevm, vmid)
+            status = self.runCommand(cmd)
+            if status == 0:
+                self.logger.debug("Command returned succesfully.", constants.ONE)
+            else:
+                raise Exception, "Error when running onevm resume"
+
+    def verifySuspend(self, action):
+        # TODO: Do a single query
+        result = 0
+        for vnode in action.vnodes:
+            # Unpack action
+            vmid = action.vnodes[vnode].enactmentInfo
+            cur = self.conn.cursor()
+            cur.execute("select state from vmpool where oid = %i" % vmid)
+            onevm = cur.fetchone()        
+            state = onevm["state"]
+            if state == 5:
+                self.logger.debug("Suspend of L%iV%i correct." % (action.leaseHaizeaID, vnode), constants.ONE)
+            else:
+                self.logger.warning("ONE did not complete suspend  of L%i%V%i on time. State is %i" % (action.leaseHaizeaID, vnode, state), constants.ONE)
+                result = 1
+        return result
+        
+    def verifyResume(self, action):
+        # TODO: Do a single query
+        result = 0
+        for vnode in action.vnodes:
+            # Unpack action
+            vmid = action.vnodes[vnode].enactmentInfo
+            cur = self.conn.cursor()
+            cur.execute("select state from vmpool where oid = %i" % vmid)
+            onevm = cur.fetchone()        
+            state = onevm["state"]
+            if state == 3:
+                self.logger.debug("Suspend of L%iV%i correct." % (action.leaseHaizeaID, vnode), constants.ONE)
+            else:
+                self.logger.warning("ONE did not complete resume of L%i%V%i on time. State is %i" % (action.leaseHaizeaID, vnode, state), constants.ONE)
+                result = 1
+        return result
+

@@ -67,7 +67,12 @@ class OpenNebulaFrontend(RequestFrontend):
             duration = TimeDelta(seconds=60) 
         leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq)
         leasereq.state = constants.LEASE_STATE_PENDING
-        leasereq.enactID = req["oid"]
+        # Enactment info should be changed to the "array id" when groups
+        # are implemented in OpenNebula
+        leasereq.enactmentInfo = int(req["oid"])
+        # Only one node for now
+        leasereq.vnodeEnactmentInfo = {}
+        leasereq.vnodeEnactmentInfo[1] = int(req["oid"])
         leasereq.setScheduler(self.rm.scheduler)
         return leasereq
     
@@ -84,7 +89,12 @@ class OpenNebulaFrontend(RequestFrontend):
             tStart = ISO.ParseDateTime(tStart)
         leasereq = ExactLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq)
         leasereq.state = constants.LEASE_STATE_PENDING
-        leasereq.enactID = req["oid"]
+        # Enactment info should be changed to the "array id" when groups
+        # are implemented in OpenNebula
+        leasereq.enactmentInfo = int(req["oid"])
+        # Only one node for now
+        leasereq.vnodeEnactmentInfo = {}
+        leasereq.vnodeEnactmentInfo[1] = int(req["oid"])
         leasereq.setScheduler(self.rm.scheduler)
         return leasereq
         
