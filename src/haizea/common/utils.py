@@ -119,11 +119,11 @@ def roundDateTimeDelta(d):
     return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))
 
 def roundDateTime(d):
+    d += DateTime.TimeDelta(seconds=0.5)
     return DateTime.DateTime(d.year, d.month, d.day, d.hour, d.minute, int(floor(d.second+0.5)))
 
 def UNIX2DateTime(t):
-    d = datetime.fromtimestamp(t)
-    return DateTime.DateTime(d.year,d.month,d.day,d.hour,d.minute,d.second)
+    return DateTime.TimestampFromTicks(t)
 
     
 def vnodemapstr(vnodes):
