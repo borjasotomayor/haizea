@@ -164,37 +164,52 @@ class ResourcePool(object):
     
     def suspendVMs(self, lease, rr):
         # List of VMs that have to be suspended. Each entry contains:
-        # (lease id, vnode, hostname)
+        # (lease id, vnode, host, lease.enactID)
         suspends = []
         for (vnode,pnode) in rr.nodes.items():
             node = self.getNode(pnode)
-            suspends += (lease.leaseID, vnode, node.hostname)
+            suspends.append((lease.leaseID, vnode, node.enactID, lease.enactID))
             
         self.vm.suspend(suspends)
     
-    def suspendDone(self):
-        pass
+    def verifySuspend(self, lease, rr):
+        suspends = []
+        for (vnode,pnode) in rr.nodes.items():
+            node = self.getNode(pnode)
+            suspends.append((lease.leaseID, vnode, node.enactID, lease.enactID))
+            
+        self.vm.verifySuspend(suspends)
     
-    def verifySuspend(self):
-        pass
+    # TODO
+    # The following should be implemented to handle asynchronous
+    # notifications of a suspend completing.
+    #def suspendDone(self, lease, rr):
+    #    pass
     
     def resumeVMs(self, lease, rr):
-        # List of VMs that have to be suspended. Each entry contains:
+        # List of VMs that have to be resumed. Each entry contains:
         # (lease id, vnode, hostname)
         resumes = []
         for (vnode,pnode) in rr.nodes.items():
             node = self.getNode(pnode)
-            resumes += (lease.leaseID, vnode, node.hostname)
+            resumes.append((lease.leaseID, vnode, node.enactID, lease.enactID))
             
         self.vm.resume(resumes)
+        
+    def verifyResume(self, lease, rr):
+        resumes = []
+        for (vnode,pnode) in rr.nodes.items():
+            node = self.getNode(pnode)
+            resumes.append((lease.leaseID, vnode, node.enactID, lease.enactID))
+            
+        self.vm.verifyResume(resumes)
     
-    def resumeDone(self):
-        pass
-    
-    def verifyResume(self):
-        pass
-    
-    
+    # TODO
+    # The following should be implemented to handle asynchronous
+    # notifications of a resume completing.
+    #def resumeDone(self, lease, rr):
+    #    pass
+
     
     
     def getNodes(self):

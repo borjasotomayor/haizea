@@ -255,6 +255,7 @@ class Scheduler(object):
         self.rm.logger.info("LEASE-%i Start of handleStartSuspend" % l.leaseID, constants.SCHED)
         l.printContents()
         rr.state = constants.RES_STATE_ACTIVE
+        self.rm.resourcepool.suspendVMs(l, rr)
         for vnode,pnode in rr.nodes.items():
             self.rm.resourcepool.addRAMFileToNode(pnode, l.leaseID, vnode, l.resreq.getByType(constants.RES_MEM))
             l.memimagemap[vnode] = pnode
@@ -265,6 +266,8 @@ class Scheduler(object):
     def handleEndSuspend(self, l, rr):
         self.rm.logger.info("LEASE-%i Start of handleEndSuspend" % l.leaseID, constants.SCHED)
         l.printContents()
+        # TODO: React to incomplete suspend
+        self.rm.resourcepool.verifySuspend(l, rr)
         rr.state = constants.RES_STATE_DONE
         l.state = constants.LEASE_STATE_SUSPENDED
         self.scheduledleases.remove(l)
@@ -277,6 +280,7 @@ class Scheduler(object):
     def handleStartResume(self, l, rr):
         self.rm.logger.info("LEASE-%i Start of handleStartResume" % l.leaseID, constants.SCHED)
         l.printContents()
+        self.rm.resourcepool.resumeVMs(l, rr)
         rr.state = constants.RES_STATE_ACTIVE
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_VM_RESUME)
@@ -285,6 +289,8 @@ class Scheduler(object):
     def handleEndResume(self, l, rr):
         self.rm.logger.info("LEASE-%i Start of handleEndResume" % l.leaseID, constants.SCHED)
         l.printContents()
+        # TODO: React to incomplete resume
+        self.rm.resourcepool.verifyResume(l, rr)
         rr.state = constants.RES_STATE_DONE
         for vnode,pnode in rr.nodes.items():
             self.rm.resourcepool.removeRAMFileFromNode(pnode, l.leaseID, vnode)
