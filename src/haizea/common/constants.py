@@ -126,6 +126,7 @@ AVOIDREDUNDANT_OPT="avoid-redundant-transfers"
 
 OPENNEBULA_SEC="opennebula"
 DB_OPT="db"
+ESTIMATESUSPENDRATE_OPT="suspendresume-rate-estimate"
 
 SCHEDULING_SEC="scheduling"
 TRACEFILE_SEC="tracefile"

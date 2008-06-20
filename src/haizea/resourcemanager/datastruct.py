@@ -215,8 +215,7 @@ class LeaseBase(object):
     def addBootOverhead(self, t):
         self.duration.incr(t)        
         
-    def estimateSuspendResumeTime(self):
-        rate = self.scheduler.rm.config.getSuspendResumeRate()
+    def estimateSuspendResumeTime(self, rate):
         time = float(self.resreq.getByType(RES_MEM)) / rate
         time = roundDateTimeDelta(TimeDelta(seconds = time))
         return time
@@ -246,7 +245,7 @@ class LeaseBase(object):
                 mbtotransfer = self.diskImageSize + self.resreq.getByType(RES_MEM)
             return self.estimateTransferTime(mbtotransfer)
         
-    def getSuspendThreshold(self, initial, migrating=False):
+    def getSuspendThreshold(self, initial, suspendrate, migrating=False):
         threshold = self.scheduler.rm.config.getSuspendThreshold()
         if threshold != None:
             # If there is a hard-coded threshold, use that
@@ -262,11 +261,11 @@ class LeaseBase(object):
                 # Overestimating, just in case (taking into account that the lease may be
                 # resumed, but also suspended again)
                 if migrating:
-                    threshold = self.estimateMigrationTime() + self.estimateSuspendResumeTime() * 2
+                    threshold = self.estimateMigrationTime() + self.estimateSuspendResumeTime(suspendrate) * 2
                 else:
-                    threshold = self.estimateSuspendResumeTime() * 2
+                    threshold = self.estimateSuspendResumeTime(suspendrate) * 2
             else:
-                threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime()
+                threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime(suspendrate)
             factor = self.scheduler.rm.config.getSuspendThresholdFactor() + 1
             return roundDateTimeDelta(threshold * factor)
             

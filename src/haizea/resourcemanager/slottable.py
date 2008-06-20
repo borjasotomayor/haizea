@@ -468,7 +468,7 @@ class SlotTable(object):
         remdur = lease.duration.getRemainingDuration()
         numnodes = lease.numnodes
         resreq = lease.resreq
-
+        suspendresumerate = self.resourcepool.info.getSuspendResumeRate()
 
         #
         # STEP 1: TAKE INTO ACCOUNT VM RESUMPTION (IF ANY)
@@ -480,7 +480,7 @@ class SlotTable(object):
         if mustresume and not canmigrate:
             vmrr, susprr = lease.getLastVMRR()
             curnodes = set(vmrr.nodes.values())
-            suspendthreshold = lease.getSuspendThreshold(initial=False, migrating=False)
+            suspendthreshold = lease.getSuspendThreshold(initial=False, suspendrate=suspendresumerate,migrating=False)
         
         if mustresume and canmigrate:
             # If we have to resume this lease, make sure that
@@ -493,11 +493,11 @@ class SlotTable(object):
             suspendthreshold = lease.getSuspendThreshold(initial=False, migrating=True)
                     
         if mustresume:
-            resumetime = lease.estimateSuspendResumeTime()
+            resumetime = lease.estimateSuspendResumeTime(suspendresumerate)
             # Must allocate time for resumption too
             remdur += resumetime
         else:
-            suspendthreshold = lease.getSuspendThreshold(initial=True)
+            suspendthreshold = lease.getSuspendThreshold(initial=True, suspendrate=suspendresumerate)
 
 
         #
@@ -591,12 +591,8 @@ class SlotTable(object):
 
         # Adjust times in case the lease has to be suspended/resumed
         if mustsuspend:
-            suspendtime = lease.estimateSuspendResumeTime()
-            if end != realend:
-                end -= suspendtime
-            else:
-                end -= suspendtime
-                realend -= suspendtime
+            suspendtime = lease.estimateSuspendResumeTime(suspendresumerate)
+            end -= suspendtime
                 
         if mustresume:
             start += resumetime
@@ -634,7 +630,7 @@ class SlotTable(object):
         if mustsuspend:
             suspres = {}
             for n in mappings.values():
-                r = ds.ResourceTuple.createEmtpy()
+                r = ds.ResourceTuple.createEmpty()
                 r.setByType(constants.RES_MEM, resreq.getByType(constants.RES_MEM))
                 r.setByType(constants.RES_DISK, resreq.getByType(constants.RES_DISK))
                 suspres[n] = r
@@ -692,10 +688,12 @@ class SlotTable(object):
         return start, end, canfit, mustsuspend
 
     def suspend(self, lease, time):
+        suspendresumerate = self.resourcepool.info.getSuspendResumeRate()
+        
         (vmrr, susprr) = lease.getLastVMRR()
         vmrrnew = copy.copy(vmrr)
         
-        suspendtime = lease.estimateSuspendResumeTime()
+        suspendtime = lease.estimateSuspendResumeTime(suspendresumerate)
         vmrrnew.end = time - suspendtime
             
         vmrrnew.oncomplete = constants.ONCOMPLETE_SUSPEND

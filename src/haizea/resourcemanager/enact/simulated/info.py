@@ -7,7 +7,8 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
     def __init__(self, resourcepool):
         ResourcePoolInfoBase.__init__(self, resourcepool)
         config = self.resourcepool.rm.config
-        
+        self.suspendresumerate = config.getSuspendResumeRate()
+                
         numnodes = config.getNumPhysicalNodes()
         bandwidth = config.getBandwidth()        
 
@@ -46,4 +47,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
             resourcecapacity = r.split(",")[1]
             capacity.setByType(desc2type[resourcename], int(resourcecapacity))
         return capacity
+
+    def getSuspendResumeRate(self):
+        return self.suspendresumerate
 
