@@ -1,6 +1,6 @@
 import haizea.traces.readers as tracereaders
 
-def analyzeExactLeaseInjection(tracefile):
+def analyzeARLeaseInjection(tracefile):
     injectedleases = tracereaders.LWF(tracefile)
     accumdur = 0
     for l in injectedleases:

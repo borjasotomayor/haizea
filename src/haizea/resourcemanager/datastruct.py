@@ -274,7 +274,7 @@ class LeaseBase(object):
             
       
         
-class ExactLease(LeaseBase):
+class ARLease(LeaseBase):
     def __init__(self, tSubmit, tStart, dur, diskImageID, diskImageSize, numnodes, resreq, realdur = None):
         start = Timestamp(tStart)
         duration = Duration(dur)
@@ -284,7 +284,7 @@ class ExactLease(LeaseBase):
     def printContents(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "__________________________________________________", DS)
         LeaseBase.printContents(self, loglevel)
-        self.logger.log(loglevel, "Type           : EXACT", DS)
+        self.logger.log(loglevel, "Type           : AR", DS)
         self.logger.log(loglevel, "Start time     : %s" % self.start, DS)
         self.logger.log(loglevel, "Duration       : %s" % self.duration, DS)
         self.printRR(loglevel)
@@ -403,7 +403,7 @@ class VMResourceReservation(ResourceReservationBase):
     def isPreemptible(self):
         if isinstance(self.lease,BestEffortLease):
             return True
-        elif isinstance(self.lease, ExactLease):
+        elif isinstance(self.lease, ARLease):
             return False
 
         

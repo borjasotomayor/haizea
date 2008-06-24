@@ -1,7 +1,7 @@
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.base import RequestFrontend
 import haizea.traces.readers as tracereaders
-from haizea.resourcemanager.datastruct import ExactLease, BestEffortLease, ResourceTuple
+from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ResourceTuple
 import operator
 from haizea.common.utils import UNIX2DateTime
 from pysqlite2 import dbapi2 as sqlite
@@ -42,7 +42,7 @@ class OpenNebulaFrontend(RequestFrontend):
     
     def ONEreq2lease(self, req, attrs):
         if attrs.has_key("HAIZEA_START"):
-            return self.createExactLease(req, attrs)
+            return self.createARLease(req, attrs)
         else:
             return self.createBestEffortLease(req, attrs)
     
@@ -76,7 +76,7 @@ class OpenNebulaFrontend(RequestFrontend):
         leasereq.setScheduler(self.rm.scheduler)
         return leasereq
     
-    def createExactLease(self, req, attrs):
+    def createARLease(self, req, attrs):
         tSubmit, vmimage, vmimagesize, numnodes, resreq = self.getCommonAttrs(req, attrs)
         duration = ISO.ParseTime(attrs["HAIZEA_DURATION"])
         tStart = attrs["HAIZEA_START"]
@@ -87,7 +87,7 @@ class OpenNebulaFrontend(RequestFrontend):
             tStart = roundDateTime(self.rm.clock.getTime() + ISO.ParseTime(tStart[1:]))
         else:
             tStart = ISO.ParseDateTime(tStart)
-        leasereq = ExactLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq)
+        leasereq = ARLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq)
         leasereq.state = constants.LEASE_STATE_PENDING
         # Enactment info should be changed to the "array id" when groups
         # are implemented in OpenNebula

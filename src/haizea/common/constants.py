@@ -5,7 +5,7 @@ TRACE_GWF=2
 
 # Types of leases
 LEASE_BESTEFFORT = 0
-LEASE_EXACT = 1
+LEASE_AR = 1
 
 # Types of resources
 RES_CPU = 0

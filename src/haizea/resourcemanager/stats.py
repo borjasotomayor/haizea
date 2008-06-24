@@ -27,8 +27,8 @@ class Stats(object):
         self.besteffortstartID = []
         self.besteffortendID = []
 
-        self.exactacceptedcount = 0
-        self.exactrejectedcount = 0
+        self.aracceptedcount = 0
+        self.arrejectedcount = 0
         self.besteffortcompletedcount = 0
         self.queuesizecount = 0
         
@@ -65,13 +65,13 @@ class Stats(object):
 
     def incrAccepted(self, leaseID):
         time = self.rm.clock.getTime()
-        self.exactacceptedcount += 1
-        self.exactaccepted.append((time, leaseID, self.exactacceptedcount))
+        self.aracceptedcount += 1
+        self.exactaccepted.append((time, leaseID, self.aracceptedcount))
 
     def incrRejected(self, leaseID):
         time = self.rm.clock.getTime()
-        self.exactrejectedcount += 1
-        self.exactrejected.append((time, leaseID, self.exactrejectedcount))
+        self.arrejectedcount += 1
+        self.exactrejected.append((time, leaseID, self.arrejectedcount))
 
     def incrBestEffortCompleted(self, leaseID):
         time = self.rm.clock.getTime()

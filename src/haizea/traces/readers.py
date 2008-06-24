@@ -1,7 +1,7 @@
 from mx.DateTime import TimeDelta, DateTimeDelta
 from mx.DateTime import ISO
 from mx.DateTime import now
-from haizea.resourcemanager.datastruct import ExactLease, BestEffortLease, ResourceTuple
+from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ResourceTuple
 import haizea.common.constants as constants
 import haizea.traces.formats as formats
 
@@ -81,7 +81,7 @@ def LWF(tracefile, inittime):
         if tStart == None:
             req = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, realduration)
         else:
-            req = ExactLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq, realduration)
+            req = ARLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq, realduration)
         req.state = constants.LEASE_STATE_PENDING
         requests.append(req)
     return requests

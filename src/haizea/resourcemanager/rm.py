@@ -6,7 +6,7 @@ from haizea.resourcemanager.log import Logger
 import haizea.resourcemanager.stats as stats
 import haizea.common.constants as constants
 from haizea.common.utils import abstract
-from haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
+from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
 import operator
 from mx.DateTime import now, TimeDelta
 from haizea.common.utils import roundDateTime
@@ -78,14 +78,14 @@ class ResourceManager(object):
             requests += f.getAccumulatedRequests()
         requests.sort(key=operator.attrgetter("tSubmit"))
                 
-        exact = [r for r in requests if isinstance(r,ExactLease)]
+        ar = [r for r in requests if isinstance(r,ARLease)]
         besteffort = [r for r in requests if isinstance(r,BestEffortLease)]
         
         for r in besteffort:
             self.scheduler.enqueue(r)
         
         try:
-            self.scheduler.schedule(exact, nexttime)
+            self.scheduler.schedule(ar, nexttime)
         except Exception, msg:
             self.logger.error("Exception in scheduling function. Dumping state..." ,constants.RM)
             self.printStats("ERROR", verbose=True)
@@ -123,8 +123,8 @@ class ResourceManager(object):
         self.logger.status("STATUS Completed best-effort leases: %i" % self.stats.besteffortcompletedcount, constants.RM)
         self.logger.status("STATUS Queue size: %i" % self.stats.queuesizecount, constants.RM)
         self.logger.status("STATUS Best-effort reservations: %i" % self.scheduler.numbesteffortres, constants.RM)
-        self.logger.status("STATUS Accepted exact leases: %i" % self.stats.exactacceptedcount, constants.RM)
-        self.logger.status("STATUS Rejected exact leases: %i" % self.stats.exactrejectedcount, constants.RM)
+        self.logger.status("STATUS Accepted AR leases: %i" % self.stats.aracceptedcount, constants.RM)
+        self.logger.status("STATUS Rejected AR leases: %i" % self.stats.arrejectedcount, constants.RM)
         self.logger.status("STATUS ----End----", constants.RM)
 
     def getNextChangePoint(self):
@@ -312,7 +312,7 @@ class RealClock(Clock):
 
 if __name__ == "__main__":
     from haizea.common.config import RMConfig
-    configfile="../../../etc/sample_opennebula.conf"
+    configfile="../../../etc/sample.conf"
     config = RMConfig.fromFile(configfile)
     rm = ResourceManager(config)
     rm.start()

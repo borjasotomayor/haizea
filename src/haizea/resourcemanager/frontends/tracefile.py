@@ -1,7 +1,7 @@
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.base import RequestFrontend
 import haizea.traces.readers as tracereaders
-from haizea.resourcemanager.datastruct import ExactLease, BestEffortLease 
+from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
 import operator
 
 
@@ -41,7 +41,7 @@ class TracefileFrontend(RequestFrontend):
             for r in self.requests:
                 if isinstance(r,BestEffortLease):
                     r.addRuntimeOverhead(overhead)
-                elif isinstance(r,ExactLease):
+                elif isinstance(r,ARLease):
                     if not config.overheadOnlyBestEffort():
                         r.addRuntimeOverhead(overhead)
 

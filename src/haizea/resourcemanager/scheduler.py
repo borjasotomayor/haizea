@@ -30,14 +30,14 @@ class Scheduler(object):
         else:
             avoidpreempt = False
         
-        # Process exact requests
+        # Process AR requests
         for r in requests:
-            self.rm.logger.info("LEASE-%i Processing request (EXACT)" % r.leaseID, constants.SCHED)
+            self.rm.logger.info("LEASE-%i Processing request (AR)" % r.leaseID, constants.SCHED)
             self.rm.logger.info("LEASE-%i Start    %s" % (r.leaseID, r.start), constants.SCHED)
             self.rm.logger.info("LEASE-%i Duration %s" % (r.leaseID, r.duration), constants.SCHED)
             self.rm.logger.info("LEASE-%i ResReq   %s" % (r.leaseID, r.resreq), constants.SCHED)
             try:
-                self.scheduleExactLease(r, avoidpreempt=avoidpreempt, nexttime=nexttime)
+                self.scheduleARLease(r, avoidpreempt=avoidpreempt, nexttime=nexttime)
                 self.scheduledleases.add(r)
                 self.rm.stats.incrAccepted(r.leaseID)
             except SchedException, msg:
@@ -48,7 +48,7 @@ class Scheduler(object):
                     try:
                         self.rm.logger.info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED)
                         self.rm.logger.info("LEASE-%i Trying again without avoiding preemption" % r.leaseID, constants.SCHED)
-                        self.scheduleExactLease(r, nexttime, avoidpreempt=False)
+                        self.scheduleARLease(r, nexttime, avoidpreempt=False)
                         self.scheduledleases.add(r)
                         self.rm.stats.incrAccepted(r.leaseID)
                     except SchedException, msg:
@@ -301,7 +301,7 @@ class Scheduler(object):
     def handleEndRR(self, l, rr):
         self.slottable.removeReservation(rr)
     
-    def scheduleExactLease(self, req, nexttime, avoidpreempt=True):
+    def scheduleARLease(self, req, nexttime, avoidpreempt=True):
         start = req.start.requested
         end = req.start.requested + req.duration.requested
         try:
@@ -376,7 +376,7 @@ class Scheduler(object):
             req.appendRR(vmrr)
             self.slottable.addReservation(vmrr)
         except SlotFittingException, msg:
-            raise SchedException, "The requested exact lease is infeasible. Reason: %s" % msg
+            raise SchedException, "The requested AR lease is infeasible. Reason: %s" % msg
 
     def scheduleBestEffortLease(self, req, nexttime):
         # Determine earliest start time in each node

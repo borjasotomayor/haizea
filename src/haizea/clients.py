@@ -3,7 +3,7 @@ from haizea.resourcemanager.rm import ResourceManager
 from haizea.traces.generators import generateTrace, generateImages
 from haizea.common.utils import Option, OptionParser, generateScripts
 from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig, ImageConfig
-from haizea.analysis.traces import analyzeExactLeaseInjection
+from haizea.analysis.traces import analyzeARLeaseInjection
 from haizea.analysis.misc import genpercentiles
 import os.path
 
@@ -211,4 +211,4 @@ class InjectionAnalyzer(object):
         
         injectionfile = opt.injectionfile
 
-        analyzeExactLeaseInjection(injectionfile)  
+        analyzeARLeaseInjection(injectionfile)  
