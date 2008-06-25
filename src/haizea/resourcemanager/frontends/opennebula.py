@@ -1,5 +1,5 @@
 # -------------------------------------------------------------------------- #
-# Copyright 2006-2008, Borja Sotomayor                                       #
+# Copyright 2006-2008, University of Chicago                                       #
 # Copyright 2008, Distributed Systems Architecture Group, Universidad        #
 # Complutense de Madrid (dsa-research.org)                                   #
 #                                                                            #

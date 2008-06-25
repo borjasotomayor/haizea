@@ -3,7 +3,7 @@ from distutils.core import setup
 setup(name='haizea',
       version='TP1.0',
       description='Haizea',
-      author='Borja Sotomayor',
+      author='University of Chicago',
       author_email='borja@cs.uchicago.edu',
       url='http://haizea.cs.uchicago.edu/',
       package_dir = {'': 'src'},
