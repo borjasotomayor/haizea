@@ -1,0 +1,41 @@
+from distutils.core import setup
+
+setup(name='haizea',
+      version='TP1.0',
+      description='Haizea',
+      author='Borja Sotomayor',
+      author_email='borja@cs.uchicago.edu',
+      url='http://haizea.cs.uchicago.edu/',
+      package_dir = {'': 'src'},
+      packages=['haizea', 
+                'haizea.common', 
+                'haizea.resourcemanager',
+                'haizea.resourcemanager.enact',
+                'haizea.resourcemanager.enact.shared',
+                'haizea.resourcemanager.enact.simulated',
+                'haizea.resourcemanager.enact.opennebula',
+                'haizea.resourcemanager.frontends',
+                'haizea.traces'],
+      scripts=['bin/haizea'],
+      data_files=['etc', ['etc/sample.conf', 
+                          'etc/sample_opennebula.conf',
+                          'etc/blue-30days-24h.conf'],
+                  'traces', ['traces/sample.lwf',
+                             'traces/sample_opennebula.lwf',
+                             'traces/sample.images'],
+                  'traces/blue', ['traces/blue/all.swf','traces/blue/30days.swf'],
+                  'traces/blue/injected_leases/', ['traces/blue/injected_leases/*.lwf']           
+                  ],
+      classifiers=[
+          'Development Status :: 2 - Pre-Alpha',
+          'Environment :: Console',
+          'Environment :: No Input/Output (Daemon)',
+          'Intended Audience :: Developers',
+          'Intended Audience :: System Administrators',
+          'License :: OSI Approved :: Apache Software License',
+          'Operating System :: POSIX',
+          'Programming Language :: Python',
+          'Topic :: Scientific/Engineering',
+          'Topic :: System :: Distributed Computing'
+          ]
+     )
