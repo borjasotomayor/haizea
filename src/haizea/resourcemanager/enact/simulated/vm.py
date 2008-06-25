@@ -22,18 +22,20 @@ class VMEnactment(VMEnactmentBase):
     def __init__(self, resourcepool):
         VMEnactmentBase.__init__(self, resourcepool)
         
-    def start(self, vms):
-        for vm in vms:
-            pass
+    def start(self, action):
+        pass
     
-    def stop(self, vms):
-        for vm in vms:
-            pass
+    def stop(self, action):
+        pass
 
-    def suspend(self, vms):
-        for vm in vms:
-            pass
+    def suspend(self, action):
+        pass
 
-    def resume(self, vms):
-        for vm in vms:
-            pass
+    def resume(self, action):
+        pass
+
+    def verifySuspend(self, action):
+        return 0
+    
+    def verifyResume(self, action):
+        return 0
