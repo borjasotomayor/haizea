@@ -39,7 +39,11 @@ class VMEnactmentAction(EnactmentAction):
     
     def fromRR(self, rr):
         EnactmentAction.fromRR(self, rr)
-        self.vnodes = dict([(vnode, VNode(info)) for (vnode,info) in rr.lease.vnodeEnactmentInfo.items()])
+        # TODO: This is very kludgy
+        if rr.lease.vnodeEnactmentInfo == None:
+            self.vnodes = dict([(vnode+1, VNode(None)) for vnode in range(rr.lease.numnodes)])
+        else:
+            self.vnodes = dict([(vnode, VNode(info)) for (vnode,info) in rr.lease.vnodeEnactmentInfo.items()])
 
 class VMEnactmentStartAction(VMEnactmentAction):
     def __init__(self):
