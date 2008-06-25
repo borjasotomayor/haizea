@@ -508,7 +508,7 @@ class SlotTable(object):
 
             for n in earliest:
                 earliest[n][0] = max(earliest[n][0],earliesttransfer)
-            suspendthreshold = lease.getSuspendThreshold(initial=False, migrating=True)
+            suspendthreshold = lease.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=True)
                     
         if mustresume:
             resumetime = lease.estimateSuspendResumeTime(suspendresumerate)
