@@ -170,7 +170,7 @@ class ResourcePool(object):
             
         self.getNode(nod_id).printFiles()
         
-        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
     
     def verifyFileTransfer(self):
         pass
@@ -275,7 +275,7 @@ class ResourcePool(object):
             
         self.getNode(nod_id).printFiles()
         
-        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
         
     def addTaintedImageToNode(self,pnode,diskImageID,imagesize,leaseID,vnode):
         self.rm.logger.info("Adding tainted image for L%iV%i in pnode=%i" % (leaseID,vnode,pnode), constants.ENACT)
@@ -285,7 +285,7 @@ class ResourcePool(object):
         img.addMapping(leaseID,vnode)
         self.getNode(pnode).addFile(img)
         self.getNode(pnode).printFiles()
-        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
         return img
         
     def checkImage(self, pnode, leaseID, vnode, imagefile):
@@ -311,7 +311,7 @@ class ResourcePool(object):
                 img.addMapping(leaseID,vnode)
                 node.addFile(img)
                 node.printFiles()
-                self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+                self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
     
     def isInPool(self,pnode,imagefile,time):
         return self.getNode(pnode).isInPool(imagefile, after=time)
@@ -345,7 +345,7 @@ class ResourcePool(object):
 
         node.printFiles()
         
-        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
         
     def addRAMFileToNode(self, pnode, leaseID, vnode, size):
         node = self.getNode(pnode)
@@ -354,7 +354,7 @@ class ResourcePool(object):
         f = RAMImageFile("RAM_L%iV%i" % (leaseID,vnode), size, leaseID,vnode)
         node.addFile(f)        
         node.printFiles()
-        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
 
     def removeRAMFileFromNode(self, pnode, leaseID, vnode):
         node = self.getNode(pnode)
@@ -362,7 +362,7 @@ class ResourcePool(object):
         node.printFiles()
         node.removeRAMFile(leaseID, vnode)
         node.printFiles()
-        self.rm.stats.addDiskUsage(self.getMaxDiskUsage())
+        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
         
     def getMaxDiskUsage(self):
         return max([n.getTotalFileSize() for n in self.nodes])

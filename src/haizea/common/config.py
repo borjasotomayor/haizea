@@ -111,6 +111,9 @@ class RMConfig(Config):
     def getMode(self):
         return self.config.get(constants.GENERAL_SEC, constants.MODE_OPT)
 
+    def getStatsDir(self):
+        return self.config.get(constants.GENERAL_SEC, constants.STATSDIR_OPT)
+
     #
     # SIMULATION OPTIONS
     #

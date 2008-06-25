@@ -23,137 +23,61 @@ import haizea.resourcemanager.datastruct as ds
 from haizea.common.utils import pickle
 
 class Stats(object):
-    def __init__(self, rm):
+    def __init__(self, rm, datadir):
         self.rm = rm
-        
-        # TODO: Datadir
-        # Write data to disk
-        #profile = config.getProfile()
-        #dir = statsdir + "/" + utils.genDataDirName(profile, tracefile, injectfile)
+        self.datadir = datadir
     
-        self.utilization = []
-        self.exactaccepted = []
-        self.exactrejected = []
-        self.besteffortcompleted = []
-        self.queuesize = []
-        self.queuewait = []
-        self.execwait = []
-        self.boundedslowdown = []
-        self.utilratio = []
-        self.diskusage = []
-
-        self.besteffortstartID = []
-        self.besteffortendID = []
-
-        self.aracceptedcount = 0
-        self.arrejectedcount = 0
-        self.besteffortcompletedcount = 0
-        self.queuesizecount = 0
-        
-        self.queuewaittimes = {}
-        self.startendtimes = {}
-        
+        # Counters
+        self.counters={}
+        self.counterLists={}
+        self.counterAvgType={}
+    
+        # What are the nodes doing?
+        self.doing = []        
         self.nodes=dict([(i+1,[]) for i in range(self.rm.resourcepool.getNumNodes())])
  
-    def addUtilization(self,util):
-        self.utilization.append((self.rm.clock.getTime(),None,util))
         
-    def addInitialMarker(self):
-        time = self.rm.clock.getTime()
-        self.exactaccepted.append((time,None,0))
-        self.exactrejected.append((time,None,0))
-        self.queuesize.append((time,None,0))
-        self.diskusage.append((time,None,0))
-        
-        for node in self.nodes:
-            self.nodes[node].append((time,constants.DOING_IDLE))
+    def createCounter(self, counterID, avgtype, initial=0):
+        self.counters[counterID] = initial
+        self.counterLists[counterID] = []
+        self.counterAvgType[counterID] = avgtype
 
-    def addFinalMarker(self):
+    def incrCounter(self, counterID, leaseID = None):
         time = self.rm.clock.getTime()
-        self.exactaccepted.append((time,None,self.exactacceptedcount))
-        self.exactrejected.append((time,None,self.exactrejectedcount))
-        self.queuesize.append((time,None,self.queuesizecount))
-        
-        for node in self.rm.resourcepool.nodes:
-            nodenum = node.nod_id
-            doing = node.vm_doing
-            (lasttime,lastdoing) = self.nodes[nodenum][-1]
-            if time != lasttime:
-                self.nodes[nodenum].append((time, doing))
+        self.appendStat(counterID, self.counters[counterID] + 1, leaseID, time)
 
-    def incrAccepted(self, leaseID):
+    def decrCounter(self, counterID, leaseID = None):
         time = self.rm.clock.getTime()
-        self.aracceptedcount += 1
-        self.exactaccepted.append((time, leaseID, self.aracceptedcount))
-
-    def incrRejected(self, leaseID):
-        time = self.rm.clock.getTime()
-        self.arrejectedcount += 1
-        self.exactrejected.append((time, leaseID, self.arrejectedcount))
-
-    def incrBestEffortCompleted(self, leaseID):
-        time = self.rm.clock.getTime()
-        self.besteffortcompletedcount += 1
-        self.besteffortcompleted.append((time,leaseID,self.besteffortcompletedcount))
+        self.appendStat(counterID, self.counters[counterID] - 1, leaseID, time)
         
-        self.startendtimes[leaseID][1] = time
-        start = self.startendtimes[leaseID][0]
-        end = self.startendtimes[leaseID][1]
-        #dur = self.rm.scheduler.completedleases.getLease(leaseID).duration.
+    def appendStat(self, counterID, value, leaseID = None,time = None):
+        if time == None:
+            time = self.rm.clock.getTime()
+        if len(self.counterLists[counterID]) > 0:
+            prevtime = self.counterLists[counterID][-1][0]
+        else:
+            prevtime = None
+        self.counters[counterID] = value
+        if time == prevtime:
+            self.counterLists[counterID][-1][2] = value
+        else:
+            self.counterLists[counterID].append([time, leaseID, value])
         
-        #ratio = dur / (end - start)
-        #self.utilratio.append((time, leaseID, ratio))
+    def start(self, time):
+        self.starttime = time
         
+        # Start the counters
+        for counterID in self.counters:
+            initial = self.counters[counterID]
+            self.appendStat(counterID, initial, time = time)
+        
+        # Start the doing
+        for n in self.nodes:
+            self.nodes[n].append((time,constants.DOING_IDLE))
 
-    def incrQueueSize(self, leaseID):
+    def tick(self):
         time = self.rm.clock.getTime()
-        self.queuesizecount += 1
-        if self.queuesize[-1][0] == time:
-            self.queuesize.pop()        
-        self.queuesize.append((time,leaseID,self.queuesizecount))
-
-    def decrQueueSize(self, leaseID):
-        time = self.rm.clock.getTime()
-        self.queuesizecount -= 1
-        if self.queuesize[-1][0] == time:
-            self.queuesize.pop()
-        self.queuesize.append((time, leaseID, self.queuesizecount))
-        
-    def startQueueWait(self, leaseID):
-        time = self.rm.clock.getTime()
-        if not self.queuewaittimes.has_key(leaseID):
-            self.queuewaittimes[leaseID] = [time, None, None]
-
-    def stopQueueWait(self, leaseID):
-        time = self.rm.clock.getTime()
-        if self.queuewaittimes[leaseID][1] == None:
-            self.queuewaittimes[leaseID][1] = time
-            start = self.queuewaittimes[leaseID][0]
-            end = self.queuewaittimes[leaseID][1]
-            wait = (end - start).seconds
-            self.queuewait.append((time,leaseID,wait))
-
-    def startExec(self, leaseID):
-        time = self.rm.clock.getTime()
-        if not self.startendtimes.has_key(leaseID):
-            self.startendtimes[leaseID] = [time, None]
-        if self.queuewaittimes[leaseID][2] == None:
-            self.queuewaittimes[leaseID][2] = time
-            start = self.queuewaittimes[leaseID][0]
-            end = self.queuewaittimes[leaseID][2]
-            wait = (end - start).seconds
-            self.execwait.append((time,leaseID,wait))
-            
-    def addBoundedSlowdown(self, leaseID, slowdown):
-        time = self.rm.clock.getTime()
-        self.boundedslowdown.append((time,leaseID,slowdown))
-        
-    def addDiskUsage(self, usage):
-        time = self.rm.clock.getTime()
-        self.diskusage.append((time,None,usage))
-        
-    def addNodeStats(self):
-        time = self.rm.clock.getTime()
+        # Update the doing
         for node in self.rm.resourcepool.nodes:
             nodenum = node.nod_id
             doing = node.getState()
@@ -167,8 +91,36 @@ class Stats(object):
                 else:
                     self.nodes[nodenum].append((time,doing))
         
+    def stop(self):
+        time = self.rm.clock.getTime()
+
+        # Stop the counters
+        for counterID in self.counters:
+            self.appendStat(counterID, self.counters[counterID], time=time)
+        
+        # Add the averages
+        for counterID in self.counters:
+            l = self.normalizeTimes(self.counterLists[counterID])
+            avgtype = self.counterAvgType[counterID]
+            if avgtype == constants.AVERAGE_NONE:
+                self.counterLists[counterID] = self.addNoAverage(l)
+            elif avgtype == constants.AVERAGE_NORMAL:
+                self.counterLists[counterID] = self.addAverage(l)
+            elif avgtype == constants.AVERAGE_TIMEWEIGHTED:
+                print counterID
+                print l
+                self.counterLists[counterID] = self.addTimeWeightedAverage(l)
+        
+        # Stop the doing
+        for node in self.rm.resourcepool.nodes:
+            nodenum = node.nod_id
+            doing = node.vm_doing
+            (lasttime,lastdoing) = self.nodes[nodenum][-1]
+            if time != lasttime:
+                self.nodes[nodenum].append((time, doing))
+            
     def normalizeTimes(self, data):
-        return [((v[0] - self.rm.clock.getStartTime()).seconds,v[1],v[2]) for v in data]
+        return [((v[0] - self.starttime).seconds,v[1],v[2]) for v in data]
         
     def addNoAverage(self, data):
         return [(v[0],v[1],v[2],None) for v in data]
@@ -208,48 +160,6 @@ class Stats(object):
             stats.append((v[0], v[1], value, avg))
         
         return stats          
-        
-    def getExactAccepted(self):
-        l = self.normalizeTimes(self.exactaccepted)
-        return self.addNoAverage(l)
-    
-    def getExactRejected(self):
-        l = self.normalizeTimes(self.exactrejected)
-        return self.addNoAverage(l)
-    
-    def getBestEffortCompleted(self):
-        l = self.normalizeTimes(self.besteffortcompleted)
-        return self.addNoAverage(l)
-    
-    def getQueueSize(self):
-        l = self.normalizeTimes(self.queuesize)
-        return self.addTimeWeightedAverage(l)
-    
-    def getQueueWait(self):
-        l = self.normalizeTimes(self.queuewait)
-        return self.addAverage(l)
-
-    def getExecWait(self):
-        l = self.normalizeTimes(self.execwait)
-        return self.addAverage(l)
-    
-    def getUtilization(self):
-        l = self.normalizeTimes(self.utilization)
-        return self.addTimeWeightedAverage(l)
-    
-    def getUtilizationRatio(self):
-        l = self.normalizeTimes(self.utilratio)
-        return self.addAverage(l)
-    
-    def getDiskUsage(self):
-        l = self.normalizeTimes(self.diskusage)
-        l = self.addNoAverage(l)
-        return l
-        
-    def getBoundedSlowdown(self):
-        l = self.normalizeTimes(self.boundedslowdown)
-        l = self.addAverage(l)
-        return l
     
     def getNodesDoing(self):
         starttime = self.rm.clock.getStartTime()

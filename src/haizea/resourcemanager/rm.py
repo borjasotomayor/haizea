@@ -73,19 +73,24 @@ class ResourceManager(object):
 
         
         # Statistics collection 
-        self.stats = stats.Stats(self)
+        self.stats = stats.Stats(self, self.config.getStatsDir())
 
         
     def start(self):
         self.logger.status("Starting resource manager", constants.RM)
-        self.stats.addInitialMarker()
+
+        self.stats.createCounter(constants.COUNTER_ARACCEPTED, constants.AVERAGE_NONE)
+        self.stats.createCounter(constants.COUNTER_ARREJECTED, constants.AVERAGE_NONE)
+        self.stats.createCounter(constants.COUNTER_BESTEFFORTCOMPLETED, constants.AVERAGE_NONE)
+        self.stats.createCounter(constants.COUNTER_QUEUESIZE, constants.AVERAGE_TIMEWEIGHTED)
+        self.stats.createCounter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
+        self.stats.createCounter(constants.COUNTER_CPUUTILIZATION, constants.AVERAGE_TIMEWEIGHTED)
+        
         self.clock.run()
         
     def stop(self):
         self.logger.status("Stopping resource manager", constants.RM)
-        self.stats.addFinalMarker()
-        # TODO: Get stats dir from config file
-        statsdir="/home/borja/docs/uchicago/research/haizea/results"
+        self.stats.stop()
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()
         #self.stats.dumpStatsToDisk(statsdir)
@@ -138,11 +143,11 @@ class ResourceManager(object):
             
     def printStatus(self):
         self.logger.status("STATUS ---Begin---", constants.RM)
-        self.logger.status("STATUS Completed best-effort leases: %i" % self.stats.besteffortcompletedcount, constants.RM)
-        self.logger.status("STATUS Queue size: %i" % self.stats.queuesizecount, constants.RM)
+        self.logger.status("STATUS Completed best-effort leases: %i" % self.stats.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
+        self.logger.status("STATUS Queue size: %i" % self.stats.counters[constants.COUNTER_QUEUESIZE], constants.RM)
         self.logger.status("STATUS Best-effort reservations: %i" % self.scheduler.numbesteffortres, constants.RM)
-        self.logger.status("STATUS Accepted AR leases: %i" % self.stats.aracceptedcount, constants.RM)
-        self.logger.status("STATUS Rejected AR leases: %i" % self.stats.arrejectedcount, constants.RM)
+        self.logger.status("STATUS Accepted AR leases: %i" % self.stats.counters[constants.COUNTER_ARACCEPTED], constants.RM)
+        self.logger.status("STATUS Rejected AR leases: %i" % self.stats.counters[constants.COUNTER_ARREJECTED], constants.RM)
         self.logger.status("STATUS ----End----", constants.RM)
 
     def getNextChangePoint(self):
@@ -194,6 +199,7 @@ class SimulatedClock(Clock):
     
     def run(self):
         self.rm.logger.status("Starting simulated clock", constants.CLOCK)
+        self.rm.stats.start(self.getStartTime())
         prevstatustime = self.time
         self.prevtime = None
         done = False
@@ -297,6 +303,7 @@ class RealClock(Clock):
     
     def run(self):
         self.rm.logger.status("Starting simulated clock", constants.CLOCK)
+        self.rm.stats.start(self.getStartTime())
         # TODO: Add signal capturing so we can stop gracefully
         done = False
         while not done:

@@ -57,7 +57,7 @@ class Scheduler(object):
             try:
                 self.scheduleARLease(r, avoidpreempt=avoidpreempt, nexttime=nexttime)
                 self.scheduledleases.add(r)
-                self.rm.stats.incrAccepted(r.leaseID)
+                self.rm.stats.incrCounter(constants.COUNTER_ARACCEPTED, r.leaseID)
             except SchedException, msg:
                 # If our first try avoided preemption, try again
                 # without avoiding preemption.
@@ -68,12 +68,12 @@ class Scheduler(object):
                         self.rm.logger.info("LEASE-%i Trying again without avoiding preemption" % r.leaseID, constants.SCHED)
                         self.scheduleARLease(r, nexttime, avoidpreempt=False)
                         self.scheduledleases.add(r)
-                        self.rm.stats.incrAccepted(r.leaseID)
+                        self.rm.stats.incrCounter(constants.COUNTER_ARACCEPTED, r.leaseID)
                     except SchedException, msg:
-                        self.rm.stats.incrRejected(r.leaseID)
+                        self.rm.stats.incrCounter(constants.COUNTER_ARREJECTED, r.leaseID)
                         self.rm.logger.info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED)
                 else:
-                    self.rm.stats.incrRejected(r.leaseID)
+                    self.rm.stats.incrCounter(constants.COUNTER_ARREJECTED, r.leaseID)
                     self.rm.logger.info("LEASE-%i Scheduling exception: %s" % (r.leaseID, msg), constants.SCHED)
                
         done = False
@@ -90,8 +90,7 @@ class Scheduler(object):
                     self.rm.logger.info("LEASE-%i ResReq  %s" % (r.leaseID, r.resreq), constants.SCHED)
                     self.scheduleBestEffortLease(r, nexttime)
                     self.scheduledleases.add(r)
-                    self.rm.stats.decrQueueSize(r.leaseID)
-                    self.rm.stats.stopQueueWait(r.leaseID)
+                    self.rm.stats.decrCounter(constants.COUNTER_QUEUESIZE, r.leaseID)
                 except SchedException, msg:
                     # Put back on queue
                     newqueue.enqueue(r)
@@ -134,8 +133,9 @@ class Scheduler(object):
                     self.handleStartResume(l, rr)
 
         util = self.slottable.getUtilization(nowtime)
-        self.rm.stats.addUtilization(util)
-        self.rm.stats.addNodeStats()   
+        self.rm.stats.appendStat(constants.COUNTER_CPUUTILIZATION, util)
+        # TODO: Should be moved to rm.py
+        self.rm.stats.tick()
                     
     def updateNodeVMState(self, nodes, state):
         for n in nodes:
@@ -153,11 +153,6 @@ class Scheduler(object):
             l.state = constants.LEASE_STATE_ACTIVE
             rr.state = constants.RES_STATE_ACTIVE
             
-            # TODO: Should be moved from stats to the lease
-            # descriptor
-            if isinstance(l,ds.BestEffortLease):
-                self.rm.stats.startExec(l.leaseID)            
-
             try:
                 self.rm.resourcepool.startVMs(l, rr)
                 # The next two lines have to be moved somewhere more
@@ -193,8 +188,7 @@ class Scheduler(object):
             for vnode,pnode in l.vmimagemap.items():
                 self.rm.resourcepool.removeImage(pnode, l.leaseID, vnode)
             if isinstance(l,ds.BestEffortLease):
-                self.rm.stats.incrBestEffortCompleted(l.leaseID)
-                self.rm.stats.addBoundedSlowdown(l.leaseID, l.getSlowdown(self.rm.clock.getTime()))        
+                self.rm.stats.incrCounter(constants.COUNTER_BESTEFFORTCOMPLETED, l.leaseID)
             if rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
                 rrs = l.nextRRs(rr)
                 for r in rrs:
@@ -290,7 +284,7 @@ class Scheduler(object):
         l.state = constants.LEASE_STATE_SUSPENDED
         self.scheduledleases.remove(l)
         self.queue.enqueueInOrder(l)
-        self.rm.stats.incrQueueSize(l.leaseID)
+        self.rm.stats.incrCounter(constants.COUNTER_QUEUESIZE, l.leaseID)
         l.printContents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_IDLE)
         self.rm.logger.debug("LEASE-%i End of handleEndSuspend" % l.leaseID, constants.SCHED)
@@ -529,7 +523,7 @@ class Scheduler(object):
             req.vmimagemap = {}
             self.scheduledleases.remove(req)
             self.queue.enqueueInOrder(req)
-            self.rm.stats.incrQueueSize(req.leaseID)
+            self.rm.stats.incrCounter(constants.COUNTER_QUEUESIZE, req.leaseID)
         else:
             susptype = self.rm.config.getSuspensionType()
             timebeforesuspend = time - vmrr.start
@@ -561,7 +555,7 @@ class Scheduler(object):
                 req.vmimagemap = {}
                 self.scheduledleases.remove(req)
                 self.queue.enqueueInOrder(req)
-                self.rm.stats.incrQueueSize(req.leaseID)
+                self.rm.stats.incrCounter(constants.COUNTER_QUEUESIZE, req.leaseID)
         self.rm.logger.edebug("Lease after preemption:", constants.SCHED)
         req.printContents()
         
@@ -806,9 +800,12 @@ class Scheduler(object):
         return self.queue.isEmpty()
     
     def enqueue(self, req):
-        self.rm.stats.incrQueueSize(req.leaseID)
-        self.rm.stats.startQueueWait(req.leaseID)
+        self.rm.stats.incrCounter(constants.COUNTER_QUEUESIZE, req.leaseID)
         self.queue.enqueue(req)
+
+    def enqueueInOrder(self, req):
+        self.rm.stats.incrCounter(constants.COUNTER_QUEUESIZE, req.leaseID)
+        self.queue.enqueueInOrder(req)
         
     def canReserveBestEffort(self):
         return self.numbesteffortres < self.maxres
