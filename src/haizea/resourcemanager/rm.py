@@ -93,7 +93,7 @@ class ResourceManager(object):
         self.stats.stop()
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()
-        #self.stats.dumpStatsToDisk(statsdir)
+        self.stats.dumpStatsToDisk()
         
     def processRequests(self, nexttime):        
         requests = []

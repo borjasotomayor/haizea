@@ -107,8 +107,6 @@ class Stats(object):
             elif avgtype == constants.AVERAGE_NORMAL:
                 self.counterLists[counterID] = self.addAverage(l)
             elif avgtype == constants.AVERAGE_TIMEWEIGHTED:
-                print counterID
-                print l
                 self.counterLists[counterID] = self.addTimeWeightedAverage(l)
         
         # Stop the doing
@@ -176,47 +174,30 @@ class Stats(object):
                 prevdoing = doing
         return nodes
     
-    def dumpStatsToDisk(self, dir):
+    def dumpStatsToDisk(self):
         try:
-            if not os.path.exists(dir):
-                os.makedirs(dir)
+            if not os.path.exists(self.datadir):
+                os.makedirs(self.datadir)
         except OSError, e:
             if e.errno != EEXIST:
                 raise e
     
-        cpuutilization = self.getUtilization()
-        exactaccepted = self.getExactAccepted()
-        exactrejected = self.getExactRejected()
-        besteffortcompleted = self.getBestEffortCompleted()
-        queuesize = self.getQueueSize()
-        queuewait = self.getQueueWait()
-        execwait = self.getExecWait()
-        utilratio = self.getUtilizationRatio()
-        diskusage = self.getDiskUsage()
-        boundedslowdown = self.getBoundedSlowdown()
+        # Save counters
+        pickle(self.counterLists, self.datadir, constants.COUNTERSFILE)
+        
+        # Save lease data
         leases = ds.LeaseTable(None)
         leases.entries = self.rm.scheduler.completedleases.entries
-        
         # Remove some data that won't be necessary in the reporting tools
         for l in leases.entries.values():
             l.removeRRs()
             l.scheduler = None
             l.logger = None
+        pickle(leases, self.datadir, constants.LEASESFILE)
         
+        # Save utilization data
         doing = self.getNodesDoing()
-    
-        pickle(cpuutilization, dir, constants.CPUUTILFILE)
-        pickle(exactaccepted, dir, constants.ACCEPTEDFILE)
-        pickle(exactrejected, dir, constants.REJECTEDFILE)
-        pickle(besteffortcompleted, dir, constants.COMPLETEDFILE)
-        pickle(queuesize, dir, constants.QUEUESIZEFILE)
-        pickle(queuewait, dir, constants.QUEUEWAITFILE)
-        pickle(execwait, dir, constants.EXECWAITFILE)
-        pickle(utilratio, dir, constants.UTILRATIOFILE)
-        pickle(diskusage, dir, constants.DISKUSAGEFILE)
-        pickle(boundedslowdown, dir, constants.SLOWDOWNFILE)
-        pickle(leases, dir, constants.LEASESFILE)
-        pickle(doing, dir, constants.DOINGFILE)
+        pickle(doing, self.datadir, constants.DOINGFILE)
 
                 
             

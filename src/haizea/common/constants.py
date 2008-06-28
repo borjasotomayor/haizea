@@ -223,18 +223,7 @@ WORSE = 1
 
 
 # Data filenames
-CPUUTILFILE="cpuutil.dat"
-MEMUTILFILE="memutil.dat"
-ACCEPTEDFILE="accepted.dat"
-REJECTEDFILE="rejected.dat"
-COMPLETEDFILE="besteffort-completed.dat"
-QUEUESIZEFILE="queuesize.dat"
-QUEUEWAITFILE="queuewait.dat"
-EXECWAITFILE="execwait.dat"
-UTILRATIOFILE="utilratio.dat"
-CLIPTIMESFILE="cliptimes.dat"
-DISKUSAGEFILE="diskusage.dat"
-SLOWDOWNFILE="slowdown.dat"
+COUNTERSFILE="data.dat"
 LEASESFILE="leases.dat"
 DOINGFILE="doing.dat"
 
