@@ -807,7 +807,7 @@ class SlotTable(object):
         
         reusealg = self.rm.config.getReuseAlg()
         nodeswithimg=[]
-        if reusealg==constants.REUSE_COWPOOL:
+        if reusealg==constants.REUSE_IMAGECACHES:
             nodeswithimg = self.rm.enactment.getNodesWithImgInPool(diskImageID, start)
 
         # Compares node x and node y. 

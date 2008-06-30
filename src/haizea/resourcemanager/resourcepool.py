@@ -36,7 +36,7 @@ class ResourcePool(object):
         self.EDFnode = self.info.getEDFNode()
         
         self.reusealg = self.rm.config.getReuseAlg()
-        if self.reusealg == constants.REUSE_COWPOOL:
+        if self.reusealg == constants.REUSE_IMAGECACHES:
             self.maxpoolsize = self.rm.config.getMaxPoolSize()
         else:
             self.maxpoolsize = None
@@ -88,7 +88,7 @@ class ResourcePool(object):
                 if self.reusealg == constants.REUSE_NONE:
                     if taintedImage == None:
                         raise Exception, "ERROR: No image for L%iV%i is on node %i" % (leaseID, vnode, pnode)
-                elif self.reusealg == constants.REUSE_COWPOOL:
+                elif self.reusealg == constants.REUSE_IMAGECACHES:
                     poolentry = node.getPoolEntry(imagefile, leaseID=lease.leaseID, vnode=vnode)
                     if poolentry == None:
                         # Not necessarily an error. Maybe the pool was full, and
@@ -134,7 +134,7 @@ class ResourcePool(object):
                 img = VMImageFile(imagefile, imagesize, masterimg=False)
                 img.addMapping(leaseID,vnode)
                 self.getNode(nod_id).addFile(img)
-        elif self.reusealg == constants.REUSE_COWPOOL:
+        elif self.reusealg == constants.REUSE_IMAGECACHES:
             # Sometimes we might find that the image is already deployed
             # (although unused). In that case, don't add another copy to
             # the pool. Just "reactivate" it.
@@ -239,7 +239,7 @@ class ResourcePool(object):
                 img = VMImageFile(imagefile, imagesize, masterimg=False)
                 img.addMapping(leaseID,vnode)
                 self.getNode(nod_id).addFile(img)
-        elif self.reusealg == constants.REUSE_COWPOOL:
+        elif self.reusealg == constants.REUSE_IMAGECACHES:
             # Sometimes we might find that the image is already deployed
             # (although unused). In that case, don't add another copy to
             # the pool. Just "reactivate" it.
@@ -295,7 +295,7 @@ class ResourcePool(object):
         elif self.reusealg == constants.REUSE_NONE:
             if not node.hasTaintedImage(leaseID, vnode, imagefile):
                 self.rm.logger.error("ERROR: Image for L%iV%i is not deployed on node %i" % (leaseID, vnode, pnode), constants.ENACT)
-        elif self.reusealg == constants.REUSE_COWPOOL:
+        elif self.reusealg == constants.REUSE_IMAGECACHES:
             poolentry = node.getPoolEntry(imagefile, leaseID=leaseID, vnode=vnode)
             if poolentry == None:
                 # Not necessarily an error. Maybe the pool was full, and
@@ -325,7 +325,7 @@ class ResourcePool(object):
     def removeImage(self,pnode,lease,vnode):
         node = self.getNode(pnode)
         node.printFiles()
-        if self.reusealg == constants.REUSE_COWPOOL:
+        if self.reusealg == constants.REUSE_IMAGECACHES:
             self.rm.logger.info("Removing pooled images for L%iV%i in node %i" % (lease,vnode,pnode), constants.ENACT)
             toremove = []
             for img in node.getPoolImages():

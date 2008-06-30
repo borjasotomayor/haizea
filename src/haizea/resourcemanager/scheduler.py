@@ -344,7 +344,7 @@ class Scheduler(object):
                     leaseID = req.leaseID
                     self.rm.logger.info("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (req.vmimage, vnode, pnode), constants.SCHED)
 
-                    if reusealg == constants.REUSE_COWPOOL:
+                    if reusealg == constants.REUSE_IMAGECACHES:
                         if self.rm.resourcepool.isInPool(pnode,req.diskImageID, start):
                             self.rm.logger.info("No need to schedule an image transfer (reusing an image in pool)", constants.SCHED)
                             mustpool[vnode] = pnode                            
@@ -378,7 +378,7 @@ class Scheduler(object):
  
             # No chance of scheduling exception at this point. It's safe
             # to add entries to the pools
-            if reusealg == constants.REUSE_COWPOOL:
+            if reusealg == constants.REUSE_IMAGECACHES:
                 for (vnode,pnode) in mustpool.items():
                     self.rm.resourcepool.addToPool(pnode, req.diskImageID, leaseID, vnode, start)
  
@@ -606,7 +606,7 @@ class Scheduler(object):
                     earliest = dict([(node, [startTime,constants.REQTRANSFER_YES]) for node in nodIDs])                                    # TODO: Take into account reusable images
             
             # Check if we can reuse images
-            if reusealg==constants.REUSE_COWPOOL:
+            if reusealg==constants.REUSE_IMAGECACHES:
                 nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(req.diskImageID)
                 for node in nodeswithimg:
                     earliest[node] = [nexttime, constants.REQTRANSFER_COWPOOL]
