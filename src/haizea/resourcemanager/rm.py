@@ -73,7 +73,7 @@ class ResourceManager(object):
 
         
         # Statistics collection 
-        self.stats = stats.Stats(self, self.config.getStatsDir())
+        self.stats = stats.Stats(self, self.config.getDataDir())
 
         
     def start(self):
