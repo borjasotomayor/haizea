@@ -111,8 +111,8 @@ class RMConfig(Config):
     def getMode(self):
         return self.config.get(constants.GENERAL_SEC, constants.MODE_OPT)
 
-    def getStatsDir(self):
-        return self.config.get(constants.GENERAL_SEC, constants.STATSDIR_OPT)
+    def getDataDir(self):
+        return self.config.get(constants.GENERAL_SEC, constants.DATADIR_OPT)
 
     #
     # SIMULATION OPTIONS
@@ -200,13 +200,13 @@ class RMConfig(Config):
 
     def getSuspendThreshold(self):
         if not self.config.has_option(constants.SCHEDULING_SEC, constants.SUSPENDTHRESHOLD_OPT):
-            return 0
+            return None
         else:
             return TimeDelta(seconds=self.config.getint(constants.SCHEDULING_SEC, constants.SUSPENDTHRESHOLD_OPT))
 
     def getSuspendThresholdFactor(self):
         if not self.config.has_option(constants.SCHEDULING_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT):
-            return None
+            return 0
         else:
             return self.config.getfloat(constants.SCHEDULING_SEC, constants.SUSPENDTHRESHOLDFACTOR_OPT)
 
@@ -264,11 +264,14 @@ class RMConfig(Config):
             return injfile
 
     def getImagefile(self):
-        imgfile = self.config.get(constants.TRACEFILE_SEC, constants.IMGFILE_OPT)
-        if imgfile == "None":
+        if not self.config.has_option(constants.TRACEFILE_SEC, constants.IMGFILE_OPT):
             return None
         else:
-            return imgfile
+            imgfile = self.config.get(constants.TRACEFILE_SEC, constants.IMGFILE_OPT)
+            if imgfile == "None":
+                return None
+            else:
+                return imgfile
 
 
 class GraphDataEntry(object):
@@ -315,8 +318,10 @@ class RMMultiConfig(Config):
         Config.__init__(self, config)
         
     def getProfiles(self):
-        names = self.config.get(constants.PROFILES_SEC, constants.NAMES_OPT).split(",")
-        return [s.strip(' ') for s in names]
+        sections = set([s.split(":")[0] for s in self.config.sections()])
+        # Remove multi and common sections
+        sections.difference_update([constants.COMMON_SEC, constants.MULTI_SEC])
+        return list(sections)
     
     def getProfilesSubset(self, sec):
         profiles = self.config.get(sec, constants.PROFILES_OPT)
@@ -347,26 +352,22 @@ class RMMultiConfig(Config):
         return injs
 
     def getTracefiles(self):
-        dir = self.config.get(constants.TRACES_SEC, constants.TRACEDIR_OPT)
-        traces = self.config.get(constants.TRACES_SEC, constants.TRACEFILES_OPT).split()
+        dir = self.config.get(constants.MULTI_SEC, constants.TRACEDIR_OPT)
+        traces = self.config.get(constants.MULTI_SEC, constants.TRACEFILES_OPT).split()
         return [dir + "/" + t for t in traces]
 
     def getInjectfiles(self):
-        dir = self.config.get(constants.INJECTIONS_SEC, constants.INJDIR_OPT)
-        inj = self.config.get(constants.INJECTIONS_SEC, constants.INJFILES_OPT).split()
+        dir = self.config.get(constants.MULTI_SEC, constants.INJDIR_OPT)
+        inj = self.config.get(constants.MULTI_SEC, constants.INJFILES_OPT).split()
         inj = [dir + "/" + i for i in inj]
         inj.append(None)
         return inj
-
-    def getCSS(self):
-        return self.config.get(constants.REPORTING_SEC, constants.CSS_OPT)
-
     
     def getConfigs(self):
         profiles = self.getProfiles()
         tracefiles = self.getTracefiles()
         injectfiles = self.getInjectfiles()
-    
+
         configs = []
         for profile in profiles:
             for tracefile in tracefiles:
@@ -382,103 +383,60 @@ class RMMultiConfig(Config):
                             profileconfig.add_section(s_noprefix)
                         for item in items:
                             profileconfig.set(s_noprefix, item[0], item[1])
-                    profileconfig.set(constants.GENERAL_SEC, constants.PROFILE_OPT, profile)
-                    profileconfig.set(constants.GENERAL_SEC, constants.TRACEFILE_OPT, tracefile)
+                            
+                    # The tracefile section may have not been created
+                    if not profileconfig.has_section(constants.TRACEFILE_SEC):
+                        profileconfig.add_section(constants.TRACEFILE_SEC)
+
+                    # Add tracefile option
+                    profileconfig.set(constants.TRACEFILE_SEC, constants.TRACEFILE_OPT, tracefile)
+                    
+                    # Add injected file option
                     if injectfile == None:
                         inj = "None"
                     else:
                         inj = injectfile
-                    profileconfig.set(constants.GENERAL_SEC, constants.INJFILE_OPT, inj)
+                    profileconfig.set(constants.TRACEFILE_SEC, constants.INJFILE_OPT, inj)
+                    
+                    # Add datadir option
+                    datadirname = genDataDirName(profile, tracefile, injectfile)
+                    basedatadir = self.config.get(constants.MULTI_SEC, constants.BASEDATADIR_OPT)
+                    datadir = basedatadir + "/" + datadirname
+                    profileconfig.set(constants.GENERAL_SEC, constants.DATADIR_OPT, datadir)
+                    
+                    # Set profile option (only used internally)
+                    profileconfig.set(constants.GENERAL_SEC, constants.PROFILE_OPT, profile)
+                    
                     c = RMConfig(profileconfig)
                     configs.append(c)
         
         return configs
-    
-    def getReportDir(self):
-        return self.config.get(constants.REPORTING_SEC, constants.REPORTDIR_OPT)
+
             
     def getConfigsToRun(self):
         configs = self.getConfigs()
-        profiles = self.getProfilesSubset(constants.RUN_SEC)
-        traces = self.getTracesSubset(constants.RUN_SEC)
-        injs = self.getInjSubset(constants.RUN_SEC)
         
-        confs = []
-        for c in configs:
-            p = c.getProfile()
-            t = os.path.basename(c.getTracefile())
-            i = c.getInjectfile()
-            if i != None: 
-                i = os.path.basename(i)
+        # TODO: Come up with a new way to filter what gets run or not
+        #profiles = self.getProfilesSubset(constants.RUN_SEC)
+        #traces = self.getTracesSubset(constants.RUN_SEC)
+        #injs = self.getInjSubset(constants.RUN_SEC)
+        
+#        confs = []
+#        for c in configs:
+#            p = c.getProfile()
+#            t = os.path.basename(c.getTracefile())
+#            i = c.getInjectfile()
+#            if i != None: 
+#                i = os.path.basename(i)
+#
+#            if p in profiles and t in traces and i in injs:
+#                confs.append(c)
+#
+#        return confs
+        return configs
 
-            if p in profiles and t in traces and i in injs:
-                confs.append(c)
+    
 
-        return confs
-        
-    def getConfigsToReport(self):
-        configs = self.getConfigs()
-        profiles = self.getProfilesSubset(constants.REPORTING_SEC)
-        traces = self.getTracesSubset(constants.REPORTING_SEC)
-        injs = self.getInjSubset(constants.REPORTING_SEC)
-
-        confs = []
-        for c in configs:
-            p = c.getProfile()
-            t = os.path.basename(c.getTracefile())
-            i = c.getInjectfile()
-            if i != None: 
-                i = os.path.basename(i)
-            
-            if p in profiles and t in traces and i in injs:
-                confs.append(c)
-                
-        return confs
-    
-    def getGraphSections(self):
-        secs = [s for s in self.config.sections() if s.startswith("graph-")]
-        secs.sort()
-        return secs
-        
-    def getGraphTitle(self, graphsec):
-        return self.config.get(graphsec, constants.TITLE_OPT)
-    
-    def getGraphDatafile(self, graphsec):
-        return self.config.get(graphsec, constants.DATAFILE_OPT)
-    
-    def getGraphType(self, graphsec):
-        return self.config.get(graphsec, constants.GRAPHTYPE_OPT)
-    
-    def getGraphTable(self, graphsec):
-        if self.config.has_option(graphsec, constants.TABLE_OPT):
-            return self.config.get(graphsec, constants.TABLE_OPT)
-        else:
-            return None
-    
-    def getGraphClip(self, graphsec):
-        def parseClip(clip):
-            if clip[-1] == "%":
-                return (constants.CLIP_PERCENTSUBMITTED, int(clip[:-1]))
-            elif clip[-1] == "s":
-                return (constants.CLIP_TIMESTAMP, int(clip[:-1]))
-            elif clip == constants.CLIP_LASTSUBMISSION:
-                return (constants.CLIP_LASTSUBMISSION, None)
-            elif clip == constants.CLIP_NOCLIP:
-                return (constants.CLIP_NOCLIP, None)
-        
-        if self.config.has_option(graphsec, constants.CLIPSTART_OPT) and self.config.has_option(graphsec, constants.CLIPEND_OPT):
-            clipstart = self.config.get(graphsec, constants.CLIPSTART_OPT)
-            clipend = self.config.get(graphsec, constants.CLIPEND_OPT)
-            return (parseClip(clipstart), parseClip(clipend))
-        else:
-            return None
-    
-    def getGraphSlideshow(self, graphsec):
-        if not self.config.has_option(graphsec, constants.SLIDESHOW_OPT):
-            return False
-        else:
-            return self.config.getboolean(graphsec, constants.SLIDESHOW_OPT)
-    
         
 class TraceConfig(Config):
     def __init__(self, c):
@@ -518,6 +476,7 @@ class TraceConfig(Config):
     
     def isGenerateBasedOnWorkload(self):
         return self.config.has_section(constants.WORKLOAD_SEC)
+
 
     
 class ImageConfig(Config):

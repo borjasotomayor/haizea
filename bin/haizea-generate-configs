@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+from haizea import clients
+import sys
+
+c = clients.GenConfigs()
+c.run(sys.argv)

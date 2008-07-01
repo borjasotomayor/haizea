@@ -19,7 +19,7 @@
 import haizea.common.constants as constants
 from haizea.resourcemanager.rm import ResourceManager
 from haizea.traces.generators import generateTrace, generateImages
-from haizea.common.utils import Option, OptionParser, generateScripts
+from haizea.common.utils import Option, OptionParser, genTraceInjName
 from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig, ImageConfig
 from haizea.analysis.traces import analyzeARLeaseInjection
 from haizea.analysis.misc import genpercentiles
@@ -32,18 +32,11 @@ class Haizea(object):
     def run(self, argv):
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        # Keeping this parameter for backwards compatibility
-        # The preferred way of specifying the stats dir is through
-        # the configuration file.
-        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir"))
 
         opt, args = p.parse_args(argv)
         
         configfile=opt.conf
         config = RMConfig.fromFile(configfile)
-      
-        # TODO: If has option, override in RM
-        statsdir = opt.statsdir
         
         rm = ResourceManager(config)
     
@@ -197,7 +190,43 @@ class ImageGenerator(object):
         imagefile = opt.imagefile
 
         generateImages(config, imagefile)           
+    
+class GenConfigs(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        p.add_option(Option("-d", "--dir", action="store", type="string", dest="dir", required=True))
+        p.add_option(Option("-m", "--only-missing", action="store_true",  dest="onlymissing"))
+
+        opt, args = p.parse_args(argv)
         
+        configfile=opt.conf
+        multiconfig = RMMultiConfig.fromFile(configfile)
+        
+        dir = opt.dir
+        onlymissing = opt.onlymissing
+        
+        configs = multiconfig.getConfigsToRun()
+        
+        etcdir = os.path.abspath(dir)    
+        if not os.path.exists(etcdir):
+            os.makedirs(etcdir)
+            
+        for c in configs:
+            profile = c.getProfile()
+            tracefile = c.getTracefile()
+            injfile = c.getInjectfile()
+            datadir = c.getDataDir()
+            name = genTraceInjName(tracefile, injfile)
+            if not onlymissing or not os.path.exists(datadir):
+                configfile = etcdir + "/%s_%s.conf" % (profile, name)
+                fc = open(configfile, "w")
+                c.config.write(fc)
+                fc.close()
+                        
 class GenScripts(object):
     def __init__(self):
         pass

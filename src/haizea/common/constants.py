@@ -115,7 +115,7 @@ IMGFILE_OPT="imagefile"
 REUSE_OPT="reuse"
 MAXPOOL_OPT="maxpool"
 NODESELECTION_OPT="nodeselection"
-STATSDIR_OPT="statsdir"
+DATADIR_OPT="datadir"
 
 REPORTING_SEC="reporting"
 CSS_OPT="css"
@@ -149,6 +149,10 @@ ESTIMATESUSPENDRATE_OPT="suspendresume-rate-estimate"
 
 SCHEDULING_SEC="scheduling"
 TRACEFILE_SEC="tracefile"
+
+COMMON_SEC="common"
+MULTI_SEC="multi"
+BASEDATADIR_OPT="basedatadir"
 
 MODE_SIMULATION="simulation"
 MODE_OPENNEBULA="opennebula"
