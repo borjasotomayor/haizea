@@ -769,26 +769,20 @@ class SlotTable(object):
                 resmrrnew.end -= diff
                 self.updateReservationWithKeyChange(resmrr, resmrrnew)
             vmrrnew.start -= diff
-            if susprr != None:
-                # This lease was going to be suspended. Determine if
-                # we still want to use some of the extra time.
-                if vmrrnew.end - newstart < lease.remdur:
-                    # We still need to run until the end, and suspend there
-                    # Don't change the end time or the suspend RR
-                    if newstart + lease.realremdur < vmrrnew.end:
-                        vmrrnew.realend = newstart + lease.realremdur
-                else:
-                    # No need to suspend any more.
-                    vmrrnew.end -= diff
-                    vmrrnew.realend -= diff
-                    vmrrnew.oncomplete = constants.ONCOMPLETE_ENDLEASE
-                    lease.removeRR(susprr)
-                    self.removeReservation(susprr)
+            
+            # If the lease was going to be suspended, check to see if
+            # we don't need to suspend any more.
+            remdur = lease.duration.getRemainingDuration()
+            if susprr != None and vmrrnew.end - newstart >= remdur: 
+                vmrrnew.end = vmrrnew.start + remdur
+                vmrrnew.oncomplete = constants.ONCOMPLETE_ENDLEASE
+                lease.removeRR(susprr)
+                self.removeReservation(susprr)
             else:
                 vmrrnew.end -= diff
-                # ONLY for simulation
-                if vmrrnew.prematureend != None:
-                    vmrrnew.prematureend -= diff
+            # ONLY for simulation
+            if vmrrnew.prematureend != None:
+                vmrrnew.prematureend -= diff
             self.updateReservationWithKeyChange(vmrr, vmrrnew)
             self.dirty()
             self.rm.logger.edebug("New lease descriptor (after slideback):", constants.ST)
@@ -888,7 +882,7 @@ class SlotTable(object):
         
     def isFull(self, time):
         nodes = self.getAvailability(time)
-        avail = sum([node.capacity.res.getByType(RES_CPU) for node in nodes.values()])
+        avail = sum([node.capacity.getByType(constants.RES_CPU) for node in nodes.values()])
         return (avail == 0)
     
 

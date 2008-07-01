@@ -189,11 +189,6 @@ class Scheduler(object):
                 self.rm.resourcepool.removeImage(pnode, l.leaseID, vnode)
             if isinstance(l,ds.BestEffortLease):
                 self.rm.stats.incrCounter(constants.COUNTER_BESTEFFORTCOMPLETED, l.leaseID)
-            if rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
-                rrs = l.nextRRs(rr)
-                for r in rrs:
-                    l.removeRR(r)
-                    self.slottable.removeReservation(r)
        
         if isinstance(l,ds.BestEffortLease):
             if rr.backfillres == True:
@@ -205,9 +200,14 @@ class Scheduler(object):
         
     def handlePrematureEndVM(self, l, rr):
         self.rm.logger.info("LEASE-%i The VM has ended prematurely." % l.leaseID, constants.SCHED)
-        rrnew = copy.copy(rr)
-        rrnew.end = self.rm.clock.getTime()
-        self.slottable.updateReservationWithKeyChange(rr, rrnew)
+        self.handleEndRR(l, rr)
+        if rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
+            rrs = l.nextRRs(rr)
+            for r in rrs:
+                l.removeRR(r)
+                self.slottable.removeReservation(r)
+        rr.oncomplete = constants.ONCOMPLETE_ENDLEASE
+        rr.end = self.rm.clock.getTime()
         self.handleEndVM(l, rr)
         nexttime = self.rm.clock.getNextSchedulableTime()
         if self.rm.config.isBackfilling():
@@ -496,6 +496,9 @@ class Scheduler(object):
            
             if reservation:
                 self.numbesteffortres += 1
+                
+            self.rm.logger.info("Lease %i scheduled." % req.leaseID, constants.SCHED)
+            req.printContents()
             
         except SlotFittingException, msg:
             raise SchedException, "The requested best-effort lease is infeasible. Reason: %s" % msg
@@ -529,7 +532,8 @@ class Scheduler(object):
             timebeforesuspend = time - vmrr.start
             # TODO: Determine if it is in fact the initial VMRR or not. Right now
             # we conservatively overestimate
-            suspendthreshold = req.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=True)
+            canmigrate = self.rm.config.isMigrationAllowed()
+            suspendthreshold = req.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=canmigrate)
             # We can't suspend if we're under the suspend threshold
             suspendable = timebeforesuspend >= suspendthreshold
             if suspendable and (susptype == constants.SUSPENSION_ALL or (req.numnodes == 1 and susptype == constants.SUSPENSION_SERIAL)):
