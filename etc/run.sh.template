@@ -1,0 +1,7 @@
+#!/bin/bash
+
+% for profile, trace, conf in configs:
+echo Running profile=${profile} trace=${trace}
+haizea -c ${conf}
+
+% endfor

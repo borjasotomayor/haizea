@@ -3,5 +3,5 @@
 from haizea import clients
 import sys
 
-c = clients.GenScripts()
+c = clients.genScript()
 c.run(sys.argv)
