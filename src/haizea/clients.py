@@ -20,9 +20,7 @@ import haizea.common.constants as constants
 from haizea.resourcemanager.rm import ResourceManager
 from haizea.traces.generators import generateTrace, generateImages
 from haizea.common.utils import Option, OptionParser, genTraceInjName
-from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, GraphConfig, ImageConfig
-from haizea.analysis.traces import analyzeARLeaseInjection
-from haizea.analysis.misc import genpercentiles
+from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, ImageConfig
 import os.path
 
 class Haizea(object):
@@ -42,118 +40,83 @@ class Haizea(object):
     
         rm.start()
 
-class Report(object):
+class GenConfigs(object):
     def __init__(self):
         pass
     
     def run(self, argv):
-        from haizea.analysis.report import Report
-
         p = OptionParser()
         p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
-        p.add_option(Option("-t", "--html-only", action="store_true", dest="htmlonly"))
-        p.add_option(Option("-m", "--mode", action="store", type="string", dest="mode", default="all"))
-
-        opt, args = p.parse_args(argv)
-        
-        configfile=os.path.abspath(opt.conf)
-        
-        statsdir = opt.statsdir
-        
-        r = Report(configfile, statsdir, opt.htmlonly, opt.mode)
-        r.generate()
-        
-class ReportSingle(object):
-    def __init__(self, mode):
-        self.mode = mode
-    
-    def run(self, argv):
-        from haizea.analysis.report import Report
-        from haizea.common.utils import genTraceInjName
-        
-        p = OptionParser()
-        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
-        p.add_option(Option("-t", "--html-only", action="store_true", dest="htmlonly"))
-        p.add_option(Option("-p", "--profile", action="store", type="string", dest="profile"))
-        p.add_option(Option("-r", "--trace", action="store", type="string", dest="trace", default=None))
-        p.add_option(Option("-i", "--inj", action="store", type="string", dest="inj"))
-
-        opt, args = p.parse_args(argv)
-        
-        configfile= os.path.abspath(opt.conf)
-            
-        statsdir = opt.statsdir
-        
-        if opt.trace != None:
-            inj = opt.inj
-            if inj == "None": inj = None
-            trace = (opt.trace, inj, genTraceInjName(opt.trace,inj))
-        else:
-            trace = None
-        
-        r = Report(configfile, statsdir, opt.htmlonly, mode = self.mode)
-        r.generate(onlyprofile=opt.profile, onlytrace=trace, configfilename = configfile)
-                
-class Graph(object):
-    def __init__(self):
-        pass
-    
-    def run(self, argv):
-        from haizea.analysis.report import Section
-        
-        p = OptionParser()
-        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
-
-        opt, args = p.parse_args(argv)
-        
-        configfile=opt.conf
-        graphconfig = GraphConfig.fromFile(configfile)
-        graphfile = configfile.split(".")[0]
-            
-        statsdir = opt.statsdir
-
-        title = graphconfig.getTitle()
-        titlex = graphconfig.getTitleX()
-        titley = graphconfig.getTitleY()
-        datafile = graphconfig.getDatafile()
-        data = graphconfig.getDataEntries()
-        graphtype = graphconfig.getGraphType()
-
-        dirs = []
-        for d in data:
-            dirs.append((d.title, statsdir + "/" + d.dirname))
-        
-        s = Section(title, datafile, graphtype)
-        
-        s.loadData(dict(dirs), profilenames=[v[0] for v in dirs])
-        s.generateGraph("./", filename=graphfile, titlex=titlex, titley=titley)
-        
-        
-class GenPercentiles(object):
-    def __init__(self):
-        pass
-    
-    def run(self, argv):
-        from haizea.analysis.main import report
-
-        p = OptionParser()
-        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        p.add_option(Option("-s", "--statsdir", action="store", type="string", dest="statsdir", required=True))
+        p.add_option(Option("-d", "--dir", action="store", type="string", dest="dir", required=True))
 
         opt, args = p.parse_args(argv)
         
         configfile=opt.conf
         multiconfig = RMMultiConfig.fromFile(configfile)
+        
+        dir = opt.dir
+        
+        configs = multiconfig.getConfigs()
+        
+        etcdir = os.path.abspath(dir)    
+        if not os.path.exists(etcdir):
+            os.makedirs(etcdir)
             
-        statsdir = opt.statsdir
+        for c in configs:
+            profile = c.getProfile()
+            tracefile = c.getTracefile()
+            injfile = c.getInjectfile()
+            datadir = c.getDataDir()
+            name = genTraceInjName(tracefile, injfile)
+            configfile = etcdir + "/%s_%s.conf" % (profile, name)
+            fc = open(configfile, "w")
+            c.config.write(fc)
+            fc.close()
+                        
+class genScript(object):
+    def __init__(self):
+        pass
+    
+    def run(self, argv):
+        p = OptionParser()
+        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+        p.add_option(Option("-t", "--template", action="store", type="string", dest="template", required=True))
+        p.add_option(Option("-d", "--confdir", action="store", type="string", dest="confdir", required=True))
+        p.add_option(Option("-m", "--only-missing", action="store_true",  dest="onlymissing"))
 
-        genpercentiles(multiconfig, statsdir)
+        opt, args = p.parse_args(argv)
+        
+        configfile=opt.conf
+        multiconfig = RMMultiConfig.fromFile(configfile)
+                
+        try:
+            from mako.template import Template
+        except:
+            print "You need Mako Templates for Python to run this command."
+            print "You can download them at http://www.makotemplates.org/"
+            exit(1)
 
+        configs = multiconfig.getConfigsToRun()
+        
+        etcdir = os.path.abspath(opt.confdir)    
+        if not os.path.exists(etcdir):
+            os.makedirs(etcdir)
+            
+        templatedata = []    
+        for c in configs:
+            profile = c.getProfile()
+            tracefile = c.getTracefile()
+            injfile = c.getInjectfile()
+            datadir = c.getDataDir()
+            name = genTraceInjName(tracefile, injfile)
+            if not opt.onlymissing or not os.path.exists(datadir):
+                configfile = etcdir + "/%s_%s.conf" % (profile, name)
+                templatedata.append((profile,name,configfile))
 
-     
+        template = Template(filename=opt.template)
+        print template.render(configs=templatedata, etcdir=etcdir)
+
+    
 class TraceGenerator(object):
     def __init__(self):
         pass
@@ -173,6 +136,7 @@ class TraceGenerator(object):
 
         generateTrace(config, tracefile, opt.guaranteeavg)     
 
+
 class ImageGenerator(object):
     def __init__(self):
         pass
@@ -190,61 +154,7 @@ class ImageGenerator(object):
         imagefile = opt.imagefile
 
         generateImages(config, imagefile)           
-    
-class GenConfigs(object):
-    def __init__(self):
-        pass
-    
-    def run(self, argv):
-        p = OptionParser()
-        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        p.add_option(Option("-d", "--dir", action="store", type="string", dest="dir", required=True))
-        p.add_option(Option("-m", "--only-missing", action="store_true",  dest="onlymissing"))
 
-        opt, args = p.parse_args(argv)
-        
-        configfile=opt.conf
-        multiconfig = RMMultiConfig.fromFile(configfile)
-        
-        dir = opt.dir
-        onlymissing = opt.onlymissing
-        
-        configs = multiconfig.getConfigsToRun()
-        
-        etcdir = os.path.abspath(dir)    
-        if not os.path.exists(etcdir):
-            os.makedirs(etcdir)
-            
-        for c in configs:
-            profile = c.getProfile()
-            tracefile = c.getTracefile()
-            injfile = c.getInjectfile()
-            datadir = c.getDataDir()
-            name = genTraceInjName(tracefile, injfile)
-            if not onlymissing or not os.path.exists(datadir):
-                configfile = etcdir + "/%s_%s.conf" % (profile, name)
-                fc = open(configfile, "w")
-                c.config.write(fc)
-                fc.close()
-                        
-class GenScripts(object):
-    def __init__(self):
-        pass
-    
-    def run(self, argv):
-        p = OptionParser()
-        p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        p.add_option(Option("-d", "--dir", action="store", type="string", dest="dir", required=True))
-        p.add_option(Option("-m", "--only-missing", action="store_true",  dest="onlymissing"))
-
-        opt, args = p.parse_args(argv)
-        
-        configfile=opt.conf
-        multiconfig = RMMultiConfig.fromFile(configfile)
-        
-        dir = opt.dir
-
-        generateScripts(configfile, multiconfig, dir, onlymissing=opt.onlymissing)
         
 class InjectionAnalyzer(object):
     def __init__(self):
