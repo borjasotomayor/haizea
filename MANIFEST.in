@@ -1,0 +1,5 @@
+include etc/*.conf
+include etc/*.template
+include traces/*.lwf
+include traces/sample.images
+include traces/multi/*.lwf
