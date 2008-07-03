@@ -1,0 +1,142 @@
+<html><head>
+
+<title>Haizea - The Open Source VM-based Lease Manager</title>
+<link href="haizea.css" type="text/css" rel="stylesheet"/>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+</head>
+<body>
+
+<div id="content">
+<div id="logo">
+<a href="index.html"><img src="logo.png" width="450" height="86" border="0"/></a>
+</div>
+<div class="topbar">
+<a href="whatis.html">What is Haizea?</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="download.html">Download</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="documentation.html" style="color:black">Documentation</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="support.html">Support</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="roadmap.html">Roadmap</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="pubs.html">Publications</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="credits.html">Credits</a></div>
+<h1>Installing Haizea</h1>
+
+<p>Haizea has been tested only on Unix systems, and these installation instructions are given with a Unix system in mind. However, Haizea includes no platform-specific code, and should run fine on other systems. If there is enough interest, we can produce installers and installation instructions for other platforms.</p>
+
+<p>Installing Haizea can be accomplished in three simple steps:</p>
+
+<h2>1. Install dependencies</h2>
+
+<p>Haizea has a couple of software dependencies. Let's get them out of the way first:</p>
+
+<ul>
+<li><a href="http://www.python.org/">Python</a> 2.5. Haizea should also work with Python 2.4, but all testing has been done on Python 2.5.</li>
+<li><a href="http://www.egenix.com/products/python/mxBase/mxDateTime/">mxDateTime</a> 3.1.0 (part of the eGenix.com mx Base Distribution).</li>
+<li>Optional: <a href="http://oss.itsystementwicklung.de/trac/pysqlite/">pysqlite</a>. This package is only necessary if you want to use the OpenNebula modules.</li>
+<li>Optional: <a href="http://www.makotemplates.org/">Mako Templates for Python</a> 0.2.2. This package is only necessary if you want to automate running multiple simulation experiments (if this doesn't make any sense, you can skip any prerequisite for now; you will be pointed to this prerequisite again in the documentation when you get to running multiple experiments).</li>
+<li>Optional: <a href="http://psyco.sourceforge.net/">Psyco</a> 1.6. This package optimizes the execution of Python code, resulting in the simulation code running much faster. You can skip this prerequisite if you are not going to use Haizea to run simulations, or if you are only going to run short simulations.</li>
+</ul>
+
+<p>Note that mxDateTime, pysqlite, Mako, and Psyco are all available as packages (DEB, RPM, etc.) on most Linux distributions. If you don't install any of the optional dependencies, Haizea will still run fine, but some functionality may not be available, as noted above.</p>
+
+<h2>2. Download Haizea</h2>
+
+<p>Go to the <a href="download.html">download page</a> and download the latest version of Haizea. This will be a tarball called <tt>haizea-XXX.tar.gz</tt>, where XXX will be the version number. For the remainder of the instructions, let's assume that you've saved this file in a directory called <tt>$HAIZEA_INST</tt>.</p>
+
+<h2>3. Install Haizea</h2>
+
+<p>Go into directory <tt>$HAIZEA_INST</tt> and un-tar the installation package:</p>
+
+<div class="shell">
+tar xvzf haizea-XXX.tar.gz
+</div>
+
+<p>This will create a directory called <tt>haizea-XXX</tt> in <tt>$HAIZEA_INST</tt>. Go into that directory, and as root, run the following:</p>
+
+<div class="shell">
+python setup.py install
+</div>
+
+<p>If you do not have root access, or want to install Haizea in your home directory, run the following:</p>
+
+<div class="shell">
+python setup.py install --home=$HOME
+</div>
+
+<p>Note: If you have never installed a Python package in your home directory before, make sure you set the environment variable <tt>PYTHONPATH</tt> appropriately so Python will be aware of the Haizea modules.</p>
+
+<div class="shell">
+export PYTHONPATH=$HOME/lib/python
+</div>
+
+<p>After running the setup script, you should see a long list of installation and building messages, ending with the following:</p>
+
+<pre class="shell">
+creating /usr/share/haizea/traces/multi
+copying traces/multi/inj1.lwf -> /usr/share/haizea/traces/multi
+copying traces/multi/inj2.lwf -> /usr/share/haizea/traces/multi
+copying traces/multi/withprematureend.lwf -> /usr/share/haizea/traces/multi
+copying traces/multi/withoutprematureend.lwf -> /usr/share/haizea/traces/multi
+running install_egg_info
+Writing /usr/lib/python2.5/site-packages/haizea-TP1.0.egg-info
+</pre>
+
+<p>If you see this, installation has been successful!</p>
+
+<h2>4. Verify installation</h2>
+
+<p>Haizea includes some sample configuration files and lease request tracefiles that you can use to test Haizea. If you installed Haizea as root, you can run the following to test your installation:</p>
+
+<pre class="shell">
+haizea -c /usr/share/haizea/etc/sample.conf
+</pre>
+
+<p>This will use a sample configuration file to simulate running the scheduler with no requests, resulting in the following (somewhat anticlimactic) output:</p>
+
+<pre class="shell">
+[2006-11-25 13:00:00.00] TRACE   Loading tracefile /usr/share/haizea/traces/sample.lwf
+[2006-11-25 13:00:00.00] TRACE   Loaded workload with 0 requests (0 best-effort + 0 AR)
+[2006-11-25 13:00:00.00] RM      Starting resource manager
+[2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
+[2006-11-25 13:00:00.00] CLOCK   Stopping simulated clock
+[2006-11-25 13:00:00.00] RM      Stopping resource manager
+[2006-11-25 13:00:00.00] RM        Completed best-effort leases: 0
+[2006-11-25 13:00:00.00] RM        Accepted AR leases: 0
+[2006-11-25 13:00:00.00] RM        Rejected AR leases: 0
+</pre>
+
+<p>Ok, not terribly exciting, but if you see this then the basic machinery is working fine. To see how to do more elaborate simulations, take a look at the <a href="doc_quickstart.html">Quickstart Guide</a>.</p>
+
+<p>Note: If you installed Haizea in your home directory, you will have to run the following:</p>
+
+<pre class="shell">
+haizea -c $HOME/share/haizea/etc/sample.conf
+</pre>
+
+<p>Additionally, you will have to modify the <tt>tracefile</tt> option in the sample configuration so it will point to the sample tracefile located in <tt>$HOME/share/haizea/traces/sample.lwf</tt> (instead of under the <tt>/usr</tt> directory).</p>
+
+
+<table border="0" align="center">
+<tr>
+<td>
+<div class="back">
+<a href="documentation.html">
+<img src="logo_small.png" width="32" height="35" border="0"><br/>
+BACK TO<br/>DOCUMENTATION
+</a>
+</div>
+</td>
+<td>&nbsp;&nbsp;</td>
+<td>
+<div class="back">
+<a href="index.html">
+<img src="logo_small.png" width="32" height="35" border="0"><br/>
+BACK TO<br/>HOME PAGE
+</a>
+</div>
+</td>
+</tr>
+</table>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,115 @@
+<html><head>
+
+<title>Haizea - The Open Source VM-based Lease Manager</title>
+<link href="haizea.css" type="text/css" rel="stylesheet"/>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+</head>
+<body>
+
+<div id="content">
+<div id="logo">
+<a href="index.html"><img src="logo.png" width="450" height="86" border="0"/></a>
+</div>
+<div class="topbar">
+<a href="whatis.html">What is Haizea?</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="download.html">Download</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="documentation.html" style="color:black">Documentation</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="support.html">Support</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="roadmap.html">Roadmap</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="pubs.html">Publications</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="credits.html">Credits</a></div>
+<h1>Running Multiple Simulation Experiments</h1>
+
+<p>
+Haizea's regular configuration file (the one that is provided
+to the Haizea daemon) allows for, at most, one tracefile to
+be used. However, when running simulations, it is often necessary
+to run through multiple tracefiles in a variety of configurations.
+The "multi-configuration" file allows you to easily do just this.
+It is similar to the regular configuration files (all the options
+are the same), but it allows you to specify multiple tracefiles
+and multiple configuration profiles.
+</p>
+
+<p>
+The multi-configuration file must contain a section called "multi"
+where some general options are specified (e.g., the tracefiles you
+want to use). Then, for each section you would ordinarily include
+in a regular configuration file, you can include common options 
+(shared by all profiles) and profile-specific options. For example,
+suppose you want to specify options in the "general" and
+"simulation" sections, and you want to create two profiles
+called "nobackfilling" and "withbackfilling". You would
+have to create the following sections:
+</p>
+
+<pre class="shell">
+[common:general]
+...
+
+[common:simulation]
+...
+
+[nobackfilling:general]
+...
+
+[nobackfilling:simulation]
+...
+
+[withbackfilling:general]
+...
+
+[withbackfilling:simulation]
+...
+</pre>
+
+<p>
+Once you've created the multi-configuration file, you must
+feed it into the "haizea-generate-configs" command, which will
+generate a regular configuration file for every combination
+of tracefile and configuration profile. Since running each
+configuration individually would be cumbersome, you can
+also use the "haizea-generate-script" command to generate
+a script that will run through all the generated configuration
+files.
+</p>
+
+<p>
+The following example file uses two example tracefiles, one where
+best-effort leases end prematurely, and one where they don't, and
+two injections of AR leases (with no special characteristic other
+than the fact that the two are different). The file defines
+four configuration profiles:
+</p>
+<ul>
+<li><strong>nobackfilling</strong>: best-effort leases are scheduled without backfilling</li>
+<li><strong>backfilling</strong>: best-effort leases are scheduled with aggressive backfilling, but without suspend/resume</li>
+<li><strong>backfilling+SR</strong>: best-effort leases are schedules with aggressive backfilling and suspend/resume, but without migration.</li>
+<li><strong>backfilling+SR+M</strong>: The whole shebang: backfilling, suspend/resume, and migration.</li>
+</ul>
+  
+<table border="0" align="center">
+<tr>
+<td>
+<div class="back">
+<a href="documentation.html">
+<img src="logo_small.png" width="32" height="35" border="0"><br/>
+BACK TO<br/>DOCUMENTATION
+</a>
+</div>
+</td>
+<td>&nbsp;&nbsp;</td>
+<td>
+<div class="back">
+<a href="index.html">
+<img src="logo_small.png" width="32" height="35" border="0"><br/>
+BACK TO<br/>HOME PAGE
+</a>
+</div>
+</td>
+</tr>
+</table>
+
+</div>
+</body>
+</html>

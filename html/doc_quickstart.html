@@ -1,0 +1,204 @@
+<html><head>
+
+<title>Haizea - The Open Source VM-based Lease Manager</title>
+<link href="haizea.css" type="text/css" rel="stylesheet"/>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+</head>
+<body>
+
+<div id="content">
+<div id="logo">
+<a href="index.html"><img src="logo.png" width="450" height="86" border="0"/></a>
+</div>
+<div class="topbar">
+<a href="whatis.html">What is Haizea?</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="download.html">Download</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="documentation.html" style="color:black">Documentation</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="support.html">Support</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="roadmap.html">Roadmap</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="pubs.html">Publications</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="credits.html">Credits</a></div>
+<h1>Quickstart Guide</h1>
+
+<h2>The configuration file</h2>
+
+<pre class="shell">
+[simulation]
+starttime: 2006-11-25 13:00:00
+nodes: 4
+resources: CPU,1;Mem,1024;Net (in),100;Net (out),100;Disk,20000
+suspendresume-rate: 50
+</pre>
+
+<div class="center">
+<img src="quickstart_leasegraph1.png" width="413" height="153">
+</div>
+
+<div class="center">
+<img src="quickstart_leasegraph2.png" width="402" height="144">
+</div>
+<h2>The tracefile</h2>
+
+<pre class="shell">
+[tracefile]
+tracefile: /usr/share/haizea/traces/sample.lwf
+</pre>
+<p></p>
+
+<pre class="shell">
+# 0   -1   3600 3600 1 1 1024 0 foobar.img 1024
+# 900 1800 900  900  4 1 1024 0 foobar.img 1024
+</pre>
+
+
+<h2>Running the simulator</h2>
+
+<pre class="shell">
+haizea -c $HOME/share/haizea/etc/sample.conf
+</pre>
+
+<pre class="shell">
+[2006-11-25 13:00:00.00] TRACE   Loading tracefile /usr/share/haizea/traces/sample.lwf
+[2006-11-25 13:00:00.00] TRACE   Loaded workload with 1 requests (1 best-effort + 0 AR)
+[2006-11-25 13:00:00.00] RM      Starting resource manager
+[2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
+[2006-11-25 13:00:00.00] SCHED   Received (and queueing) best-effort lease request #1, 
+                                 1 nodes for 01:00:00.00.
+[2006-11-25 13:00:00.00] SCHED   Next request in the queue is lease 1. 
+                                 Attempting to schedule...
+[2006-11-25 13:00:00.00] SLOT    Lease #1 has been scheduled on nodes [1] 
+                                 from 2006-11-25 13:00:00.00 
+                                   to 2006-11-25 14:00:00.00
+[2006-11-25 13:00:00.00] SCHED   Started VMs for lease 1 on nodes [1]
+[2006-11-25 14:00:00.00] SCHED   Stopped VMs for lease 1 on nodes [1]
+[2006-11-25 14:00:00.00] CLOCK   Stopping simulated clock
+[2006-11-25 14:00:00.00] RM      Stopping resource manager
+[2006-11-25 14:00:00.00] RM        Completed best-effort leases: 1
+[2006-11-25 14:00:00.00] RM        Accepted AR leases: 0
+[2006-11-25 14:00:00.00] RM        Rejected AR leases: 0
+</pre>
+
+<div class="center">
+<img src="quickstart_leasegraph3.png" width="402" height="144">
+</div>
+
+<pre class="shell">
+[2006-11-25 13:00:00.00] TRACE   Loading tracefile /usr/share/haizea/traces/sample.lwf
+[2006-11-25 13:00:00.00] TRACE   Loaded workload with 2 requests (1 best-effort + 1 AR)
+[2006-11-25 13:00:00.00] RM      Starting resource manager
+[2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
+<span style="color:green">[2006-11-25 13:00:00.00] SCHED   Received (and queueing) best-effort lease request #1, 
+                                 1 nodes for 01:00:00.00.
+[2006-11-25 13:00:00.00] SCHED   Next request in the queue is lease 1. 
+                                 Attempting to schedule...
+[2006-11-25 13:00:00.00] SLOT    Lease #1 has been scheduled on nodes [1] 
+                                 from 2006-11-25 13:00:00.00 
+                                   to 2006-11-25 14:00:00.00
+[2006-11-25 13:00:00.00] SCHED   Started VMs for lease 1 on nodes [1]</span>
+
+<span style="color:brown">[2006-11-25 13:15:00.00] SCHED   Received AR lease request #2, 4 nodes 
+                                 from 2006-11-25 13:30:00.00 
+                                   to 2006-11-25 14:00:00.00.
+[2006-11-25 13:15:00.00] SCHED   Must preempt leases [1] to make room for AR lease #2
+[2006-11-25 13:15:00.00] SCHED   Preempting lease #1...
+[2006-11-25 13:15:00.00] SCHED   ... lease #1 will be suspended 
+                                     at 2006-11-25 13:30:00.00.
+[2006-11-25 13:15:00.00] SCHED   AR lease request #2 has been accepted.</span>
+
+<span style="color:green">[2006-11-25 13:29:39.00] SCHED   Stopped VMs for lease 1 on nodes [1]
+[2006-11-25 13:29:39.00] SCHED   Suspending lease 1...
+
+[2006-11-25 13:30:00.00] SCHED   Lease 1 suspended.</span>
+<span style="color:brown">[2006-11-25 13:30:00.00] SCHED   Started VMs for lease 2 on nodes [2, 3, 4, 1]
+[2006-11-25 13:30:00.00] SCHED   Next request in the queue is lease 1. 
+                                 Attempting to schedule...
+[2006-11-25 13:30:00.00] SLOT    Lease #1 has been scheduled on nodes [1] 
+                                 from 2006-11-25 14:00:21.00 (resuming) 
+                                   to 2006-11-25 14:30:42.00
+
+[2006-11-25 14:00:00.00] SCHED   Stopped VMs for lease 2 on nodes [2, 3, 4, 1]</span>
+<span style="color:green">[2006-11-25 14:00:00.00] SCHED   Resuming lease 1...
+
+[2006-11-25 14:00:21.00] SCHED   Resumed lease 1
+[2006-11-25 14:00:21.00] SCHED   Started VMs for lease 1 on nodes [1]
+
+[2006-11-25 14:30:42.00] SCHED   Stopped VMs for lease 1 on nodes [1]</span>
+[2006-11-25 14:30:42.00] CLOCK   Stopping simulated clock
+[2006-11-25 14:30:42.00] RM      Stopping resource manager
+[2006-11-25 14:30:42.00] RM        Completed best-effort leases: 1
+[2006-11-25 14:30:42.00] RM        Accepted AR leases: 1
+[2006-11-25 14:30:42.00] RM        Rejected AR leases: 0
+</pre>
+<h2>The scheduling options</h2>
+
+<pre class="shell">
+[scheduling]
+...
+
+suspension: none
+
+...
+</pre>
+
+<div class="center">
+<img src="quickstart_leasegraph4.png" width="459" height="144">
+</div>
+<pre class="shell">
+[2006-11-25 13:15:00.00] SCHED   Preempting lease #1...
+[2006-11-25 13:15:00.00] SCHED   ... lease #1 has been cancelled and requeued
+                                     (cannot be suspended)
+</pre>
+
+<pre class="shell">
+[2006-11-25 13:15:00.00] SLOT    Lease #1 has been scheduled on nodes [1] 
+                                 from 2006-11-25 14:00:00.00 
+                                   to 2006-11-25 15:00:00.00
+</pre>
+
+<pre class="shell">
+[scheduling]
+...
+
+diskimage-transfer: multicast
+
+...
+</pre>
+
+<pre class="shell">
+[2006-11-25 13:00:00.00] SCHED   Starting image transfer for lease 1
+[2006-11-25 13:01:22.00] SCHED   Completed image transfer for lease 1
+</pre>
+
+<h2>Other things you can do with Haizea</h2>
+
+<ul>
+<li>Run on real hardware</li>
+<li>Run multiple simulations easily</li>
+<li>Produce raw data and graphs that will help you make sense of the simulation</li>
+</ul>
+
+<table border="0" align="center">
+<tr>
+<td>
+<div class="back">
+<a href="documentation.html">
+<img src="logo_small.png" width="32" height="35" border="0"><br/>
+BACK TO<br/>DOCUMENTATION
+</a>
+</div>
+</td>
+<td>&nbsp;&nbsp;</td>
+<td>
+<div class="back">
+<a href="index.html">
+<img src="logo_small.png" width="32" height="35" border="0"><br/>
+BACK TO<br/>HOME PAGE
+</a>
+</div>
+</td>
+</tr>
+</table>
+
+</div>
+</body>
+</html>
