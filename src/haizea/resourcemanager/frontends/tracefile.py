@@ -35,6 +35,8 @@ class TracefileFrontend(RequestFrontend):
         
         # Read trace file
         # Requests is a list of lease requests
+        self.rm.logger.info("Loading tracefile %s" % tracefile, constants.TRACE)
+
         self.requests = None
         if tracefile.endswith(".swf"):
             self.requests = tracereaders.SWF(tracefile, config)
@@ -42,11 +44,13 @@ class TracefileFrontend(RequestFrontend):
             self.requests = tracereaders.LWF(tracefile, starttime)
     
         if injectfile != None:
+            self.rm.logger.info("Loading injection file %s" % injectfile, constants.TRACE)
             injectedleases = tracereaders.LWF(injectfile, starttime)
             self.requests += injectedleases
             self.requests.sort(key=operator.attrgetter("tSubmit"))
 
         if imagefile != None:
+            self.rm.logger.info("Loading image file %s" % imagefile, constants.TRACE)
             imagesizes, images = tracereaders.IMG(imagefile)
             for r,i in zip(self.requests,images):
                 r.vmimage = i
@@ -71,6 +75,10 @@ class TracefileFrontend(RequestFrontend):
         # Make the scheduler reachable from the lease request
         for r in self.requests:
             r.setScheduler(rm.scheduler)
+            
+        num_besteffort = len([x for x in self.requests if isinstance(x,BestEffortLease)])
+        num_ar = len([x for x in self.requests if isinstance(x,ARLease)])
+        self.rm.logger.info("Loaded workload with %i requests (%i best-effort + %i AR)" % (num_besteffort+num_ar, num_besteffort, num_ar), constants.TRACE)
         
         
     def getAccumulatedRequests(self):

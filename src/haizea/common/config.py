@@ -165,6 +165,12 @@ class RMConfig(Config):
         else:
             return self.config.getboolean(constants.SIMULATION_SEC, constants.RUNOVERHEADBE_OPT)
 
+    def getStatusMessageInterval(self):
+        if not self.config.has_option(constants.SIMULATION_SEC, constants.STATUS_INTERVAL_OPT):
+            return None
+        else:
+            return self.config.getint(constants.SIMULATION_SEC, constants.STATUS_INTERVAL_OPT)
+
     #
     # OPENNEBULA OPTIONS
     #
@@ -231,11 +237,11 @@ class RMConfig(Config):
         else:
             return self.config.get(constants.SCHEDULING_SEC, constants.REUSE_OPT)
         
-    def getMaxPoolSize(self):
-        if not self.config.has_option(constants.SCHEDULING_SEC, constants.MAXPOOL_OPT):
-            return constants.POOL_UNLIMITED
+    def getMaxCacheSize(self):
+        if not self.config.has_option(constants.SCHEDULING_SEC, constants.CACHESIZE_OPT):
+            return constants.CACHESIZE_UNLIMITED
         else:
-            return self.config.getint(constants.SCHEDULING_SEC, constants.MAXPOOL_OPT)        
+            return self.config.getint(constants.SCHEDULING_SEC, constants.CACHESIZE_OPT)        
         
     def isAvoidingRedundantTransfers(self):
         if not self.config.has_option(constants.SCHEDULING_SEC, constants.AVOIDREDUNDANT_OPT):
@@ -257,11 +263,14 @@ class RMConfig(Config):
         return self.config.get(constants.TRACEFILE_SEC, constants.TRACEFILE_OPT)
 
     def getInjectfile(self):
-        injfile = self.config.get(constants.TRACEFILE_SEC, constants.INJFILE_OPT)
-        if injfile == "None":
+        if not self.config.has_option(constants.TRACEFILE_SEC, constants.IMGFILE_OPT):
             return None
         else:
-            return injfile
+            injfile = self.config.get(constants.TRACEFILE_SEC, constants.INJFILE_OPT)
+            if injfile == "None":
+                return None
+            else:
+                return injfile
 
     def getImagefile(self):
         if not self.config.has_option(constants.TRACEFILE_SEC, constants.IMGFILE_OPT):

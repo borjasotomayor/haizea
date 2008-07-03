@@ -91,6 +91,11 @@ class ResourceManager(object):
     def stop(self):
         self.logger.status("Stopping resource manager", constants.RM)
         self.stats.stop()
+
+        self.logger.status("  Completed best-effort leases: %i" % self.stats.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
+        self.logger.status("  Accepted AR leases: %i" % self.stats.counters[constants.COUNTER_ARACCEPTED], constants.RM)
+        self.logger.status("  Rejected AR leases: %i" % self.stats.counters[constants.COUNTER_ARREJECTED], constants.RM)
+        
         for l in self.scheduler.completedleases.entries.values():
             l.printContents()
         self.stats.dumpStatsToDisk()
@@ -140,15 +145,6 @@ class ResourceManager(object):
             for lease in self.scheduler.queue.q:
                 lease.printContents(loglevel=loglevel)
             self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM)
-            
-    def printStatus(self):
-        self.logger.status("STATUS ---Begin---", constants.RM)
-        self.logger.status("STATUS Completed best-effort leases: %i" % self.stats.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
-        self.logger.status("STATUS Queue size: %i" % self.stats.counters[constants.COUNTER_QUEUESIZE], constants.RM)
-        self.logger.status("STATUS Best-effort reservations: %i" % self.scheduler.numbesteffortres, constants.RM)
-        self.logger.status("STATUS Accepted AR leases: %i" % self.stats.counters[constants.COUNTER_ARACCEPTED], constants.RM)
-        self.logger.status("STATUS Rejected AR leases: %i" % self.stats.counters[constants.COUNTER_ARREJECTED], constants.RM)
-        self.logger.status("STATUS ----End----", constants.RM)
 
     def getNextChangePoint(self):
        return self.scheduler.slottable.peekNextChangePoint(self.clock.getTime())
@@ -182,6 +178,8 @@ class SimulatedClock(Clock):
         Clock.__init__(self,rm)
         self.starttime = starttime
         self.time = starttime
+        self.logger = self.rm.logger
+        self.statusinterval = self.rm.config.getStatusMessageInterval()
        
     def getTime(self):
         return self.time
@@ -209,15 +207,15 @@ class SimulatedClock(Clock):
                 self.rm.notifyEndVM(rr.lease, rr)
             self.rm.processReservations(self.time)
             self.rm.processRequests(self.time)
-            # Since...
+            # Since processing requests may have resulted in new reservations
+            # starting now, we process reservations again.
             self.rm.processReservations(self.time)
-            if (self.time - prevstatustime).minutes >= 15:
-                self.rm.printStatus()
+            if self.statusinterval != None and (self.time - prevstatustime).minutes >= self.statusinterval:
+                self.printStatus()
                 prevstatustime = self.time
                 
             self.time, done = self.getNextTime()
                     
-        self.rm.printStatus()
         self.rm.logger.status("Stopping simulated clock", constants.CLOCK)
         self.rm.stop()
     
@@ -274,6 +272,15 @@ class SimulatedClock(Clock):
             raise Exception, "The simulated clock can only work with a tracefile request frontend."
         else:
             return tracef[0] 
+        
+    def printStatus(self):
+        self.logger.status("STATUS ---Begin---", constants.RM)
+        self.logger.status("STATUS Completed best-effort leases: %i" % self.rm.stats.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
+        self.logger.status("STATUS Queue size: %i" % self.rm.stats.counters[constants.COUNTER_QUEUESIZE], constants.RM)
+        self.logger.status("STATUS Best-effort reservations: %i" % self.rm.scheduler.numbesteffortres, constants.RM)
+        self.logger.status("STATUS Accepted AR leases: %i" % self.rm.stats.counters[constants.COUNTER_ARACCEPTED], constants.RM)
+        self.logger.status("STATUS Rejected AR leases: %i" % self.rm.stats.counters[constants.COUNTER_ARREJECTED], constants.RM)
+        self.logger.status("STATUS ----End----", constants.RM)
         
 class RealClock(Clock):
     def __init__(self, rm, quantum, fastforward = False):

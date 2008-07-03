@@ -324,9 +324,9 @@ class SlotTable(object):
         # At this point we know if the lease is feasible, and if
         # will require preemption.
         if not mustpreempt:
-           self.rm.logger.info("The VM reservations for this lease are feasible without preemption.", constants.ST)
+           self.rm.logger.debug("The VM reservations for this lease are feasible without preemption.", constants.ST)
         else:
-           self.rm.logger.info("The VM reservations for this lease are feasible but will require preemption.", constants.ST)
+           self.rm.logger.debug("The VM reservations for this lease are feasible but will require preemption.", constants.ST)
 
         # merge canfitnopreempt and canfitpreempt
         canfit = {}
@@ -342,7 +342,7 @@ class SlotTable(object):
 
         orderednodes = self.prioritizenodes(canfit, diskImageID, start, canpreempt, avoidpreempt)
             
-        self.rm.logger.info("Node ordering: %s" % orderednodes, constants.ST)
+        self.rm.logger.debug("Node ordering: %s" % orderednodes, constants.ST)
         
         # vnode -> pnode
         nodeassignment = {}
@@ -473,8 +473,8 @@ class SlotTable(object):
                     if preemptedEnough(amountToPreempt):
                         break
             
-        self.rm.logger.info("Preempting leases (at start of reservation): %s" % [r.lease.leaseID for r in atstart], constants.ST)
-        self.rm.logger.info("Preempting leases (in middle of reservation): %s" % [r.lease.leaseID for r in atmiddle], constants.ST)
+        self.rm.logger.debug("Preempting leases (at start of reservation): %s" % [r.lease.leaseID for r in atstart], constants.ST)
+        self.rm.logger.debug("Preempting leases (in middle of reservation): %s" % [r.lease.leaseID for r in atmiddle], constants.ST)
         
         leases = [r.lease for r in atstart|atmiddle]
         
@@ -661,6 +661,13 @@ class SlotTable(object):
 
         vmrr = ds.VMResourceReservation(lease, start, end, mappings, res, oncomplete, reservation)
         vmrr.state = constants.RES_STATE_SCHEDULED
+        
+        susp_str = res_str = ""
+        if mustresume:
+            res_str = " (resuming)"
+        if mustsuspend:
+            susp_str = " (suspending)"
+        self.rm.logger.info("Lease #%i has been scheduled on nodes %s from %s%s to %s%s" % (lease.leaseID, mappings.values(), start, res_str, end, susp_str), constants.ST)
 
         return resmrr, vmrr, susprr, reservation
 
@@ -679,11 +686,11 @@ class SlotTable(object):
                 maxend = start + remdur
                 end, canfit = self.availabilitywindow.findPhysNodesForVMs(numnodes, maxend)
         
-                self.rm.logger.info("This lease can be scheduled from %s to %s" % (start, end), constants.ST)
+                self.rm.logger.debug("This lease can be scheduled from %s to %s" % (start, end), constants.ST)
                 
                 if end < maxend:
                     mustsuspend=True
-                    self.rm.logger.info("This lease will require suspension (maxend = %s)" % (maxend), constants.ST)
+                    self.rm.logger.debug("This lease will require suspension (maxend = %s)" % (maxend), constants.ST)
                     
                     if suspendable:
                         # It the lease is suspendable...
@@ -691,7 +698,7 @@ class SlotTable(object):
                             if end-start > suspendthreshold:
                                 break
                             else:
-                                self.rm.logger.info("This starting time does not meet the suspend threshold (%s < %s)" % (end-start, suspendthreshold), constants.ST)
+                                self.rm.logger.debug("This starting time does not meet the suspend threshold (%s < %s)" % (end-start, suspendthreshold), constants.ST)
                                 start = None
                         else:
                             pass
@@ -755,7 +762,7 @@ class SlotTable(object):
             if self.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
                 (end, canfit) = self.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
                 if end == originalstart and set(nodes) <= set(canfit.keys()):
-                    self.rm.logger.info("Can slide back to %s" % p, constants.ST)
+                    self.rm.logger.debug("Can slide back to %s" % p, constants.ST)
                     newstart = p
                     break
         if newstart == None:
@@ -802,7 +809,7 @@ class SlotTable(object):
         reusealg = self.rm.config.getReuseAlg()
         nodeswithimg=[]
         if reusealg==constants.REUSE_IMAGECACHES:
-            nodeswithimg = self.rm.enactment.getNodesWithImgInPool(diskImageID, start)
+            nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(diskImageID, start)
 
         # Compares node x and node y. 
         # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)

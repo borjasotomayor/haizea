@@ -113,7 +113,7 @@ TRACEFILE_OPT="tracefile"
 INJFILE_OPT="injectionfile"
 IMGFILE_OPT="imagefile"
 REUSE_OPT="reuse"
-MAXPOOL_OPT="maxpool"
+CACHESIZE_OPT="diskimage-cache-size"
 NODESELECTION_OPT="nodeselection"
 DATADIR_OPT="datadir"
 
@@ -142,6 +142,7 @@ RUNOVERHEADBE_OPT="runtime-overhead-onlybesteffort"
 FORCETRANSFERT_OPT="force-transfer-time"
 REUSE_OPT="diskimage-reuse"
 AVOIDREDUNDANT_OPT="avoid-redundant-transfers"
+STATUS_INTERVAL_OPT="status-message-interval"
 
 OPENNEBULA_SEC="opennebula"
 DB_OPT="db"
@@ -212,6 +213,7 @@ DS="STRUCT"
 ENACT="ENACT"
 CLOCK="CLOCK"
 ONE="ONE"
+TRACE="TRACE"
 
 # Transfer required in deployment
 REQTRANSFER_NO = 0
@@ -272,7 +274,7 @@ CLIP_TIMESTAMP = "timestamp"
 CLIP_LASTSUBMISSION = "last-submission"
 CLIP_NOCLIP = "noclip"
 
-POOL_UNLIMITED = -1
+CACHESIZE_UNLIMITED = -1
 
 REPORT_ALL="all"
 REPORT_BASH="bash"
