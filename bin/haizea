@@ -2,9 +2,11 @@
 
 from haizea import clients
 import sys
-#import psyco
-
-#psyco.full()
-
+try:
+	import psyco
+	psyco.full()
+except:
+	pass
+	
 c = clients.Haizea()
 c.run(sys.argv)
