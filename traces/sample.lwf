@@ -11,7 +11,7 @@
 #
 #  0  Request time  : The time at which the lease is requested
 #  1  Start time    : The time at which the lease must start. 
-#                     -1 denotes that no start time is requestes
+#                     -1 denotes that no start time is requested
 #                     (i.e., best-effort start time)
 #  2  Duration      : Requested duration
 #  3  Real duration : Real duration. This field is used to 
@@ -46,8 +46,8 @@
 # Name: PREEMPT-PREMATUREEND2
 # Description: Same as PREEMPT, but with 
 # premature end time for both leases.
-0   -1   3600 2700 1 1 1024 0 foobar.img 1024
-900 1800 900  600  4 1 1024 0 foobar.img 1024
+#0   -1   3600 2700 1 1 1024 0 foobar.img 1024
+#900 1800 900  600  4 1 1024 0 foobar.img 1024
 
 # Name: RESERVATION
 # Description: Two best-effort leases. The first one is a long
@@ -65,3 +65,33 @@
 # since it can now start earlier
 #0   -1   3600 1800 1 1 1024 0 foobar.img 1024
 #900 -1   900  900  4 1 1024 0 foobar.img 1024
+
+# Name: MIGRATE
+# Description: Slightly convoluted combination of requests with
+#   the ultimate purpose of forcing one of the leases (the last
+#   one) to cold-migrate from nodes P3, P4 to nodes P1, P2
+#   (which become available earlier than expected due to the
+#   early end of the first AR lease)
+#0    1800 3600 900  2 1 1024 0 foobar.img 1024
+#0    1800 3600 3600 2 1 1024 0 foobar.img 1024
+#0    -1   3600 3600 2 1 1024 0 foobar.img 1024
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
+
+# Name: REUSE-1
+# Description: Two lease requests, both requiring the same
+#   disk image. The second (best-effort) should be able to avoid 
+#   doing an image transfer by reusing the cached image from the 
+#   first (AR) request.
+#0     900  900  900 1 1 1024 0 foobar.img 1024
+#2700   -1  900  900 1 1 1024 0 foobar.img 1024
+
+# Name: REUSE-2
+# Description: The first two lease requests are AR leases happening
+#   at the same time, but with different images. The third one is
+#   a best-effort one, using the image from the second AR request
+#   (which should be scheduled on nodes P3, P4). The scheduler should
+#   prefer scheduling the best-effort lease on P3, P4 since it
+#   avoids an image transfer.
+#0     900  900  900 2 1 1024 0 foobar1.img 1024
+#0     900  900  900 2 1 1024 0 foobar2.img 1024
+#2700   -1  900  900 1 1 1024 0 foobar2.img 1024
