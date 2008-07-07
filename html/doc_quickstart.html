@@ -200,7 +200,7 @@ haizea -c /usr/share/haizea/etc/sample.conf
 Notice how the above corresponds to the previous figure. In particular, notice the following:
 </p>
 <ul>
-<li>When the AR lease request is received, Haizea looks at the schedule and determines that the only way to schedule the AR lease is to preempt the best-effort lease. However, instead of cancelling that lease, it will just reschedule it so it is suspended right before the AR lease start. Note that Haizea will always try to minimize the number of preemption (in this case, we're forcing the situation for demonstration purposes) by assigning the AR lease to resources that are available without preempting other leases.</li>
+<li>When the AR lease request is received, Haizea looks at the schedule and determines that the only way to schedule the AR lease is to preempt the best-effort lease. However, instead of canceling that lease, it will just reschedule it so it is suspended right before the AR lease start. Note that Haizea will always try to minimize the number of preemption (in this case, we're forcing the situation for demonstration purposes) by assigning the AR lease to resources that are available without preempting other leases.</li>
 <li>Shortly before the AR lease starts, the best-effort lease is suspended (the time required to do this is estimated by Haizea based on an option in the configuration file). When the AR lease ends at 14:00, Haizea begins resuming the suspended best-effort lease.</li>
 </ul>
 
@@ -239,7 +239,7 @@ suspension: none
 <img src="quickstart_leasegraph4.png" width="459" height="144">
 </div>
 
-<p>Notice how, although suspending a lease is a disruptive activity which can delay the completion time of a best-effort request, it is still much better than completely cancelling a request and waiting for enough resources to accomodate the entire (uninterrupted) duration of the lease.</p>
+<p>Notice how, although suspending a lease is a disruptive activity which can delay the completion time of a best-effort request, it is still much better than completely canceling a request and waiting for enough resources to accommodate the entire (uninterrupted) duration of the lease.</p>
 
 <p>Another scheduling option you can modify is whether Haizea should transfer the VM's disk image from an image repository before the lease can start. You can do this by modifying the <tt>diskimage-transfer</tt> option:</p>
 
@@ -270,7 +270,7 @@ diskimage-transfer: multicast
 <ul>
 <li><strong>Run on real hardware</strong>: First and foremost, everything you just saw above in simulation can be done on real hardware. This is accomplished by using Haizea with the OpenNebula virtual infrastructure manager. So, if you have a Xen or KVM cluster, you can just install OpenNebula and Haizea to enable your users to request VM-based leases on your cluster. Full OpenNebula support will be released in mid-July, including a guide on how to configure and use both systems together.</li>
 <li><strong>Run complex simulations</strong>: The above show only two leases on a 4-node cluster during a span of roughly 2 hours. <em>Boring</em>. Haizea can handle more complex simulations, and also provides the necessary tools for you to easily run multiple simulations with different profiles. For example, in the Haizea paper <a href="pubs.html">Combining Batch Execution and Leasing Using Virtual Machines</a> we simulated running 72 30-day workloads in six different configurations, or 36 years of lease scheduling. To set up this kind of simulations, take a look at the <a href="doc_multiple.html">Running Multiple Simulation Experiments with Haizea</a> document.</li>
-<li><strong>Produce reports and graphs</strong>: The above examples relied on you reading the Haizea log messages, which is ok for a simple simulation, but no fun when you're scheduling thousands of leases. Haizea saves a fair amount of raw data to disk with scheduling metrics, utilization information, etc. which can ge used to generate reports and graphs. We are in the process of documenting this data format and producing tools that will allow you to easily analyse that data and create graphs.</li>
+<li><strong>Produce reports and graphs</strong>: The above examples relied on you reading the Haizea log messages, which is ok for a simple simulation, but no fun when you're scheduling thousands of leases. Haizea saves a fair amount of raw data to disk with scheduling metrics, utilization information, etc. which can be used to generate reports and graphs. We are in the process of documenting this data format and producing tools that will allow you to easily analyse that data and create graphs.</li>
 </ul>
 
 <table border="0" align="center">
