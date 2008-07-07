@@ -27,17 +27,17 @@ class DiscreteDistributionBase(object):
         self.probabilities = probabilities[:]
         self.accumprobabilities = probabilities[:]
         accum = 0.0
-        for i,prob in enumerate(self.probabilities):
+        for i, prob in enumerate(self.probabilities):
             accum += prob
             self.accumprobabilities[i] = accum
         self.numValues = len(self.values)
         
     def getAvg(self):
-        return reduce(operator.add, [x[0]*x[1] for x in zip(self.values,self.probabilities)])
+        return reduce(operator.add, [x[0]*x[1] for x in zip(self.values, self.probabilities)])
 
     def getValueFromProb(self, prob):
         pos = None
-        for i,p in enumerate(self.accumprobabilities):
+        for i, p in enumerate(self.accumprobabilities):
             if prob < p:
                 pos = i
                 break #Ugh
@@ -61,43 +61,43 @@ class DiscreteDistributionBase(object):
     
     
 class DiscreteDistribution(DiscreteDistributionBase):
-    def __init__(self,values,probabilities):
-        DiscreteDistributionBase.__init__(self,values,probabilities)
+    def __init__(self, values, probabilities):
+        DiscreteDistributionBase.__init__(self, values, probabilities)
         
     def get(self):
         return self.getValueFromProb(random.random())
 
         
 class DiscreteUniformDistribution(DiscreteDistributionBase):
-    def __init__(self,values):
+    def __init__(self, values):
         probabilities= [1.0/len(values)] * len(values)
-        DiscreteDistributionBase.__init__(self,values,probabilities)
+        DiscreteDistributionBase.__init__(self, values, probabilities)
         
     def get(self):
         return self.getValueFromProb(random.random())
 
         
 class ContinuousDistributionBase(object):
-    def __init__(self,min,max):
+    def __init__(self, min, max):
         self.min = float(min)
         self.max = float(max)
         
     def getList(self, n):
         l = []
-        for i in xrange(1,n):
+        for i in xrange(1, n):
             l.append(self.get())
         return l
     
 class ContinuousUniformDistribution(ContinuousDistributionBase):
-    def __init__(self,min,max):
-        ContinuousDistributionBase.__init__(self,min,max)
+    def __init__(self, min, max):
+        ContinuousDistributionBase.__init__(self, min, max)
         
     def get(self):
         return random.uniform(self.min, self.max)
                     
 class ContinuousNormalDistribution(ContinuousDistributionBase):
-    def __init__(self,min,max,mu,sigma):
-        ContinuousDistributionBase.__init__(self,min,max)
+    def __init__(self, min, max, mu, sigma):
+        ContinuousDistributionBase.__init__(self, min, max)
         self.mu = mu
         self.sigma = sigma
         
@@ -110,8 +110,8 @@ class ContinuousNormalDistribution(ContinuousDistributionBase):
         return number
     
 class ContinuousParetoDistribution(ContinuousDistributionBase):
-    def __init__(self,min,max,alpha):
-        ContinuousDistributionBase.__init__(self,min,max)
+    def __init__(self, min, max, alpha):
+        ContinuousDistributionBase.__init__(self, min, max)
         self.alpha = alpha
         
     def get(self):

@@ -16,7 +16,6 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-import haizea.common.constants as constants
 from haizea.resourcemanager.rm import ResourceManager
 from haizea.traces.generators import generateTrace, generateImages
 from haizea.common.utils import Option, OptionParser, genTraceInjName
@@ -111,7 +110,7 @@ class genScript(object):
             name = genTraceInjName(tracefile, injfile)
             if not opt.onlymissing or not os.path.exists(datadir):
                 configfile = etcdir + "/%s_%s.conf" % (profile, name)
-                templatedata.append((profile,name,configfile))
+                templatedata.append((profile, name, configfile))
 
         template = Template(filename=opt.template)
         print template.render(configs=templatedata, etcdir=etcdir)
@@ -168,4 +167,4 @@ class InjectionAnalyzer(object):
         
         injectionfile = opt.injectionfile
 
-        analyzeARLeaseInjection(injectionfile)  
+        #analyzeARLeaseInjection(injectionfile)  

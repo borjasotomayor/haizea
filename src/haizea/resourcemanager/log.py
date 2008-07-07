@@ -43,10 +43,10 @@ class Logger(object):
         self.extremedebug = (level == "EXTREMEDEBUG")
 
     def info(self, msg, comp):
-        self.logger.info("[%s] %s %s" % (self.rm.clock.getTime(),comp.ljust(7),msg))
+        self.logger.info("[%s] %s %s" % (self.rm.clock.getTime(), comp.ljust(7), msg))
         
     def debug(self, msg, comp):
-        self.logger.debug("[%s] %s %s" % (self.rm.clock.getTime(),comp.ljust(7),msg))
+        self.logger.debug("[%s] %s %s" % (self.rm.clock.getTime(), comp.ljust(7), msg))
     
     def edebug(self, msg, comp):
         # Since there is such a huge amount of edebug messages, we use the
@@ -54,17 +54,17 @@ class Logger(object):
         # (this actually saves quite a bit of cycles spent in logging functions
         # that ultimately determine that the message doesn't have to printed)
         if self.extremedebug:
-            self.logger.log(self.loglevel["EXTREMEDEBUG"],"[%s] %s %s" % (self.rm.clock.getTime(),comp.ljust(7),msg))
+            self.logger.log(self.loglevel["EXTREMEDEBUG"],"[%s] %s %s" % (self.rm.clock.getTime(), comp.ljust(7), msg))
     
     def status(self, msg, comp):
-        self.logger.log(self.loglevel["STATUS"],"[%s] %s %s" % (self.rm.clock.getTime(),comp.ljust(7),msg))
+        self.logger.log(self.loglevel["STATUS"],"[%s] %s %s" % (self.rm.clock.getTime(), comp.ljust(7), msg))
         
     def warning(self, msg, comp):
-        self.logger.warning("[%s] %s %s" % (self.rm.clock.getTime(),comp.ljust(7),msg))    
+        self.logger.warning("[%s] %s %s" % (self.rm.clock.getTime(), comp.ljust(7), msg))    
         
     def error(self, msg, comp):
-        self.logger.error("[%s] %s %s" % (self.rm.clock.getTime(),comp.ljust(7),msg))        
+        self.logger.error("[%s] %s %s" % (self.rm.clock.getTime(), comp.ljust(7), msg))        
         
     def log(self, level, msg, comp):
         if level != "EXTREMEDEBUG" or self.extremedebug:
-            self.logger.log(self.loglevel[level], "[%s] %s %s" % (self.rm.clock.getTime(),comp.ljust(7),msg))        
+            self.logger.log(self.loglevel[level], "[%s] %s %s" % (self.rm.clock.getTime(), comp.ljust(7), msg))        

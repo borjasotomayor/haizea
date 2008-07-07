@@ -55,8 +55,8 @@ class ResourceTuple(object):
     
     @classmethod
     def setResourceTypes(cls, resourcetypes):
-        cls.type2pos = dict([(x[0],i) for i,x in enumerate(resourcetypes)])
-        cls.descriptions = dict([(i,x[2]) for i,x in enumerate(resourcetypes)])
+        cls.type2pos = dict([(x[0], i) for i, x in enumerate(resourcetypes)])
+        cls.descriptions = dict([(i, x[2]) for i, x in enumerate(resourcetypes)])
         cls.tuplelength = len(resourcetypes)
 
     @classmethod
@@ -99,8 +99,8 @@ class ResourceTuple(object):
     
     def __repr__(self):
         r=""
-        for i,x in enumerate(self.res):
-            r += "%s:%.2f " % (self.descriptions[i],x)
+        for i, x in enumerate(self.res):
+            r += "%s:%.2f " % (self.descriptions[i], x)
         return r
 
 class Timestamp(object):
@@ -125,6 +125,12 @@ class Duration(object):
         self.requested += t
         if self.known != None:
             self.known += t
+            
+    def incr_by_percent(self, pct):
+        factor = 1 + float(pct)/100
+        self.requested = roundDateTimeDelta(self.requested * factor)
+        if self.known != None:
+            self.requested = roundDateTimeDelta(self.known * factor)
         
     def accumulateDuration(self, t):
         self.accumulated += t
@@ -137,7 +143,7 @@ class Duration(object):
         return self.known - self.accumulated
             
     def __repr__(self):
-        return "REQ: %s  |  ACC: %s  |  ACT: %s  |  KNW: %s" % (self.requested, self.accumulated, self.actual,self.known)
+        return "REQ: %s  |  ACC: %s  |  ACT: %s  |  KNW: %s" % (self.requested, self.accumulated, self.actual, self.known)
 
 class LeaseBase(object):
     def __init__(self, tSubmit, start, duration, diskImageID, diskImageSize, numnodes, resreq):
@@ -290,7 +296,8 @@ class LeaseBase(object):
             factor = self.scheduler.rm.config.getSuspendThresholdFactor() + 1
             return roundDateTimeDelta(threshold * factor)
             
-      
+    def addRuntimeOverhead(self, percent):
+        self.duration.incr_by_percent(percent)      
         
 class ARLease(LeaseBase):
     def __init__(self, tSubmit, tStart, dur, diskImageID, diskImageSize, numnodes, resreq, realdur = None):
@@ -308,12 +315,6 @@ class ARLease(LeaseBase):
         self.printRR(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------", DS)
     
-    def addRuntimeOverhead(self, percent):
-        factor = 1 + float(percent)/100
-        duration = self.end - self.start
-        realduration = self.prematureend - self.start
-        self.end = self.start + roundDateTimeDelta(duration * factor)
-        self.prematureend = self.start + roundDateTimeDelta(realduration * factor)
 
         
 class BestEffortLease(LeaseBase):
@@ -333,14 +334,6 @@ class BestEffortLease(LeaseBase):
         self.logger.log(loglevel, "Images Avail @ : %s" % self.imagesavail, DS)
         self.printRR(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------", DS)
-
-    def addRuntimeOverhead(self, percent):
-        factor = 1 + float(percent)/100
-        self.maxdur = roundDateTimeDelta(self.maxdur * factor)
-        self.remdur = roundDateTimeDelta(self.remdur * factor)
-        self.realremdur = roundDateTimeDelta(self.realremdur * factor)
-        self.realdur = roundDateTimeDelta(self.realdur * factor)
-
         
     def getSlowdown(self, end, bound=10):
 #        timeOnDedicated = self.timeOnDedicated
@@ -365,7 +358,7 @@ class ResourceReservationBase(object):
         self.logger.log(loglevel, "Start          : %s" % self.start, DS)
         self.logger.log(loglevel, "End            : %s" % self.end, DS)
         self.logger.log(loglevel, "State          : %s" % rstate_str(self.state), DS)
-        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i,x) for i,x in self.res.items()]), DS)
+        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.res.items()]), DS)
         
                 
 class FileTransferResourceReservation(ResourceReservationBase):
@@ -501,7 +494,7 @@ class LeaseTable(object):
         if type==None:
             return self.entries.values()
         else:
-            return [e for e in self.entries.values() if isinstance(e,type)]
+            return [e for e in self.entries.values() if isinstance(e, type)]
     
     # TODO: Should be moved to slottable module
     def getNextLeasesScheduledInNodes(self, time, nodes):

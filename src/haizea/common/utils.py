@@ -29,7 +29,7 @@ class Option (optparse.Option):
 
     def _check_required (self):
         if self.required and not self.takes_value():
-            raise OptionError(
+            raise optparse.OptionError(
                 "required flag set for option that doesn't take a value",
                  self)
 
@@ -85,7 +85,7 @@ def vnodemapstr(vnodes):
     if len(vnodes) == 0:
         return "UNUSED"
     else:
-        return ",".join(["L"+`l`+"V"+`v` for (l,v) in vnodes])
+        return ",".join(["L"+`l`+"V"+`v` for (l, v) in vnodes])
     
 # Based on http://norvig.com/python-iaq.html
 def abstract():

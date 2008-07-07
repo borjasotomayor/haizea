@@ -24,7 +24,7 @@ class ResourcePoolInfoBase(object):
         self.resourcepool = resourcepool
         self.logger = resourcepool.rm.logger
         
-        resourcetypes = self.getResourceTypes()
+        resourcetypes = self.getResourceTypes() #IGNORE:E1111
         ds.ResourceTuple.setResourceTypes(resourcetypes)
 
         

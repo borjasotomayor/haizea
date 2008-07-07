@@ -41,30 +41,30 @@ class Config(object):
         if self.config.has_option(section, constants.MIN_OPT) and self.config.has_option(section, constants.MAX_OPT):
             min = self.config.getint(section, constants.MIN_OPT)
             max = self.config.getint(section, constants.MAX_OPT)
-            values = range(min,max+1)
+            values = range(min, max+1)
         elif self.config.has_option(section, constants.ITEMS_OPT):
             pass
         elif self.config.has_option(section, constants.ITEMSPROBS_OPT):
             pass
-        elif self.config.has_option(section, constants.ITEMSFILE_OPT):
-            filename = config.get(section, constants.ITEMSFILE_OPT)
-            file = open (filename, "r")
-            values = []
-            for line in file:
-                value = line.strip().split(";")[0]
-                values.append(value)
-        elif self.config.has_option(section, constants.ITEMSPROBSFILE_OPT):
-            itemsprobsOpt = self.config.get(section, constants.ITEMSPROBSFILE_OPT).split(",")
-            itemsFile = open(itemsprobsOpt[0], "r")
-            probsField = int(itemsprobsOpt[1])
-            values = []
-            probs = []
-            for line in itemsFile:
-                fields = line.split(";")
-                itemname = fields[0]
-                itemprob = float(fields[probsField])/100
-                values.append(itemname)
-                probs.append(itemprob)
+#        elif self.config.has_option(section, constants.ITEMSFILE_OPT):
+#            filename = config.get(section, constants.ITEMSFILE_OPT)
+#            file = open (filename, "r")
+#            values = []
+#            for line in file:
+#                value = line.strip().split(";")[0]
+#                values.append(value)
+#        elif self.config.has_option(section, constants.ITEMSPROBSFILE_OPT):
+#            itemsprobsOpt = self.config.get(section, constants.ITEMSPROBSFILE_OPT).split(",")
+#            itemsFile = open(itemsprobsOpt[0], "r")
+#            probsField = int(itemsprobsOpt[1])
+#            values = []
+#            probs = []
+#            for line in itemsFile:
+#                fields = line.split(";")
+#                itemname = fields[0]
+#                itemprob = float(fields[probsField])/100
+#                values.append(itemname)
+#                probs.append(itemprob)
         dist = None
         if distType == constants.DIST_UNIFORM:
             dist = stats.DiscreteUniformDistribution(values)
@@ -76,17 +76,17 @@ class Config(object):
         return dist
         
     def createContinuousDistributionFromSection(self, section):
-        distType = self.config.get(section, DISTRIBUTION_OPT)
-        min = self.config.getfloat(section, MIN_OPT)
-        max = self.config.get(section, MAX_OPT)
+        distType = self.config.get(section, constants.DISTRIBUTION_OPT)
+        min = self.config.getfloat(section, constants.MIN_OPT)
+        max = self.config.get(section, constants.MAX_OPT)
         if max == "unbounded":
             max = float("inf")
         if distType == "uniform":
             dist = stats.ContinuousUniformDistribution(min, max)
         elif distType == "normal":
-            mu = self.config.getfloat(section, MEAN_OPT)
-            sigma = self.config.getfloat(section, STDEV_OPT)
-            dist = stats.ContinuousNormalDistribution(min,max,mu,sigma)
+            mu = self.config.getfloat(section, constants.MEAN_OPT)
+            sigma = self.config.getfloat(section, constants.STDEV_OPT)
+            dist = stats.ContinuousNormalDistribution(min, max, mu, sigma)
         elif distType == "pareto":
             pass 
         
@@ -119,7 +119,7 @@ class RMConfig(Config):
     #
         
     def getInitialTime(self):
-        timeopt = self.config.get(constants.SIMULATION_SEC,constants.STARTTIME_OPT)
+        timeopt = self.config.get(constants.SIMULATION_SEC, constants.STARTTIME_OPT)
         return ISO.ParseDateTime(timeopt)
     
     def getNumPhysicalNodes(self):
@@ -282,46 +282,6 @@ class RMConfig(Config):
             else:
                 return imgfile
 
-
-class GraphDataEntry(object):
-    def __init__(self, title, profile, trace, inject):
-        self.title = title
-        self.dirname = genDataDirName(profile,trace,inject)
-
-class GraphConfig(Config):
-    def __init__(self, config):
-        Config.__init__(self, config)    
-    
-    def getTitle(self):
-        return self.config.get(constants.GENERAL_SEC, constants.TITLE_OPT)
-    
-    def getDatafile(self):
-        return self.config.get(constants.GENERAL_SEC, constants.DATAFILE_OPT)
-
-    def getTitleX(self):
-        return self.config.get(constants.GENERAL_SEC, constants.TITLEX_OPT)
-    
-    def getTitleY(self):
-        return self.config.get(constants.GENERAL_SEC, constants.TITLEY_OPT)
-
-    def getGraphType(self):
-        graphname = self.config.get(constants.GENERAL_SEC, constants.GRAPHTYPE_OPT)
-        return constants.graphtype[graphname]
-    
-    def getDataEntries(self):
-        datasections = [s for s in self.config.sections() if s.startswith("data")]
-        datasections.sort()
-        data = []
-        for s in datasections:
-            title = self.config.get(s, constants.TITLE_OPT)
-            profile = self.config.get(s, constants.PROFILE_OPT)
-            trace = self.config.get(s, constants.TRACE_OPT)
-            inject = self.config.get(s, constants.INJ_OPT)
-            if inject == "NONE":
-                inject = None
-            data.append(GraphDataEntry(title, profile, trace, inject))
-        return data
-    
 class RMMultiConfig(Config):
     def __init__(self, config):
         Config.__init__(self, config)
@@ -464,7 +424,7 @@ class TraceConfig(Config):
             intervalavg = int(tracedur / numreqs)
             min = intervalavg - 3600 # Make this configurable
             max = intervalavg + 3600 # Make this configurable
-            values = range(min,max+1)
+            values = range(min, max+1)
             self.intervaldist = stats.DiscreteUniformDistribution(values)
         else:
             self.intervaldist = self.createDiscreteDistributionFromSection(constants.INTERVAL_SEC)

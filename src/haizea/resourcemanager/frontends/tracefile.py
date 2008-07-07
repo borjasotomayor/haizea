@@ -52,7 +52,7 @@ class TracefileFrontend(RequestFrontend):
         if imagefile != None:
             self.rm.logger.info("Loading image file %s" % imagefile, constants.TRACE)
             imagesizes, images = tracereaders.IMG(imagefile)
-            for r,i in zip(self.requests,images):
+            for r, i in zip(self.requests, images):
                 r.vmimage = i
                 r.vmimagesize = imagesizes[i]
                 r.resreq.setByType(constants.RES_DISK, imagesizes[i] + r.resreq.getByType(constants.RES_MEM))

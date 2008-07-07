@@ -21,6 +21,7 @@ import os.path
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
 from haizea.common.utils import pickle
+from errno import EEXIST
 
 class Stats(object):
     def __init__(self, rm, datadir):
@@ -50,7 +51,7 @@ class Stats(object):
         time = self.rm.clock.getTime()
         self.appendStat(counterID, self.counters[counterID] - 1, leaseID, time)
         
-    def appendStat(self, counterID, value, leaseID = None,time = None):
+    def appendStat(self, counterID, value, leaseID = None, time = None):
         if time == None:
             time = self.rm.clock.getTime()
         if len(self.counterLists[counterID]) > 0:
@@ -73,7 +74,7 @@ class Stats(object):
         
         # Start the doing
         for n in self.nodes:
-            self.nodes[n].append((time,constants.DOING_IDLE))
+            self.nodes[n].append((time, constants.DOING_IDLE))
 
     def tick(self):
         time = self.rm.clock.getTime()
@@ -81,15 +82,15 @@ class Stats(object):
         for node in self.rm.resourcepool.nodes:
             nodenum = node.nod_id
             doing = node.getState()
-            (lasttime,lastdoing) = self.nodes[nodenum][-1]
+            (lasttime, lastdoing) = self.nodes[nodenum][-1]
             if doing == lastdoing:
                 # No need to update
                 pass
             else:
                 if lasttime == time:
-                        self.nodes[nodenum][-1] = (time,doing)
+                        self.nodes[nodenum][-1] = (time, doing)
                 else:
-                    self.nodes[nodenum].append((time,doing))
+                    self.nodes[nodenum].append((time, doing))
         
     def stop(self):
         time = self.rm.clock.getTime()
@@ -113,19 +114,20 @@ class Stats(object):
         for node in self.rm.resourcepool.nodes:
             nodenum = node.nod_id
             doing = node.vm_doing
-            (lasttime,lastdoing) = self.nodes[nodenum][-1]
+            (lasttime, lastdoing) = self.nodes[nodenum][-1]
             if time != lasttime:
                 self.nodes[nodenum].append((time, doing))
             
     def normalizeTimes(self, data):
-        return [((v[0] - self.starttime).seconds,v[1],v[2]) for v in data]
+        return [((v[0] - self.starttime).seconds, v[1], v[2]) for v in data]
         
     def addNoAverage(self, data):
-        return [(v[0],v[1],v[2],None) for v in data]
+        return [(v[0], v[1], v[2],None) for v in data]
     
     def addTimeWeightedAverage(self, data):
-        accum=0
+        accum = 0
         prevTime = None
+        prevValue = None
         startVM = None
         stats = []
         for v in data:
@@ -166,10 +168,10 @@ class Stats(object):
             nodes[n] = []
             prevtime = None
             prevdoing = None
-            for (time,doing) in self.nodes[n]:
+            for (time, doing) in self.nodes[n]:
                 if prevtime != None:
                     difftime = (time-prevtime).seconds
-                    nodes[n].append((difftime,prevdoing))
+                    nodes[n].append((difftime, prevdoing))
                 prevtime = time
                 prevdoing = doing
         return nodes

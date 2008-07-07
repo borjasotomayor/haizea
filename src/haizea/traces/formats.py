@@ -18,16 +18,16 @@
 
 class LWFEntry(object):
     pos = {
-                     0:("reqTime",int),
-                     1:("startTime",int),
-                     2:("duration",int),
-                     3:("realDuration",int),
-                     4:("numNodes",int),
-                     5:("CPU",int),
-                     6:("mem",int),
-                     7:("disk",int),
-                     8:("vmImage",str),
-                     9:("vmImageSize",int)
+                     0:("reqTime", int),
+                     1:("startTime", int),
+                     2:("duration", int),
+                     3:("realDuration", int),
+                     4:("numNodes", int),
+                     5:("CPU", int),
+                     6:("mem", int),
+                     7:("disk", int),
+                     8:("vmImage", str),
+                     9:("vmImageSize", int)
                      }
     numFields = len(pos)
     
@@ -48,12 +48,12 @@ class LWFEntry(object):
         return line
         
     @classmethod
-    def fromLine(cls,line):
+    def fromLine(cls, line):
         c = cls()
         fields = line.split()
         if len(fields)!=cls.numFields:
             raise Exception, "Unexpected number of fields in line"
-        for i,field in enumerate(fields):
+        for i, field in enumerate(fields):
             attrname = cls.pos[i][0]
             fieldtype = cls.pos[i][1]
             c.__setattr__(attrname, fieldtype(field))
@@ -75,7 +75,7 @@ class LWF(object):
         file.close()
         return cls(entries)
     
-    def toFile(self,file):
+    def toFile(self, file):
         f = open(file, "w")
         for entry in self.entries:
             print >>f, entry.toLine()

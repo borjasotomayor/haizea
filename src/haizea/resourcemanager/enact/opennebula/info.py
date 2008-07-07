@@ -40,7 +40,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         cur = conn.cursor()
         cur.execute("select hid, host_name from hostpool where state != 4")
         hosts = cur.fetchall()
-        for (i,host) in enumerate(hosts):
+        for (i, host) in enumerate(hosts):
             nod_id = i+1
             enactID = int(host["hid"])
             hostname = host["host_name"]

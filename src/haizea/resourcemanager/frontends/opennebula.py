@@ -50,7 +50,7 @@ class OpenNebulaFrontend(RequestFrontend):
         for req in openNebulaReqs:
             cur.execute("select * from vm_template where id=%i" % req["oid"])
             template = cur.fetchall()
-            attrs = dict([(r["name"],r["value"]) for r in template])
+            attrs = dict([(r["name"], r["value"]) for r in template])
             self.processed.append(req["oid"])
             requests.append(self.ONEreq2lease(req, attrs))
         return requests
@@ -64,7 +64,7 @@ class OpenNebulaFrontend(RequestFrontend):
         else:
             return self.createBestEffortLease(req, attrs)
     
-    def getCommonAttrs(self,req, attrs):
+    def getCommonAttrs(self, req, attrs):
         disk = attrs[RES_DISK]
         diskattrs = dict([n.split("=") for n in disk.split(",")])
         tSubmit = UNIX2DateTime(req["stime"])

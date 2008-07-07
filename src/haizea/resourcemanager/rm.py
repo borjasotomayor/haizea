@@ -115,7 +115,7 @@ class ResourceManager(object):
         try:
             self.scheduler.schedule(ar, nexttime)
         except Exception, msg:
-            self.logger.error("Exception in scheduling function. Dumping state..." ,constants.RM)
+            self.logger.error("Exception in scheduling function. Dumping state..." , constants.RM)
             self.printStats("ERROR", verbose=True)
             raise      
 
@@ -123,28 +123,28 @@ class ResourceManager(object):
         try:
             self.scheduler.processReservations(time)
         except Exception, msg:
-            self.logger.error("Exception when processing reservations. Dumping state..." ,constants.RM)
+            self.logger.error("Exception when processing reservations. Dumping state..." , constants.RM)
             self.printStats("ERROR", verbose=True)
             raise      
 
         
     def printStats(self, loglevel, verbose=False):
         self.clock.printStats(loglevel)
-        self.logger.log(loglevel, "Next change point (in slot table): %s" % self.getNextChangePoint(),constants.RM)
+        self.logger.log(loglevel, "Next change point (in slot table): %s" % self.getNextChangePoint(), constants.RM)
         scheduled = self.scheduler.scheduledleases.entries.keys()
-        self.logger.log(loglevel, "Scheduled requests: %i" % len(scheduled),constants.RM)
+        self.logger.log(loglevel, "Scheduled requests: %i" % len(scheduled), constants.RM)
         if verbose and len(scheduled)>0:
-            self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",constants.RM)
+            self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", constants.RM)
             for k in scheduled:
                 lease = self.scheduler.scheduledleases.getLease(k)
                 lease.printContents(loglevel=loglevel)
-            self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM)
-        self.logger.log(loglevel, "Queue size: %i" % len(self.scheduler.queue.q),constants.RM)
+            self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", constants.RM)
+        self.logger.log(loglevel, "Queue size: %i" % len(self.scheduler.queue.q), constants.RM)
         if verbose and len(self.scheduler.queue.q)>0:
-            self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv",constants.RM)
+            self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", constants.RM)
             for lease in self.scheduler.queue.q:
                 lease.printContents(loglevel=loglevel)
-            self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",constants.RM)
+            self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", constants.RM)
 
     def getNextChangePoint(self):
        return self.scheduler.slottable.peekNextChangePoint(self.clock.getTime())
@@ -175,7 +175,7 @@ class Clock(object):
         
 class SimulatedClock(Clock):
     def __init__(self, rm, starttime):
-        Clock.__init__(self,rm)
+        Clock.__init__(self, rm)
         self.starttime = starttime
         self.time = starttime
         self.logger = self.rm.logger
@@ -225,9 +225,9 @@ class SimulatedClock(Clock):
         nextchangepoint = self.rm.getNextChangePoint()
         nextprematureend = self.rm.scheduler.slottable.getNextPrematureEnd(self.time)
         nextreqtime = tracefrontend.getNextReqTime()
-        self.rm.logger.debug("Next change point (in slot table): %s" % nextchangepoint,constants.CLOCK)
-        self.rm.logger.debug("Next request time: %s" % nextreqtime,constants.CLOCK)
-        self.rm.logger.debug("Next premature end: %s" % nextprematureend,constants.CLOCK)
+        self.rm.logger.debug("Next change point (in slot table): %s" % nextchangepoint, constants.CLOCK)
+        self.rm.logger.debug("Next request time: %s" % nextreqtime, constants.CLOCK)
+        self.rm.logger.debug("Next premature end: %s" % nextprematureend, constants.CLOCK)
         
         prevtime = self.time
         newtime = self.time
@@ -259,7 +259,7 @@ class SimulatedClock(Clock):
                 done = True
                 
         if newtime == prevtime and done != True:
-            self.rm.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." ,constants.CLOCK)
+            self.rm.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." , constants.CLOCK)
             self.rm.printStats("ERROR", verbose=True)
             raise Exception, "Simulated clock has fallen into an infinite loop."
         
@@ -284,7 +284,7 @@ class SimulatedClock(Clock):
         
 class RealClock(Clock):
     def __init__(self, rm, quantum, fastforward = False):
-        Clock.__init__(self,rm)
+        Clock.__init__(self, rm)
         self.fastforward = fastforward
         if not self.fastforward:
             self.lastwakeup = None

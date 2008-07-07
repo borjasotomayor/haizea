@@ -72,7 +72,7 @@ def IMG(imgfile):
         if line[0]=='#':
             state = 1
         elif state == 0:
-            image,size = line.split()
+            image, size = line.split()
             imagesizes[image] = int(size)
         elif state == 1:
             images.append(line.strip())

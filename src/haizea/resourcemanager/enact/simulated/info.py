@@ -58,7 +58,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
                 (constants.RES_NETOUT, constants.RESTYPE_INT, "Net (out)")]
         
     def parseResourcesString(self, resources):
-        desc2type = dict([(x[2],x[0]) for x in self.getResourceTypes()])
+        desc2type = dict([(x[2], x[0]) for x in self.getResourceTypes()])
         capacity=ds.ResourceTuple.createEmpty()
         for r in resources:
             resourcename = r.split(",")[0]

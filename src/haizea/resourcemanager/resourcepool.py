@@ -26,6 +26,10 @@ class ResourcePool(object):
     def __init__(self, rm):
         self.rm = rm
         
+        self.info = None
+        self.vm = None
+        self.storage = None
+
         self.loadEnactmentModules()
         
         self.nodes = self.info.getNodes()
@@ -45,11 +49,11 @@ class ResourcePool(object):
         mode = self.rm.config.getMode()
         try:
             exec "import %s.%s as enact" % (constants.ENACT_PACKAGE, mode)
-            self.info = enact.info(self)
-            self.vm = enact.vm(self)
-            self.storage = enact.storage(self)
+            self.info = enact.info(self) #IGNORE:E0602
+            self.vm = enact.vm(self) #IGNORE:E0602
+            self.storage = enact.storage(self) #IGNORE:E0602
         except Exception, msg:
-            self.rm.logger.error("Unable to load enactment modules for mode '%s'" % mode ,constants.RM)
+            self.rm.logger.error("Unable to load enactment modules for mode '%s'" % mode, constants.RM)
             raise                
         
         
@@ -68,7 +72,7 @@ class ResourcePool(object):
         # must support it too. If we can't assume CoW, we would have to
         # make a copy of the master image (which takes time), and should
         # be scheduled.
-        for (vnode,pnode) in rr.nodes.items():
+        for (vnode, pnode) in rr.nodes.items():
             node = self.getNode(pnode)
             
             taintedImage = None
@@ -82,12 +86,12 @@ class ResourcePool(object):
                 # TODO: It might make sense to consider two cases:
                 #       "no image management at all" and "assume master image
                 #       is predeployed, but we still have to make a copy".
-                taintedImage = self.addTaintedImageToNode(pnode,lease.diskImageID,lease.diskImageSize,lease.leaseID,vnode)
+                taintedImage = self.addTaintedImageToNode(pnode, lease.diskImageID, lease.diskImageSize, lease.leaseID, vnode)
             else:
                 taintedImage = node.getTaintedImage(lease.leaseID, vnode, lease.diskImageID)
                 if self.reusealg == constants.REUSE_NONE:
                     if taintedImage == None:
-                        raise Exception, "ERROR: No image for L%iV%i is on node %i" % (leaseID, vnode, pnode)
+                        raise Exception, "ERROR: No image for L%iV%i is on node %i" % (lease.leaseID, vnode, pnode)
                 elif self.reusealg == constants.REUSE_IMAGECACHES:
                     poolentry = node.getPoolEntry(lease.diskImageID, leaseID=lease.leaseID, vnode=vnode)
                     if poolentry == None:
@@ -125,14 +129,14 @@ class ResourcePool(object):
         pass
     
     # TODO: This has to be divided into the above three functions.
-    def addImageToNode(self,nod_id,imagefile,imagesize,vnodes,timeout=None):
-        self.rm.logger.debug("Adding image for leases=%s in nod_id=%i" % (vnodes,nod_id), constants.ENACT)
+    def addImageToNode(self, nod_id, imagefile, imagesize, vnodes, timeout=None):
+        self.rm.logger.debug("Adding image for leases=%s in nod_id=%i" % (vnodes, nod_id), constants.ENACT)
         self.getNode(nod_id).printFiles()
 
         if self.reusealg == constants.REUSE_NONE:
             for (leaseID, vnode) in vnodes:
                 img = VMImageFile(imagefile, imagesize, masterimg=False)
-                img.addMapping(leaseID,vnode)
+                img.addMapping(leaseID, vnode)
                 self.getNode(nod_id).addFile(img)
         elif self.reusealg == constants.REUSE_IMAGECACHES:
             # Sometimes we might find that the image is already deployed
@@ -145,7 +149,7 @@ class ResourcePool(object):
                 img = VMImageFile(imagefile, imagesize, masterimg=True)
                 img.timeout = timeout
                 for (leaseID, vnode) in vnodes:
-                    img.addMapping(leaseID,vnode)
+                    img.addMapping(leaseID, vnode)
                 if self.maxcachesize != constants.CACHESIZE_UNLIMITED:
                     poolsize = self.getNode(nod_id).getPoolSize()
                     reqsize = poolsize + imagesize
@@ -161,7 +165,7 @@ class ResourcePool(object):
                             # only by these leases
                             for (leaseID, vnode) in vnodes:
                                 img = VMImageFile(imagefile, imagesize, masterimg=False)
-                                img.addMapping(leaseID,vnode)
+                                img.addMapping(leaseID, vnode)
                                 self.getNode(nod_id).addFile(img)
                         else:
                             self.getNode(nod_id).addFile(img)
@@ -217,14 +221,14 @@ class ResourcePool(object):
     def getNumNodes(self):
         return len(self.nodes)
         
-    def getNode(self,nod_id):
+    def getNode(self, nod_id):
         return self.nodes[nod_id-1]
 
-    def getNodesWithImg(self,imgURI):
+    def getNodesWithImg(self, imgURI):
         return [n.nod_id for n in self.nodes if n.isImgDeployed(imgURI)]
     
-    def getNodesWithImgLater(self,imgURI,time):
-        return [n.nod_id for n in self.nodes if n.isImgDeployedLater(imgURI,time)]
+    def getNodesWithImgLater(self, imgURI, time):
+        return [n.nod_id for n in self.nodes if n.isImgDeployedLater(imgURI, time)]
 
     def getFIFORepositoryNode(self):
         return self.FIFOnode
@@ -232,12 +236,12 @@ class ResourcePool(object):
     def getEDFRepositoryNode(self):
         return self.EDFnode
         
-    def addTaintedImageToNode(self,pnode,diskImageID,imagesize,leaseID,vnode):
-        self.rm.logger.debug("Adding tainted image for L%iV%i in pnode=%i" % (leaseID,vnode,pnode), constants.ENACT)
+    def addTaintedImageToNode(self, pnode, diskImageID, imagesize, leaseID, vnode):
+        self.rm.logger.debug("Adding tainted image for L%iV%i in pnode=%i" % (leaseID, vnode, pnode), constants.ENACT)
         self.getNode(pnode).printFiles()
         imagefile = self.storage.resolveToFile(leaseID, vnode, diskImageID)
         img = VMImageFile(imagefile, imagesize, diskImageID=diskImageID, masterimg=False)
-        img.addMapping(leaseID,vnode)
+        img.addMapping(leaseID, vnode)
         self.getNode(pnode).addFile(img)
         self.getNode(pnode).printFiles()
         self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
@@ -263,29 +267,29 @@ class ResourcePool(object):
                 self.rm.logger.debug("Adding tainted image for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT)
                 node.printFiles()
                 img = VMImageFile(imagefile, poolentry.filesize, masterimg=False)
-                img.addMapping(leaseID,vnode)
+                img.addMapping(leaseID, vnode)
                 node.addFile(img)
                 node.printFiles()
                 self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
     
-    def isInPool(self,pnode,imagefile,time):
+    def isInPool(self, pnode, imagefile, time):
         return self.getNode(pnode).isInPool(imagefile, after=time)
     
     def getNodesWithImgInPool(self, imagefile, after = None):
         return [n.nod_id for n in self.nodes if n.isInPool(imagefile, after=after)]
     
-    def addToPool(self,pnode, imagefile, leaseID, vnode, timeout):
+    def addToPool(self, pnode, imagefile, leaseID, vnode, timeout):
         return self.getNode(pnode).addToPool(imagefile, leaseID, vnode, timeout)
     
-    def removeImage(self,pnode,lease,vnode):
+    def removeImage(self, pnode, lease, vnode):
         node = self.getNode(pnode)
         node.printFiles()
         if self.reusealg == constants.REUSE_IMAGECACHES:
-            self.rm.logger.debug("Removing pooled images for L%iV%i in node %i" % (lease,vnode,pnode), constants.ENACT)
+            self.rm.logger.debug("Removing pooled images for L%iV%i in node %i" % (lease, vnode, pnode), constants.ENACT)
             toremove = []
             for img in node.getPoolImages():
-                if (lease,vnode) in img.mappings:
-                    img.mappings.remove((lease,vnode))
+                if (lease, vnode) in img.mappings:
+                    img.mappings.remove((lease, vnode))
                 node.printFiles()
                 # Keep image around, even if it isn't going to be used
                 # by any VMs. It might be reused later on.
@@ -295,8 +299,8 @@ class ResourcePool(object):
                 node.files.remove(img)
             node.printFiles()
 
-        self.rm.logger.debug("Removing tainted images for L%iV%i in node %i" % (lease,vnode,pnode), constants.ENACT)
-        node.removeTainted(lease,vnode)
+        self.rm.logger.debug("Removing tainted images for L%iV%i in node %i" % (lease, vnode, pnode), constants.ENACT)
+        node.removeTainted(lease, vnode)
 
         node.printFiles()
         
@@ -304,16 +308,16 @@ class ResourcePool(object):
         
     def addRAMFileToNode(self, pnode, leaseID, vnode, size):
         node = self.getNode(pnode)
-        self.rm.logger.debug("Adding RAM file for L%iV%i in node %i" % (leaseID,vnode,pnode), constants.ENACT)
+        self.rm.logger.debug("Adding RAM file for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT)
         node.printFiles()
-        f = RAMImageFile("RAM_L%iV%i" % (leaseID,vnode), size, leaseID,vnode)
+        f = RAMImageFile("RAM_L%iV%i" % (leaseID, vnode), size, leaseID, vnode)
         node.addFile(f)        
         node.printFiles()
         self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
 
     def removeRAMFileFromNode(self, pnode, leaseID, vnode):
         node = self.getNode(pnode)
-        self.rm.logger.debug("Removing RAM file for L%iV%i in node %i" % (leaseID,vnode,pnode), constants.ENACT)
+        self.rm.logger.debug("Removing RAM file for L%iV%i in node %i" % (leaseID, vnode, pnode), constants.ENACT)
         node.printFiles()
         node.removeRAMFile(leaseID, vnode)
         node.printFiles()
@@ -346,7 +350,7 @@ class Node(object):
             self.workingspacesize += f.filesize
         
     def removeTainted(self, lease, vnode):
-        img = [f for f in self.files if isinstance(f, VMImageFile) and f.masterimg==False and f.hasMapping(lease,vnode)]
+        img = [f for f in self.files if isinstance(f, VMImageFile) and f.masterimg==False and f.hasMapping(lease, vnode)]
         if len(img) > 0:
             img = img[0]
             self.files.remove(img)
@@ -367,7 +371,7 @@ class Node(object):
         elif len(image) == 1:
             return image[0]
         elif len(image) > 1:
-            self.rm.logger.warning("More than one tainted image for L%iV%i on node %i" % (leaseID, vnode, self.nod_id), constants.ENACT)
+            self.logger.warning("More than one tainted image for L%iV%i on node %i" % (leaseID, vnode, self.nod_id), constants.ENACT)
             return image[0]
         
     def addToPool(self, imagefile, leaseID, vnode, timeout):
@@ -440,7 +444,7 @@ class Node(object):
         images = ""
         if len(self.files) > 0:
             images = ", ".join([str(img) for img in self.files])
-        self.logger.edebug("Node %i has %iMB %s" % (self.nod_id,self.getTotalFileSize(),images), constants.ENACT)
+        self.logger.edebug("Node %i has %iMB %s" % (self.nod_id, self.getTotalFileSize(), images), constants.ENACT)
 
     def getState(self):
         if self.vm_doing == constants.DOING_IDLE and self.transfer_doing == constants.DOING_TRANSFER:
@@ -463,10 +467,10 @@ class VMImageFile(File):
         self.timeout = None
         
     def addMapping(self, leaseID, vnode):
-        self.mappings.add((leaseID,vnode))
+        self.mappings.add((leaseID, vnode))
         
     def hasMapping(self, leaseID, vnode):
-        return (leaseID,vnode) in self.mappings
+        return (leaseID, vnode) in self.mappings
     
     def hasMappings(self):
         return len(self.mappings) > 0

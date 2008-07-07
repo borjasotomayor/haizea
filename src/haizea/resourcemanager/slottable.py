@@ -60,14 +60,14 @@ class NodeList(object):
 
     def toPairList(self, onlynodes=None):
         nodelist = []
-        for i,n in enumerate(self.nodelist):
+        for i, n in enumerate(self.nodelist):
             if onlynodes == None or (onlynodes != None and i+1 in onlynodes):
                 nodelist.append((i+1,Node(n.capacity, n.capacitywithpreemption, n.resourcepoolnode)))
         return nodelist
     
     def toDict(self):
         nodelist = self.copy()
-        return dict([(i+1,v) for i,v in enumerate(nodelist)])
+        return dict([(i+1, v) for i, v in enumerate(nodelist)])
         
 class KeyValueWrapper(object):
     def __init__(self, key, value):
@@ -140,11 +140,11 @@ class SlotTable(object):
         # Keep only those nodes with enough resources
         if resreq != None:
             newnodes = []
-            for i,node in nodes:
+            for i, node in nodes:
                 if not resreq.fitsIn(node.capacity) and not resreq.fitsIn(node.capacitywithpreemption):
                     pass
                 else:
-                    newnodes.append((i,node))
+                    newnodes.append((i, node))
             nodes = newnodes
         
         return dict(nodes)
@@ -398,7 +398,7 @@ class SlotTable(object):
 
 
     def findLeasesToPreempt(self, mustpreempt, startTime, endTime):
-        def comparepreemptability(rrX,rrY):
+        def comparepreemptability(rrX, rrY):
             if rrX.lease.tSubmit > rrY.lease.tSubmit:
                 return constants.BETTER
             elif rrX.lease.tSubmit < rrY.lease.tSubmit:
@@ -498,7 +498,7 @@ class SlotTable(object):
         if mustresume and not canmigrate:
             vmrr, susprr = lease.getLastVMRR()
             curnodes = set(vmrr.nodes.values())
-            suspendthreshold = lease.getSuspendThreshold(initial=False, suspendrate=suspendresumerate,migrating=False)
+            suspendthreshold = lease.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=False)
         
         if mustresume and canmigrate:
             # If we have to resume this lease, make sure that
@@ -507,7 +507,7 @@ class SlotTable(object):
             earliesttransfer = self.rm.clock.getTime() + migratetime
 
             for n in earliest:
-                earliest[n][0] = max(earliest[n][0],earliesttransfer)
+                earliest[n][0] = max(earliest[n][0], earliesttransfer)
             suspendthreshold = lease.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=True)
                     
         if mustresume:
@@ -526,7 +526,7 @@ class SlotTable(object):
         # Nodes may not be available at a changepoint because images
         # cannot be transferred at that time.
         if not mustresume:
-            cps = [(node,e[0]) for node,e in earliest.items()]
+            cps = [(node, e[0]) for node, e in earliest.items()]
             cps.sort(key=itemgetter(1))
             curcp = None
             changepoints = []
@@ -796,7 +796,7 @@ class SlotTable(object):
             lease.printContents()
 
 
-    def prioritizenodes(self,canfit, diskImageID,start,canpreempt, avoidpreempt):
+    def prioritizenodes(self, canfit, diskImageID, start, canpreempt, avoidpreempt):
         # TODO2: Choose appropriate prioritizing function based on a
         # config file, instead of hardcoding it)
         #
@@ -813,7 +813,7 @@ class SlotTable(object):
 
         # Compares node x and node y. 
         # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)
-        def comparenodes(x,y):
+        def comparenodes(x, y):
             hasimgX = x in nodeswithimg
             hasimgY = y in nodeswithimg
 
@@ -943,7 +943,7 @@ class AvailabilityWindow(object):
                 capacitywithpreemption = availatstart[node].capacitywithpreemption
             else:
                 capacitywithpreemption = None
-            self.avail[node] = [AvailEntry(self.time,capacity,capacitywithpreemption, self.resreq)]
+            self.avail[node] = [AvailEntry(self.time, capacity, capacitywithpreemption, self.resreq)]
         
         # Determine the availability at the subsequent change points
         nodes = set(availatstart.keys())
@@ -976,7 +976,7 @@ class AvailabilityWindow(object):
     
     def fitAtStart(self, nodes = None, canpreempt = False):
         if nodes != None:
-            avail = [v for (k,v) in self.avail.items() if k in nodes]
+            avail = [v for (k, v) in self.avail.items() if k in nodes]
         else:
             avail = self.avail.values()
         if canpreempt:
@@ -989,10 +989,10 @@ class AvailabilityWindow(object):
     def findPhysNodesForVMs(self, numnodes, maxend, strictend=False, canpreempt=False):
         # Returns the physical nodes that can run all VMs, and the
         # time at which the VMs must end
-        canfit = dict([(n, v[0].getCanfit(canpreempt)) for (n,v) in self.avail.items()])
+        canfit = dict([(n, v[0].getCanfit(canpreempt)) for (n, v) in self.avail.items()])
         entries = []
         for n in self.avail.keys():
-            entries += [(n,e) for e in self.avail[n][1:]]
+            entries += [(n, e) for e in self.avail[n][1:]]
         getTime = lambda x: x[1].time
         entries.sort(key=getTime)
         if strictend:
@@ -1018,7 +1018,7 @@ class AvailabilityWindow(object):
                     canfit[physnode] = entry.getCanfit(canpreempt)
 
         # Filter out nodes where we can't fit any vms
-        canfit = dict([(n,v) for (n,v) in canfit.items() if v > 0])
+        canfit = dict([(n, v) for (n, v) in canfit.items() if v > 0])
         
         return end, canfit
             
