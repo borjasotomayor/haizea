@@ -20,7 +20,6 @@ import haizea.resourcemanager.datastruct as ds
 from haizea.resourcemanager.slottable import SlotTable, SlotFittingException
 import haizea.common.constants as constants
 import copy
-from mx.DateTime import TimeDelta
 
 class SchedException(Exception):
     pass

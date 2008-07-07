@@ -20,7 +20,6 @@ from haizea.common.constants import state_str, rstate_str, DS, RES_STATE_SCHEDUL
 from haizea.common.utils import roundDateTimeDelta
 from operator import attrgetter
 from mx.DateTime import TimeDelta
-import haizea.common.constants as constants
 from math import floor
 leaseID = 1
 

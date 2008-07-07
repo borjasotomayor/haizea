@@ -18,9 +18,7 @@
 
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.base import RequestFrontend
-import haizea.traces.readers as tracereaders
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ResourceTuple
-import operator
 from haizea.common.utils import UNIX2DateTime
 from pysqlite2 import dbapi2 as sqlite
 from mx.DateTime import TimeDelta, ISO

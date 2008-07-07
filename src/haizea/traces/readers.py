@@ -16,9 +16,7 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from mx.DateTime import TimeDelta, DateTimeDelta
-from mx.DateTime import ISO
-from mx.DateTime import now
+from mx.DateTime import TimeDelta
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ResourceTuple
 import haizea.common.constants as constants
 import haizea.traces.formats as formats

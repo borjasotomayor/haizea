@@ -18,8 +18,6 @@
 
 from haizea.common.utils import vnodemapstr
 import haizea.common.constants as constants
-from haizea.common.utils import abstract
-import haizea.resourcemanager.datastruct as ds
 import haizea.resourcemanager.enact.actions as actions
 
 class ResourcePool(object):

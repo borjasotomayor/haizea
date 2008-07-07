@@ -17,12 +17,9 @@
 # -------------------------------------------------------------------------- #
 
 import optparse
-import os.path
 from mx import DateTime
-from datetime import datetime
 from math import ceil, floor
-from cPickle import load, dump, HIGHEST_PROTOCOL
-from errno import EEXIST
+from cPickle import dump, HIGHEST_PROTOCOL
 
 class Option (optparse.Option):
     ATTRS = optparse.Option.ATTRS + ['required']
