@@ -1,6 +1,6 @@
 <html><head>
 
-<title>Haizea - The Open Source VM-based Lease Manager</title>
+<title>Haizea - An Open Source VM-based Lease Manager</title>
 <link href="haizea.css" type="text/css" rel="stylesheet"/>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 </head>
@@ -22,24 +22,45 @@
 
 <p>
 Haizea's regular configuration file (the one that is provided
-to the Haizea daemon) allows for, at most, one tracefile to
+to the <tt>haizea</tt> command) allows for, at most, one tracefile to
 be used. However, when running simulations, it is often necessary
-to run through multiple tracefiles in a variety of configurations.
+to run through multiple tracefiles in a variety of configurations to 
+compare the results of each tracefile/configuration combination.
 The "multi-configuration" file allows you to easily do just this.
-It is similar to the regular configuration files (all the options
+It is similar to the regular configuration file (all the options
 are the same), but it allows you to specify multiple tracefiles
 and multiple configuration profiles.
 </p>
 
 <p>
 The multi-configuration file must contain a section called "multi"
-where some general options are specified (e.g., the tracefiles you
-want to use). Then, for each section you would ordinarily include
+where you must specify the following:
+</p>
+
+<ul>
+<li>The tracefiles you want to use</li>
+<li>The "injected tracefiles" you want to use. In our own experiments, we found that it was easier to create workloads starting from a base workload and then "injecting" different types of workloads (e.g., a base workload of best-effort leases where AR leases of varying characteristics are "injected"). You can, of course, not specify any injected tracefiles.</li>
+<li>The directory where Haizea should store all the information it collects during the simulation (scheduling metrics, utilization information, etc.)</li>
+</ul>
+
+<p>The <tt>[multi]</tt> section should look like this:</p>
+
+<pre class="shell">
+[multi]
+tracedir: <em>Directory with tracefiles</em>
+tracefiles: <em>Tracefiles to use in experiments</em>
+injectiondir: <em>Directory with injectable tracefiles</em>
+injectionfiles: <em>Injectable tracefiles</em>
+basedatadir: <em>Directory where raw data will be saved</em>
+</pre>
+
+<p>
+Next, for each section you would ordinarily include
 in a regular configuration file, you can include common options 
 (shared by all profiles) and profile-specific options. For example,
-suppose you want to specify options in the "general" and
-"simulation" sections, and you want to create two profiles
-called "nobackfilling" and "withbackfilling". You would
+assuming you want to specify options in the <tt>general</tt> and
+<tt>simulation</tt> sections, and you want to create two profiles
+called <tt>nobackfilling</tt> and <tt>withbackfilling</tt>, you would
 have to create the following sections:
 </p>
 
@@ -64,30 +85,24 @@ have to create the following sections:
 </pre>
 
 <p>
-Once you've created the multi-configuration file, you must
-feed it into the "haizea-generate-configs" command, which will
-generate a regular configuration file for every combination
-of tracefile and configuration profile. Since running each
-configuration individually would be cumbersome, you can
-also use the "haizea-generate-script" command to generate
-a script that will run through all the generated configuration
-files.
+An example multi-configuration file is provided in <tt>/usr/share/haizea/etc/sample-multi.conf</tt>. Using this file, or once you've created your own, you can use the <tt>haizea-generate-configs</tt> to create the individual configuration files (one for every combination of tracefile, injected tracefile, and profile):
 </p>
 
+<pre class="shell">
+haizea-generate-configs -c <em>config</em> -d <em>dir</em>
+</pre>
+
 <p>
-The following example file uses two example tracefiles, one where
-best-effort leases end prematurely, and one where they don't, and
-two injections of AR leases (with no special characteristic other
-than the fact that the two are different). The file defines
-four configuration profiles:
+The <tt>-c</tt> parameter is used to specify the multi-config file, and the <tt>-d</tt> parameter is used to specify where the configuration files should be created. Since running each configuration individually would be cumbersome, you can
+also use the <tt>haizea-generate-script</tt> command to generate a script that will run through all the generated configuration files. This command requires <a href="http://www.makotemplates.org/">Mako Templates for Python</a>, so make sure you install Mako before using <tt>haizea-generate-scripts</tt>. Haizea currently includes two script templates: one to generate a BASH script that will call <tt>haizea</tt> with each individual configuration file, and one to generate a basic Condor submission script. For example, to generate the BASH script, you would run the command like this:
 </p>
-<ul>
-<li><strong>nobackfilling</strong>: best-effort leases are scheduled without backfilling</li>
-<li><strong>backfilling</strong>: best-effort leases are scheduled with aggressive backfilling, but without suspend/resume</li>
-<li><strong>backfilling+SR</strong>: best-effort leases are schedules with aggressive backfilling and suspend/resume, but without migration.</li>
-<li><strong>backfilling+SR+M</strong>: The whole shebang: backfilling, suspend/resume, and migration.</li>
-</ul>
-  
+
+<pre class="shell">
+haizea-generate-scripts -c <em>config</em> -d <em>dir</em> -t /usr/share/haizea/etc/run.sh.template
+</pre>
+
+<p>
+</p>
 <table border="0" align="center">
 <tr>
 <td>

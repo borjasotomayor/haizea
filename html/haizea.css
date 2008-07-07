@@ -1,5 +1,5 @@
 body {
-	font:	11pt Verdana, Arial, Helvetica, sans-serif;
+	font:	10.5pt Verdana, Arial, Helvetica, sans-serif;
 	background:#eef;
 	padding:0px;
 	margin:0px;
@@ -34,6 +34,10 @@ li {
 tt {
     font:   10pt Courier New, Courier, monospace;
     font-weight:bold;
+}
+
+h2 tt {
+    font-size: 13pt;
 }
 
 .warning {

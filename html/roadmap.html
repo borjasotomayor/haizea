@@ -1,6 +1,6 @@
 <html><head>
 
-<title>Haizea - The Open Source VM-based Lease Manager</title>
+<title>Haizea - An Open Source VM-based Lease Manager</title>
 <link href="haizea.css" type="text/css" rel="stylesheet"/>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 </head>
@@ -23,25 +23,28 @@
 <p>The next version of Haizea will be TP1.1, due mid-July 2008. This version will include the following improvements:</p>
 
 <ul>
-<li>More complete integration with OpenNebula.</li>
-<li>Documentation on how to set up and use OpenNebula with Haizea as a scheduling backend.</li>
+<li>Integration with upcoming OpenNebula 1.0.</li>
+<li>Documentation on how to set up and use OpenNebula 1.0 with Haizea as a scheduling backend.</li>
 <li>Tools to produce reports and pretty graphs based on Haizea runs (both simulation and OpenNebula)</li>
 </ul>
 
 <p>There are several improvements that are planned for upcoming versions (coming out in summer and fall of 2008, exact dates to be determined):</p>
 <ul>
 <li>Support for more types of leases</li>
+<li>Basic server consolidation algorithms</li>
 <li>Decoupling policy decisions from Haizea</li>
 <li>Lease negotiation</li>
+<li>RPC interface so enactment backend can send asynchronous events</li>
 <li>Command Line Interface (CLI) to Haizea</li>
-<li>Processing asynchronous events from enactment backend</li>
 </ul>
 
 <h2>Wish list</h2>
 <ul>
-<li>Slot table data structure</li>
-<li>General code cleanup</li>
+<li>The slot table data structure is the only part of Haizea that I wish were not implemented in Python. This part of the scheduler becomes a performance bottleneck in the simulations (it's not a problem if you're running Haizea "in real time"). A C/C++ implementation could speed up simulations, and would allow us to more efficiently query the slot table.</li>
+<li>Decoupling the notion of "deployment overhead" with "transferring a VM image". Although transferring a VM image is a common way of "setting up" a VM, there are other ways of deploying a VM (such as having a base image installed on all physical nodes and installing packages on them). Ideally, the scheduler should be able to interface with a "deployment overhead" module that will be the "expert" in deployment (however, the scheduler is still in charge of scheduling the overhead, but it consults with the overhead module to determine when the overhead can be scheduled, what nodes are preferable if we want to minimize overhead, etc.)</li>
+<li>The source code is still in need of some general clean-up and documentation. This is slowly getting done.</li>
 </ul>
+
 <div class="back">
 <a href="index.html">
 <img src="logo_small.png" width="32" height="35" border="0"><br/>

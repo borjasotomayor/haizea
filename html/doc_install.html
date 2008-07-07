@@ -1,6 +1,6 @@
 <html><head>
 
-<title>Haizea - The Open Source VM-based Lease Manager</title>
+<title>Haizea - An Open Source VM-based Lease Manager</title>
 <link href="haizea.css" type="text/css" rel="stylesheet"/>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 </head>
@@ -22,7 +22,7 @@
 
 <p>Haizea has been tested only on Unix systems, and these installation instructions are given with a Unix system in mind. However, Haizea includes no platform-specific code, and should run fine on other systems. If there is enough interest, we can produce installers and installation instructions for other platforms.</p>
 
-<p>Installing Haizea can be accomplished in three simple steps:</p>
+<p>Installing Haizea can be accomplished in four simple steps:</p>
 
 <h2>1. Install dependencies</h2>
 
@@ -32,7 +32,7 @@
 <li><a href="http://www.python.org/">Python</a> 2.5. Haizea should also work with Python 2.4, but all testing has been done on Python 2.5.</li>
 <li><a href="http://www.egenix.com/products/python/mxBase/mxDateTime/">mxDateTime</a> 3.1.0 (part of the eGenix.com mx Base Distribution).</li>
 <li>Optional: <a href="http://oss.itsystementwicklung.de/trac/pysqlite/">pysqlite</a>. This package is only necessary if you want to use the OpenNebula modules.</li>
-<li>Optional: <a href="http://www.makotemplates.org/">Mako Templates for Python</a> 0.2.2. This package is only necessary if you want to automate running multiple simulation experiments (if this doesn't make any sense, you can skip any prerequisite for now; you will be pointed to this prerequisite again in the documentation when you get to running multiple experiments).</li>
+<li>Optional: <a href="http://www.makotemplates.org/">Mako Templates for Python</a> 0.2.2. This package is only necessary if you want to automate running multiple simulation experiments (if this doesn't make any sense, you can skip this prerequisite for now; you will be pointed to this prerequisite again in the documentation when you get to running multiple experiments).</li>
 <li>Optional: <a href="http://psyco.sourceforge.net/">Psyco</a> 1.6. This package optimizes the execution of Python code, resulting in the simulation code running much faster. You can skip this prerequisite if you are not going to use Haizea to run simulations, or if you are only going to run short simulations.</li>
 </ul>
 
@@ -68,7 +68,7 @@ python setup.py install --home=$HOME
 export PYTHONPATH=$HOME/lib/python
 </div>
 
-<p>After running the setup script, you should see a long list of installation and building messages, ending with the following:</p>
+<p>After running the setup script, you should see a long list of installation and build messages, ending with the following:</p>
 
 <pre class="shell">
 creating /usr/share/haizea/traces/multi
