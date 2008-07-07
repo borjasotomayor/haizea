@@ -263,7 +263,7 @@ class RMConfig(Config):
         return self.config.get(constants.TRACEFILE_SEC, constants.TRACEFILE_OPT)
 
     def getInjectfile(self):
-        if not self.config.has_option(constants.TRACEFILE_SEC, constants.IMGFILE_OPT):
+        if not self.config.has_option(constants.TRACEFILE_SEC, constants.INJFILE_OPT):
             return None
         else:
             injfile = self.config.get(constants.TRACEFILE_SEC, constants.INJFILE_OPT)
@@ -366,7 +366,7 @@ class RMMultiConfig(Config):
                     else:
                         inj = injectfile
                     profileconfig.set(constants.TRACEFILE_SEC, constants.INJFILE_OPT, inj)
-                    
+
                     # Add datadir option
                     datadirname = genDataDirName(profile, tracefile, injectfile)
                     basedatadir = self.config.get(constants.MULTI_SEC, constants.BASEDATADIR_OPT)
