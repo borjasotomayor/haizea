@@ -102,6 +102,7 @@ INJS_OPT="injections"
 GENERAL_SEC="general"
 LOGLEVEL_OPT="loglevel"
 MODE_OPT="mode"
+LEASE_DEPLOYMENT_OPT="lease-deployment"
 PROFILE_OPT="profile"
 SUSPENSION_OPT="suspension"
 MIGRATION_OPT="migration"
@@ -144,9 +145,12 @@ REUSE_OPT="diskimage-reuse"
 AVOIDREDUNDANT_OPT="avoid-redundant-transfers"
 STATUS_INTERVAL_OPT="status-message-interval"
 
-OPENNEBULA_SEC="opennebula"
-DB_OPT="db"
-ESTIMATESUSPENDRATE_OPT="suspendresume-rate-estimate"
+OPENNEBULA_SEC = "opennebula"
+DB_OPT = "db"
+ESTIMATESUSPENDRATE_OPT = "suspendresume-rate-estimate"
+
+DEPLOY_IMAGETRANSFER_SEC = "deploy-imagetransfer"
+TRANSFER_MECHANISM_OPT = "transfer-mechanism"
 
 SCHEDULING_SEC="scheduling"
 TRACEFILE_SEC="tracefile"
@@ -183,6 +187,10 @@ REUSE_IMAGECACHES="image-caches"
 
 NODESELECTION_AVOIDPREEMPT="avoid-preemption"
 NODESELECTION_PREFERREUSE="prefer-imagereuse"
+
+DEPLOYMENT_UNMANAGED = "unmanaged"
+DEPLOYMENT_PREDEPLOY = "predeployed-images"
+DEPLOYMENT_TRANSFER = "imagetransfer"
 
 # Graph configfile sections and options
 TITLE_OPT="title"

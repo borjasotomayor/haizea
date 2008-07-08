@@ -37,6 +37,8 @@ class ResourcePool(object):
         self.FIFOnode = self.info.getFIFONode()
         self.EDFnode = self.info.getEDFNode()
         
+        self.imagenode_bandwidth = self.rm.config.getBandwidth()
+        
         self.reusealg = self.rm.config.getReuseAlg()
         if self.reusealg == constants.REUSE_IMAGECACHES:
             self.maxcachesize = self.rm.config.getMaxCacheSize()
@@ -74,7 +76,10 @@ class ResourcePool(object):
             node = self.getNode(pnode)
             
             taintedImage = None
-            if self.rm.config.getTransferType() == constants.TRANSFER_NONE:
+            
+            # TODO: Factor this out
+            lease_deployment_type = self.rm.config.get_lease_deployment_type()
+            if lease_deployment_type == constants.DEPLOYMENT_UNMANAGED:
                 # If we assume predeployment, we mark that there is a new
                 # tainted image, but there is no need to go to the enactment
                 # module (we trust that the image is predeployed, or that
@@ -85,7 +90,9 @@ class ResourcePool(object):
                 #       "no image management at all" and "assume master image
                 #       is predeployed, but we still have to make a copy".
                 taintedImage = self.addTaintedImageToNode(pnode, lease.diskImageID, lease.diskImageSize, lease.leaseID, vnode)
-            else:
+            elif lease_deployment_type == constants.DEPLOYMENT_PREDEPLOY:
+                taintedImage = self.addTaintedImageToNode(pnode, lease.diskImageID, lease.diskImageSize, lease.leaseID, vnode)
+            elif lease_deployment_type == constants.DEPLOYMENT_TRANSFER:
                 taintedImage = node.getTaintedImage(lease.leaseID, vnode, lease.diskImageID)
                 if self.reusealg == constants.REUSE_NONE:
                     if taintedImage == None:

@@ -277,11 +277,12 @@ class LeaseBase(object):
             # If there is a hard-coded threshold, use that
             return threshold
         else:
-            transfertype = self.scheduler.rm.config.getTransferType()
-            if transfertype == TRANSFER_NONE:
-                deploytime = TimeDelta(seconds=0)
-            else: 
-                deploytime = self.estimateImageTransferTime()
+            # deploytime needs to be factored out of here
+#            transfertype = self.scheduler.rm.config.getTransferType()
+#            if transfertype == TRANSFER_NONE:
+#                deploytime = TimeDelta(seconds=0)
+#            else: 
+#                deploytime = self.estimateImageTransferTime()
             # The threshold will be a multiple of the overhead
             if not initial:
                 # Overestimating, just in case (taking into account that the lease may be
@@ -291,7 +292,8 @@ class LeaseBase(object):
                 else:
                     threshold = self.estimateSuspendResumeTime(suspendrate) * 2
             else:
-                threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime(suspendrate)
+                #threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime(suspendrate)
+                threshold = self.scheduler.rm.config.getBootOverhead() + self.estimateSuspendResumeTime(suspendrate)
             factor = self.scheduler.rm.config.getSuspendThresholdFactor() + 1
             return roundDateTimeDelta(threshold * factor)
             
@@ -357,32 +359,7 @@ class ResourceReservationBase(object):
         self.logger.log(loglevel, "Start          : %s" % self.start, DS)
         self.logger.log(loglevel, "End            : %s" % self.end, DS)
         self.logger.log(loglevel, "State          : %s" % rstate_str(self.state), DS)
-        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.res.items()]), DS)
-        
-                
-class FileTransferResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, res, start=None, end=None):
-        ResourceReservationBase.__init__(self, lease, start, end, res)
-        self.deadline = None
-        self.file = None
-        # Dictionary of  physnode -> [ (leaseID, vnode)* ]
-        self.transfers = {}
-
-    def printContents(self, loglevel="EXTREMEDEBUG"):
-        ResourceReservationBase.printContents(self, loglevel)
-        self.logger.log(loglevel, "Type           : FILE TRANSFER", DS)
-        self.logger.log(loglevel, "Deadline       : %s" % self.deadline, DS)
-        self.logger.log(loglevel, "File           : %s" % self.file, DS)
-        self.logger.log(loglevel, "Transfers      : %s" % self.transfers, DS)
-        
-    def piggyback(self, leaseID, vnode, physnode):
-        if self.transfers.has_key(physnode):
-            self.transfers[physnode].append((leaseID, vnode))
-        else:
-            self.transfers[physnode] = [(leaseID, vnode)]
-            
-    def isPreemptible(self):
-        return False        
+        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.res.items()]), DS) 
                 
 class VMResourceReservation(ResourceReservationBase):
     def __init__(self, lease, start, end, nodes, res, oncomplete, backfillres):

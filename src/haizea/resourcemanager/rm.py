@@ -31,13 +31,13 @@ This module provides the following classes:
 * RealClock: A clock that advances in realtime.
 """
 
-import haizea.resourcemanager.scheduler as scheduler
 import haizea.resourcemanager.stats as stats
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
 from haizea.resourcemanager.resourcepool import ResourcePool
+from haizea.resourcemanager.scheduler import Scheduler
 from haizea.resourcemanager.log import Logger
 from haizea.common.utils import abstract, roundDateTime
 
@@ -80,7 +80,7 @@ class ResourceManager(object):
             self.resourcepool = ResourcePool(self)
         
             # Scheduler
-            self.scheduler = scheduler.Scheduler(self)
+            self.scheduler = Scheduler(self)
     
             # Lease request frontends
             # In simulation, we can only use the tracefile frontend
@@ -93,7 +93,7 @@ class ResourceManager(object):
             self.resourcepool = ResourcePool(self)
     
             # Scheduler
-            self.scheduler = scheduler.Scheduler(self)
+            self.scheduler = Scheduler(self)
 
             # Lease request frontends
             # TODO: Get this from config file
@@ -181,7 +181,7 @@ class ResourceManager(object):
         
         # The scheduler takes care of this.
         try:
-            self.scheduler.processReservations(time)
+            self.scheduler.process_reservations(time)
         except Exception, msg:
             # Exit if something goes horribly wrong
             self.logger.error("Exception when processing reservations. Dumping state..." , constants.RM)
@@ -226,7 +226,7 @@ class ResourceManager(object):
    
     def exists_leases_in_rm(self):
         """Return True if there are any leases still "in the system" """
-        return self.scheduler.existsScheduledLeases() or not self.scheduler.isQueueEmpty()
+        return self.scheduler.exists_scheduled_leases() or not self.scheduler.is_queue_empty()
     
     def notify_end_vm(self, lease, rr):
         """Notifies the resource manager that a VM has ended prematurely.
@@ -236,7 +236,7 @@ class ResourceManager(object):
         Arguments:
         lease -- Lease the VM belongs to
         rr    -- Resource reservations where the premature end happened"""
-        self.scheduler.handlePrematureEndVM(lease, rr)
+        self.scheduler.notify_premature_end_vm(lease, rr)
 
             
 class Clock(object):

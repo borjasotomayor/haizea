@@ -111,6 +111,12 @@ class RMConfig(Config):
     def getMode(self):
         return self.config.get(constants.GENERAL_SEC, constants.MODE_OPT)
 
+    def get_lease_deployment_type(self):
+        if not self.config.has_option(constants.GENERAL_SEC, constants.LEASE_DEPLOYMENT_OPT):
+            return constants.DEPLOYMENT_UNMANAGED
+        else:
+            return self.config.get(constants.GENERAL_SEC, constants.LEASE_DEPLOYMENT_OPT)
+
     def getDataDir(self):
         return self.config.get(constants.GENERAL_SEC, constants.DATADIR_OPT)
 
@@ -225,35 +231,37 @@ class RMConfig(Config):
     def getBackfillingType(self):
         return self.config.get(constants.SCHEDULING_SEC, constants.BACKFILLING_OPT)
 
-    def getTransferType(self):
-        if not self.config.has_option(constants.SCHEDULING_SEC, constants.TRANSFER_OPT):
-            return constants.TRANSFER_NONE
-        else:
-            return self.config.get(constants.SCHEDULING_SEC, constants.TRANSFER_OPT)
+
+    #
+    # DEPLOYMENT (IMAGETRANSFER) OPTIONS
+    #
+
+    def get_transfer_mechanism(self):
+        return self.config.get(constants.DEPLOY_IMAGETRANSFER_SEC, constants.TRANSFER_MECHANISM_OPT)
 
     def getReuseAlg(self):
-        if not self.config.has_option(constants.SCHEDULING_SEC, constants.REUSE_OPT):
+        if not self.config.has_option(constants.DEPLOY_IMAGETRANSFER_SEC, constants.REUSE_OPT):
             return constants.REUSE_NONE
         else:
-            return self.config.get(constants.SCHEDULING_SEC, constants.REUSE_OPT)
+            return self.config.get(constants.DEPLOY_IMAGETRANSFER_SEC, constants.REUSE_OPT)
         
     def getMaxCacheSize(self):
-        if not self.config.has_option(constants.SCHEDULING_SEC, constants.CACHESIZE_OPT):
+        if not self.config.has_option(constants.DEPLOY_IMAGETRANSFER_SEC, constants.CACHESIZE_OPT):
             return constants.CACHESIZE_UNLIMITED
         else:
-            return self.config.getint(constants.SCHEDULING_SEC, constants.CACHESIZE_OPT)        
+            return self.config.getint(constants.DEPLOY_IMAGETRANSFER_SEC, constants.CACHESIZE_OPT)        
         
     def isAvoidingRedundantTransfers(self):
         if not self.config.has_option(constants.SCHEDULING_SEC, constants.AVOIDREDUNDANT_OPT):
             return False
         else:
-            return self.config.getboolean(constants.SCHEDULING_SEC, constants.AVOIDREDUNDANT_OPT)
+            return self.config.getboolean(constants.DEPLOY_IMAGETRANSFER_SEC, constants.AVOIDREDUNDANT_OPT)
 
     def getNodeSelectionPolicy(self):
-        if not self.config.has_option(constants.SCHEDULING_SEC, constants.NODESELECTION_OPT):
+        if not self.config.has_option(constants.DEPLOY_IMAGETRANSFER_SEC, constants.NODESELECTION_OPT):
             return constants.NODESELECTION_AVOIDPREEMPT
         else:
-            return self.config.get(constants.SCHEDULING_SEC, constants.NODESELECTION_OPT)
+            return self.config.get(constants.DEPLOY_IMAGETRANSFER_SEC, constants.NODESELECTION_OPT)
 
 
     #
