@@ -86,7 +86,7 @@ class TracefileFrontend(RequestFrontend):
         # "accumulated requests". Rather, we just take whatever
         # requests are in the trace up to the current time
         # reported by the resource manager
-        time = self.rm.clock.getTime()
+        time = self.rm.clock.get_time()
         nowreq = [r for r in self.requests if r.tSubmit <= time]
         self.requests = [r for r in self.requests if r.tSubmit > time]   
         return nowreq              

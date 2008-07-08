@@ -16,22 +16,51 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+"""The rm (resource manager) module is the root of Haizea. If you want to
+see where the ball starts rolling, look at the following two functions:
+
+* rm.ResourceManager.__init__()
+* rm.ResourceManager.start()
+
+This module provides the following classes:
+
+* ResourceManager: The resource manager itself. Pretty much everything else
+  is contained in this class.
+* Clock: A base class for the resource manager's clock.
+* SimulatedClock: A clock for simulations.
+* RealClock: A clock that advances in realtime.
+"""
+
 import haizea.resourcemanager.scheduler as scheduler
-from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
-from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
-from haizea.resourcemanager.resourcepool import ResourcePool
-from haizea.resourcemanager.log import Logger
 import haizea.resourcemanager.stats as stats
 import haizea.common.constants as constants
-from haizea.common.utils import abstract
+from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
+from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
+from haizea.resourcemanager.resourcepool import ResourcePool
+from haizea.resourcemanager.log import Logger
+from haizea.common.utils import abstract, roundDateTime
+
 import operator
+from time import sleep
 from mx.DateTime import now, TimeDelta
-from haizea.common.utils import roundDateTime
-import time
 
 class ResourceManager(object):
+    """The resource manager
+    
+    This class is the root of Haizea. Pretty much everything else (scheduler,
+    enactment modules, etc.) is contained in this class. The ResourceManager
+    class is meant to be a singleton.
+    
+    """
+    
     def __init__(self, config):
+        """Initializes the resource manager.
+        
+        Argument:
+        config -- a populated instance of haizea.common.config.RMConfig
+        
+        """
         self.config = config
         
         # Create the RM components
@@ -55,7 +84,7 @@ class ResourceManager(object):
     
             # Lease request frontends
             # In simulation, we can only use the tracefile frontend
-            self.frontends = [TracefileFrontend(self, self.clock.getStartTime())]
+            self.frontends = [TracefileFrontend(self, self.clock.get_start_time())]
         elif mode == "opennebula":
             # The clock
             self.clock = RealClock(self, 5)
@@ -70,15 +99,15 @@ class ResourceManager(object):
             # TODO: Get this from config file
             self.frontends = [OpenNebulaFrontend(self)]
 
-
-        
         # Statistics collection 
         self.stats = stats.Stats(self, self.config.getDataDir())
 
         
     def start(self):
+        """Starts the resource manager"""
         self.logger.status("Starting resource manager", constants.RM)
 
+        # Create counters to keep track of interesting data.
         self.stats.createCounter(constants.COUNTER_ARACCEPTED, constants.AVERAGE_NONE)
         self.stats.createCounter(constants.COUNTER_ARREJECTED, constants.AVERAGE_NONE)
         self.stats.createCounter(constants.COUNTER_BESTEFFORTCOMPLETED, constants.AVERAGE_NONE)
@@ -86,51 +115,94 @@ class ResourceManager(object):
         self.stats.createCounter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
         self.stats.createCounter(constants.COUNTER_CPUUTILIZATION, constants.AVERAGE_TIMEWEIGHTED)
         
+        # Start the clock
         self.clock.run()
         
     def stop(self):
+        """Stops the resource manager"""
+        
         self.logger.status("Stopping resource manager", constants.RM)
+        
+        # Stop collecting data (this finalizes counters)
         self.stats.stop()
 
         self.logger.status("  Completed best-effort leases: %i" % self.stats.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
         self.logger.status("  Accepted AR leases: %i" % self.stats.counters[constants.COUNTER_ARACCEPTED], constants.RM)
         self.logger.status("  Rejected AR leases: %i" % self.stats.counters[constants.COUNTER_ARREJECTED], constants.RM)
         
-        for l in self.scheduler.completedleases.entries.values():
-            l.printContents()
+        # In debug mode, dump the lease descriptors.
+        for lease in self.scheduler.completedleases.entries.values():
+            lease.printContents()
+            
+        # Write all collected data to disk
         self.stats.dumpStatsToDisk()
         
-    def processRequests(self, nexttime):        
+    def process_requests(self, nexttime):
+        """Process any new requests in the request frontend
+        
+        Checks the request frontend to see if there are any new requests that
+        have to be processed. AR leases are sent directly to the schedule.
+        Best-effort leases are queued.
+        
+        Arguments:
+        nexttime -- The next time at which the scheduler can allocate resources.
+                    This is meant to be provided by the clock simply as a sanity
+                    measure when running in real time (to avoid scheduling something
+                    "now" to actually have "now" be in the past once the scheduling
+                    function returns. i.e., nexttime has nothing to do with whether 
+                    there are resources available at that time or not.
+        
+        """        
+        
+        # Get requests from frontend
         requests = []
-        for f in self.frontends:
-            requests += f.getAccumulatedRequests()
+        for frontend in self.frontends:
+            requests += frontend.getAccumulatedRequests()
         requests.sort(key=operator.attrgetter("tSubmit"))
                 
-        ar = [r for r in requests if isinstance(r,ARLease)]
-        besteffort = [r for r in requests if isinstance(r,BestEffortLease)]
+        ar_leases = [req for req in requests if isinstance(req, ARLease)]
+        be_leases = [req for req in requests if isinstance(req, BestEffortLease)]
         
-        for r in besteffort:
-            self.scheduler.enqueue(r)
+        # Queue best-effort
+        for req in be_leases:
+            self.scheduler.enqueue(req)
         
+        # Process AR leases, and run the scheduling function.
         try:
-            self.scheduler.schedule(ar, nexttime)
+            self.scheduler.schedule(ar_leases, nexttime)
         except Exception, msg:
+            # Exit if something goes horribly wrong
             self.logger.error("Exception in scheduling function. Dumping state..." , constants.RM)
-            self.printStats("ERROR", verbose=True)
+            self.print_stats("ERROR", verbose=True)
             raise      
 
-    def processReservations(self, time):                
+    def process_reservations(self, time):
+        """Process reservations starting/stopping at specified time"""
+        
+        # The scheduler takes care of this.
         try:
             self.scheduler.processReservations(time)
         except Exception, msg:
+            # Exit if something goes horribly wrong
             self.logger.error("Exception when processing reservations. Dumping state..." , constants.RM)
-            self.printStats("ERROR", verbose=True)
+            self.print_stats("ERROR", verbose=True)
             raise      
 
         
-    def printStats(self, loglevel, verbose=False):
-        self.clock.printStats(loglevel)
-        self.logger.log(loglevel, "Next change point (in slot table): %s" % self.getNextChangePoint(), constants.RM)
+    def print_stats(self, loglevel, verbose=False):
+        """Print some basic statistics in the log
+        
+        Arguments:
+        loglevel -- log level at which to print stats
+        verbose -- if True, will print the lease descriptor of all the scheduled
+                   and queued leases.
+        """
+        
+        # Print clock stats and the next changepoint in slot table
+        self.clock.print_stats(loglevel)
+        self.logger.log(loglevel, "Next change point (in slot table): %s" % self.get_next_changepoint(), constants.RM)
+
+        # Print descriptors of scheduled leases
         scheduled = self.scheduler.scheduledleases.entries.keys()
         self.logger.log(loglevel, "Scheduled requests: %i" % len(scheduled), constants.RM)
         if verbose and len(scheduled)>0:
@@ -139,6 +211,8 @@ class ResourceManager(object):
                 lease = self.scheduler.scheduledleases.getLease(k)
                 lease.printContents(loglevel=loglevel)
             self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", constants.RM)
+
+        # Print queue size and descriptors of queued leases
         self.logger.log(loglevel, "Queue size: %i" % len(self.scheduler.queue.q), constants.RM)
         if verbose and len(self.scheduler.queue.q)>0:
             self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", constants.RM)
@@ -146,92 +220,188 @@ class ResourceManager(object):
                 lease.printContents(loglevel=loglevel)
             self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", constants.RM)
 
-    def getNextChangePoint(self):
-       return self.scheduler.slottable.peekNextChangePoint(self.clock.getTime())
+    def get_next_changepoint(self):
+        """Return next changepoint in the slot table"""
+        return self.scheduler.slottable.peekNextChangePoint(self.clock.get_time())
    
-    def existsLeasesInRM(self):
-       return self.scheduler.existsScheduledLeases() or not self.scheduler.isQueueEmpty()
+    def exists_leases_in_rm(self):
+        """Return True if there are any leases still "in the system" """
+        return self.scheduler.existsScheduledLeases() or not self.scheduler.isQueueEmpty()
     
-    def notifyEndVM(self, l, rr):
-        self.scheduler.handlePrematureEndVM(l, rr)
+    def notify_end_vm(self, lease, rr):
+        """Notifies the resource manager that a VM has ended prematurely.
+        
+        This message is passed along to the scheduler.
+        
+        Arguments:
+        lease -- Lease the VM belongs to
+        rr    -- Resource reservations where the premature end happened"""
+        self.scheduler.handlePrematureEndVM(lease, rr)
+
             
 class Clock(object):
+    """Base class for the resource manager's clock.
+    
+    The clock is in charge of periodically waking the resource manager so it
+    will process new requests and handle existing reservations. This is a
+    base class defining abstract methods.
+    
+    """
     def __init__(self, rm):
         self.rm = rm
     
-    def getTime(self): abstract()
+    def get_time(self): 
+        """Return the current time"""
+        return abstract()
 
-    def getStartTime(self): abstract()
+    def get_start_time(self): 
+        """Return the time at which the clock started ticking"""
+        return abstract()
     
-    # Remove this once premature end handling is taken
-    # out of handleEndVM 
-    def getNextSchedulableTime(self): abstract()
+    def get_next_schedulable_time(self): 
+        """Return the next time at which resources could be scheduled.
+        
+        The "next schedulable time" server sanity measure when running 
+        in real time (to avoid scheduling something "now" to actually 
+        have "now" be in the past once the scheduling function returns. 
+        i.e., the "next schedulable time" has nothing to do with whether 
+        there are resources available at that time or not.
+        """
+        return abstract()
     
-    def run(self): abstract()     
+    def run(self):
+        """Start and run the clock. This function is, in effect,
+        the main loop of the resource manager."""
+        return abstract()     
     
-    def printStats(self, loglevel):
-        pass       
+    def print_stats(self, loglevel):
+        """Print some basic statistics about the clock on the log
+        
+        Arguments:
+        loglevel -- log level at which statistics should be printed.
+        """
+        return abstract()
     
         
 class SimulatedClock(Clock):
+    """Simulates the passage of time... really fast.
+    
+    The simulated clock steps through time to produce an ideal schedule.
+    See the run() function for a description of how time is incremented
+    exactly in the simulated clock.
+    
+    """
+    
     def __init__(self, rm, starttime):
+        """Initialize the simulated clock, starting at the provided starttime"""
         Clock.__init__(self, rm)
         self.starttime = starttime
         self.time = starttime
         self.logger = self.rm.logger
         self.statusinterval = self.rm.config.getStatusMessageInterval()
        
-    def getTime(self):
-        return self.time
-
-    def getPreciseTime(self):
+    def get_time(self):
+        """See docstring in base Clock class."""
         return self.time
     
-    def getStartTime(self):
+    def get_start_time(self):
+        """See docstring in base Clock class."""
         return self.starttime
 
-    # Remove this once premature end handling is taken
-    # out of handleEndVM 
-    def getNextSchedulableTime(self):
+    def get_next_schedulable_time(self):
+        """See docstring in base Clock class."""
         return self.time    
     
     def run(self):
+        """Runs the simulated clock through time.
+        
+        The clock starts at the provided start time. At each point in time,
+        it wakes up the resource manager and then skips to the next time
+        where "something" is happening (see __get_next_time for a more
+        rigorous description of this).
+        
+        The clock stops when there is nothing left to do (no pending or 
+        queue requests, and no future reservations)
+        
+        The simulated clock can only work in conjunction with the
+        tracefile request frontend.
+        """
         self.rm.logger.status("Starting simulated clock", constants.CLOCK)
-        self.rm.stats.start(self.getStartTime())
+        self.rm.stats.start(self.get_start_time())
         prevstatustime = self.time
-        self.prevtime = None
         done = False
+        # Main loop
         while not done:
+            # Check to see if there are any leases which are ending prematurely.
+            # Note that this is unique to simulation.
             prematureends = self.rm.scheduler.slottable.getPrematurelyEndingRes(self.time)
+            
+            # Notify the resource manager about the premature ends
             for rr in prematureends:
                 self.rm.notifyEndVM(rr.lease, rr)
-            self.rm.processReservations(self.time)
-            self.rm.processRequests(self.time)
+                
+            # Process reservations starting/stopping at the current time and
+            # check if there are any new requests.
+            self.rm.process_reservations(self.time)
+            self.rm.process_requests(self.time)
+            
             # Since processing requests may have resulted in new reservations
             # starting now, we process reservations again.
-            self.rm.processReservations(self.time)
+            self.rm.process_reservations(self.time)
+            
+            # Print a status message
             if self.statusinterval != None and (self.time - prevstatustime).minutes >= self.statusinterval:
-                self.printStatus()
+                self.__print_status()
                 prevstatustime = self.time
                 
-            self.time, done = self.getNextTime()
+            # Skip to next point in time.
+            self.time, done = self.__get_next_time()
                     
+        # Stop the resource manager
         self.rm.logger.status("Stopping simulated clock", constants.CLOCK)
         self.rm.stop()
+        
+    def print_stats(self, loglevel):
+        """See docstring in base Clock class."""
+        pass
+        
+    def __print_status(self):
+        """Prints status summary."""
+        self.logger.status("STATUS ---Begin---", constants.RM)
+        self.logger.status("STATUS Completed best-effort leases: %i" % self.rm.stats.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
+        self.logger.status("STATUS Queue size: %i" % self.rm.stats.counters[constants.COUNTER_QUEUESIZE], constants.RM)
+        self.logger.status("STATUS Best-effort reservations: %i" % self.rm.scheduler.numbesteffortres, constants.RM)
+        self.logger.status("STATUS Accepted AR leases: %i" % self.rm.stats.counters[constants.COUNTER_ARACCEPTED], constants.RM)
+        self.logger.status("STATUS Rejected AR leases: %i" % self.rm.stats.counters[constants.COUNTER_ARREJECTED], constants.RM)
+        self.logger.status("STATUS ----End----", constants.RM)        
     
-    def getNextTime(self):
+    def __get_next_time(self):
+        """Determines what is the next point in time to skip to.
+        
+        At a given point in time, the next time is the earliest of the following:
+        * The arrival of the next lease request
+        * The start or end of a reservation (a "changepoint" in the slot table)
+        * A premature end of a lease
+        """
         done = False
-        tracefrontend = self.getTraceFrontend()
-        nextchangepoint = self.rm.getNextChangePoint()
+        
+        # Determine candidate next times
+        tracefrontend = self.__get_trace_frontend()
+        nextchangepoint = self.rm.get_next_changepoint()
         nextprematureend = self.rm.scheduler.slottable.getNextPrematureEnd(self.time)
         nextreqtime = tracefrontend.getNextReqTime()
         self.rm.logger.debug("Next change point (in slot table): %s" % nextchangepoint, constants.CLOCK)
         self.rm.logger.debug("Next request time: %s" % nextreqtime, constants.CLOCK)
         self.rm.logger.debug("Next premature end: %s" % nextprematureend, constants.CLOCK)
         
+        # The previous time is now
         prevtime = self.time
+        
+        # We initialize the next time to now too, to detect if
+        # we've been unable to determine what the next time is.
         newtime = self.time
         
+        # Find the earliest of the three, accounting for None values
         if nextchangepoint != None and nextreqtime == None:
             newtime = nextchangepoint
         elif nextchangepoint == None and nextreqtime != None:
@@ -243,14 +413,24 @@ class SimulatedClock(Clock):
             newtime = min(nextprematureend, newtime)
             
         if nextchangepoint == newtime:
+            # Note that, above, we just "peeked" the next changepoint in the slottable.
+            # If it turns out we're skipping to that point in time, then we need to
+            # "get" it (this is because changepoints in the slottable are cached to
+            # minimize access to the slottable. This optimization turned out to
+            # be more trouble than it's worth and will probably be removed sometime
+            # soon.
             newtime = self.rm.scheduler.slottable.getNextChangePoint(newtime)
             
-        if not self.rm.existsLeasesInRM() and not tracefrontend.existsPendingReq():
+        # If there's no more leases in the system, and no more pending requests,
+        # then we're done.
+        if not self.rm.exists_leases_in_rm() and not tracefrontend.existsPendingReq():
             done = True
         
+        # We can also be done if we've specified that we want to stop when
+        # the best-effort requests are all done or when they've all been submitted.
         stopwhen = self.rm.config.stopWhen()
-        scheduledbesteffort = self.rm.scheduler.scheduledleases.getLeases(type=BestEffortLease)
-        pendingbesteffort = [r for r in tracefrontend.requests if isinstance(r,BestEffortLease)]
+        scheduledbesteffort = self.rm.scheduler.scheduledleases.getLeases(type = BestEffortLease)
+        pendingbesteffort = [r for r in tracefrontend.requests if isinstance(r, BestEffortLease)]
         if stopwhen == constants.STOPWHEN_BEDONE:
             if self.rm.scheduler.isQueueEmpty() and len(scheduledbesteffort) + len(pendingbesteffort) == 0:
                 done = True
@@ -258,6 +438,8 @@ class SimulatedClock(Clock):
             if len(pendingbesteffort) == 0:
                 done = True
                 
+        # If we didn't arrive at a new time, and we're not done, we've fallen into
+        # an infinite loop. This is A Bad Thing(tm).
         if newtime == prevtime and done != True:
             self.rm.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." , constants.CLOCK)
             self.rm.printStats("ERROR", verbose=True)
@@ -265,86 +447,128 @@ class SimulatedClock(Clock):
         
         return newtime, done
 
-    def getTraceFrontend(self):
+    def __get_trace_frontend(self):
+        """Gets the tracefile frontend from the resource manager"""
         frontends = self.rm.frontends
-        tracef = [f for f in frontends if isinstance(f,TracefileFrontend)]
+        tracef = [f for f in frontends if isinstance(f, TracefileFrontend)]
         if len(tracef) != 1:
             raise Exception, "The simulated clock can only work with a tracefile request frontend."
         else:
             return tracef[0] 
         
-    def printStatus(self):
-        self.logger.status("STATUS ---Begin---", constants.RM)
-        self.logger.status("STATUS Completed best-effort leases: %i" % self.rm.stats.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
-        self.logger.status("STATUS Queue size: %i" % self.rm.stats.counters[constants.COUNTER_QUEUESIZE], constants.RM)
-        self.logger.status("STATUS Best-effort reservations: %i" % self.rm.scheduler.numbesteffortres, constants.RM)
-        self.logger.status("STATUS Accepted AR leases: %i" % self.rm.stats.counters[constants.COUNTER_ARACCEPTED], constants.RM)
-        self.logger.status("STATUS Rejected AR leases: %i" % self.rm.stats.counters[constants.COUNTER_ARREJECTED], constants.RM)
-        self.logger.status("STATUS ----End----", constants.RM)
         
 class RealClock(Clock):
+    """A realtime clock.
+    
+    The real clock wakes up periodically to, in turn, tell the resource manager
+    to wake up. The real clock can also be run in a "fastforward" mode for
+    debugging purposes (however, unlike the simulated clock, the clock will
+    always skip a fixed amount of time into the future).
+    """
     def __init__(self, rm, quantum, fastforward = False):
+        """Initializes the real clock.
+        
+        Arguments:
+        rm -- the resource manager
+        quantum -- interval between clock wakeups
+        fastforward -- if True, the clock won't actually sleep
+                       for the duration of the quantum."""
         Clock.__init__(self, rm)
         self.fastforward = fastforward
         if not self.fastforward:
             self.lastwakeup = None
         else:
             self.lastwakeup = roundDateTime(now())
-        self.starttime = self.getTime()
+        self.starttime = self.get_time()
         self.nextperiodicwakeup = None
         self.quantum = TimeDelta(seconds=quantum)
                
-    def getTime(self):
+    def get_time(self):
+        """See docstring in base Clock class."""
         if not self.fastforward:
             return now()
         else:
             return self.lastwakeup
     
-    def getStartTime(self):
+    def get_start_time(self):
+        """See docstring in base Clock class."""
         return self.starttime
 
-    # Remove this once premature end handling is taken
-    # out of handleEndVM 
-    def getNextSchedulableTime(self):
+    def get_next_schedulable_time(self):
+        """See docstring in base Clock class."""
         return self.nextperiodicwakeup    
     
     def run(self):
+        """Runs the real clock through time.
+        
+        The clock starts when run() is called. In each iteration of the main loop
+        it will do the following:
+        - Wake up the resource manager
+        - Determine if there will be anything to do before the next
+          time the clock will wake up (after the quantum has passed). Note
+          that this information is readily available on the slot table.
+          If so, set next-wakeup-time to (now + time until slot table
+          event). Otherwise, set it to (now + quantum)
+        - Sleep until next-wake-up-time
+        
+        The clock never stops.
+        TODO: Add signal capturing so we can use a signal to gracefully
+              stop the clock.
+        
+        """
         self.rm.logger.status("Starting simulated clock", constants.CLOCK)
-        self.rm.stats.start(self.getStartTime())
-        # TODO: Add signal capturing so we can stop gracefully
+        self.rm.stats.start(self.get_start_time())
+        
         done = False
+        # Main loop
         while not done:
             self.rm.logger.status("Waking up to manage resources", constants.CLOCK)
-            if not self.fastforward:
-                self.lastwakeup = roundDateTime(self.getTime())
-            self.nextperiodicwakeup = roundDateTime(self.lastwakeup + self.quantum)
-            self.rm.logger.status("Wake-up time recorded as %s" % self.lastwakeup, constants.CLOCK)
-            self.rm.processReservations(self.lastwakeup)
-            self.rm.processRequests(self.nextperiodicwakeup)
             
-            nextchangepoint = self.rm.getNextChangePoint()
+            # Save the waking time. We want to use a consistent time in the 
+            # resource manager operations (if we use now(), we'll get a different
+            # time every time)
+            if not self.fastforward:
+                self.lastwakeup = roundDateTime(self.get_time())
+            self.rm.logger.status("Wake-up time recorded as %s" % self.lastwakeup, constants.CLOCK)
+                
+            # Next wakeup time
+            self.nextperiodicwakeup = roundDateTime(self.lastwakeup + self.quantum)
+
+            # Wake up the resource manager
+            self.rm.process_reservations(self.lastwakeup)
+            self.rm.process_requests(self.nextperiodicwakeup)
+            
+            # Determine if there's anything to do before the next wakeup time
+            nextchangepoint = self.rm.get_next_change_point()
             if nextchangepoint != None and nextchangepoint <= self.nextperiodicwakeup:
+                # We need to wake up earlier to handle a slot table event
                 nextwakeup = nextchangepoint
                 self.rm.scheduler.slottable.getNextChangePoint(self.lastwakeup)
                 self.rm.logger.status("Going back to sleep. Waking up at %s to handle slot table event." % nextwakeup, constants.CLOCK)
             else:
+                # Nothing to do before waking up
                 nextwakeup = self.nextperiodicwakeup
                 self.rm.logger.status("Going back to sleep. Waking up at %s to see if something interesting has happened by then." % nextwakeup, constants.CLOCK)
             
+            # Sleep
             if not self.fastforward:
-                time.sleep((nextwakeup - now()).seconds)
+                sleep((nextwakeup - now()).seconds)
             else:
                 self.lastwakeup = nextwakeup
 
-                    
+        # Stop
         self.rm.printStatus()
         self.rm.logger.status("Stopping clock", constants.CLOCK)
         self.rm.stop()
           
+    def print_stats(self, loglevel):
+        """See docstring in base Clock class."""
+        pass
+          
 
 if __name__ == "__main__":
     from haizea.common.config import RMConfig
-    configfile="../../../etc/sample.conf"
-    config = RMConfig.fromFile(configfile)
-    rm = ResourceManager(config)
-    rm.start()
+    CONFIGFILE = "../../../etc/sample.conf"
+    CONFIG = RMConfig.fromFile(CONFIGFILE)
+    RM = ResourceManager(CONFIG)
+    RM.start()

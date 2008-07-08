@@ -44,16 +44,16 @@ class Stats(object):
         self.counterAvgType[counterID] = avgtype
 
     def incrCounter(self, counterID, leaseID = None):
-        time = self.rm.clock.getTime()
+        time = self.rm.clock.get_time()
         self.appendStat(counterID, self.counters[counterID] + 1, leaseID, time)
 
     def decrCounter(self, counterID, leaseID = None):
-        time = self.rm.clock.getTime()
+        time = self.rm.clock.get_time()
         self.appendStat(counterID, self.counters[counterID] - 1, leaseID, time)
         
     def appendStat(self, counterID, value, leaseID = None, time = None):
         if time == None:
-            time = self.rm.clock.getTime()
+            time = self.rm.clock.get_time()
         if len(self.counterLists[counterID]) > 0:
             prevtime = self.counterLists[counterID][-1][0]
         else:
@@ -77,7 +77,7 @@ class Stats(object):
             self.nodes[n].append((time, constants.DOING_IDLE))
 
     def tick(self):
-        time = self.rm.clock.getTime()
+        time = self.rm.clock.get_time()
         # Update the doing
         for node in self.rm.resourcepool.nodes:
             nodenum = node.nod_id
@@ -93,7 +93,7 @@ class Stats(object):
                     self.nodes[nodenum].append((time, doing))
         
     def stop(self):
-        time = self.rm.clock.getTime()
+        time = self.rm.clock.get_time()
 
         # Stop the counters
         for counterID in self.counters:
@@ -162,7 +162,7 @@ class Stats(object):
         return stats          
     
     def getNodesDoing(self):
-        starttime = self.rm.clock.getStartTime()
+        starttime = self.rm.clock.get_start_time()
         nodes=dict([(i+1,[]) for i in range(self.rm.config.getNumPhysicalNodes())])
         for n in self.nodes:
             nodes[n] = []

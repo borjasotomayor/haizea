@@ -188,7 +188,7 @@ class Scheduler(object):
         self.rm.logger.debug("LEASE-%i Start of handleEndVM" % l.leaseID, constants.SCHED)
         self.rm.logger.edebug("LEASE-%i Before:" % l.leaseID, constants.SCHED)
         l.printContents()
-        diff = self.rm.clock.getTime() - rr.start
+        diff = self.rm.clock.get_time() - rr.start
         l.duration.accumulateDuration(diff)
         rr.state = constants.RES_STATE_DONE
         if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE:
@@ -220,7 +220,7 @@ class Scheduler(object):
                 l.removeRR(r)
                 self.slottable.removeReservation(r)
         rr.oncomplete = constants.ONCOMPLETE_ENDLEASE
-        rr.end = self.rm.clock.getTime()
+        rr.end = self.rm.clock.get_time()
         self.handleEndVM(l, rr)
         nexttime = self.rm.clock.getNextSchedulableTime()
         if self.rm.config.isBackfilling():

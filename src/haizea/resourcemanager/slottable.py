@@ -504,7 +504,7 @@ class SlotTable(object):
             # If we have to resume this lease, make sure that
             # we have enough time to transfer the images.
             migratetime = lease.estimateMigrationTime()
-            earliesttransfer = self.rm.clock.getTime() + migratetime
+            earliesttransfer = self.rm.clock.get_time() + migratetime
 
             for n in earliest:
                 earliest[n][0] = max(earliest[n][0], earliesttransfer)
