@@ -460,17 +460,7 @@ class Queue(object):
     def enqueueInOrder(self, r):
         self.q.append(r)
         self.q.sort(key=attrgetter("leaseID"))
-    
-    def getNextCancelPoint(self):
-        if self.isEmpty():
-            return None
-        else:
-            return min([l.maxqueuetime for l in self.q])
-        
-    def purgeCancelled(self):
-        cancelled = [l.leaseID for l in self.q if l.mustBeCancelled(self.scheduler.rm.clock.getTime())]
-        self.q = [l for l in self.q if not l.mustBeCancelled(self.scheduler.rm.clock.getTime())]
-        return cancelled
+
         
 class LeaseTable(object):
     def __init__(self, scheduler):
