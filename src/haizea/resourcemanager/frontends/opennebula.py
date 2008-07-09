@@ -21,13 +21,23 @@ from haizea.resourcemanager.frontends.base import RequestFrontend
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ResourceTuple
 from haizea.common.utils import UNIX2DateTime
 from pysqlite2 import dbapi2 as sqlite
-from mx.DateTime import TimeDelta, ISO
+from mx.DateTime import DateTimeDelta, TimeDelta, ISO
 from haizea.common.utils import roundDateTime
 
-RES_CPU="CPU"
-RES_MEM="MEMORY"
-RES_DISK="DISK"
-DISK_IMAGE="IMAGE"
+HAIZEA_PARAM = "HAIZEA"
+HAIZEA_START = "start"
+HAIZEA_START_NOW = "now"
+HAIZEA_START_BESTEFFORT = "best_effort"
+HAIZEA_DURATION = "duration"
+HAIZEA_DURATION_UNLIMITED = "unlimited"
+HAIZEA_PREEMPTABLE = "preemptable"
+HAIZEA_PREEMPTABLE_YES = "yes"
+HAIZEA_PREEMPTABLE_NO = "no"
+
+ONE_CPU="CPU"
+ONE_MEMORY="MEMORY"
+ONE_DISK="DISK"
+ONE_DISK_SOURCE="SOURCE"
 
 class OpenNebulaFrontend(RequestFrontend):
     def __init__(self, rm):
@@ -57,30 +67,41 @@ class OpenNebulaFrontend(RequestFrontend):
         return True
     
     def ONEreq2lease(self, req, attrs):
-        if attrs.has_key("HAIZEA_START"):
-            return self.createARLease(req, attrs)
+        haizea_param = self.get_vector_value(attrs[HAIZEA_PARAM])
+        start = haizea_param[HAIZEA_START]
+        if start == HAIZEA_START_NOW:
+            pass
+        elif start  == HAIZEA_START_BESTEFFORT:
+            return self.create_besteffort_lease(req, attrs, haizea_param)
         else:
-            return self.createBestEffortLease(req, attrs)
+            return self.create_ar_lease(req, attrs, haizea_param)
     
-    def getCommonAttrs(self, req, attrs):
-        disk = attrs[RES_DISK]
-        diskattrs = dict([n.split("=") for n in disk.split(",")])
+    def get_vector_value(self, value):
+        return dict([n.split("=") for n in value.split(",")])
+    
+    def get_common_attrs(self, req, attrs, haizea_param):
+        disk = self.get_vector_value(attrs[ONE_DISK])
         tSubmit = UNIX2DateTime(req["stime"])
-        vmimage = diskattrs[DISK_IMAGE]
+        vmimage = disk[ONE_DISK_SOURCE]
         vmimagesize = 0
         numnodes = 1
         resreq = ResourceTuple.createEmpty()
-        resreq.setByType(constants.RES_CPU, float(attrs[RES_CPU]))
-        resreq.setByType(constants.RES_MEM, int(attrs[RES_MEM]))
-        return tSubmit, vmimage, vmimagesize, numnodes, resreq
-    
-    def createBestEffortLease(self, req, attrs):
-        tSubmit, vmimage, vmimagesize, numnodes, resreq = self.getCommonAttrs(req, attrs)
-        if attrs.has_key("HAIZEA_DURATION"):
-            duration = ISO.ParseTime(attrs["HAIZEA_DURATION"])
+        resreq.setByType(constants.RES_CPU, float(attrs[ONE_CPU]))
+        resreq.setByType(constants.RES_MEM, int(attrs[ONE_MEMORY]))
+
+        duration = haizea_param[HAIZEA_DURATION]
+        if duration == HAIZEA_DURATION_UNLIMITED:
+            # This is an interim solution (make it run for a century).
+            # TODO: Integrate concept of unlimited duration in the lease datastruct
+            duration = DateTimeDelta(36500)
         else:
-            # TODO: Just for testing. Should be unlimited duration.
-            duration = TimeDelta(seconds=60) 
+            duration = ISO.ParseTimeDelta(duration)
+
+        return tSubmit, vmimage, vmimagesize, numnodes, resreq, duration
+    
+    def create_besteffort_lease(self, req, attrs, haizea_param):
+        tSubmit, vmimage, vmimagesize, numnodes, resreq, duration = self.get_common_attrs(req, attrs, haizea_param)
+ 
         leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq)
         leasereq.state = constants.LEASE_STATE_PENDING
         # Enactment info should be changed to the "array id" when groups
@@ -92,18 +113,18 @@ class OpenNebulaFrontend(RequestFrontend):
         leasereq.setScheduler(self.rm.scheduler)
         return leasereq
     
-    def createARLease(self, req, attrs):
-        tSubmit, vmimage, vmimagesize, numnodes, resreq = self.getCommonAttrs(req, attrs)
-        duration = ISO.ParseTime(attrs["HAIZEA_DURATION"])
-        tStart = attrs["HAIZEA_START"]
-        if tStart[0] == "+":
+    def create_ar_lease(self, req, attrs, haizea_param):
+        tSubmit, vmimage, vmimagesize, numnodes, resreq, duration = self.get_common_attrs(req, attrs, haizea_param)
+
+        start = haizea_param[HAIZEA_START]
+        if start[0] == "+":
             # Relative time
             # For testing, should be:
             # tStart = tSubmit + ISO.ParseTime(tStart[1:])
-            tStart = roundDateTime(self.rm.clock.getTime() + ISO.ParseTime(tStart[1:]))
+            start = roundDateTime(self.rm.clock.get_time() + ISO.ParseTime(start[1:]))
         else:
-            tStart = ISO.ParseDateTime(tStart)
-        leasereq = ARLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq)
+            start = ISO.ParseDateTime(start)
+        leasereq = ARLease(tSubmit, start, duration, vmimage, vmimagesize, numnodes, resreq)
         leasereq.state = constants.LEASE_STATE_PENDING
         # Enactment info should be changed to the "array id" when groups
         # are implemented in OpenNebula

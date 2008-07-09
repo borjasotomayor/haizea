@@ -84,3 +84,6 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         
     def getSuspendResumeRate(self):
         return self.suspendresumerate
+
+    def get_bandwidth(self):
+        return 0

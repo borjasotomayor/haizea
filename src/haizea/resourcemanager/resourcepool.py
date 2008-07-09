@@ -37,7 +37,7 @@ class ResourcePool(object):
         self.FIFOnode = self.info.getFIFONode()
         self.EDFnode = self.info.getEDFNode()
         
-        self.imagenode_bandwidth = self.rm.config.getBandwidth()
+        self.imagenode_bandwidth = self.info.get_bandwidth()
         
         self.reusealg = self.rm.config.getReuseAlg()
         if self.reusealg == constants.REUSE_IMAGECACHES:
