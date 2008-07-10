@@ -39,14 +39,15 @@ class VMEnactment(VMEnactmentBase):
     def start(self, action):
         for vnode in action.vnodes:
             # Unpack action
-            vmid = action.vnodes[vnode].enactmentInfo
+            vmid = action.vnodes[vnode].enactment_info
             hostID = action.vnodes[vnode].pnode
             image = action.vnodes[vnode].diskimage
-            cpu = action.vnodes[vnode].resources.getByType(constants.RES_CPU)
-            memory = action.vnodes[vnode].resources.getByType(constants.RES_MEM)
+            cpu = action.vnodes[vnode].resources.get_by_type(constants.RES_CPU)
+            memory = action.vnodes[vnode].resources.get_by_type(constants.RES_MEM)
             
             self.logger.debug("Received request to start VM for L%iV%i on host %i, image=%s, cpu=%i, mem=%i"
-                         % (action.leaseHaizeaID, vnode, hostID, image, cpu, memory), constants.ONE)
+                         % (action.lease_haizea_id, vnode, hostID, image, cpu, memory), constants.ONE)
+
             cmd = "%s deploy %i %i" % (self.onevm, vmid, hostID)
             status = self.runCommand(cmd)
             if status == 0:
@@ -57,7 +58,7 @@ class VMEnactment(VMEnactmentBase):
     def stop(self, action):
         for vnode in action.vnodes:
             # Unpack action
-            vmid = action.vnodes[vnode].enactmentInfo
+            vmid = action.vnodes[vnode].enactment_info
             cmd = "%s shutdown %i" % (self.onevm, vmid)
             status = self.runCommand(cmd)
             if status == 0:
@@ -68,7 +69,7 @@ class VMEnactment(VMEnactmentBase):
     def suspend(self, action):
         for vnode in action.vnodes:
             # Unpack action
-            vmid = action.vnodes[vnode].enactmentInfo
+            vmid = action.vnodes[vnode].enactment_info
             cmd = "%s suspend %i" % (self.onevm, vmid)
             status = self.runCommand(cmd)
             if status == 0:
@@ -79,7 +80,7 @@ class VMEnactment(VMEnactmentBase):
     def resume(self, action):
         for vnode in action.vnodes:
             # Unpack action
-            vmid = action.vnodes[vnode].enactmentInfo
+            vmid = action.vnodes[vnode].enactment_info
             cmd = "%s resume %i" % (self.onevm, vmid)
             status = self.runCommand(cmd)
             if status == 0:
@@ -92,13 +93,13 @@ class VMEnactment(VMEnactmentBase):
         result = 0
         for vnode in action.vnodes:
             # Unpack action
-            vmid = action.vnodes[vnode].enactmentInfo
+            vmid = action.vnodes[vnode].enactment_info
             cur = self.conn.cursor()
             cur.execute("select state from vmpool where oid = %i" % vmid)
             onevm = cur.fetchone()        
             state = onevm["state"]
             if state == 5:
-                self.logger.debug("Suspend of L%iV%i correct." % (action.leaseHaizeaID, vnode), constants.ONE)
+                self.logger.debug("Suspend of L%iV%i correct." % (action.lease_haizea_id, vnode), constants.ONE)
             else:
                 self.logger.warning("ONE did not complete suspend  of L%i%V%i on time. State is %i" % (action.leaseHaizeaID, vnode, state), constants.ONE)
                 result = 1
@@ -109,13 +110,13 @@ class VMEnactment(VMEnactmentBase):
         result = 0
         for vnode in action.vnodes:
             # Unpack action
-            vmid = action.vnodes[vnode].enactmentInfo
+            vmid = action.vnodes[vnode].enactment_info
             cur = self.conn.cursor()
             cur.execute("select state from vmpool where oid = %i" % vmid)
             onevm = cur.fetchone()        
             state = onevm["state"]
             if state == 3:
-                self.logger.debug("Suspend of L%iV%i correct." % (action.leaseHaizeaID, vnode), constants.ONE)
+                self.logger.debug("Suspend of L%iV%i correct." % (action.lease_haizea_id, vnode), constants.ONE)
             else:
                 self.logger.warning("ONE did not complete resume of L%i%V%i on time. State is %i" % (action.leaseHaizeaID, vnode, state), constants.ONE)
                 result = 1

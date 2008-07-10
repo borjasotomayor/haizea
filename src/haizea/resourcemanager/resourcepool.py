@@ -110,9 +110,9 @@ class ResourcePool(object):
                         taintedImage = self.addTaintedImageToNode(pnode, lease.diskimage_id, lease.diskimage_size, lease.id, vnode)
                         # ENACTMENT
                         # self.storage.createCopyFromCache(pnode, lease.diskImageSize)
-            startAction.vnodes[vnode].pnode = node.enactmentInfo
+            startAction.vnodes[vnode].pnode = node.enactment_info
             startAction.vnodes[vnode].diskimage = taintedImage.filename
-            startAction.vnodes[vnode].res = rr.resources_in_pnode[pnode]
+            startAction.vnodes[vnode].resources = rr.resources_in_pnode[pnode]
 
         self.vm.start(startAction)
         
@@ -341,7 +341,7 @@ class Node(object):
         self.workingspacesize = 0
         self.capacity = capacity
         # enactment-specific information
-        self.enactmentInfo = None
+        self.enactment_info = None
         # Kludgy way of keeping track of utilization
         self.transfer_doing = constants.DOING_IDLE
         self.vm_doing = constants.DOING_IDLE

@@ -40,10 +40,10 @@ def SWF(tracefile, config):
                 vmimage = "NOIMAGE"
                 vmimagesize = 600 # Arbitrary
                 numnodes = int(fields[7]) # 7: reqNProcs
-                resreq = ResourceTuple.createEmpty()
-                resreq.setByType(constants.RES_CPU, 1) # One CPU per VM, should be configurable
-                resreq.setByType(constants.RES_MEM, 1024) # Should be configurable
-                resreq.setByType(constants.RES_DISK, vmimagesize + 0) # Should be configurable
+                resreq = ResourceTuple.create_empty()
+                resreq.set_by_type(constants.RES_CPU, 1) # One CPU per VM, should be configurable
+                resreq.set_by_type(constants.RES_MEM, 1024) # Should be configurable
+                resreq.set_by_type(constants.RES_DISK, vmimagesize + 0) # Should be configurable
                 maxdur = TimeDelta(seconds=reqtime)
                 if runtime < 0 and status==5:
                     # This is a job that got cancelled while waiting in the queue
@@ -56,7 +56,8 @@ def SWF(tracefile, config):
                     maxqueuetime = None
                 if realdur > maxdur:
                     realdur = maxdur
-                req = BestEffortLease(None, tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, realdur, maxqueuetime, timeOnDedicated=realdur)
+                preemptible = True
+                req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, preemptible, realdur)
                 req.state = constants.LEASE_STATE_PENDING
                 requests.append(req)
     return requests
@@ -90,14 +91,16 @@ def LWF(tracefile, inittime):
         vmimage = entry.vmImage
         vmimagesize = entry.vmImageSize
         numnodes = entry.numNodes
-        resreq = ResourceTuple.createEmpty()
-        resreq.setByType(constants.RES_CPU, entry.CPU)
-        resreq.setByType(constants.RES_MEM, entry.mem)
-        resreq.setByType(constants.RES_DISK, vmimagesize + entry.disk)
+        resreq = ResourceTuple.create_empty()
+        resreq.set_by_type(constants.RES_CPU, entry.CPU)
+        resreq.set_by_type(constants.RES_MEM, entry.mem)
+        resreq.set_by_type(constants.RES_DISK, vmimagesize + entry.disk)
         if tStart == None:
-            req = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, realduration)
+            preemptible = True
+            req = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, preemptible, realduration)
         else:
-            req = ARLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq, realduration)
+            preemptible = False
+            req = ARLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq, preemptible, realduration)
         req.state = constants.LEASE_STATE_PENDING
         requests.append(req)
     return requests

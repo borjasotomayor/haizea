@@ -30,9 +30,9 @@ HAIZEA_START_NOW = "now"
 HAIZEA_START_BESTEFFORT = "best_effort"
 HAIZEA_DURATION = "duration"
 HAIZEA_DURATION_UNLIMITED = "unlimited"
-HAIZEA_PREEMPTABLE = "preemptable"
-HAIZEA_PREEMPTABLE_YES = "yes"
-HAIZEA_PREEMPTABLE_NO = "no"
+HAIZEA_PREEMPTIBLE = "preemptible"
+HAIZEA_PREEMPTIBLE_YES = "yes"
+HAIZEA_PREEMPTIBLE_NO = "no"
 
 ONE_CPU="CPU"
 ONE_MEMORY="MEMORY"
@@ -96,25 +96,28 @@ class OpenNebulaFrontend(RequestFrontend):
             duration = DateTimeDelta(36500)
         else:
             duration = ISO.ParseTimeDelta(duration)
+            
+        preemptible = haizea_param[HAIZEA_PREEMPTIBLE]
+        preemptible = (preemptible == HAIZEA_PREEMPTIBLE_YES)
 
-        return tSubmit, vmimage, vmimagesize, numnodes, resreq, duration
+        return tSubmit, vmimage, vmimagesize, numnodes, resreq, duration, preemptible
     
     def create_besteffort_lease(self, req, attrs, haizea_param):
-        tSubmit, vmimage, vmimagesize, numnodes, resreq, duration = self.get_common_attrs(req, attrs, haizea_param)
+        tSubmit, vmimage, vmimagesize, numnodes, resreq, duration, preemptible = self.get_common_attrs(req, attrs, haizea_param)
  
-        leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq)
+        leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
         leasereq.state = constants.LEASE_STATE_PENDING
         # Enactment info should be changed to the "array id" when groups
         # are implemented in OpenNebula
-        leasereq.enactmentInfo = int(req["oid"])
+        leasereq.enactment_info = int(req["oid"])
         # Only one node for now
-        leasereq.vnodeEnactmentInfo = {}
-        leasereq.vnodeEnactmentInfo[1] = int(req["oid"])
+        leasereq.vnode_enactment_info = {}
+        leasereq.vnode_enactment_info[1] = int(req["oid"])
         leasereq.set_scheduler(self.rm.scheduler)
         return leasereq
     
     def create_ar_lease(self, req, attrs, haizea_param):
-        tSubmit, vmimage, vmimagesize, numnodes, resreq, duration = self.get_common_attrs(req, attrs, haizea_param)
+        tSubmit, vmimage, vmimagesize, numnodes, resreq, duration, preemptible = self.get_common_attrs(req, attrs, haizea_param)
 
         start = haizea_param[HAIZEA_START]
         if start[0] == "+":
@@ -124,14 +127,14 @@ class OpenNebulaFrontend(RequestFrontend):
             start = roundDateTime(self.rm.clock.get_time() + ISO.ParseTime(start[1:]))
         else:
             start = ISO.ParseDateTime(start)
-        leasereq = ARLease(tSubmit, start, duration, vmimage, vmimagesize, numnodes, resreq)
+        leasereq = ARLease(tSubmit, start, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
         leasereq.state = constants.LEASE_STATE_PENDING
         # Enactment info should be changed to the "array id" when groups
         # are implemented in OpenNebula
         leasereq.enactmentInfo = int(req["oid"])
         # Only one node for now
-        leasereq.vnodeEnactmentInfo = {}
-        leasereq.vnodeEnactmentInfo[1] = int(req["oid"])
+        leasereq.vnode_enactment_info = {}
+        leasereq.vnode_enactment_info[1] = int(req["oid"])
         leasereq.set_scheduler(self.rm.scheduler)
         return leasereq
         
