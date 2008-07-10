@@ -44,17 +44,17 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
             nod_id = i+1
             enactID = int(host["hid"])
             hostname = host["host_name"]
-            capacity = ds.ResourceTuple.createEmpty()
-            capacity.setByType(constants.RES_DISK, 80000) # OpenNebula currently doesn't provide this
-            capacity.setByType(constants.RES_NETIN, 100) # OpenNebula currently doesn't provide this
-            capacity.setByType(constants.RES_NETOUT, 100) # OpenNebula currently doesn't provide this
+            capacity = ds.ResourceTuple.create_empty()
+            capacity.set_by_type(constants.RES_DISK, 80000) # OpenNebula currently doesn't provide this
+            capacity.set_by_type(constants.RES_NETIN, 100) # OpenNebula currently doesn't provide this
+            capacity.set_by_type(constants.RES_NETOUT, 100) # OpenNebula currently doesn't provide this
             cur.execute("select name, value from host_attributes where id=%i" % enactID)
             attrs = cur.fetchall()
             for attr in attrs:
                 name = attr["name"]
                 if oneattr2haizea.has_key(name):
-                    capacity.setByType(oneattr2haizea[name], int(attr["value"]))
-            capacity.setByType(constants.RES_CPU, capacity.getByType(constants.RES_CPU) / 100.0)
+                    capacity.set_by_type(oneattr2haizea[name], int(attr["value"]))
+            capacity.set_by_type(constants.RES_CPU, capacity.get_by_type(constants.RES_CPU) / 100.0)
             node = Node(self.resourcepool, nod_id, hostname, capacity)
             node.enactmentInfo = int(enactID)
             self.nodes.append(node)

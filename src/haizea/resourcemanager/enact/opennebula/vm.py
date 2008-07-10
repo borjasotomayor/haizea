@@ -42,8 +42,8 @@ class VMEnactment(VMEnactmentBase):
             vmid = action.vnodes[vnode].enactmentInfo
             hostID = action.vnodes[vnode].pnode
             image = action.vnodes[vnode].diskimage
-            cpu = action.vnodes[vnode].res.getByType(constants.RES_CPU)
-            memory = action.vnodes[vnode].res.getByType(constants.RES_MEM)
+            cpu = action.vnodes[vnode].resources.getByType(constants.RES_CPU)
+            memory = action.vnodes[vnode].resources.getByType(constants.RES_MEM)
             
             self.logger.debug("Received request to start VM for L%iV%i on host %i, image=%s, cpu=%i, mem=%i"
                          % (action.leaseHaizeaID, vnode, hostID, image, cpu, memory), constants.ONE)

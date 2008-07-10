@@ -16,150 +16,62 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+"""This module provides the fundamental data structures (besides the slot table,
+which is in a module of its own) used by Haizea. The module provides four types
+of structures:
+
+* Lease data structures
+  * LeaseBase: Base class for leases
+  * ARLease: Advance reservation lease
+  * BestEffortLease: Best-effort lease
+  * ImmediateLease: Immediate lease
+* Resource reservation (RR) structures:
+  * ResourceReservationBase: Base class for RRs in the slot table
+  * VMResourceReservation: RR representing one or more VMs
+  * SuspensionResourceReservation: RR representing a lease suspension
+  * ResumptionResourceReservation: RR representing a lease resumption
+* Lease containers
+  * Queue: Your run-of-the-mill queue
+  * LeaseTable: Provides easy access to leases in the system
+* Miscellaneous structures
+  * ResourceTuple: A tuple representing a resource usage or requirement
+  * Timestamp: A wrapper around requested/scheduled/actual timestamps
+  * Duration: A wrapper around requested/accumulated/actual durations
+"""
+
 from haizea.common.constants import state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
-from haizea.common.utils import roundDateTimeDelta
+from haizea.common.utils import roundDateTimeDelta, get_lease_id, pretty_nodemap, estimate_transfer_time
+
 from operator import attrgetter
 from mx.DateTime import TimeDelta
 from math import floor
-leaseID = 1
 
-def getLeaseID():
-    global leaseID
-    l = leaseID
-    leaseID += 1
-    return l
 
-def resetLeaseID():
-    global leaseID
-    leaseID = 1
+#-------------------------------------------------------------------#
+#                                                                   #
+#                     LEASE DATA STRUCTURES                         #
+#                                                                   #
+#-------------------------------------------------------------------#
 
-def prettyNodemap(nodes):
-    pnodes = list(set(nodes.values()))
-    normmap = [([y[0] for y in nodes.items() if y[1]==x], x) for x in pnodes]
-    for m in normmap: m[0].sort()
-    s = "   ".join([", ".join(["V"+`y` for y in x[0]])+" -> P" + `x[1]` for x in normmap])
-    return s    
-
-class ResourceTuple(object):
-    def __init__(self, res):
-        self.res = res
-        
-    @classmethod
-    def fromList(cls, l):
-        return cls(l[:])
-
-    @classmethod
-    def copy(cls, rt):
-        return cls(rt.res[:])
-    
-    @classmethod
-    def setResourceTypes(cls, resourcetypes):
-        cls.type2pos = dict([(x[0], i) for i, x in enumerate(resourcetypes)])
-        cls.descriptions = dict([(i, x[2]) for i, x in enumerate(resourcetypes)])
-        cls.tuplelength = len(resourcetypes)
-
-    @classmethod
-    def createEmpty(cls):
-        return cls([0 for x in range(cls.tuplelength)])
-        
-    def fitsIn(self, res2):
-        fits = True
-        for i in xrange(len(self.res)):
-            if self.res[i] > res2.res[i]:
-                fits = False
-                break
-        return fits
-    
-    def getNumFitsIn(self, res2):
-        canfit = 10000 # Arbitrarily large
-        for i in xrange(len(self.res)):
-            if self.res[i] != 0:
-                f = res2.res[i] / self.res[i]
-                if f < canfit:
-                    canfit = f
-        return int(floor(canfit))
-    
-    def decr(self, res2):
-        for slottype in xrange(len(self.res)):
-            self.res[slottype] -= res2.res[slottype]
-
-    def incr(self, res2):
-        for slottype in xrange(len(self.res)):
-            self.res[slottype] += res2.res[slottype]
-        
-    def getByType(self, resourcetype):
-        return self.res[self.type2pos[resourcetype]]
-
-    def setByType(self, resourcetype, value):
-        self.res[self.type2pos[resourcetype]] = value        
-        
-    def isZeroOrLess(self):
-        return sum([v for v in self.res]) <= 0
-    
-    def __repr__(self):
-        r=""
-        for i, x in enumerate(self.res):
-            r += "%s:%.2f " % (self.descriptions[i], x)
-        return r
-
-class Timestamp(object):
-    def __init__(self, requested):
-        self.requested = requested
-        self.scheduled = None
-        self.actual = None
-
-    def __repr__(self):
-        return "REQ: %s  |  SCH: %s  |  ACT: %s" % (self.requested, self.scheduled, self.actual)
-        
-class Duration(object):
-    def __init__(self, requested, known=None):
-        self.original = requested
-        self.requested = requested
-        self.accumulated = TimeDelta()
-        self.actual = None
-        # The following is ONLY used in simulation
-        self.known = known
-        
-    def incr(self, t):
-        self.requested += t
-        if self.known != None:
-            self.known += t
-            
-    def incr_by_percent(self, pct):
-        factor = 1 + float(pct)/100
-        self.requested = roundDateTimeDelta(self.requested * factor)
-        if self.known != None:
-            self.requested = roundDateTimeDelta(self.known * factor)
-        
-    def accumulateDuration(self, t):
-        self.accumulated += t
-            
-    def getRemainingDuration(self):
-        return self.requested - self.accumulated
-
-    # ONLY in simulation
-    def getRemainingKnownDuration(self):
-        return self.known - self.accumulated
-            
-    def __repr__(self):
-        return "REQ: %s  |  ACC: %s  |  ACT: %s  |  KNW: %s" % (self.requested, self.accumulated, self.actual, self.known)
 
 class LeaseBase(object):
-    def __init__(self, tSubmit, start, duration, diskImageID, diskImageSize, numnodes, resreq):
+    def __init__(self, submit_time, start, duration, diskimage_id, 
+                 diskimage_size, numnodes, requested_resources, preemptible):
         # Lease ID (read only)
-        self.leaseID = getLeaseID()
+        self.id = get_lease_id()
         
         # Request attributes (read only)
-        self.tSubmit = tSubmit
+        self.submit_time = submit_time
         self.start = start
         self.duration = duration
         self.end = None
-        self.diskImageID = diskImageID
-        self.diskImageSize = diskImageSize
+        self.diskimage_id = diskimage_id
+        self.diskimage_size = diskimage_size
         # TODO: The following assumes homogeneous nodes. Should be modified
         # to account for heterogeneous nodes.
         self.numnodes = numnodes
-        self.resreq = resreq
+        self.requested_resources = requested_resources
+        self.preemptible = preemptible
 
         # Bookkeeping attributes
         # (keep track of the lease's state, resource reservations, etc.)
@@ -169,109 +81,113 @@ class LeaseBase(object):
         self.rr = []
         
         # Enactment information. Should only be manipulated by enactment module
-        self.enactmentInfo = None
-        self.vnodeEnactmentInfo = None
+        self.enactment_info = None
+        self.vnode_enactment_info = None
 
-                
-    def setScheduler(self, scheduler):
+    # TODO: Remove the link to the scheduler, and pass all necessary information
+    # as parameters to methods.
+    def set_scheduler(self, scheduler):
         self.scheduler = scheduler
         self.logger = scheduler.rm.logger
         
-    def printContents(self, loglevel="EXTREMEDEBUG"):
-        self.logger.log(loglevel, "Lease ID       : %i" % self.leaseID, DS)
-        self.logger.log(loglevel, "Submission time: %s" % self.tSubmit, DS)
+    def print_contents(self, loglevel="EXTREMEDEBUG"):
+        self.logger.log(loglevel, "Lease ID       : %i" % self.id, DS)
+        self.logger.log(loglevel, "Submission time: %s" % self.submit_time, DS)
+        self.logger.log(loglevel, "Duration       : %s" % self.duration, DS)
         self.logger.log(loglevel, "State          : %s" % state_str(self.state), DS)
-        self.logger.log(loglevel, "VM image       : %s" % self.diskImageID, DS)
-        self.logger.log(loglevel, "VM image size  : %s" % self.diskImageSize, DS)
+        self.logger.log(loglevel, "VM image       : %s" % self.diskimage_id, DS)
+        self.logger.log(loglevel, "VM image size  : %s" % self.diskimage_size, DS)
         self.logger.log(loglevel, "Num nodes      : %s" % self.numnodes, DS)
-        self.logger.log(loglevel, "Resource req   : %s" % self.resreq, DS)
-        self.logger.log(loglevel, "VM image map   : %s" % prettyNodemap(self.vmimagemap), DS)
-        self.logger.log(loglevel, "Mem image map  : %s" % prettyNodemap(self.memimagemap), DS)
+        self.logger.log(loglevel, "Resource req   : %s" % self.requested_resources, DS)
+        self.logger.log(loglevel, "VM image map   : %s" % pretty_nodemap(self.vmimagemap), DS)
+        self.logger.log(loglevel, "Mem image map  : %s" % pretty_nodemap(self.memimagemap), DS)
 
-    def printRR(self, loglevel="EXTREMEDEBUG"):
+    def print_rrs(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "RESOURCE RESERVATIONS", DS)
         self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~", DS)
         for r in self.rr:
-            r.printContents(loglevel)
+            r.print_contents(loglevel)
             self.logger.log(loglevel, "##", DS)
             
-    def appendRR(self, rr):
-        self.rr.append(rr)
         
-    def hasStartingReservations(self, time):
-        return len(self.getStartingReservations(time)) > 0
+    def has_starting_reservations(self, time):
+        return len(self.get_starting_reservations(time)) > 0
 
-    def hasEndingReservations(self, time):
-        return len(self.getEndingReservations(time)) > 0
+    def has_ending_reservations(self, time):
+        return len(self.get_ending_reservations(time)) > 0
 
-    def getStartingReservations(self, time):
+    def get_starting_reservations(self, time):
         return [r for r in self.rr if r.start <= time and r.state == RES_STATE_SCHEDULED]
 
-    def getEndingReservations(self, time):
+    def get_ending_reservations(self, time):
         return [r for r in self.rr if r.end <= time and r.state == RES_STATE_ACTIVE]
+
+    def get_endtime(self):
+        vmrr, resrr = self.get_last_vmrr()
+        return vmrr.end
+
     
-    def getLastVMRR(self):
+    def append_rr(self, rr):
+        self.rr.append(rr)
+
+    def next_rrs(self, rr):
+        return self.rr[self.rr.index(rr)+1:]
+
+    def prev_rr(self, rr):
+        return self.rr[self.rr.index(rr)-1]
+
+    def get_last_vmrr(self):
         if isinstance(self.rr[-1],VMResourceReservation):
             return (self.rr[-1], None)
         elif isinstance(self.rr[-1],SuspensionResourceReservation):
             return (self.rr[-2], self.rr[-1])
-        
-    def getEnd(self):
-        vmrr, resrr = self.getLastVMRR()
-        return vmrr.end
-        
-    def nextRRs(self, rr):
-        return self.rr[self.rr.index(rr)+1:]
 
-    def prevRR(self, rr):
-        return self.rr[self.rr.index(rr)-1]
-
-    def replaceRR(self, rrold, rrnew):
+    def replace_rr(self, rrold, rrnew):
         self.rr[self.rr.index(rrold)] = rrnew
     
-    def removeRR(self, rr):
+    def remove_rr(self, rr):
         if not rr in self.rr:
             raise Exception, "Tried to remove an RR not contained in this lease"
         else:
             self.rr.remove(rr)
 
-    def removeRRs(self):
+    def clear_rrs(self):
         self.rr = []
         
-    def addBootOverhead(self, t):
-        self.duration.incr(t)        
         
-    def estimateSuspendResumeTime(self, rate):
-        time = float(self.resreq.getByType(RES_MEM)) / rate
+    def add_boot_overhead(self, t):
+        self.duration.incr(t)        
+
+    def add_runtime_overhead(self, percent):
+        self.duration.incr_by_percent(percent)      
+        
+        
+    def estimate_suspend_resume_time(self, rate):
+        time = float(self.requested_resources.get_by_type(RES_MEM)) / rate
         time = roundDateTimeDelta(TimeDelta(seconds = time))
         return time
     
-    # TODO: Should be in common package
-    def estimateTransferTime(self, size):
-        bandwidth = self.scheduler.rm.config.getBandwidth()
-        bandwidthMBs = float(bandwidth) / 8
-        seconds = size / bandwidthMBs
-        return roundDateTimeDelta(TimeDelta(seconds = seconds)) 
-    
-    def estimateImageTransferTime(self):
+    # TODO: Factor out into deployment modules
+    def estimate_image_transfer_time(self, bandwidth):
         forceTransferTime = self.scheduler.rm.config.getForceTransferTime()
         if forceTransferTime != None:
             return forceTransferTime
         else:      
-            return self.estimateTransferTime(self.diskImageSize)
+            return estimate_transfer_time(self.diskimage_size, bandwidth)
         
-    def estimateMigrationTime(self):
+    def estimate_migration_time(self, bandwidth):
         whattomigrate = self.scheduler.rm.config.getMustMigrate()
         if whattomigrate == MIGRATE_NONE:
             return TimeDelta(seconds=0)
         else:
             if whattomigrate == MIGRATE_MEM:
-                mbtotransfer = self.resreq.getByType(RES_MEM)
+                mbtotransfer = self.requested_resources.get_by_type(RES_MEM)
             elif whattomigrate == MIGRATE_MEMVM:
-                mbtotransfer = self.diskImageSize + self.resreq.getByType(RES_MEM)
-            return self.estimateTransferTime(mbtotransfer)
+                mbtotransfer = self.diskimage_size + self.requested_resources.get_by_type(RES_MEM)
+            return estimate_transfer_time(mbtotransfer, bandwidth)
         
-    def getSuspendThreshold(self, initial, suspendrate, migrating=False):
+    # TODO: This whole function has to be rethought
+    def get_suspend_threshold(self, initial, suspendrate, migrating=False, bandwidth=None):
         threshold = self.scheduler.rm.config.getSuspendThreshold()
         if threshold != None:
             # If there is a hard-coded threshold, use that
@@ -288,89 +204,124 @@ class LeaseBase(object):
                 # Overestimating, just in case (taking into account that the lease may be
                 # resumed, but also suspended again)
                 if migrating:
-                    threshold = self.estimateMigrationTime() + self.estimateSuspendResumeTime(suspendrate) * 2
+                    threshold = self.estimate_suspend_resume_time(suspendrate) * 2
+                    #threshold = self.estimate_migration_time(bandwidth) + self.estimate_suspend_resume_time(suspendrate) * 2
                 else:
-                    threshold = self.estimateSuspendResumeTime(suspendrate) * 2
+                    threshold = self.estimate_suspend_resume_time(suspendrate) * 2
             else:
                 #threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime(suspendrate)
-                threshold = self.scheduler.rm.config.getBootOverhead() + self.estimateSuspendResumeTime(suspendrate)
+                threshold = self.scheduler.rm.config.getBootOverhead() + self.estimate_suspend_resume_time(suspendrate)
             factor = self.scheduler.rm.config.getSuspendThresholdFactor() + 1
             return roundDateTimeDelta(threshold * factor)
             
-    def addRuntimeOverhead(self, percent):
-        self.duration.incr_by_percent(percent)      
+        
         
 class ARLease(LeaseBase):
-    def __init__(self, tSubmit, tStart, dur, diskImageID, diskImageSize, numnodes, resreq, realdur = None):
-        start = Timestamp(tStart)
-        duration = Duration(dur)
+    def __init__(self, submit_time, start, duration, diskimage_id, 
+                 diskimage_size, numnodes, resreq, preemptible,
+                 # AR-specific parameters:
+                 realdur = None):
+        start = Timestamp(start)
+        duration = Duration(duration)
         duration.known = realdur # ONLY for simulation
-        LeaseBase.__init__(self, tSubmit, start, duration, diskImageID, diskImageSize, numnodes, resreq)
+        LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
+                           diskimage_size, numnodes, resreq, preemptible)
         
-    def printContents(self, loglevel="EXTREMEDEBUG"):
+    def print_contents(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "__________________________________________________", DS)
-        LeaseBase.printContents(self, loglevel)
+        LeaseBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : AR", DS)
         self.logger.log(loglevel, "Start time     : %s" % self.start, DS)
-        self.logger.log(loglevel, "Duration       : %s" % self.duration, DS)
-        self.printRR(loglevel)
+        self.print_rrs(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------", DS)
     
 
         
 class BestEffortLease(LeaseBase):
-    def __init__(self, tSubmit, reqdur, diskImageID, diskImageSize, numnodes, resreq, realdur = None):
-        start = Timestamp(None) # i.e., start on a best-effort bais
-        duration = Duration(reqdur)
+    def __init__(self, submit_time, duration, diskimage_id, 
+                 diskimage_size, numnodes, resreq, preemptible,
+                 # BE-specific parameters:
+                 realdur = None):
+        start = Timestamp(None) # i.e., start on a best-effort basis
+        duration = Duration(duration)
         duration.known = realdur # ONLY for simulation
         # When the images will be available
         self.imagesavail = None        
-        LeaseBase.__init__(self, tSubmit, start, duration, diskImageID, diskImageSize, numnodes, resreq)
+        LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
+                           diskimage_size, numnodes, resreq, preemptible)
 
-    def printContents(self, loglevel="EXTREMEDEBUG"):
+    def print_contents(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "__________________________________________________", DS)
-        LeaseBase.printContents(self, loglevel)
+        LeaseBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : BEST-EFFORT", DS)
-        self.logger.log(loglevel, "Duration       : %s" % self.duration, DS)
         self.logger.log(loglevel, "Images Avail @ : %s" % self.imagesavail, DS)
-        self.printRR(loglevel)
+        self.print_rrs(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------", DS)
         
-    def getSlowdown(self, end, bound=10):
-#        timeOnDedicated = self.timeOnDedicated
-#        timeOnLoaded = end - self.tSubmit
-#        bound = TimeDelta(seconds=bound)
-#        if timeOnDedicated < bound:
-#            timeOnDedicated = bound
-#        return timeOnLoaded / timeOnDedicated
-        return 42
+    def get_waiting_time(self):
+        return self.start.actual - self.submit_time
+        
+    def get_slowdown(self, bound=10):
+        time_on_dedicated = self.duration.original
+        time_on_loaded = self.end - self.submit_time
+        bound = TimeDelta(seconds=bound)
+        if time_on_dedicated < bound:
+            time_on_dedicated = bound
+        return time_on_loaded / time_on_dedicated
+
+
+class ImmediateLease(LeaseBase):
+    def __init__(self, submit_time, duration, diskimage_id, 
+                 diskimage_size, numnodes, resreq, preemptible,
+                 # Immediate-specific parameters:
+                 realdur = None):
+        start = Timestamp(None) # i.e., start on a best-effort basis
+        duration = Duration(duration)
+        duration.known = realdur # ONLY for simulation
+        LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
+                           diskimage_size, numnodes, resreq, preemptible)
+
+    def print_contents(self, loglevel="EXTREMEDEBUG"):
+        self.logger.log(loglevel, "__________________________________________________", DS)
+        LeaseBase.print_contents(self, loglevel)
+        self.logger.log(loglevel, "Type           : IMMEDIATE", DS)
+        self.print_rrs(loglevel)
+        self.logger.log(loglevel, "--------------------------------------------------", DS)
+
+
+#-------------------------------------------------------------------#
+#                                                                   #
+#                        RESOURCE RESERVATION                       #
+#                          DATA STRUCTURES                          #
+#                                                                   #
+#-------------------------------------------------------------------#
 
         
 class ResourceReservationBase(object):
     def __init__(self, lease, start, end, res):
+        self.lease = lease
         self.start = start
         self.end = end
-        self.lease = lease
         self.state = None
-        self.res = res
+        self.resources_in_pnode = res
         self.logger = lease.scheduler.rm.logger
                         
-    def printContents(self, loglevel="EXTREMEDEBUG"):
+    def print_contents(self, loglevel="EXTREMEDEBUG"):
         self.logger.log(loglevel, "Start          : %s" % self.start, DS)
         self.logger.log(loglevel, "End            : %s" % self.end, DS)
         self.logger.log(loglevel, "State          : %s" % rstate_str(self.state), DS)
-        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.res.items()]), DS) 
+        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()]), DS) 
                 
 class VMResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, nodes, res, oncomplete, backfillres):
+    def __init__(self, lease, start, end, nodes, res, oncomplete, backfill_reservation):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
         self.oncomplete = oncomplete
-        self.backfillres = backfillres
+        self.backfill_reservation = backfill_reservation
 
         # ONLY for simulation
         if lease.duration.known != None:
-            remdur = lease.duration.getRemainingKnownDuration()
+            remdur = lease.duration.get_remaining_known_duration()
             rrdur = self.end - self.start
             if remdur < rrdur:
                 self.prematureend = self.start + remdur
@@ -379,19 +330,16 @@ class VMResourceReservation(ResourceReservationBase):
         else:
             self.prematureend = None 
 
-    def printContents(self, loglevel="EXTREMEDEBUG"):
-        ResourceReservationBase.printContents(self, loglevel)
+    def print_contents(self, loglevel="EXTREMEDEBUG"):
+        ResourceReservationBase.print_contents(self, loglevel)
         if self.prematureend != None:
             self.logger.log(loglevel, "Premature end  : %s" % self.prematureend, DS)
         self.logger.log(loglevel, "Type           : VM", DS)
-        self.logger.log(loglevel, "Nodes          : %s" % prettyNodemap(self.nodes), DS)
+        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes), DS)
         self.logger.log(loglevel, "On Complete    : %s" % self.oncomplete, DS)
         
-    def isPreemptible(self):
-        if isinstance(self.lease,BestEffortLease):
-            return True
-        elif isinstance(self.lease, ARLease):
-            return False
+    def is_preemptible(self):
+        return self.lease.preemptible
 
         
 class SuspensionResourceReservation(ResourceReservationBase):
@@ -399,12 +347,15 @@ class SuspensionResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
-    def printContents(self, loglevel="EXTREMEDEBUG"):
-        ResourceReservationBase.printContents(self, loglevel)
+    def print_contents(self, loglevel="EXTREMEDEBUG"):
+        ResourceReservationBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : SUSPEND", DS)
-        self.logger.log(loglevel, "Nodes          : %s" % prettyNodemap(self.nodes), DS)
+        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes), DS)
         
-    def isPreemptible(self):
+    # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
+    # has wider implications (with a non-trivial handling). For now, we leave them 
+    # as non-preemptible, since the probability of preempting a suspension RR is slim.
+    def is_preemptible(self):
         return False        
         
 class ResumptionResourceReservation(ResourceReservationBase):
@@ -412,51 +363,66 @@ class ResumptionResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
-    def printContents(self, loglevel="EXTREMEDEBUG"):
-        ResourceReservationBase.printContents(self, loglevel)
+    def print_contents(self, loglevel="EXTREMEDEBUG"):
+        ResourceReservationBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : RESUME", DS)
-        self.logger.log(loglevel, "Nodes          : %s" % prettyNodemap(self.nodes), DS)
+        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes), DS)
 
-    def isPreemptible(self):
+    # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
+    # has wider implications (with a non-trivial handling). For now, we leave them 
+    # as non-preemptible, since the probability of preempting a suspension RR is slim.
+    def is_preemptible(self):
         return False        
+        
+
+#-------------------------------------------------------------------#
+#                                                                   #
+#                         LEASE CONTAINERS                          #
+#                                                                   #
+#-------------------------------------------------------------------#
         
 class Queue(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
-        self.q = []
+        self.__q = []
         
-    def isEmpty(self):
-        return len(self.q)==0
+    def is_empty(self):
+        return len(self.__q)==0
     
     def enqueue(self, r):
-        self.q.append(r)
+        self.__q.append(r)
     
     def dequeue(self):
-        return self.q.pop(0)
+        return self.__q.pop(0)
     
-    def enqueueInOrder(self, r):
-        self.q.append(r)
-        self.q.sort(key=attrgetter("leaseID"))
+    def enqueue_in_order(self, r):
+        self.__q.append(r)
+        self.__q.sort(key=attrgetter("submit_time"))
 
+    def length(self):
+        return len(self.__q)
+    
+    def __iter__(self):
+        return iter(self.__q)
         
 class LeaseTable(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.entries = {}
         
-    def getLease(self, leaseID):
-        return self.entries[leaseID]
+    def get_lease(self, lease_id):
+        return self.entries[lease_id]
     
-    def isEmpty(self):
+    def is_empty(self):
         return len(self.entries)==0
     
     def remove(self, lease):
-        del self.entries[lease.leaseID]
+        del self.entries[lease.id]
         
     def add(self, lease):
-        self.entries[lease.leaseID] = lease
+        self.entries[lease.id] = lease
         
-    def getLeases(self, type=None):
+    def get_leases(self, type=None):
         if type==None:
             return self.entries.values()
         else:
@@ -487,15 +453,114 @@ class LeaseTable(object):
                 leases2.update(l)
         return list(leases2)
     
-    def getPercentSubmittedTime(self, percent, leasetype=None):
-        leases = self.entries.values()
-        leases.sort(key=attrgetter("tSubmit"))
-        if leasetype != None:
-            leases = [l for l in leases if isinstance(l, leasetype)]
-        pos = int((len(leases) * (percent / 100.0)) - 1)
-        firstsubmission = leases[0].tSubmit
-        pctsubmission = leases[pos].tSubmit
-        return (pctsubmission - firstsubmission).seconds
+#-------------------------------------------------------------------#
+#                                                                   #
+#             MISCELLANEOUS DATA STRUCTURES CONTAINERS              #
+#                                                                   #
+#-------------------------------------------------------------------#    
+    
+class ResourceTuple(object):
+    def __init__(self, res):
+        self._res = res
+        
+    @classmethod
+    def from_list(cls, l):
+        return cls(l[:])
 
-    def getLastSubmissionTime(self, leasetype=None):
-        return self.getPercentSubmittedTime(100, leasetype)
+    @classmethod
+    def copy(cls, rt):
+        return cls(rt._res[:])
+    
+    @classmethod
+    def set_resource_types(cls, resourcetypes):
+        cls.type2pos = dict([(x[0], i) for i, x in enumerate(resourcetypes)])
+        cls.descriptions = dict([(i, x[2]) for i, x in enumerate(resourcetypes)])
+        cls.tuplelength = len(resourcetypes)
+
+    @classmethod
+    def create_empty(cls):
+        return cls([0 for x in range(cls.tuplelength)])
+        
+    def fits_in(self, res2):
+        fits = True
+        for i in xrange(len(self._res)):
+            if self._res[i] > res2._res[i]:
+                fits = False
+                break
+        return fits
+    
+    def get_num_fits_in(self, res2):
+        canfit = 10000 # Arbitrarily large
+        for i in xrange(len(self._res)):
+            if self._res[i] != 0:
+                f = res2._res[i] / self._res[i]
+                if f < canfit:
+                    canfit = f
+        return int(floor(canfit))
+    
+    def decr(self, res2):
+        for slottype in xrange(len(self._res)):
+            self._res[slottype] -= res2._res[slottype]
+
+    def incr(self, res2):
+        for slottype in xrange(len(self._res)):
+            self._res[slottype] += res2._res[slottype]
+        
+    def get_by_type(self, resourcetype):
+        return self._res[self.type2pos[resourcetype]]
+
+    def set_by_type(self, resourcetype, value):
+        self._res[self.type2pos[resourcetype]] = value        
+        
+    def is_zero_or_less(self):
+        return sum([v for v in self._res]) <= 0
+    
+    def __repr__(self):
+        r=""
+        for i, x in enumerate(self._res):
+            r += "%s:%.2f " % (self.descriptions[i], x)
+        return r
+
+
+class Timestamp(object):
+    def __init__(self, requested):
+        self.requested = requested
+        self.scheduled = None
+        self.actual = None
+
+    def __repr__(self):
+        return "REQ: %s  |  SCH: %s  |  ACT: %s" % (self.requested, self.scheduled, self.actual)
+        
+class Duration(object):
+    def __init__(self, requested, known=None):
+        self.original = requested
+        self.requested = requested
+        self.accumulated = TimeDelta()
+        self.actual = None
+        # The following is ONLY used in simulation
+        self.known = known
+        
+    def incr(self, t):
+        self.requested += t
+        if self.known != None:
+            self.known += t
+            
+    def incr_by_percent(self, pct):
+        factor = 1 + float(pct)/100
+        self.requested = roundDateTimeDelta(self.requested * factor)
+        if self.known != None:
+            self.requested = roundDateTimeDelta(self.known * factor)
+        
+    def accumulate_duration(self, t):
+        self.accumulated += t
+            
+    def get_remaining_duration(self):
+        return self.requested - self.accumulated
+
+    # ONLY in simulation
+    def get_remaining_known_duration(self):
+        return self.known - self.accumulated
+            
+    def __repr__(self):
+        return "REQ: %s  |  ACC: %s  |  ACT: %s  |  KNW: %s" % (self.requested, self.accumulated, self.actual, self.known)
+    

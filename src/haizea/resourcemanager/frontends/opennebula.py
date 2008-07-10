@@ -85,9 +85,9 @@ class OpenNebulaFrontend(RequestFrontend):
         vmimage = disk[ONE_DISK_SOURCE]
         vmimagesize = 0
         numnodes = 1
-        resreq = ResourceTuple.createEmpty()
-        resreq.setByType(constants.RES_CPU, float(attrs[ONE_CPU]))
-        resreq.setByType(constants.RES_MEM, int(attrs[ONE_MEMORY]))
+        resreq = ResourceTuple.create_empty()
+        resreq.set_by_type(constants.RES_CPU, float(attrs[ONE_CPU]))
+        resreq.set_by_type(constants.RES_MEM, int(attrs[ONE_MEMORY]))
 
         duration = haizea_param[HAIZEA_DURATION]
         if duration == HAIZEA_DURATION_UNLIMITED:
@@ -110,7 +110,7 @@ class OpenNebulaFrontend(RequestFrontend):
         # Only one node for now
         leasereq.vnodeEnactmentInfo = {}
         leasereq.vnodeEnactmentInfo[1] = int(req["oid"])
-        leasereq.setScheduler(self.rm.scheduler)
+        leasereq.set_scheduler(self.rm.scheduler)
         return leasereq
     
     def create_ar_lease(self, req, attrs, haizea_param):
@@ -132,6 +132,6 @@ class OpenNebulaFrontend(RequestFrontend):
         # Only one node for now
         leasereq.vnodeEnactmentInfo = {}
         leasereq.vnodeEnactmentInfo[1] = int(req["oid"])
-        leasereq.setScheduler(self.rm.scheduler)
+        leasereq.set_scheduler(self.rm.scheduler)
         return leasereq
         

@@ -43,15 +43,15 @@ class Stats(object):
         self.counterLists[counterID] = []
         self.counterAvgType[counterID] = avgtype
 
-    def incrCounter(self, counterID, leaseID = None):
+    def incrCounter(self, counterID, lease_id = None):
         time = self.rm.clock.get_time()
-        self.appendStat(counterID, self.counters[counterID] + 1, leaseID, time)
+        self.appendStat(counterID, self.counters[counterID] + 1, lease_id, time)
 
-    def decrCounter(self, counterID, leaseID = None):
+    def decrCounter(self, counterID, lease_id = None):
         time = self.rm.clock.get_time()
-        self.appendStat(counterID, self.counters[counterID] - 1, leaseID, time)
+        self.appendStat(counterID, self.counters[counterID] - 1, lease_id, time)
         
-    def appendStat(self, counterID, value, leaseID = None, time = None):
+    def appendStat(self, counterID, value, lease_id = None, time = None):
         if time == None:
             time = self.rm.clock.get_time()
         if len(self.counterLists[counterID]) > 0:
@@ -62,7 +62,7 @@ class Stats(object):
         if time == prevtime:
             self.counterLists[counterID][-1][2] = value
         else:
-            self.counterLists[counterID].append([time, leaseID, value])
+            self.counterLists[counterID].append([time, lease_id, value])
         
     def start(self, time):
         self.starttime = time
@@ -132,7 +132,7 @@ class Stats(object):
         stats = []
         for v in data:
             time = v[0]
-            leaseID = v[1]
+            lease_id = v[1]
             value = v[2]
             if prevTime != None:
                 timediff = time - prevTime
@@ -141,7 +141,7 @@ class Stats(object):
                 avg = accum/time
             else:
                 avg = value
-            stats.append((time, leaseID, value, avg))
+            stats.append((time, lease_id, value, avg))
             prevTime = time
             prevValue = value
         
@@ -192,7 +192,7 @@ class Stats(object):
         leases.entries = self.rm.scheduler.completedleases.entries
         # Remove some data that won't be necessary in the reporting tools
         for l in leases.entries.values():
-            l.removeRRs()
+            l.clear_rrs()
             l.scheduler = None
             l.logger = None
         pickle(leases, self.datadir, constants.LEASESFILE)

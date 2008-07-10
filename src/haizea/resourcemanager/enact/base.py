@@ -25,7 +25,7 @@ class ResourcePoolInfoBase(object):
         self.logger = resourcepool.rm.logger
         
         resourcetypes = self.getResourceTypes() #IGNORE:E1111
-        ds.ResourceTuple.setResourceTypes(resourcetypes)
+        ds.ResourceTuple.set_resource_types(resourcetypes)
 
         
     def getNodes(self): 

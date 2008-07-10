@@ -28,15 +28,15 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         self.suspendresumerate = config.getSuspendResumeRate()
                 
         numnodes = config.getNumPhysicalNodes()
-        bandwidth = config.getBandwidth()        
+        self.bandwidth = config.getBandwidth()        
 
         capacity = self.parseResourcesString(config.getResourcesPerPhysNode())
         
         self.nodes = [Node(self.resourcepool, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
         
         # Image repository nodes
-        imgcapacity = ds.ResourceTuple.createEmpty()
-        imgcapacity.setByType(constants.RES_NETOUT, bandwidth)
+        imgcapacity = ds.ResourceTuple.create_empty()
+        imgcapacity.set_by_type(constants.RES_NETOUT, self.bandwidth)
 
         self.FIFOnode = Node(self.resourcepool, numnodes+1, "FIFOnode", imgcapacity)
         self.EDFnode = Node(self.resourcepool, numnodes+2, "EDFnode", imgcapacity)
@@ -59,11 +59,11 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         
     def parseResourcesString(self, resources):
         desc2type = dict([(x[2], x[0]) for x in self.getResourceTypes()])
-        capacity=ds.ResourceTuple.createEmpty()
+        capacity=ds.ResourceTuple.create_empty()
         for r in resources:
             resourcename = r.split(",")[0]
             resourcecapacity = r.split(",")[1]
-            capacity.setByType(desc2type[resourcename], int(resourcecapacity))
+            capacity.set_by_type(desc2type[resourcename], int(resourcecapacity))
         return capacity
 
     def getSuspendResumeRate(self):

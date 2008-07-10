@@ -132,7 +132,7 @@ class ResourceManager(object):
         
         # In debug mode, dump the lease descriptors.
         for lease in self.scheduler.completedleases.entries.values():
-            lease.printContents()
+            lease.print_contents()
             
         # Write all collected data to disk
         self.stats.dumpStatsToDisk()
@@ -158,7 +158,7 @@ class ResourceManager(object):
         requests = []
         for frontend in self.frontends:
             requests += frontend.getAccumulatedRequests()
-        requests.sort(key=operator.attrgetter("tSubmit"))
+        requests.sort(key=operator.attrgetter("submit_time"))
                 
         ar_leases = [req for req in requests if isinstance(req, ARLease)]
         be_leases = [req for req in requests if isinstance(req, BestEffortLease)]
@@ -208,16 +208,16 @@ class ResourceManager(object):
         if verbose and len(scheduled)>0:
             self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", constants.RM)
             for k in scheduled:
-                lease = self.scheduler.scheduledleases.getLease(k)
-                lease.printContents(loglevel=loglevel)
+                lease = self.scheduler.scheduledleases.get_lease(k)
+                lease.print_contents(loglevel=loglevel)
             self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", constants.RM)
 
         # Print queue size and descriptors of queued leases
-        self.logger.log(loglevel, "Queue size: %i" % len(self.scheduler.queue.q), constants.RM)
-        if verbose and len(self.scheduler.queue.q)>0:
+        self.logger.log(loglevel, "Queue size: %i" % self.scheduler.queue.length(), constants.RM)
+        if verbose and self.scheduler.queue.length()>0:
             self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", constants.RM)
-            for lease in self.scheduler.queue.q:
-                lease.printContents(loglevel=loglevel)
+            for lease in self.scheduler.queue:
+                lease.print_contents(loglevel=loglevel)
             self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", constants.RM)
 
     def get_next_changepoint(self):
@@ -338,7 +338,7 @@ class SimulatedClock(Clock):
             
             # Notify the resource manager about the premature ends
             for rr in prematureends:
-                self.rm.notifyEndVM(rr.lease, rr)
+                self.rm.notify_end_vm(rr.lease, rr)
                 
             # Process reservations starting/stopping at the current time and
             # check if there are any new requests.
@@ -429,7 +429,7 @@ class SimulatedClock(Clock):
         # We can also be done if we've specified that we want to stop when
         # the best-effort requests are all done or when they've all been submitted.
         stopwhen = self.rm.config.stopWhen()
-        scheduledbesteffort = self.rm.scheduler.scheduledleases.getLeases(type = BestEffortLease)
+        scheduledbesteffort = self.rm.scheduler.scheduledleases.get_leases(type = BestEffortLease)
         pendingbesteffort = [r for r in tracefrontend.requests if isinstance(r, BestEffortLease)]
         if stopwhen == constants.STOPWHEN_BEDONE:
             if self.rm.scheduler.isQueueEmpty() and len(scheduledbesteffort) + len(pendingbesteffort) == 0:
@@ -539,7 +539,7 @@ class RealClock(Clock):
             self.rm.process_requests(self.nextperiodicwakeup)
             
             # Determine if there's anything to do before the next wakeup time
-            nextchangepoint = self.rm.get_next_change_point()
+            nextchangepoint = self.rm.get_next_changepoint()
             if nextchangepoint != None and nextchangepoint <= self.nextperiodicwakeup:
                 # We need to wake up earlier to handle a slot table event
                 nextwakeup = nextchangepoint

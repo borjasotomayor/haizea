@@ -94,3 +94,24 @@ def pickle(data, dir, file):
     f = open (dir + "/" + file, "w")
     dump(data, f, protocol = HIGHEST_PROTOCOL)
     f.close()
+
+LEASE_ID = 1
+
+def get_lease_id():
+    global LEASE_ID
+    l = LEASE_ID
+    LEASE_ID += 1
+    return l
+
+def pretty_nodemap(nodes):
+    pnodes = list(set(nodes.values()))
+    normmap = [([y[0] for y in nodes.items() if y[1]==x], x) for x in pnodes]
+    for m in normmap: m[0].sort()
+    s = "   ".join([", ".join(["V"+`y` for y in x[0]])+" -> P" + `x[1]` for x in normmap])
+    return s  
+
+def estimate_transfer_time(size, bandwidth):
+    bandwidthMBs = float(bandwidth) / 8
+    seconds = size / bandwidthMBs
+    return roundDateTimeDelta(DateTime.TimeDelta(seconds = seconds)) 
+ 

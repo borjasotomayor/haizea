@@ -70,11 +70,11 @@ class TracefileFrontend(RequestFrontend):
         # Add boot + shutdown overhead
         overhead = config.getBootOverhead()
         for r in self.requests:
-            r.addBootOverhead(overhead)
+            r.add_boot_overhead(overhead)
 
         # Make the scheduler reachable from the lease request
         for r in self.requests:
-            r.setScheduler(rm.scheduler)
+            r.set_scheduler(rm.scheduler)
             
         num_besteffort = len([x for x in self.requests if isinstance(x,BestEffortLease)])
         num_ar = len([x for x in self.requests if isinstance(x,ARLease)])
@@ -87,8 +87,8 @@ class TracefileFrontend(RequestFrontend):
         # requests are in the trace up to the current time
         # reported by the resource manager
         time = self.rm.clock.get_time()
-        nowreq = [r for r in self.requests if r.tSubmit <= time]
-        self.requests = [r for r in self.requests if r.tSubmit > time]   
+        nowreq = [r for r in self.requests if r.submit_time <= time]
+        self.requests = [r for r in self.requests if r.submit_time > time]   
         return nowreq              
 
     def existsPendingReq(self):
@@ -96,6 +96,6 @@ class TracefileFrontend(RequestFrontend):
 
     def getNextReqTime(self):
         if self.existsPendingReq():
-            return self.requests[0].tSubmit
+            return self.requests[0].submit_time
         else:
             return None

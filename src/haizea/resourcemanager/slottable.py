@@ -117,10 +117,10 @@ class SlotTable(object):
         reservations = self.getReservationsAt(time)
         # Find how much resources are available on each node
         for r in reservations:
-            for node in r.res:
-                nodes[node].capacity.decr(r.res[node])
-                if not r.isPreemptible():
-                    nodes[node].capacitywithpreemption.decr(r.res[node])                        
+            for node in r.resources_in_pnode:
+                nodes[node].capacity.decr(r.resources_in_pnode[node])
+                if not r.is_preemptible():
+                    nodes[node].capacitywithpreemption.decr(r.resources_in_pnode[node])                        
             
         self.availabilitycache[time] = nodes
 
@@ -141,7 +141,7 @@ class SlotTable(object):
         if resreq != None:
             newnodes = []
             for i, node in nodes:
-                if not resreq.fitsIn(node.capacity) and not resreq.fitsIn(node.capacitywithpreemption):
+                if not resreq.fits_in(node.capacity) and not resreq.fits_in(node.capacitywithpreemption):
                     pass
                 else:
                     newnodes.append((i, node))
@@ -151,8 +151,8 @@ class SlotTable(object):
     
     def getUtilization(self, time, restype=constants.RES_CPU):
         nodes = self.getAvailability(time)
-        total = sum([n.capacity.getByType(restype) for n in self.nodes.nodelist])
-        avail = sum([n.capacity.getByType(restype) for n in nodes.values()])
+        total = sum([n.capacity.get_by_type(restype) for n in self.nodes.nodelist])
+        avail = sum([n.capacity.get_by_type(restype) for n in nodes.values()])
         return 1.0 - (float(avail)/total)
 
     def getReservationsAt(self, time):
@@ -218,7 +218,7 @@ class SlotTable(object):
         # TODO: Might be more efficient to resort lists
         self.removeReservation(rrold)
         self.addReservation(rrnew)
-        rrold.lease.replaceRR(rrold, rrnew)
+        rrold.lease.replace_rr(rrold, rrnew)
         self.dirty()
 
 
@@ -249,7 +249,7 @@ class SlotTable(object):
         changepoints = set()
         res = self.getReservationsWithChangePointsAfter(after)
         for rr in res:
-            if nodes == None or (nodes != None and len(set(rr.res.keys()) & set(nodes)) > 0):
+            if nodes == None or (nodes != None and len(set(rr.resources_in_pnode.keys()) & set(nodes)) > 0):
                 if rr.start > after:
                     changepoints.add(rr.start)
                 if rr.end > after:
@@ -278,12 +278,12 @@ class SlotTable(object):
         return p
     
     def fitExact(self, leasereq, preemptible=False, canpreempt=True, avoidpreempt=True):
-        leaseID = leasereq.leaseID
+        lease_id = leasereq.id
         start = leasereq.start.requested
         end = leasereq.start.requested + leasereq.duration.requested
-        diskImageID = leasereq.diskImageID
+        diskImageID = leasereq.diskimage_id
         numnodes = leasereq.numnodes
-        resreq = leasereq.resreq
+        resreq = leasereq.requested_resources
 
         self.availabilitywindow.initWindow(start, resreq, canpreempt=canpreempt)
         self.availabilitywindow.printContents(withpreemption = False)
@@ -399,16 +399,16 @@ class SlotTable(object):
 
     def findLeasesToPreempt(self, mustpreempt, startTime, endTime):
         def comparepreemptability(rrX, rrY):
-            if rrX.lease.tSubmit > rrY.lease.tSubmit:
+            if rrX.lease.tSubmit > rrY.lease.submit_time:
                 return constants.BETTER
-            elif rrX.lease.tSubmit < rrY.lease.tSubmit:
+            elif rrX.lease.tSubmit < rrY.lease.submit_time:
                 return constants.WORSE
             else:
                 return constants.EQUAL        
             
         def preemptedEnough(amountToPreempt):
             for node in amountToPreempt:
-                if not amountToPreempt[node].isZeroOrLess():
+                if not amountToPreempt[node].is_zero_or_less():
                     return False
             return True
         
@@ -418,12 +418,12 @@ class SlotTable(object):
         nodes = set(mustpreempt.keys())
         
         reservationsAtStart = self.getReservationsAt(startTime)
-        reservationsAtStart = [r for r in reservationsAtStart if r.isPreemptible()
-                        and len(set(r.res.keys()) & nodes)>0]
+        reservationsAtStart = [r for r in reservationsAtStart if r.is_preemptible()
+                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
         
         reservationsAtMiddle = self.getReservationsStartingBetween(startTime, endTime)
-        reservationsAtMiddle = [r for r in reservationsAtMiddle if r.isPreemptible()
-                        and len(set(r.res.keys()) & nodes)>0]
+        reservationsAtMiddle = [r for r in reservationsAtMiddle if r.is_preemptible()
+                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
         
         reservationsAtStart.sort(comparepreemptability)
         reservationsAtMiddle.sort(comparepreemptability)
@@ -437,11 +437,11 @@ class SlotTable(object):
             # The following will really only come into play when we have
             # multiple VMs per node
             mustpreemptres = False
-            for n in r.res.keys():
+            for n in r.resources_in_pnode.keys():
                 # Don't need to preempt if we've already preempted all
                 # the needed resources in node n
-                if amountToPreempt.has_key(n) and not amountToPreempt[n].isZeroOrLess():
-                    amountToPreempt[n].decr(r.res[n])
+                if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
+                    amountToPreempt[n].decr(r.resources_in_pnode[n])
                     mustpreemptres = True
             if mustpreemptres:
                 atstart.add(r)
@@ -464,28 +464,29 @@ class SlotTable(object):
                                 if r.start <= cp and cp < r.end]
                 for r in reservations:
                     mustpreemptres = False
-                    for n in r.res.keys():
-                        if amountToPreempt.has_key(n) and not amountToPreempt[n].isZeroOrLess():
-                            amountToPreempt[n].decr(r.res[n])
+                    for n in r.resources_in_pnode.keys():
+                        if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
+                            amountToPreempt[n].decr(r.resources_in_pnode[n])
                             mustpreemptres = True
                     if mustpreemptres:
                         atmiddle.add(r)
                     if preemptedEnough(amountToPreempt):
                         break
             
-        self.rm.logger.debug("Preempting leases (at start of reservation): %s" % [r.lease.leaseID for r in atstart], constants.ST)
-        self.rm.logger.debug("Preempting leases (in middle of reservation): %s" % [r.lease.leaseID for r in atmiddle], constants.ST)
+        self.rm.logger.debug("Preempting leases (at start of reservation): %s" % [r.lease.id for r in atstart], constants.ST)
+        self.rm.logger.debug("Preempting leases (in middle of reservation): %s" % [r.lease.id for r in atmiddle], constants.ST)
         
         leases = [r.lease for r in atstart|atmiddle]
         
         return leases
 
 
-    def fitBestEffort(self, lease, earliest, canreserve, suspendable, preemptible, canmigrate, mustresume):
-        leaseID = lease.leaseID
-        remdur = lease.duration.getRemainingDuration()
+    def fitBestEffort(self, lease, earliest, canreserve, suspendable, canmigrate, mustresume):
+        lease_id = lease.id
+        remdur = lease.duration.get_remaining_duration()
         numnodes = lease.numnodes
-        resreq = lease.resreq
+        resreq = lease.requested_resources
+        preemptible = lease.preemptible
         suspendresumerate = self.resourcepool.info.getSuspendResumeRate()
 
         #
@@ -496,26 +497,29 @@ class SlotTable(object):
         # If we can't migrate, we have to stay in the
         # nodes where the lease is currently deployed
         if mustresume and not canmigrate:
-            vmrr, susprr = lease.getLastVMRR()
+            vmrr, susprr = lease.get_last_vmrr()
             curnodes = set(vmrr.nodes.values())
             suspendthreshold = lease.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=False)
         
         if mustresume and canmigrate:
             # If we have to resume this lease, make sure that
             # we have enough time to transfer the images.
-            migratetime = lease.estimateMigrationTime()
+            # TODO: Get bandwidth another way. Right now, the
+            # image node bandwidth is the same as the bandwidt
+            # in the other nodes, but this won't always be true.
+            migratetime = lease.estimate_migration_time(self.rm.resourcepool.imagenode_bandwidth)
             earliesttransfer = self.rm.clock.get_time() + migratetime
 
             for n in earliest:
                 earliest[n][0] = max(earliest[n][0], earliesttransfer)
-            suspendthreshold = lease.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=True)
+            suspendthreshold = lease.get_suspend_threshold(initial=False, suspendrate=suspendresumerate, migrating=True)
                     
         if mustresume:
-            resumetime = lease.estimateSuspendResumeTime(suspendresumerate)
+            resumetime = lease.estimate_suspend_resume_time(suspendresumerate)
             # Must allocate time for resumption too
             remdur += resumetime
         else:
-            suspendthreshold = lease.getSuspendThreshold(initial=True, suspendrate=suspendresumerate)
+            suspendthreshold = lease.get_suspend_threshold(initial=True, suspendrate=suspendresumerate)
 
 
         #
@@ -598,7 +602,7 @@ class SlotTable(object):
         if mustresume:
             # If we're resuming, we prefer resuming in the nodes we're already
             # deployed in, to minimize the number of transfers.
-            vmrr, susprr = lease.getLastVMRR()
+            vmrr, susprr = lease.get_last_vmrr()
             nodes = set(vmrr.nodes.values())
             availnodes = set(physnodes)
             deplnodes = availnodes.intersection(nodes)
@@ -637,9 +641,9 @@ class SlotTable(object):
         if mustresume:
             resmres = {}
             for n in mappings.values():
-                r = ds.ResourceTuple.createEmpty()
-                r.setByType(constants.RES_MEM, resreq.getByType(constants.RES_MEM))
-                r.setByType(constants.RES_DISK, resreq.getByType(constants.RES_DISK))
+                r = ds.ResourceTuple.create_empty()
+                r.set_by_type(constants.RES_MEM, resreq.get_by_type(constants.RES_MEM))
+                r.set_by_type(constants.RES_DISK, resreq.get_by_type(constants.RES_DISK))
                 resmres[n] = r
             resmrr = ds.ResumptionResourceReservation(lease, start-resumetime, start, resmres, mappings)
             resmrr.state = constants.RES_STATE_SCHEDULED
@@ -648,9 +652,9 @@ class SlotTable(object):
         if mustsuspend:
             suspres = {}
             for n in mappings.values():
-                r = ds.ResourceTuple.createEmpty()
-                r.setByType(constants.RES_MEM, resreq.getByType(constants.RES_MEM))
-                r.setByType(constants.RES_DISK, resreq.getByType(constants.RES_DISK))
+                r = ds.ResourceTuple.create_empty()
+                r.set_by_type(constants.RES_MEM, resreq.get_by_type(constants.RES_MEM))
+                r.set_by_type(constants.RES_DISK, resreq.get_by_type(constants.RES_DISK))
                 suspres[n] = r
             susprr = ds.SuspensionResourceReservation(lease, end, end + suspendtime, suspres, mappings)
             susprr.state = constants.RES_STATE_SCHEDULED
@@ -667,7 +671,7 @@ class SlotTable(object):
             res_str = " (resuming)"
         if mustsuspend:
             susp_str = " (suspending)"
-        self.rm.logger.info("Lease #%i has been scheduled on nodes %s from %s%s to %s%s" % (lease.leaseID, mappings.values(), start, res_str, end, susp_str), constants.ST)
+        self.rm.logger.info("Lease #%i has been scheduled on nodes %s from %s%s to %s%s" % (lease.id, mappings.values(), start, res_str, end, susp_str), constants.ST)
 
         return resmrr, vmrr, susprr, reservation
 
@@ -715,10 +719,10 @@ class SlotTable(object):
     def suspend(self, lease, time):
         suspendresumerate = self.resourcepool.info.getSuspendResumeRate()
         
-        (vmrr, susprr) = lease.getLastVMRR()
+        (vmrr, susprr) = lease.get_last_vmrr()
         vmrrnew = copy.copy(vmrr)
         
-        suspendtime = lease.estimateSuspendResumeTime(suspendresumerate)
+        suspendtime = lease.estimate_suspend_resume_time(suspendresumerate)
         vmrrnew.end = time - suspendtime
             
         vmrrnew.oncomplete = constants.ONCOMPLETE_SUSPEND
@@ -726,29 +730,29 @@ class SlotTable(object):
         self.updateReservationWithKeyChange(vmrr, vmrrnew)
        
         if susprr != None:
-            lease.removeRR(susprr)
+            lease.remove_rr(susprr)
             self.removeReservation(susprr)
         
         mappings = vmrr.nodes
         suspres = {}
         for n in mappings.values():
-            r = ds.ResourceTuple.createEmpty()
-            r.setByType(constants.RES_MEM, vmrr.res[n].getByType(constants.RES_MEM))
-            r.setByType(constants.RES_DISK, vmrr.res[n].getByType(constants.RES_DISK))
+            r = ds.ResourceTuple.create_empty()
+            r.set_by_type(constants.RES_MEM, vmrr.resources_in_pnode[n].get_by_type(constants.RES_MEM))
+            r.set_by_type(constants.RES_DISK, vmrr.resources_in_pnode[n].get_by_type(constants.RES_DISK))
             suspres[n] = r
         
         newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, suspres, mappings)
         newsusprr.state = constants.RES_STATE_SCHEDULED
-        lease.appendRR(newsusprr)
+        lease.append_rr(newsusprr)
         self.addReservation(newsusprr)
         
 
     def slideback(self, lease, earliest):
-        (vmrr, susprr) = lease.getLastVMRR()
+        (vmrr, susprr) = lease.get_last_vmrr()
         vmrrnew = copy.copy(vmrr)
         nodes = vmrrnew.nodes.values()
         if lease.state == constants.LEASE_STATE_SUSPENDED:
-            resmrr = lease.prevRR(vmrr)
+            resmrr = lease.prev_rr(vmrr)
             originalstart = resmrr.start
         else:
             resmrr = None
@@ -757,7 +761,7 @@ class SlotTable(object):
         cp = [earliest] + cp
         newstart = None
         for p in cp:
-            self.availabilitywindow.initWindow(p, lease.resreq, canpreempt=False)
+            self.availabilitywindow.initWindow(p, lease.requested_resources, canpreempt=False)
             self.availabilitywindow.printContents()
             if self.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
                 (end, canfit) = self.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
@@ -779,11 +783,11 @@ class SlotTable(object):
             
             # If the lease was going to be suspended, check to see if
             # we don't need to suspend any more.
-            remdur = lease.duration.getRemainingDuration()
+            remdur = lease.duration.get_remaining_duration()
             if susprr != None and vmrrnew.end - newstart >= remdur: 
                 vmrrnew.end = vmrrnew.start + remdur
                 vmrrnew.oncomplete = constants.ONCOMPLETE_ENDLEASE
-                lease.removeRR(susprr)
+                lease.remove_rr(susprr)
                 self.removeReservation(susprr)
             else:
                 vmrrnew.end -= diff
@@ -793,7 +797,7 @@ class SlotTable(object):
             self.updateReservationWithKeyChange(vmrr, vmrrnew)
             self.dirty()
             self.rm.logger.edebug("New lease descriptor (after slideback):", constants.ST)
-            lease.printContents()
+            lease.print_contents()
 
 
     def prioritizenodes(self, canfit, diskImageID, start, canpreempt, avoidpreempt):
@@ -904,11 +908,11 @@ class AvailEntry(object):
             self.canfit = 0
             self.canfitpreempt = 0
         else:
-            self.canfit = resreq.getNumFitsIn(avail)
+            self.canfit = resreq.get_num_fits_in(avail)
             if availpreempt == None:
                 self.canfitpreempt = 0
             else:
-                self.canfitpreempt = resreq.getNumFitsIn(availpreempt)
+                self.canfitpreempt = resreq.get_num_fits_in(availpreempt)
         
     def getCanfit(self, canpreempt):
         if canpreempt:
@@ -963,10 +967,10 @@ class AvailabilityWindow(object):
             # Decrease in the window
             for node in newnodes:
                 capacity = availatpoint[node].capacity
-                fits = self.resreq.getNumFitsIn(capacity)
+                fits = self.resreq.get_num_fits_in(capacity)
                 if canpreempt:
                     capacitywithpreemption = availatpoint[node].capacitywithpreemption
-                    fitswithpreemption = self.resreq.getNumFitsIn(capacitywithpreemption)
+                    fitswithpreemption = self.resreq.get_num_fits_in(capacitywithpreemption)
                 prevavail = self.avail[node][-1]
                 if not canpreempt and prevavail.getCanfit(canpreempt=False) > fits:
                     self.avail[node].append(AvailEntry(p, capacity, capacitywithpreemption, self.resreq))

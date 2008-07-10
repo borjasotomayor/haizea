@@ -18,18 +18,18 @@
 
 class EnactmentAction(object):
     def __init__(self):
-        self.leaseHaizeaID = None
-        self.leaseEnactmentInfo = None
+        self.lease_haizea_id = None
+        self.lease_enactment_info = None
             
     def fromRR(self, rr):
-        self.leaseHaizeaID = rr.lease.leaseID
-        self.leaseEnactmentInfo = rr.lease.enactmentInfo
+        self.lease_haizea_id = rr.lease.id
+        self.lease_enactment_info = rr.lease.enactment_info
         
 class VNode(object):
-    def __init__(self, enactmentInfo):
-        self.enactmentInfo = enactmentInfo
+    def __init__(self, enactment_info):
+        self.enactment_info = enactment_info
         self.pnode = None
-        self.res = None
+        self.resources = None
         self.diskimage = None
         
 class VMEnactmentAction(EnactmentAction):
@@ -40,10 +40,10 @@ class VMEnactmentAction(EnactmentAction):
     def fromRR(self, rr):
         EnactmentAction.fromRR(self, rr)
         # TODO: This is very kludgy
-        if rr.lease.vnodeEnactmentInfo == None:
+        if rr.lease.vnode_enactment_info == None:
             self.vnodes = dict([(vnode+1, VNode(None)) for vnode in range(rr.lease.numnodes)])
         else:
-            self.vnodes = dict([(vnode, VNode(info)) for (vnode, info) in rr.lease.vnodeEnactmentInfo.items()])
+            self.vnodes = dict([(vnode, VNode(info)) for (vnode, info) in rr.lease.vnode_enactment_info.items()])
 
 class VMEnactmentStartAction(VMEnactmentAction):
     def __init__(self):
