@@ -1,8 +1,21 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.0//EN" "http://www.w3.org/TR/xhtml-basic/xhtml-basic10.dtd">
+
 <html><head>
 
 <title>Haizea - An Open Source VM-based Lease Manager</title>
 <link href="haizea.css" type="text/css" rel="stylesheet"/>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-4920033-1");
+pageTracker._initData();
+pageTracker._trackPageview();
+</script>
+
 </head>
 <body>
 
@@ -22,7 +35,7 @@
 
 <h2>Haizea</h2>
 
-<p>The current version of Haizea is Technology Preview 1.0, released on July 7th, 2008. To install, download <a href="downloads/haizea-TP1.0.tar.gz">haizea-TP1.0.tar.gz</a> and follow the <a href="doc_install.html">installation instructions</a>. Haizea is published under the <a href="http://www.apache.org/licenses/LICENSE-2.0.html">Apache License 2.0</a>, a BSD-like <a href="http://www.opensource.org/">OSI</a>-compatible license.</p>
+<p>The current version of Haizea is Technology Preview 1.0, released on July 7th, 2008. To install, download <a href="downloads/haizea-TP1.0.tar.gz"  onClick="javascript: pageTracker._trackPageview('/downloads/haizea-TP1.0.tar.gz');">haizea-TP1.0.tar.gz</a> and follow the <a href="doc_install.html">installation instructions</a>. Haizea is published under the <a href="http://www.apache.org/licenses/LICENSE-2.0.html">Apache License 2.0</a>, a BSD-like <a href="http://www.opensource.org/">OSI</a>-compatible license.</p>
 
 <h2>Additional tracefiles</h2>
 
@@ -30,7 +43,15 @@
 
 <h2>SVN repository</h2>
 
-<p>We are currently working on setting up a public SVN repository for the Haizea code. In the meanwhile, the downloadable tarball includes most of the source code.</p>
+<p>Our SVN repository can be found at <strong>http://haizea.cs.uchicago.edu/svn/</strong>. You can checkout the latest version of the code like this:</p>
+
+<pre class="shell">
+svn co http://haizea.cs.uchicago.edu/svn/trunk
+</pre>
+
+<p>You can also point your web browser to <a href="http://haizea.cs.uchicago.edu/svn/">http://haizea.cs.uchicago.edu/svn/</a> to peruse the code. The current interface is very basic, but a pretty web-based SVN browser will be available further down the road.</p>
+
+<p>To keep track of commmits, you can subscribe to the <a href="https://mailman.cs.uchicago.edu/mailman/listinfo/haizea-commit">haizea-commit mailing list</a> to get an e-mail notification every time there is a commit in the SVN repository.</p>
 
 <div class="back">
 <a href="index.html">
@@ -39,5 +60,7 @@ BACK TO<br/>HOME PAGE
 </a>
 </div>
 </div>
+
+
 </body>
 </html>
