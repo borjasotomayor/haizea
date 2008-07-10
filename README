@@ -128,7 +128,3 @@ following:
 Additionally, you will have to modify the tracefile option in the sample 
 configuration so it will point to the sample tracefile located in 
 $HOME/share/haizea/traces/sample.lwf (instead of under the /usr directory).
-
-FOO
-BAR
-BAZ
