@@ -499,7 +499,7 @@ class SlotTable(object):
         if mustresume and not canmigrate:
             vmrr, susprr = lease.get_last_vmrr()
             curnodes = set(vmrr.nodes.values())
-            suspendthreshold = lease.getSuspendThreshold(initial=False, suspendrate=suspendresumerate, migrating=False)
+            suspendthreshold = lease.get_suspend_threshold(initial=False, suspendrate=suspendresumerate, migrating=False)
         
         if mustresume and canmigrate:
             # If we have to resume this lease, make sure that
@@ -613,7 +613,7 @@ class SlotTable(object):
 
         # Adjust times in case the lease has to be suspended/resumed
         if mustsuspend:
-            suspendtime = lease.estimateSuspendResumeTime(suspendresumerate)
+            suspendtime = lease.estimate_suspend_resume_time(suspendresumerate)
             end -= suspendtime
                 
         if mustresume:

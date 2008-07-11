@@ -47,7 +47,7 @@ class TracefileFrontend(RequestFrontend):
             self.rm.logger.info("Loading injection file %s" % injectfile, constants.TRACE)
             injectedleases = tracereaders.LWF(injectfile, starttime)
             self.requests += injectedleases
-            self.requests.sort(key=operator.attrgetter("tSubmit"))
+            self.requests.sort(key=operator.attrgetter("submit_time"))
 
         if imagefile != None:
             self.rm.logger.info("Loading image file %s" % imagefile, constants.TRACE)

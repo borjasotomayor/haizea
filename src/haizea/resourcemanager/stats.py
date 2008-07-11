@@ -163,7 +163,7 @@ class Stats(object):
     
     def getNodesDoing(self):
         starttime = self.rm.clock.get_start_time()
-        nodes=dict([(i+1,[]) for i in range(self.rm.config.getNumPhysicalNodes())])
+        nodes=dict([(i+1,[]) for i in range(self.rm.resourcepool.getNumNodes())])
         for n in self.nodes:
             nodes[n] = []
             prevtime = None
