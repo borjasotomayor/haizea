@@ -1,6 +1,8 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.0//EN" "http://www.w3.org/TR/xhtml-basic/xhtml-basic10.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
-<html><head>
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
 
 <title>Haizea - An Open Source VM-based Lease Manager</title>
 <link href="haizea.css" type="text/css" rel="stylesheet"/>
@@ -10,7 +12,7 @@
 
 <div id="content">
 <div id="logo">
-<a href="index.html"><img src="logo.png" width="450" height="86" border="0"/></a>
+<a href="index.html"><img src="logo.png" width="450" height="86" border="0" alt="Haizea"/></a>
 </div>
 <div class="topbar">
 <strong>What is Haizea?</strong>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
@@ -41,7 +43,7 @@
 </ul>
 
 <div class="center">
-<img src="what_haizea_does.png" width="650" height="352"/>
+<img src="what_haizea_does.png" width="650" height="352" alt="Haizea can be used with OpenNebula or in simulation."/>
 </div>
 
 <h2>Leasing as a fundamental abstraction</h2>
@@ -50,7 +52,7 @@
 
 <p>Maybe you're a scientist who needs to run some simulations. You have specific hardware requirements, but you're not particularly picky about when the simulations run, and probably won't even notice if they are interrupted at some point, as long as they finish running (correctly) at some point, maybe before a given deadline. A <a href="http://en.wikipedia.org/wiki/Job_scheduling">job scheduler</a>, and a compute cluster, would probably be a good fit for you.</p>
 
-<p>You could also be a software developer who wants to test his or her code on a pristine machine, which you would only need for a relatively short period of time. Plus, every time you use this machine, you'd like it to start up with the exact same pristine software environment. Oh, and you want your machine now. As in <em>right now</em>. One option could be to install a <A href="http://en.wikipedia.org/wiki/Virtual_machine">virtual machine</A> (VM) manager (such as Xen, VMWare, etc.) to start up these pristine machines as VMs on your own machine. Even better, you could directly to a cloud (like <A href="http://www.amazon.com/ec2/">Amazon EC2</A> or the <A href="http://workspace.globus.org/clouds/">Science Clouds</A>) and have those VMs appear automagically somewhere else, so you don't have to worry about setting up the VM manager or having a machine powerful enough to run those VMs.</p>
+<p>You could also be a software developer who wants to test his or her code on a pristine machine, which you would only need for a relatively short period of time. Plus, every time you use this machine, you'd like it to start up with the exact same pristine software environment. Oh, and you want your machine now. As in <em>right now</em>. One option could be to install a <a href="http://en.wikipedia.org/wiki/Virtual_machine">virtual machine</a> (VM) manager (such as Xen, VMWare, etc.) to start up these pristine machines as VMs on your own machine. Even better, you could directly to a cloud (like <a href="http://www.amazon.com/ec2/">Amazon EC2</a> or the <a href="http://workspace.globus.org/clouds/">Science Clouds</a>) and have those VMs appear automagically somewhere else, so you don't have to worry about setting up the VM manager or having a machine powerful enough to run those VMs.</p>
 
 <p>Or perhaps you're a run-of-the-mill geek who wants his or her own web/mail/DNS/etc server. This server will presumably be running for months or even years with high availability: your server has to be running all the time, with no interruptions. There's a whole slew of hosting providers who can give you a dedicated server or a virtual private server. The latter are typically managed with VM-based datacenter managers.</p>
 
@@ -92,7 +94,7 @@ Although there are many systems (particularly job-based systems) that support th
 
 <div class="back">
 <a href="index.html">
-<img src="logo_small.png" width="32" height="35" border="0"><br/>
+<img src="logo_small.png" width="32" height="35" border="0" alt="haizea"/><br/>
 BACK TO<br/>HOME PAGE
 </a>
 </div>
