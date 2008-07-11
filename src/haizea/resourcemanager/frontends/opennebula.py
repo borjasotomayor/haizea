@@ -96,7 +96,7 @@ class OpenNebulaFrontend(RequestFrontend):
         numnodes = 1
         resreq = ResourceTuple.create_empty()
         resreq.set_by_type(constants.RES_CPU, float(attrs[ONE_CPU]))
-        resreq.set_by_type(constants.RES_MEM, int(attrs[ONE_MEMORY])/1000)
+        resreq.set_by_type(constants.RES_MEM, int(attrs[ONE_MEMORY]))
 
         duration = haizea_param[HAIZEA_DURATION]
         if duration == HAIZEA_DURATION_UNLIMITED:

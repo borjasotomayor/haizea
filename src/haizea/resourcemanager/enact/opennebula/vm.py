@@ -101,7 +101,7 @@ class VMEnactment(VMEnactmentBase):
             if state == 5:
                 self.logger.debug("Suspend of L%iV%i correct." % (action.lease_haizea_id, vnode), constants.ONE)
             else:
-                self.logger.warning("ONE did not complete suspend  of L%i%V%i on time. State is %i" % (action.leaseHaizeaID, vnode, state), constants.ONE)
+                self.logger.warning("ONE did not complete suspend  of L%iV%i on time. State is %i" % (action.lease_haizea_id, vnode, state), constants.ONE)
                 result = 1
         return result
         
@@ -118,7 +118,7 @@ class VMEnactment(VMEnactmentBase):
             if state == 3:
                 self.logger.debug("Resume of L%iV%i correct." % (action.lease_haizea_id, vnode), constants.ONE)
             else:
-                self.logger.warning("ONE did not complete resume of L%i%V%i on time. State is %i" % (action.leaseHaizeaID, vnode, state), constants.ONE)
+                self.logger.warning("ONE did not complete resume of L%iV%i on time. State is %i" % (action.lease_haizea_id, vnode, state), constants.ONE)
                 result = 1
         return result
 
