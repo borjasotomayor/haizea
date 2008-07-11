@@ -35,13 +35,15 @@ import haizea.resourcemanager.stats as stats
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
-from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
+from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease 
 from haizea.resourcemanager.resourcepool import ResourcePool
 from haizea.resourcemanager.scheduler import Scheduler
 from haizea.resourcemanager.log import Logger
 from haizea.common.utils import abstract, roundDateTime
 
 import operator
+import signal
+import sys
 from time import sleep
 from mx.DateTime import now, TimeDelta
 
@@ -110,6 +112,8 @@ class ResourceManager(object):
         # Create counters to keep track of interesting data.
         self.stats.createCounter(constants.COUNTER_ARACCEPTED, constants.AVERAGE_NONE)
         self.stats.createCounter(constants.COUNTER_ARREJECTED, constants.AVERAGE_NONE)
+        self.stats.createCounter(constants.COUNTER_IMACCEPTED, constants.AVERAGE_NONE)
+        self.stats.createCounter(constants.COUNTER_IMREJECTED, constants.AVERAGE_NONE)
         self.stats.createCounter(constants.COUNTER_BESTEFFORTCOMPLETED, constants.AVERAGE_NONE)
         self.stats.createCounter(constants.COUNTER_QUEUESIZE, constants.AVERAGE_TIMEWEIGHTED)
         self.stats.createCounter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
@@ -125,6 +129,9 @@ class ResourceManager(object):
         
         # Stop collecting data (this finalizes counters)
         self.stats.stop()
+
+        # TODO: When gracefully stopping mid-scheduling, we need to figure out what to
+        #       do with leases that are still running.
 
         self.logger.status("  Completed best-effort leases: %i" % self.stats.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
         self.logger.status("  Accepted AR leases: %i" % self.stats.counters[constants.COUNTER_ARACCEPTED], constants.RM)
@@ -162,14 +169,19 @@ class ResourceManager(object):
                 
         ar_leases = [req for req in requests if isinstance(req, ARLease)]
         be_leases = [req for req in requests if isinstance(req, BestEffortLease)]
+        im_leases = [req for req in requests if isinstance(req, ImmediateLease)]
         
         # Queue best-effort
         for req in be_leases:
             self.scheduler.enqueue(req)
+            
+        # Add AR leases and immediate leases
+        for req in ar_leases + im_leases:
+            self.scheduler.add_pending_lease(req)
         
-        # Process AR leases, and run the scheduling function.
+        # Run the scheduling function.
         try:
-            self.scheduler.schedule(ar_leases, nexttime)
+            self.scheduler.schedule(nexttime)
         except Exception, msg:
             # Exit if something goes horribly wrong
             self.logger.error("Exception in scheduling function. Dumping state..." , constants.RM)
@@ -228,6 +240,7 @@ class ResourceManager(object):
         """Return True if there are any leases still "in the system" """
         return self.scheduler.exists_scheduled_leases() or not self.scheduler.is_queue_empty()
     
+    # TODO: Replace this with a more general event handling system
     def notify_end_vm(self, lease, rr):
         """Notifies the resource manager that a VM has ended prematurely.
         
@@ -511,13 +524,14 @@ class RealClock(Clock):
           event). Otherwise, set it to (now + quantum)
         - Sleep until next-wake-up-time
         
-        The clock never stops.
-        TODO: Add signal capturing so we can use a signal to gracefully
-              stop the clock.
-        
+        The clock keeps on tickin' until a SIGINT signal (Ctrl-C if running in the
+        foreground) or a SIGTERM signal is received.
         """
         self.rm.logger.status("Starting simulated clock", constants.CLOCK)
         self.rm.stats.start(self.get_start_time())
+        
+        signal.signal(signal.SIGINT, self.signalhandler_gracefulstop)
+        signal.signal(signal.SIGTERM, self.signalhandler_gracefulstop)
         
         done = False
         # Main loop
@@ -555,20 +569,26 @@ class RealClock(Clock):
                 sleep((nextwakeup - now()).seconds)
             else:
                 self.lastwakeup = nextwakeup
-
-        # Stop
-        self.rm.printStatus()
-        self.rm.logger.status("Stopping clock", constants.CLOCK)
-        self.rm.stop()
           
     def print_stats(self, loglevel):
         """See docstring in base Clock class."""
         pass
-          
+    
+    def signalhandler_gracefulstop(self, signum, frame):
+        """Handler for SIGTERM and SIGINT. Allows Haizea to stop gracefully."""
+        sigstr = ""
+        if signum == signal.SIGTERM:
+            sigstr = " (SIGTERM)"
+        elif signum == signal.SIGINT:
+            sigstr = " (SIGINT)"
+        self.rm.logger.status("Received signal %i%s" %(signum, sigstr), constants.CLOCK)
+        self.rm.logger.status("Stopping gracefully...", constants.CLOCK)
+        self.rm.stop()
+        sys.exit()
 
 if __name__ == "__main__":
     from haizea.common.config import RMConfig
-    CONFIGFILE = "../../../etc/sample.conf"
+    CONFIGFILE = "../../../etc/sample_opennebula.conf"
     CONFIG = RMConfig.fromFile(CONFIGFILE)
     RM = ResourceManager(CONFIG)
     RM.start()

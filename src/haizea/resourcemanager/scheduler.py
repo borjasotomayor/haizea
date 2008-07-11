@@ -36,6 +36,8 @@ from haizea.resourcemanager.slottable import SlotTable, SlotFittingException
 from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeployment
 from haizea.resourcemanager.deployment.predeployed import PredeployedImagesDeployment
 from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeployment
+from haizea.resourcemanager.datastruct import ARLease, ImmediateLease 
+
 
 class SchedException(Exception):
     """A simple exception class used for scheduling exceptions"""
@@ -79,6 +81,7 @@ class Scheduler(object):
         self.scheduledleases = ds.LeaseTable(self)
         self.completedleases = ds.LeaseTable(self)
         self.rejectedleases = ds.LeaseTable(self)
+        self.pending_leases = []
 
         deploy_type = self.rm.config.get_lease_deployment_type()
         if deploy_type == constants.DEPLOYMENT_UNMANAGED:
@@ -105,78 +108,22 @@ class Scheduler(object):
         self.maxres = self.rm.config.getMaxReservations()
         self.numbesteffortres = 0
     
-    def schedule(self, requests, nexttime):        
-        if self.rm.config.getNodeSelectionPolicy() == constants.NODESELECTION_AVOIDPREEMPT:
-            avoidpreempt = True
-        else:
-            avoidpreempt = False
+    def schedule(self, nexttime):        
+        ar_leases = [req for req in self.pending_leases if isinstance(req, ARLease)]
+        im_leases = [req for req in self.pending_leases if isinstance(req, ImmediateLease)]
+        self.pending_leases = []
         
-        # Process AR requests
-        for lease_req in requests:
-            self.rm.logger.debug("LEASE-%i Processing request (AR)" % lease_req.id, constants.SCHED)
-            self.rm.logger.debug("LEASE-%i Start    %s" % (lease_req.id, lease_req.start), constants.SCHED)
-            self.rm.logger.debug("LEASE-%i Duration %s" % (lease_req.id, lease_req.duration), constants.SCHED)
-            self.rm.logger.debug("LEASE-%i ResReq   %s" % (lease_req.id, lease_req.requested_resources), constants.SCHED)
-            self.rm.logger.info("Received AR lease request #%i, %i nodes from %s to %s." % (lease_req.id, lease_req.numnodes, lease_req.start.requested, lease_req.start.requested + lease_req.duration.requested), constants.SCHED)
-            
-            accepted = False
-            try:
-                self.schedule_ar_lease(lease_req, avoidpreempt=avoidpreempt, nexttime=nexttime)
-                self.scheduledleases.add(lease_req)
-                self.rm.stats.incrCounter(constants.COUNTER_ARACCEPTED, lease_req.id)
-                accepted = True
-            except SchedException, msg:
-                # If our first try avoided preemption, try again
-                # without avoiding preemption.
-                # TODO: Roll this into the exact slot fitting algorithm
-                if avoidpreempt:
-                    try:
-                        self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
-                        self.rm.logger.debug("LEASE-%i Trying again without avoiding preemption" % lease_req.id, constants.SCHED)
-                        self.schedule_ar_lease(lease_req, nexttime, avoidpreempt=False)
-                        self.scheduledleases.add(lease_req)
-                        self.rm.stats.incrCounter(constants.COUNTER_ARACCEPTED, lease_req.id)
-                        accepted = True
-                    except SchedException, msg:
-                        self.rm.stats.incrCounter(constants.COUNTER_ARREJECTED, lease_req.id)
-                        self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
-                else:
-                    self.rm.stats.incrCounter(constants.COUNTER_ARREJECTED, lease_req.id)
-                    self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
-            if accepted:
-                self.rm.logger.info("AR lease request #%i has been accepted." % lease_req.id, constants.SCHED)
-            else:
-                self.rm.logger.info("AR lease request #%i has been rejected." % lease_req.id, constants.SCHED)
-                
+        # Process immediate requests
+        for lease_req in im_leases:
+            self.__process_im_request(lease_req, nexttime)
 
-        done = False
-        newqueue = ds.Queue(self)
-        while not done and not self.is_queue_empty():
-            if self.numbesteffortres == self.maxres and self.slottable.isFull(nexttime):
-                self.rm.logger.debug("Used up all reservations and slot table is full. Skipping rest of queue.", constants.SCHED)
-                done = True
-            else:
-                lease_req = self.queue.dequeue()
-                try:
-                    self.rm.logger.info("Next request in the queue is lease %i. Attempting to schedule..." % lease_req.id, constants.SCHED)
-                    self.rm.logger.debug("LEASE-%i Processing request (BEST-EFFORT)" % lease_req.id, constants.SCHED)
-                    self.rm.logger.debug("LEASE-%i Duration: %s" % (lease_req.id, lease_req.duration), constants.SCHED)
-                    self.rm.logger.debug("LEASE-%i ResReq  %s" % (lease_req.id, lease_req.requested_resources), constants.SCHED)
-                    self.schedule_besteffort_lease(lease_req, nexttime)
-                    self.scheduledleases.add(lease_req)
-                    self.rm.stats.decrCounter(constants.COUNTER_QUEUESIZE, lease_req.id)
-                except SchedException, msg:
-                    # Put back on queue
-                    newqueue.enqueue(lease_req)
-                    self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
-                    self.rm.logger.info("Lease %i could not be scheduled at this time." % lease_req.id, constants.SCHED)
-                    if not self.rm.config.isBackfilling():
-                        done = True
+        # Process AR requests
+        for lease_req in ar_leases:
+            self.__process_ar_request(lease_req, nexttime)
+            
+        # Process best-effort requests
+        self.__process_queue(nexttime)
         
-        for lease in self.queue:
-            newqueue.enqueue(lease)
-        
-        self.queue = newqueue 
     
     def process_reservations(self, nowtime):
         starting = [l for l in self.scheduledleases.entries.values() if l.has_starting_reservations(nowtime)]
@@ -202,13 +149,21 @@ class Scheduler(object):
         handler = ReservationEventHandler(on_start=on_start, on_end=on_end)
         self.handlers[type] = handler        
     
-    
     def enqueue(self, lease_req):
         """Queues a best-effort lease request"""
         self.rm.stats.incrCounter(constants.COUNTER_QUEUESIZE, lease_req.id)
         self.queue.enqueue(lease_req)
         self.rm.logger.info("Received (and queueing) best-effort lease request #%i, %i nodes for %s." % (lease_req.id, lease_req.numnodes, lease_req.duration.requested), constants.SCHED)
 
+    def add_pending_lease(self, lease_req):
+        """
+        Adds a pending lease request, to be scheduled as soon as
+        the scheduling function is called. Unlike best-effort leases,
+        if one these leases can't be scheduled immediately, it is
+        rejected (instead of being placed on a queue, in case resources
+        become available later on).
+        """
+        self.pending_leases.append(lease_req)
 
     def is_queue_empty(self):
         """Return True is the queue is empty, False otherwise"""
@@ -236,8 +191,48 @@ class Scheduler(object):
             # reservations that we can slide back.
             self.reevaluate_schedule(l, rr.nodes.values(), nexttime, [])
     
+    def __process_ar_request(self, lease_req, nexttime):
+        self.rm.logger.info("Received AR lease request #%i, %i nodes from %s to %s." % (lease_req.id, lease_req.numnodes, lease_req.start.requested, lease_req.start.requested + lease_req.duration.requested), constants.SCHED)
+        self.rm.logger.debug("  Start   : %s" % lease_req.start, constants.SCHED)
+        self.rm.logger.debug("  Duration: %s" % lease_req.duration, constants.SCHED)
+        self.rm.logger.debug("  ResReq  : %s" % lease_req.requested_resources, constants.SCHED)
+        
+        if self.rm.config.getNodeSelectionPolicy() == constants.NODESELECTION_AVOIDPREEMPT:
+            avoidpreempt = True
+        else:
+            avoidpreempt = False
+
+        accepted = False
+        try:
+            self.__schedule_ar_lease(lease_req, avoidpreempt=avoidpreempt, nexttime=nexttime)
+            self.scheduledleases.add(lease_req)
+            self.rm.stats.incrCounter(constants.COUNTER_ARACCEPTED, lease_req.id)
+            accepted = True
+        except SchedException, msg:
+            # If our first try avoided preemption, try again
+            # without avoiding preemption.
+            # TODO: Roll this into the exact slot fitting algorithm
+            if avoidpreempt:
+                try:
+                    self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
+                    self.rm.logger.debug("LEASE-%i Trying again without avoiding preemption" % lease_req.id, constants.SCHED)
+                    self.__schedule_ar_lease(lease_req, nexttime, avoidpreempt=False)
+                    self.scheduledleases.add(lease_req)
+                    self.rm.stats.incrCounter(constants.COUNTER_ARACCEPTED, lease_req.id)
+                    accepted = True
+                except SchedException, msg:
+                    self.rm.stats.incrCounter(constants.COUNTER_ARREJECTED, lease_req.id)
+                    self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
+            else:
+                self.rm.stats.incrCounter(constants.COUNTER_ARREJECTED, lease_req.id)
+                self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
+        if accepted:
+            self.rm.logger.info("AR lease request #%i has been accepted." % lease_req.id, constants.SCHED)
+        else:
+            self.rm.logger.info("AR lease request #%i has been rejected." % lease_req.id, constants.SCHED)
+        
     
-    def schedule_ar_lease(self, lease_req, nexttime, avoidpreempt=True):
+    def __schedule_ar_lease(self, lease_req, nexttime, avoidpreempt=True):
         start = lease_req.start.requested
         end = lease_req.start.requested + lease_req.duration.requested
         try:
@@ -248,7 +243,6 @@ class Scheduler(object):
                 self.rm.logger.info("Must preempt leases %s to make room for AR lease #%i" % ([l.id for l in leases], lease_req.id), constants.SCHED)
                 for lease in leases:
                     self.preempt(lease, time=start)
-            
 
             # Add VM resource reservations
             vmrr = ds.VMResourceReservation(lease_req, start, end, nodeassignment, res, constants.ONCOMPLETE_ENDLEASE, False)
@@ -265,7 +259,37 @@ class Scheduler(object):
         except SlotFittingException, msg:
             raise SchedException, "The requested AR lease is infeasible. Reason: %s" % msg
 
-    def schedule_besteffort_lease(self, req, nexttime):
+    def __process_queue(self, nexttime):
+        done = False
+        newqueue = ds.Queue(self)
+        while not done and not self.is_queue_empty():
+            if self.numbesteffortres == self.maxres and self.slottable.isFull(nexttime):
+                self.rm.logger.debug("Used up all reservations and slot table is full. Skipping rest of queue.", constants.SCHED)
+                done = True
+            else:
+                lease_req = self.queue.dequeue()
+                try:
+                    self.rm.logger.info("Next request in the queue is lease %i. Attempting to schedule..." % lease_req.id, constants.SCHED)
+                    self.rm.logger.debug("  Duration: %s" % lease_req.duration, constants.SCHED)
+                    self.rm.logger.debug("  ResReq  : %s" % lease_req.requested_resources, constants.SCHED)
+                    self.__schedule_besteffort_lease(lease_req, nexttime)
+                    self.scheduledleases.add(lease_req)
+                    self.rm.stats.decrCounter(constants.COUNTER_QUEUESIZE, lease_req.id)
+                except SchedException, msg:
+                    # Put back on queue
+                    newqueue.enqueue(lease_req)
+                    self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
+                    self.rm.logger.info("Lease %i could not be scheduled at this time." % lease_req.id, constants.SCHED)
+                    if not self.rm.config.isBackfilling():
+                        done = True
+        
+        for lease in self.queue:
+            newqueue.enqueue(lease)
+        
+        self.queue = newqueue 
+        
+
+    def __schedule_besteffort_lease(self, req, nexttime):
         # Determine earliest start time in each node
         if req.state == constants.LEASE_STATE_PENDING:
             # Figure out earliest start times based on
@@ -327,8 +351,24 @@ class Scheduler(object):
             
         except SlotFittingException, msg:
             raise SchedException, "The requested best-effort lease is infeasible. Reason: %s" % msg
+
         
-    def schedule_immediate_lease(self, req, nexttime):
+    def __process_im_request(self, lease_req, nexttime):
+        self.rm.logger.info("Received immediate lease request #%i (%i nodes)" % (lease_req.id, lease_req.numnodes), constants.SCHED)
+        self.rm.logger.debug("  Duration: %s" % lease_req.duration, constants.SCHED)
+        self.rm.logger.debug("  ResReq  : %s" % lease_req.requested_resources, constants.SCHED)
+        
+        try:
+            self.__schedule_immediate_lease(lease_req, nexttime=nexttime)
+            self.scheduledleases.add(lease_req)
+            self.rm.stats.incrCounter(constants.COUNTER_IMACCEPTED, lease_req.id)
+            self.rm.logger.info("Immediate lease request #%i has been accepted." % lease_req.id, constants.SCHED)
+        except SchedException, msg:
+            self.rm.stats.incrCounter(constants.COUNTER_IMREJECTED, lease_req.id)
+            self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
+        
+        
+    def __schedule_immediate_lease(self, req, nexttime):
         # Determine earliest start time in each node
         earliest = self.deployment.find_earliest_starting_times(req, nexttime)
         try:

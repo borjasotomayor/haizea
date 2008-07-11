@@ -183,6 +183,9 @@ class RMConfig(Config):
     def getONEDB(self):
         return self.config.get(constants.OPENNEBULA_SEC, constants.DB_OPT)
 
+    def getONEvm(self):
+        return self.config.get(constants.OPENNEBULA_SEC, constants.ONEVM_OPT)
+
     def getONESuspendResumeRate(self):
         return self.config.getint(constants.OPENNEBULA_SEC, constants.ESTIMATESUSPENDRATE_OPT)
 

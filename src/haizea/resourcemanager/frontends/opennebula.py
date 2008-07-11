@@ -18,19 +18,20 @@
 
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.base import RequestFrontend
-from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ResourceTuple
+from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease, ResourceTuple
 from haizea.common.utils import UNIX2DateTime
 from pysqlite2 import dbapi2 as sqlite
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO
 from haizea.common.utils import roundDateTime
+import operator
 
 HAIZEA_PARAM = "HAIZEA"
-HAIZEA_START = "start"
+HAIZEA_START = "START"
 HAIZEA_START_NOW = "now"
 HAIZEA_START_BESTEFFORT = "best_effort"
-HAIZEA_DURATION = "duration"
+HAIZEA_DURATION = "DURATION"
 HAIZEA_DURATION_UNLIMITED = "unlimited"
-HAIZEA_PREEMPTIBLE = "preemptible"
+HAIZEA_PREEMPTIBLE = "PREEMPTIBLE"
 HAIZEA_PREEMPTIBLE_YES = "yes"
 HAIZEA_PREEMPTIBLE_NO = "no"
 
@@ -61,16 +62,24 @@ class OpenNebulaFrontend(RequestFrontend):
             attrs = dict([(r["name"], r["value"]) for r in template])
             self.processed.append(req["oid"])
             requests.append(self.ONEreq2lease(req, attrs))
+        requests.sort(key=operator.attrgetter("submit_time"))
         return requests
 
     def existsMoreRequests(self):
         return True
     
     def ONEreq2lease(self, req, attrs):
-        haizea_param = self.get_vector_value(attrs[HAIZEA_PARAM])
+        # If there is no HAIZEA parameter, the default is to treat the
+        # request as an immediate request with unlimited duration
+        if not attrs.has_key(HAIZEA_PARAM):
+            haizea_param = {HAIZEA_START: HAIZEA_START_NOW,
+                            HAIZEA_DURATION: HAIZEA_DURATION_UNLIMITED,
+                            HAIZEA_PREEMPTIBLE: HAIZEA_PREEMPTIBLE_NO}
+        else:
+            haizea_param = self.get_vector_value(attrs[HAIZEA_PARAM])
         start = haizea_param[HAIZEA_START]
         if start == HAIZEA_START_NOW:
-            pass
+            return self.create_immediate_lease(req, attrs, haizea_param)
         elif start  == HAIZEA_START_BESTEFFORT:
             return self.create_besteffort_lease(req, attrs, haizea_param)
         else:
@@ -87,7 +96,7 @@ class OpenNebulaFrontend(RequestFrontend):
         numnodes = 1
         resreq = ResourceTuple.create_empty()
         resreq.set_by_type(constants.RES_CPU, float(attrs[ONE_CPU]))
-        resreq.set_by_type(constants.RES_MEM, int(attrs[ONE_MEMORY]))
+        resreq.set_by_type(constants.RES_MEM, int(attrs[ONE_MEMORY])/1000)
 
         duration = haizea_param[HAIZEA_DURATION]
         if duration == HAIZEA_DURATION_UNLIMITED:
@@ -132,6 +141,20 @@ class OpenNebulaFrontend(RequestFrontend):
         # Enactment info should be changed to the "array id" when groups
         # are implemented in OpenNebula
         leasereq.enactmentInfo = int(req["oid"])
+        # Only one node for now
+        leasereq.vnode_enactment_info = {}
+        leasereq.vnode_enactment_info[1] = int(req["oid"])
+        leasereq.set_scheduler(self.rm.scheduler)
+        return leasereq
+
+    def create_immediate_lease(self, req, attrs, haizea_param):
+        tSubmit, vmimage, vmimagesize, numnodes, resreq, duration, preemptible = self.get_common_attrs(req, attrs, haizea_param)
+ 
+        leasereq = ImmediateLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
+        leasereq.state = constants.LEASE_STATE_PENDING
+        # Enactment info should be changed to the "array id" when groups
+        # are implemented in OpenNebula
+        leasereq.enactment_info = int(req["oid"])
         # Only one node for now
         leasereq.vnode_enactment_info = {}
         leasereq.vnode_enactment_info[1] = int(req["oid"])

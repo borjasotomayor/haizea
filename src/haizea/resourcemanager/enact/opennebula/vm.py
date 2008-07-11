@@ -24,7 +24,7 @@ from pysqlite2 import dbapi2 as sqlite
 class VMEnactment(VMEnactmentBase):
     def __init__(self, resourcepool):
         VMEnactmentBase.__init__(self, resourcepool)
-        self.onevm = "/home/borja/bin/onevm"
+        self.onevm = self.resourcepool.rm.config.getONEvm()
         
         self.conn = sqlite.connect(self.resourcepool.rm.config.getONEDB())
         self.conn.row_factory = sqlite.Row
@@ -116,7 +116,7 @@ class VMEnactment(VMEnactmentBase):
             onevm = cur.fetchone()        
             state = onevm["state"]
             if state == 3:
-                self.logger.debug("Suspend of L%iV%i correct." % (action.lease_haizea_id, vnode), constants.ONE)
+                self.logger.debug("Resume of L%iV%i correct." % (action.lease_haizea_id, vnode), constants.ONE)
             else:
                 self.logger.warning("ONE did not complete resume of L%i%V%i on time. State is %i" % (action.leaseHaizeaID, vnode, state), constants.ONE)
                 result = 1

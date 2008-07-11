@@ -147,6 +147,7 @@ STATUS_INTERVAL_OPT="status-message-interval"
 
 OPENNEBULA_SEC = "opennebula"
 DB_OPT = "db"
+ONEVM_OPT = "onevm"
 ESTIMATESUSPENDRATE_OPT = "suspendresume-rate-estimate"
 
 DEPLOY_IMAGETRANSFER_SEC = "deploy-imagetransfer"
@@ -299,9 +300,11 @@ DOING_TRANSFER_NOVM=666
 
 ENACT_PACKAGE="haizea.resourcemanager.enact"
 
-COUNTER_ARACCEPTED="accepted"
-COUNTER_ARREJECTED="rejected"
-COUNTER_BESTEFFORTCOMPLETED="besteffort-completed"
+COUNTER_ARACCEPTED="ar_accepted"
+COUNTER_ARREJECTED="ar_rejected"
+COUNTER_IMACCEPTED="im_accepted"
+COUNTER_IMREJECTED="im_rejected"
+COUNTER_BESTEFFORTCOMPLETED="besteffort_completed"
 COUNTER_QUEUESIZE="queuesize"
 COUNTER_DISKUSAGE="diskusage"
 COUNTER_CPUUTILIZATION="cpuutilization"
