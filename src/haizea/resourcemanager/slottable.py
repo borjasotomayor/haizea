@@ -360,7 +360,10 @@ class SlotTable(object):
                 canfitinnode = canfit[physnode][0]
                 for i in range(1, canfitinnode+1):
                     nodeassignment[vnode] = physnode
-                    res[physnode] = resreq
+                    if res.has_key(physnode):
+                        res[physnode].incr(resreq)
+                    else:
+                        res[physnode] = ds.ResourceTuple.copy(resreq)
                     canfit[physnode][0] -= 1
                     canfit[physnode][1] -= 1
                     vnode += 1
@@ -375,7 +378,10 @@ class SlotTable(object):
                 canfitinnode = canfit[physnode][1]
                 for i in range(1, canfitinnode+1):
                     nodeassignment[vnode] = physnode
-                    res[physnode] = resreq
+                    if res.has_key(physnode):
+                        res[physnode].incr(resreq)
+                    else:
+                        res[physnode] = ResourceTuple.copy(resreq)
                     canfit[physnode][1] -= 1
                     vnode += 1
                     # Check if this will actually result in a preemption
@@ -628,7 +634,10 @@ class SlotTable(object):
                 if canfit[n]>0:
                     canfit[n] -= 1
                     mappings[vmnode] = n
-                    res[n] = resreq
+                    if res.has_key(n):
+                        res[n].incr(resreq)
+                    else:
+                        res[n] = ds.ResourceTuple.copy(resreq)
                     vmnode += 1
                     break
 
@@ -893,7 +902,7 @@ class SlotTable(object):
         
     def isFull(self, time):
         nodes = self.getAvailability(time)
-        avail = sum([node.capacity.getByType(constants.RES_CPU) for node in nodes.values()])
+        avail = sum([node.capacity.get_by_type(constants.RES_CPU) for node in nodes.values()])
         return (avail == 0)
     
 
