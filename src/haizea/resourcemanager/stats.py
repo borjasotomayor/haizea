@@ -19,62 +19,68 @@
 import os
 import os.path
 import haizea.common.constants as constants
-import haizea.resourcemanager.datastruct as ds
 from haizea.common.utils import pickle
 from errno import EEXIST
 
-class Stats(object):
-    def __init__(self, rm, datadir):
-        self.rm = rm
-        self.datadir = datadir
-    
+class StatsData(object):
+    def __init__(self):
         # Counters
-        self.counters={}
-        self.counterLists={}
-        self.counterAvgType={}
+        self.counters = {}
+        self.counter_lists = {}
+        self.counter_avg_type = {}
     
         # What are the nodes doing?
-        self.doing = []        
-        self.nodes=dict([(i+1,[]) for i in range(self.rm.resourcepool.getNumNodes())])
- 
+        self.nodes = {}      
         
-    def createCounter(self, counterID, avgtype, initial=0):
-        self.counters[counterID] = initial
-        self.counterLists[counterID] = []
-        self.counterAvgType[counterID] = avgtype
+        # Lease data
+        self.leases = {}
 
-    def incrCounter(self, counterID, lease_id = None):
-        time = self.rm.clock.get_time()
-        self.appendStat(counterID, self.counters[counterID] + 1, lease_id, time)
+class StatsCollection(object):
+    def __init__(self, rm, datafile):
+        self.data = StatsData()
+        self.rm = rm
+        self.datafile = datafile   
+        self.starttime = None
 
-    def decrCounter(self, counterID, lease_id = None):
+    def create_counter(self, counter_id, avgtype, initial=0):
+        self.data.counters[counter_id] = initial
+        self.data.counter_lists[counter_id] = []
+        self.data.counter_avg_type[counter_id] = avgtype
+
+    def incr_counter(self, counter_id, lease_id = None):
         time = self.rm.clock.get_time()
-        self.appendStat(counterID, self.counters[counterID] - 1, lease_id, time)
+        self.append_stat(counter_id, self.data.counters[counter_id] + 1, lease_id, time)
+
+    def decr_counter(self, counter_id, lease_id = None):
+        time = self.rm.clock.get_time()
+        self.append_stat(counter_id, self.data.counters[counter_id] - 1, lease_id, time)
         
-    def appendStat(self, counterID, value, lease_id = None, time = None):
+    def append_stat(self, counter_id, value, lease_id = None, time = None):
         if time == None:
             time = self.rm.clock.get_time()
-        if len(self.counterLists[counterID]) > 0:
-            prevtime = self.counterLists[counterID][-1][0]
+        if len(self.data.counter_lists[counter_id]) > 0:
+            prevtime = self.data.counter_lists[counter_id][-1][0]
         else:
             prevtime = None
-        self.counters[counterID] = value
+        self.data.counters[counter_id] = value
         if time == prevtime:
-            self.counterLists[counterID][-1][2] = value
+            self.data.counter_lists[counter_id][-1][2] = value
         else:
-            self.counterLists[counterID].append([time, lease_id, value])
+            self.data.counter_lists[counter_id].append([time, lease_id, value])
+
         
     def start(self, time):
         self.starttime = time
         
         # Start the counters
-        for counterID in self.counters:
-            initial = self.counters[counterID]
-            self.appendStat(counterID, initial, time = time)
+        for counter_id in self.data.counters:
+            initial = self.data.counters[counter_id]
+            self.append_stat(counter_id, initial, time = time)
         
         # Start the doing
-        for n in self.nodes:
-            self.nodes[n].append((time, constants.DOING_IDLE))
+        numnodes = self.rm.resourcepool.getNumNodes()
+        for n in range(numnodes):
+            self.data.nodes[n+1] = [(time, constants.DOING_IDLE)]
 
     def tick(self):
         time = self.rm.clock.get_time()
@@ -82,75 +88,75 @@ class Stats(object):
         for node in self.rm.resourcepool.nodes:
             nodenum = node.nod_id
             doing = node.getState()
-            (lasttime, lastdoing) = self.nodes[nodenum][-1]
+            (lasttime, lastdoing) = self.data.nodes[nodenum][-1]
             if doing == lastdoing:
                 # No need to update
                 pass
             else:
                 if lasttime == time:
-                        self.nodes[nodenum][-1] = (time, doing)
+                    self.data.nodes[nodenum][-1] = (time, doing)
                 else:
-                    self.nodes[nodenum].append((time, doing))
+                    self.data.nodes[nodenum].append((time, doing))
         
     def stop(self):
         time = self.rm.clock.get_time()
 
         # Stop the counters
-        for counterID in self.counters:
-            self.appendStat(counterID, self.counters[counterID], time=time)
+        for counter_id in self.data.counters:
+            self.append_stat(counter_id, self.data.counters[counter_id], time=time)
         
         # Add the averages
-        for counterID in self.counters:
-            l = self.normalizeTimes(self.counterLists[counterID])
-            avgtype = self.counterAvgType[counterID]
+        for counter_id in self.data.counters:
+            l = self.normalize_times(self.data.counter_lists[counter_id])
+            avgtype = self.data.counter_avg_type[counter_id]
             if avgtype == constants.AVERAGE_NONE:
-                self.counterLists[counterID] = self.addNoAverage(l)
+                self.data.counter_lists[counter_id] = self.add_no_average(l)
             elif avgtype == constants.AVERAGE_NORMAL:
-                self.counterLists[counterID] = self.addAverage(l)
+                self.data.counter_lists[counter_id] = self.add_average(l)
             elif avgtype == constants.AVERAGE_TIMEWEIGHTED:
-                self.counterLists[counterID] = self.addTimeWeightedAverage(l)
+                self.data.counter_lists[counter_id] = self.add_timeweighted_average(l)
         
         # Stop the doing
         for node in self.rm.resourcepool.nodes:
             nodenum = node.nod_id
             doing = node.vm_doing
-            (lasttime, lastdoing) = self.nodes[nodenum][-1]
+            (lasttime, lastdoing) = self.data.nodes[nodenum][-1]
             if time != lasttime:
-                self.nodes[nodenum].append((time, doing))
+                self.data.nodes[nodenum].append((time, doing))
+                
+        self.normalize_doing()
             
-    def normalizeTimes(self, data):
+    def normalize_times(self, data):
         return [((v[0] - self.starttime).seconds, v[1], v[2]) for v in data]
         
-    def addNoAverage(self, data):
-        return [(v[0], v[1], v[2],None) for v in data]
+    def add_no_average(self, data):
+        return [(v[0], v[1], v[2], None) for v in data]
     
-    def addTimeWeightedAverage(self, data):
+    def add_timeweighted_average(self, data):
         accum = 0
-        prevTime = None
-        prevValue = None
-        startVM = None
+        prev_time = None
+        prev_value = None
         stats = []
         for v in data:
             time = v[0]
             lease_id = v[1]
             value = v[2]
-            if prevTime != None:
-                timediff = time - prevTime
-                weightedValue = prevValue*timediff
-                accum += weightedValue
+            if prev_time != None:
+                timediff = time - prev_time
+                weighted_value = prev_value*timediff
+                accum += weighted_value
                 avg = accum/time
             else:
                 avg = value
             stats.append((time, lease_id, value, avg))
-            prevTime = time
-            prevValue = value
+            prev_time = time
+            prev_value = value
         
         return stats        
     
-    def addAverage(self, data):
-        accum=0
-        count=0
-        startVM = None
+    def add_average(self, data):
+        accum = 0
+        count = 0
         stats = []
         for v in data:
             value = v[2]
@@ -161,45 +167,40 @@ class Stats(object):
         
         return stats          
     
-    def getNodesDoing(self):
-        starttime = self.rm.clock.get_start_time()
-        nodes=dict([(i+1,[]) for i in range(self.rm.resourcepool.getNumNodes())])
-        for n in self.nodes:
+    def normalize_doing(self):
+        nodes = dict([(i+1, []) for i in range(self.rm.resourcepool.getNumNodes())])
+        for n in self.data.nodes:
             nodes[n] = []
             prevtime = None
             prevdoing = None
-            for (time, doing) in self.nodes[n]:
+            for (time, doing) in self.data.nodes[n]:
                 if prevtime != None:
                     difftime = (time-prevtime).seconds
                     nodes[n].append((difftime, prevdoing))
                 prevtime = time
                 prevdoing = doing
-        return nodes
+        self.data.nodes = nodes
     
-    def dumpStatsToDisk(self):
+    def save_to_disk(self):
         try:
-            if not os.path.exists(self.datadir):
-                os.makedirs(self.datadir)
+            dirname = os.path.dirname(self.datafile)
+            if not os.path.exists(dirname):
+                os.makedirs(dirname)
         except OSError, e:
             if e.errno != EEXIST:
                 raise e
     
-        # Save counters
-        pickle(self.counterLists, self.datadir, constants.COUNTERSFILE)
-        
-        # Save lease data
-        leases = ds.LeaseTable(None)
-        leases.entries = self.rm.scheduler.completedleases.entries
+        # Add lease data
+        leases = self.rm.scheduler.completedleases.entries
         # Remove some data that won't be necessary in the reporting tools
-        for l in leases.entries.values():
+        for l in leases.values():
             l.clear_rrs()
             l.scheduler = None
             l.logger = None
-        pickle(leases, self.datadir, constants.LEASESFILE)
-        
-        # Save utilization data
-        doing = self.getNodesDoing()
-        pickle(doing, self.datadir, constants.DOINGFILE)
+            self.data.leases[l.id] = l
+
+        # Save data
+        pickle(self.data, self.datafile)
 
                 
             

@@ -236,12 +236,6 @@ EQUAL = 0
 WORSE = 1
 
 
-# Data filenames
-COUNTERSFILE="data.dat"
-LEASESFILE="leases.dat"
-DOINGFILE="doing.dat"
-
-
 # Types of final tables in report generation
 TABLE_FINALVALUE="final-value"
 TABLE_FINALTIME="final-time"

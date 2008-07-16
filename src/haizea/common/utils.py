@@ -58,8 +58,8 @@ def abstract():
     caller = inspect.stack()[1][3]
     raise NotImplementedError(caller + ' must be implemented in subclass')
 
-def pickle(data, dir, file):
-    f = open (dir + "/" + file, "w")
+def pickle(data, file):
+    f = open (file, "w")
     dump(data, f, protocol = HIGHEST_PROTOCOL)
     f.close()
 

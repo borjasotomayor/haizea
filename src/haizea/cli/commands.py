@@ -58,7 +58,6 @@ def haizea_generate_configs(argv):
         profile = c.getProfile()
         tracefile = c.getTracefile()
         injfile = c.getInjectfile()
-        datadir = c.getDataDir()
         name = gen_traceinj_name(tracefile, injfile)
         configfile = etcdir + "/%s_%s.conf" % (profile, name)
         fc = open(configfile, "w")
@@ -95,9 +94,9 @@ def haizea_generate_scripts(argv):
         profile = c.getProfile()
         tracefile = c.getTracefile()
         injfile = c.getInjectfile()
-        datadir = c.getDataDir()
+        datafile = c.getDataFile()
         name = gen_traceinj_name(tracefile, injfile)
-        if not opt.onlymissing or not os.path.exists(datadir):
+        if not opt.onlymissing or not os.path.exists(datafile):
             configfile = etcdir + "/%s_%s.conf" % (profile, name)
             templatedata.append((profile, name, configfile))
 

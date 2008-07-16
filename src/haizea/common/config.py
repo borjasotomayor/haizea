@@ -117,8 +117,8 @@ class RMConfig(Config):
         else:
             return self.config.get(constants.GENERAL_SEC, constants.LEASE_DEPLOYMENT_OPT)
 
-    def getDataDir(self):
-        return self.config.get(constants.GENERAL_SEC, constants.DATADIR_OPT)
+    def getDataFile(self):
+        return self.config.get(constants.GENERAL_SEC, constants.DATAFILE_OPT)
 
     #
     # SIMULATION OPTIONS
@@ -381,8 +381,10 @@ class RMMultiConfig(Config):
                     # Add datadir option
                     datadirname = genDataDirName(profile, tracefile, injectfile)
                     basedatadir = self.config.get(constants.MULTI_SEC, constants.BASEDATADIR_OPT)
-                    datadir = basedatadir + "/" + datadirname
-                    profileconfig.set(constants.GENERAL_SEC, constants.DATADIR_OPT, datadir)
+                    # TODO: Change this so there will be a single directory with all the
+                    # data files, instead of multiple directories
+                    datafile = basedatadir + "/" + datadirname + "/haizea.dat"
+                    profileconfig.set(constants.GENERAL_SEC, constants.DATAFILE_OPT, datadir)
                     
                     # Set profile option (only used internally)
                     profileconfig.set(constants.GENERAL_SEC, constants.PROFILE_OPT, profile)

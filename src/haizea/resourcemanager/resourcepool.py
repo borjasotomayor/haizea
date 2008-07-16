@@ -181,7 +181,7 @@ class ResourcePool(object):
                     
         self.getNode(nod_id).printFiles()
         
-        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
+        self.rm.stats.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
     
     def verifyFileTransfer(self):
         pass
@@ -218,7 +218,14 @@ class ResourcePool(object):
     #def resumeDone(self, lease, rr):
     #    pass
 
-    
+    def poll_unscheduled_vm_end(self):
+        pass
+
+    # TODO
+    # The following should be implemented to handle asynchronous
+    # notifications of a VM ending
+    #def notify_vm_done(self, lease, rr):
+    #    pass
     
     def getNodes(self):
         return self.nodes
@@ -249,7 +256,7 @@ class ResourcePool(object):
         img.addMapping(lease_id, vnode)
         self.getNode(pnode).addFile(img)
         self.getNode(pnode).printFiles()
-        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
+        self.rm.stats.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
         return img
         
     def checkImage(self, pnode, lease_id, vnode, imagefile):
@@ -275,7 +282,7 @@ class ResourcePool(object):
                 img.addMapping(lease_id, vnode)
                 node.addFile(img)
                 node.printFiles()
-                self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
+                self.rm.stats.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
     
     def isInPool(self, pnode, imagefile, time):
         return self.getNode(pnode).isInPool(imagefile, after=time)
@@ -309,7 +316,7 @@ class ResourcePool(object):
 
         node.printFiles()
         
-        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
+        self.rm.stats.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
         
     def addRAMFileToNode(self, pnode, lease_id, vnode, size):
         node = self.getNode(pnode)
@@ -318,7 +325,7 @@ class ResourcePool(object):
         f = RAMImageFile("RAM_L%iV%i" % (lease_id, vnode), size, lease_id, vnode)
         node.addFile(f)        
         node.printFiles()
-        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
+        self.rm.stats.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
 
     def removeRAMFileFromNode(self, pnode, lease_id, vnode):
         node = self.getNode(pnode)
@@ -326,7 +333,7 @@ class ResourcePool(object):
         node.printFiles()
         node.removeRAMFile(lease_id, vnode)
         node.printFiles()
-        self.rm.stats.appendStat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
+        self.rm.stats.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
         
     def getMaxDiskUsage(self):
         return max([n.getTotalFileSize() for n in self.nodes])
@@ -343,6 +350,8 @@ class Node(object):
         # enactment-specific information
         self.enactment_info = None
         # Kludgy way of keeping track of utilization
+        # TODO: Compute this information based on the lease reservations,
+        # either on the fly or when Haizea stops running.
         self.transfer_doing = constants.DOING_IDLE
         self.vm_doing = constants.DOING_IDLE
         
