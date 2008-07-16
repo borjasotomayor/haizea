@@ -381,7 +381,7 @@ class SlotTable(object):
                     if res.has_key(physnode):
                         res[physnode].incr(resreq)
                     else:
-                        res[physnode] = ResourceTuple.copy(resreq)
+                        res[physnode] = ds.ResourceTuple.copy(resreq)
                     canfit[physnode][1] -= 1
                     vnode += 1
                     # Check if this will actually result in a preemption
