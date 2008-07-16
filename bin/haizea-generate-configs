@@ -1,7 +1,6 @@
 #!/usr/bin/python
 
-from haizea import clients
+from haizea.cli import commands
 import sys
 
-c = clients.GenConfigs()
-c.run(sys.argv)
+commands.haizea_generate_configs(sys.argv)

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-from haizea import clients
+from haizea.cli import commands
 import sys
 try:
 	import psyco
@@ -8,5 +8,4 @@ try:
 except:
 	pass
 	
-c = clients.Haizea()
-c.run(sys.argv)
+commands.haizea(sys.argv)
