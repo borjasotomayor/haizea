@@ -19,6 +19,7 @@
 import os
 import os.path
 import haizea.common.constants as constants
+import haizea.resourcemanager.datastruct as ds
 from haizea.common.utils import pickle
 from errno import EEXIST
 
@@ -34,6 +35,22 @@ class StatsData(object):
         
         # Lease data
         self.leases = {}
+        
+    def get_waiting_times(self):
+        waiting_times = {}
+        for lease_id in self.leases:
+            lease = self.leases[lease_id]
+            if isinstance(lease, ds.BestEffortLease):
+                waiting_times[lease_id] = lease.get_waiting_time()
+        return waiting_times
+
+    def get_slowdowns(self):
+        slowdowns = {}
+        for lease_id in self.leases:
+            lease = self.leases[lease_id]
+            if isinstance(lease, ds.BestEffortLease):
+                slowdowns[lease_id] = lease.get_slowdown()
+        return slowdowns
 
 class StatsCollection(object):
     def __init__(self, rm, datafile):

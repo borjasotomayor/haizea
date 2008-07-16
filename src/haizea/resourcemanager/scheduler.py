@@ -474,6 +474,8 @@ class Scheduler(object):
         if l.state == constants.LEASE_STATE_DEPLOYED:
             l.state = constants.LEASE_STATE_ACTIVE
             rr.state = constants.RES_STATE_ACTIVE
+            now_time = self.rm.clock.get_time()
+            l.start.actual = now_time
             
             try:
                 self.rm.resourcepool.startVMs(l, rr)
@@ -499,13 +501,15 @@ class Scheduler(object):
         self.rm.logger.debug("LEASE-%i Start of handleEndVM" % l.id, constants.SCHED)
         self.rm.logger.edebug("LEASE-%i Before:" % l.id, constants.SCHED)
         l.print_contents()
-        diff = self.rm.clock.get_time() - rr.start
+        now_time = self.rm.clock.get_time()
+        diff = now_time - rr.start
         l.duration.accumulate_duration(diff)
         rr.state = constants.RES_STATE_DONE
         if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE:
             self.rm.resourcepool.stopVMs(l, rr)
             l.state = constants.LEASE_STATE_DONE
             l.duration.actual = l.duration.accumulated
+            l.end = now_time
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
             for vnode, pnode in l.vmimagemap.items():

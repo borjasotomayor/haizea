@@ -18,7 +18,7 @@
 
 from mx import DateTime
 from math import ceil, floor
-from cPickle import dump, HIGHEST_PROTOCOL
+from cPickle import dump, load, HIGHEST_PROTOCOL
 
 def gen_traceinj_name(tracefile, injectedfile):
     tracename=tracefile.split("/")[-1].split(".")[0]
@@ -62,6 +62,13 @@ def pickle(data, file):
     f = open (file, "w")
     dump(data, f, protocol = HIGHEST_PROTOCOL)
     f.close()
+
+def unpickle(file):
+    f = open (file, "r")
+    data = load(f)
+    f.close()
+    return data
+
 
 LEASE_ID = 1
 

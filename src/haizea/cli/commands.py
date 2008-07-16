@@ -18,7 +18,7 @@
 
 from haizea.resourcemanager.rm import ResourceManager
 from haizea.traces.generators import generateTrace, generateImages
-from haizea.common.utils import gen_traceinj_name
+from haizea.common.utils import gen_traceinj_name, unpickle
 from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, ImageConfig
 import os.path
 import optparse
@@ -102,6 +102,29 @@ def haizea_generate_scripts(argv):
 
     template = Template(filename=opt.template)
     print template.render(configs=templatedata, etcdir=etcdir)
+
+
+def haizea_convert_data(argv):
+    p = OptionParser()
+    p.add_option(Option("-d", "--datafiles", action="store", type="string", dest="datafiles", required=True))
+    p.add_option(Option("-s", "--summary", action="store_true",  dest="summary"))
+    p.add_option(Option("-l", "--lease-stats", action="store", type="string", dest="lease"))
+    p.add_option(Option("-t", "--include-attributes", action="store_true", dest="attributes"))
+    p.add_option(Option("-f", "--format", action="store", type="string", dest="format"))
+
+    opt, args = p.parse_args(argv)
+    
+    datafile=opt.datafiles
+    
+    stats = unpickle(datafile)
+    
+    # Barebones for now. Just prints out lease id, waiting time, and
+    # slowdown (only best-effort leases)
+    waitingtimes = stats.get_waiting_times()
+    slowdowns = stats.get_slowdowns()
+    print "lease_id waiting_time slowdown"
+    for lease_id in waitingtimes:
+        print lease_id, waitingtimes[lease_id].seconds, slowdowns[lease_id]
 
 
 class OptionParser (optparse.OptionParser):
