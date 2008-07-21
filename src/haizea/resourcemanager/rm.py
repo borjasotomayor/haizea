@@ -88,8 +88,11 @@ class ResourceManager(object):
             # In simulation, we can only use the tracefile frontend
             self.frontends = [TracefileFrontend(self, self.clock.get_start_time())]
         elif mode == "opennebula":
+            
             # The clock
-            self.clock = RealClock(self, 5)
+            wakeup_interval = config.get_wakeup_interval()
+            non_sched = config.get_non_schedulable_interval()
+            self.clock = RealClock(self, wakeup_interval, non_sched)
     
             # Resource pool
             self.resourcepool = ResourcePool(self)
@@ -478,7 +481,7 @@ class RealClock(Clock):
     debugging purposes (however, unlike the simulated clock, the clock will
     always skip a fixed amount of time into the future).
     """
-    def __init__(self, rm, quantum, fastforward = False):
+    def __init__(self, rm, quantum, non_sched, fastforward = False):
         """Initializes the real clock.
         
         Arguments:
@@ -493,8 +496,10 @@ class RealClock(Clock):
         else:
             self.lastwakeup = roundDateTime(now())
         self.starttime = self.get_time()
+        self.nextschedulable = None
         self.nextperiodicwakeup = None
         self.quantum = TimeDelta(seconds=quantum)
+        self.non_sched = TimeDelta(seconds=non_sched)
                
     def get_time(self):
         """See docstring in base Clock class."""
@@ -509,7 +514,7 @@ class RealClock(Clock):
 
     def get_next_schedulable_time(self):
         """See docstring in base Clock class."""
-        return self.nextperiodicwakeup    
+        return self.nextschedulable    
     
     def run(self):
         """Runs the real clock through time.
@@ -545,12 +550,15 @@ class RealClock(Clock):
                 self.lastwakeup = roundDateTime(self.get_time())
             self.rm.logger.status("Wake-up time recorded as %s" % self.lastwakeup, constants.CLOCK)
                 
+            # Next schedulable time
+            self.nextschedulable = roundDateTime(self.lastwakeup + self.non_sched)
+            
             # Next wakeup time
             self.nextperiodicwakeup = roundDateTime(self.lastwakeup + self.quantum)
 
             # Wake up the resource manager
             self.rm.process_reservations(self.lastwakeup)
-            self.rm.process_requests(self.nextperiodicwakeup)
+            self.rm.process_requests(self.nextschedulable)
             
             # Determine if there's anything to do before the next wakeup time
             nextchangepoint = self.rm.get_next_changepoint()
@@ -588,7 +596,7 @@ class RealClock(Clock):
 
 if __name__ == "__main__":
     from haizea.common.config import RMConfig
-    CONFIGFILE = "../../../etc/sample.conf"
+    CONFIGFILE = "../../../etc/sample_opennebula.conf"
     CONFIG = RMConfig.fromFile(CONFIGFILE)
     RM = ResourceManager(CONFIG)
     RM.start()

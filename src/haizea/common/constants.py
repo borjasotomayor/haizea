@@ -149,6 +149,8 @@ OPENNEBULA_SEC = "opennebula"
 DB_OPT = "db"
 ONEVM_OPT = "onevm"
 ESTIMATESUSPENDRATE_OPT = "suspendresume-rate-estimate"
+WAKEUPINTERVAL_OPT = "wakeup-interval"
+NONSCHEDULABLE_OPT = "non-schedulable-interval"
 
 DEPLOY_IMAGETRANSFER_SEC = "deploy-imagetransfer"
 TRANSFER_MECHANISM_OPT = "transfer-mechanism"

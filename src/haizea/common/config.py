@@ -186,8 +186,23 @@ class RMConfig(Config):
     def getONEvm(self):
         return self.config.get(constants.OPENNEBULA_SEC, constants.ONEVM_OPT)
 
+    def get_wakeup_interval(self):
+        if not self.config.has_option(constants.OPENNEBULA_SEC, constants.WAKEUPINTERVAL_OPT):
+            return 60
+        else:
+            return self.config.getint(constants.OPENNEBULA_SEC, constants.WAKEUPINTERVAL_OPT)
+
     def getONESuspendResumeRate(self):
-        return self.config.getint(constants.OPENNEBULA_SEC, constants.ESTIMATESUSPENDRATE_OPT)
+        if not self.config.has_option(constants.OPENNEBULA_SEC, constants.ESTIMATESUSPENDRATE_OPT):
+            return 32
+        else:
+            return self.config.getint(constants.OPENNEBULA_SEC, constants.ESTIMATESUSPENDRATE_OPT)
+
+    def get_non_schedulable_interval(self):
+        if not self.config.has_option(constants.OPENNEBULA_SEC, constants.NONSCHEDULABLE_OPT):
+            return 10
+        else:
+            return self.config.getint(constants.OPENNEBULA_SEC, constants.NONSCHEDULABLE_OPT)
 
     #
     # SCHEDULING OPTIONS
