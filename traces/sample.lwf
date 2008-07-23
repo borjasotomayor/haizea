@@ -95,3 +95,15 @@
 #0     900  900  900 2 1 1024 0 foobar1.img 1024
 #0     900  900  900 2 1 1024 0 foobar2.img 1024
 #2700   -1  900  900 1 1 1024 0 foobar2.img 1024
+
+# Name: WAIT
+# Description: All best-effort requests, all of which (except the first)
+# will have to wait in the queue before starting.
+0    -1   900  900  4 1 1024 0 foobar.img 1024
+0    -1   900  900  4 1 1024 0 foobar.img 1024
+0    -1   900  900  4 1 1024 0 foobar.img 1024
+0    -1   900  900  4 1 1024 0 foobar.img 1024
+0    -1   900  900  4 1 1024 0 foobar.img 1024
+0    -1   900  900  4 1 1024 0 foobar.img 1024
+0    -1   900  900  4 1 1024 0 foobar.img 1024
+0    -1   900  900  4 1 1024 0 foobar.img 1024
