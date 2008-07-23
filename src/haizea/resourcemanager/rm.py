@@ -254,6 +254,20 @@ class ResourceManager(object):
         rr    -- Resource reservations where the premature end happened"""
         self.scheduler.notify_premature_end_vm(lease, rr)
 
+
+    def cancel_lease(self, lease):
+        """Cancels a lease.
+        
+        TODO: Right now, a lease only gets cancelled if an enactment action
+        fails. If this happens, Haizea will continue running, but won't clean
+        up the lease (so, in effect, it will think resources are still being
+        used, and any future enactment actions for that lease will also fail)
+        
+        Arguments:
+        lease -- Lease to cancel
+        """
+        pass
+
             
 class Clock(object):
     """Base class for the resource manager's clock.
@@ -532,7 +546,7 @@ class RealClock(Clock):
         The clock keeps on tickin' until a SIGINT signal (Ctrl-C if running in the
         foreground) or a SIGTERM signal is received.
         """
-        self.rm.logger.status("Starting simulated clock", constants.CLOCK)
+        self.rm.logger.status("Starting clock", constants.CLOCK)
         self.rm.stats.start(self.get_start_time())
         
         signal.signal(signal.SIGINT, self.signalhandler_gracefulstop)
@@ -553,12 +567,19 @@ class RealClock(Clock):
             # Next schedulable time
             self.nextschedulable = roundDateTime(self.lastwakeup + self.non_sched)
             
-            # Next wakeup time
-            self.nextperiodicwakeup = roundDateTime(self.lastwakeup + self.quantum)
-
             # Wake up the resource manager
             self.rm.process_reservations(self.lastwakeup)
+            # TODO: Compute nextschedulable here, before processing requests
             self.rm.process_requests(self.nextschedulable)
+            
+            # Next wakeup time
+            time_now = now()
+            if self.lastwakeup + self.quantum <= time_now:
+                quantums = (time_now - self.lastwakeup) / self.quantum
+                quantums = int(ceil(quantums)) * self.quantum
+                self.nextperiodicwakeup = roundDateTime(self.lastwakeup + quantums)
+            else:
+                self.nextperiodicwakeup = roundDateTime(self.lastwakeup + self.quantum)
             
             # Determine if there's anything to do before the next wakeup time
             nextchangepoint = self.rm.get_next_changepoint()

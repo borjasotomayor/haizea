@@ -114,12 +114,20 @@ class ResourcePool(object):
             startAction.vnodes[vnode].diskimage = taintedImage.filename
             startAction.vnodes[vnode].resources = rr.resources_in_pnode[pnode]
 
-        self.vm.start(startAction)
+        try:
+            self.vm.start(startAction)
+        except Exception, msg:
+            self.rm.logger.error("Enactment of start VM failed: %s" % msg, constants.RM)
+            self.rm.cancel_lease(lease)
         
     def stopVMs(self, lease, rr):
         stopAction = actions.VMEnactmentStopAction()
         stopAction.fromRR(rr)
-        self.vm.stop(stopAction)
+        try:
+            self.vm.stop(stopAction)
+        except Exception, msg:
+            self.rm.logger.error("Enactment of end VM failed: %s" % msg, constants.RM)
+            self.rm.cancel_lease(lease)
         
     def transferFiles(self):
         pass
@@ -187,12 +195,16 @@ class ResourcePool(object):
         pass
     
     def suspendVMs(self, lease, rr):
-        suspendAction = actions.VMEnactmentStopAction()
+        suspendAction = actions.VMEnactmentSuspendAction()
         suspendAction.fromRR(rr)
-        self.vm.suspend(suspendAction)
+        try:
+            self.vm.suspend(suspendAction)
+        except Exception, msg:
+            self.rm.logger.error("Enactment of suspend VM failed: %s" % msg, constants.RM)
+            self.rm.cancel_lease(lease)
     
     def verifySuspend(self, lease, rr):
-        verifySuspendAction = actions.VMEnactmentStopAction()
+        verifySuspendAction = actions.VMEnactmentConfirmSuspendAction()
         verifySuspendAction.fromRR(rr)
         self.vm.verifySuspend(verifySuspendAction)
     
@@ -203,12 +215,16 @@ class ResourcePool(object):
     #    pass
     
     def resumeVMs(self, lease, rr):
-        resumeAction = actions.VMEnactmentStopAction()
+        resumeAction = actions.VMEnactmentResumeAction()
         resumeAction.fromRR(rr)
-        self.vm.resume(resumeAction)
+        try:
+            self.vm.resume(resumeAction)
+        except Exception, msg:
+            self.rm.logger.error("Enactment of resume VM failed: %s" % msg, constants.RM)
+            self.rm.cancel_lease(lease)
     
     def verifyResume(self, lease, rr):
-        verifyResumeAction = actions.VMEnactmentStopAction()
+        verifyResumeAction = actions.VMEnactmentConfirmResumeAction()
         verifyResumeAction.fromRR(rr)
         self.vm.verifyResume(verifyResumeAction)    
         

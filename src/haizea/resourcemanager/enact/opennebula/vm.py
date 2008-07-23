@@ -30,11 +30,11 @@ class VMEnactment(VMEnactmentBase):
         self.conn.row_factory = sqlite.Row
 
         
-    def runCommand(self, cmd):
+    def run_command(self, cmd):
         self.logger.debug("Running command: %s" % cmd, constants.ONE)
         (status, output) = commands.getstatusoutput(cmd)
         self.logger.debug("Returned status=%i, output='%s'" % (status, output), constants.ONE)
-        return status
+        return status, output
 
     def start(self, action):
         for vnode in action.vnodes:
@@ -49,44 +49,44 @@ class VMEnactment(VMEnactmentBase):
                          % (action.lease_haizea_id, vnode, hostID, image, cpu, memory), constants.ONE)
 
             cmd = "%s deploy %i %i" % (self.onevm, vmid, hostID)
-            status = self.runCommand(cmd)
+            status, output = self.run_command(cmd)
             if status == 0:
                 self.logger.debug("Command returned succesfully.", constants.ONE)
             else:
-                raise Exception, "Error when running onevm deploy"
+                raise Exception, "Error when running onevm deploy (status=%i, output='%s')" % (status, output)
             
     def stop(self, action):
         for vnode in action.vnodes:
             # Unpack action
             vmid = action.vnodes[vnode].enactment_info
             cmd = "%s shutdown %i" % (self.onevm, vmid)
-            status = self.runCommand(cmd)
+            status, output = self.run_command(cmd)
             if status == 0:
                 self.logger.debug("Command returned succesfully.", constants.ONE)
             else:
-                raise Exception, "Error when running onevm shutdown"
+                raise Exception, "Error when running onevm shutdown (status=%i, output='%s')" % (status, output)
 
     def suspend(self, action):
         for vnode in action.vnodes:
             # Unpack action
             vmid = action.vnodes[vnode].enactment_info
             cmd = "%s suspend %i" % (self.onevm, vmid)
-            status = self.runCommand(cmd)
+            status, output = self.run_command(cmd)
             if status == 0:
                 self.logger.debug("Command returned succesfully.", constants.ONE)
             else:
-                raise Exception, "Error when running onevm suspend"
+                raise Exception, "Error when running onevm suspend (status=%i, output='%s')" % (status, output)
         
     def resume(self, action):
         for vnode in action.vnodes:
             # Unpack action
             vmid = action.vnodes[vnode].enactment_info
             cmd = "%s resume %i" % (self.onevm, vmid)
-            status = self.runCommand(cmd)
+            status, output = self.run_command(cmd)
             if status == 0:
                 self.logger.debug("Command returned succesfully.", constants.ONE)
             else:
-                raise Exception, "Error when running onevm resume"
+                raise Exception, "Error when running onevm resume (status=%i, output='%s')" % (status, output)
 
     def verifySuspend(self, action):
         # TODO: Do a single query
