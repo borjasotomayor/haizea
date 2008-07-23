@@ -375,7 +375,7 @@ class ImageTransferDeployment(DeploymentBase):
         elif lease.state == constants.LEASE_STATE_SUSPENDED:
             pass # This shouldn't happen
         lease.print_contents()
-        sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_TRANSFER)
+        sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_TRANSFER, lease.id)
         sched.logger.debug("LEASE-%i End of handleStartFileTransfer" % lease.id, constants.SCHED)
         sched.logger.info("Starting image transfer for lease %i" % (lease.id), constants.SCHED)
 
@@ -409,7 +409,7 @@ class ImageTransferDeployment(DeploymentBase):
             pass
             # TODO: Migrating
         lease.print_contents()
-        sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_IDLE)
+        sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_IDLE, lease.id)
         sched.rm.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id, constants.SCHED)
         sched.rm.logger.info("Completed image transfer for lease %i" % (lease.id), constants.SCHED)
 
