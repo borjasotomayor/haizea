@@ -1,0 +1,73 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<title>Haizea - An Open Source VM-based Lease Manager</title>
+<link href="haizea.css" type="text/css" rel="stylesheet"/>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+</head>
+<body>
+
+<div id="content">
+<div id="logo">
+<a href="index.html"><img src="logo.png" width="450" height="86" border="0" alt="Haizea"/></a>
+</div>
+<div class="topbar">
+<a href="whatis.html">What is Haizea?</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="features.html" style="color:black">Features</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="download.html">Download</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="documentation.html">Documentation</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="support.html">Support</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="pubs.html">Publications</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="credits.html">Credits</a></div>
+<h1>Features</h1>
+
+<h2>Resource leases</h2>
+
+<p>Haizea can schedule <strong>resource leases</strong> on a set of physical machines (typically a cluster), and implements those leases as virtual machines. In a nutshell, Haizea supports the following types of leases:</p>
+
+<ul>
+<li>Leases requiring a single VM or groups of VMs that must run in parallel.</li>
+<li><strong>Best-effort leases</strong>, which will wait in a queue until resources become available.</li>
+<li><strong>Advance reservation leases</strong>, which must start at a specific time.</li>
+<li><strong>Immediate leases</strong>, which must start right now, or not at all.</li>
+</ul>
+
+<p>You can find a more detailed description of these types of leases in the <a href="features_leases.html">Supported types of leases</a> page.</p>
+
+<h2>Scheduling features</h2>
+
+<p>Haizea's scheduling algorithms can...</p>
+
+<ul>
+    <li>... explicitly schedule the deployment overhead of virtual machines, instead of having it deducted from a user's allocation. For example, if a lease must start at 2pm, Haizea will schedule the transfer of the necessary VM images to the physical nodes where the virtual machines will be running (and will make sure that the images arrive on time).</li>
+    <li>... leverage the suspend/resume capability of virtual machines to suspend preemptible leases when a higher-priority lease needs resources. It also leverages cold migration of VMs (migrating a suspended VM to a different machine to resume it there). Live migration scheduling is in the works.</li>
+    <li>... schedule best-effort requests using a First-Come-First-Serve queue with backfilling (aggressive, conservative, or with any number of reservations).</li>
+</ul>
+
+<h2>OpenNebula support</h2>
+
+<p>Haizea can be used as a scheduling backend for the OpenNebula virtual infrastructure manager to do all the above in a Xen or KVM cluster. More details in <a href="doc_opennebula.html">"Using OpenNebula and Haizea to manage VMs on a cluster"</a>.</p>
+
+
+
+<div class="back">
+<a href="index.html">
+<img src="logo_small.png" width="32" height="35" border="0" alt="haizea"/><br/>
+BACK TO<br/>HOME PAGE
+</a>
+</div>
+</div>
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-4920033-1");
+pageTracker._initData();
+pageTracker._trackPageview();
+</script>
+</body>
+</html>

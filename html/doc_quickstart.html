@@ -16,10 +16,10 @@
 </div>
 <div class="topbar">
 <a href="whatis.html">What is Haizea?</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="features.html">Features</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="download.html">Download</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="documentation.html" style="color:black">Documentation</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="support.html">Support</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-<a href="roadmap.html">Roadmap</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="pubs.html">Publications</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="credits.html">Credits</a></div>
 <h1>Quickstart Guide</h1>
@@ -245,16 +245,16 @@ suspension: none
 
 <p>Notice how, although suspending a lease is a disruptive activity which can delay the completion time of a best-effort request, it is still much better than completely canceling a request and waiting for enough resources to accommodate the entire (uninterrupted) duration of the lease.</p>
 
-<p>Another scheduling option you can modify is whether Haizea should transfer the VM's disk image from an image repository before the lease can start. You can do this by modifying the <tt>diskimage-transfer</tt> option:</p>
+<p>Another scheduling option you can modify is whether Haizea should transfer the VM's disk image from an image repository before the lease can start. You can do this by modifying the <tt>lease-deployment</tt> option:</p>
 
 <pre class="shell">
-[scheduling]
+[general]
 ...
-
-diskimage-transfer: multicast
-
+lease-deployment: imagetransfer
 ...
 </pre>
+
+<p>If you look at the bottom of the sample configuration file, you will find a section called <tt>[deploy-imagetransfer]</tt> with all the image transfer options.</p>
 
 <p>Rerun Haizea again. You should get a schedule similar to the previous one, but with some extra messages indicating that image transfers are taking place:</p>
 
@@ -272,9 +272,9 @@ diskimage-transfer: multicast
 <p>At this point, you can run simple simulations with Haizea. However, there is a lot more that you can do with Haizea:</p>
 
 <ul>
-<li><strong>Run on real hardware</strong>: First and foremost, everything you just saw above in simulation can be done on real hardware. This is accomplished by using Haizea with the OpenNebula virtual infrastructure manager. So, if you have a Xen or KVM cluster, you can just install OpenNebula and Haizea to enable your users to request VM-based leases on your cluster. Full OpenNebula support will be released in mid-July, including a guide on how to configure and use both systems together.</li>
-<li><strong>Run complex simulations</strong>: The above show only two leases on a 4-node cluster during a span of roughly 2 hours. <em>Boring</em>. Haizea can handle more complex simulations, and also provides the necessary tools for you to easily run multiple simulations with different profiles. For example, in the Haizea paper <a href="pubs.html">Combining Batch Execution and Leasing Using Virtual Machines</a> we simulated running 72 30-day workloads in six different configurations, or 36 years of lease scheduling. To set up this kind of simulations, take a look at the <a href="doc_multiple.html">Running Multiple Simulation Experiments with Haizea</a> document.</li>
-<li><strong>Produce reports and graphs</strong>: The above examples relied on you reading the Haizea log messages, which is ok for a simple simulation, but no fun when you're scheduling thousands of leases. Haizea saves a fair amount of raw data to disk with scheduling metrics, utilization information, etc. which can be used to generate reports and graphs. We are in the process of documenting this data format and producing tools that will allow you to easily analyse that data and create graphs.</li>
+<li><strong>Run on real hardware</strong>: First and foremost, everything you just saw above in simulation can be done on real hardware. This is accomplished by using Haizea with the OpenNebula virtual infrastructure manager. So, if you have a Xen or KVM cluster, you can just <a href="doc_opennebula.html">install OpenNebula and Haizea</a> to enable your users to request VM-based leases on your cluster.</li>
+<li><strong>Run complex simulations</strong>: The above shows only two leases on a 4-node cluster during a span of roughly 2 hours. <em>Boring</em>. Haizea can handle more complex simulations, and also provides the necessary tools for you to easily run multiple simulations with different profiles. For example, in the Haizea paper <a href="pubs.html">Combining Batch Execution and Leasing Using Virtual Machines</a> we simulated running 72 30-day workloads in six different configurations, or 36 years of lease scheduling. To set up this kind of simulations, take a look at the <a href="doc_multiple.html">Running Multiple Simulation Experiments with Haizea</a> document.</li>
+<li><strong>Produce reports and graphs</strong>: The above examples relied on you reading the Haizea log messages, which is ok for a simple simulation, but no fun when you're scheduling thousands of leases. Haizea saves <a href="doc_analysis.html">a fair amount of raw data to disk with scheduling metrics, utilization information, etc.</a> which can be used to generate reports and graphs. We are in the process of producing tools that will allow you to easily analyse that data and create graphs.</li>
 </ul>
 
 <table border="0" align="center">

@@ -16,10 +16,10 @@
 </div>
 <div class="topbar">
 <strong>What is Haizea?</strong>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
+<a href="features.html">Features</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="download.html">Download</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="documentation.html">Documentation</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="support.html">Support</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
-<a href="roadmap.html">Roadmap</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="pubs.html">Publications</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="credits.html">Credits</a></div>
 <h1>What is Haizea?</h1>
@@ -28,23 +28,26 @@
 
 <ul>
 <li><strong>Haizea is a resource manager</strong> (or, depending on who you ask, a "resource scheduler"): Haizea is a software component that can manage a set of computers (typically a cluster), allowing users to request exclusive use of those resources described in a variety of terms, such as "I need 10 nodes, each with 1 GB of memory, right now" or "I need 4 nodes, each with 2 CPUs and 2GB of memory, from 2pm to 4pm tomorrow".</li>
-<li><strong>Haizea uses leases</strong>: The fundamental resource provisioning abstraction in Haizea is the <em>lease</em>. Intuitively, a lease is some form of contract where one party agrees to provide a set of resources (an apartment, a car, etc.) to another party. When a user wants to request computational resources from Haizea, it does so in the form of a lease. When applied to computational resources, the lease abstraction is a powerful and general construct with a lot of nuances. See below for a more detailed definition of leases.</li>
+<li><strong>Haizea uses leases</strong>: The fundamental resource provisioning abstraction in Haizea is the <em>lease</em>. Intuitively, a lease is some form of contract where one party agrees to provide a set of resources (an apartment, a car, etc.) to another party. When a user wants to request computational resources from Haizea, it does so in the form of a lease. When applied to computational resources, the lease abstraction is a powerful and general construct with a lot of nuances. See below for a more detailed definition of leases or read about the <a href="features_leases.html">types of leases supported by Haizea</a>.</li>
 <li><strong>Haizea is VM-based</strong>: We hold that the best way of implementing resource leases is using virtual machines (VMs). Therefore, Haizea's scheduling algorithms are geared towards managing virtual machines, factoring in all the extra operations (and overhead) involved in managing VMs. The <a href="http://workspace.globus.org/papers/">Globus Virtual Workspaces</a> group, where Haizea was originally developed, has an <a href="http://workspace.globus.org/papers/">extensive list of publications</a> that argue how using virtual machines for resource leasing is A Good Thing (and also Not A Trivial Thing).</li>
 <li><strong>Haizea is open source</strong>: Haizea is published under the <a href="http://www.apache.org/licenses/LICENSE-2.0.html">Apache License 2.0</a>, a BSD-like <a href="http://www.opensource.org/">OSI</a>-compatible license.</li>
 </ul>
 
 <h2>What can you do with Haizea?</h2>
 
-<p>You can use Haizea one of two ways. Haizea can be used as a standalone component or as a scheduling backend for a virtual infrastructure manager, such as <a href="http://www.opennebula.org/">OpenNebula</a>. So, if you're...</p>
-
-<ul>
-<li><strong>Using Haizea on its own</strong>: You actually can't do all that much :-) Haizea is, primarily, a VM resource management component that can take lease requests and make scheduling decisions, but doesn't actually know anything about how to <em>enact</em> those decisions. For example, Haizea may determine at what times a set of VMs representing a lease must start and stop, but it doesn't actually know how to instruct a virtual machine manager to do these actions. Haizea can, however, simulate those enactment actions so, on its own, Haizea might be useful for you if you're doing scheduling research involving leases or VMs (in fact, the Haizea simulator has been used in <a href="pubs.html">a couple of papers</a>). Otherwise, you probably want to be...</li>
-<li><strong>Using Haizea with OpenNebula</strong>: Haizea can be used as a drop-in replacement for <a href="http://www.opennebula.org/">OpenNebula</a>'s scheduling daemon. OpenNebula is a virtual infrastructure manager that enables the dynamic deployment and re-allocation of virtual machines on a pool of physical resources. OpenNebula and Haizea complement each other, since OpenNebula provides all the enactment muscle (OpenNebula can manage Xen VMs on a cluster, and will support KVM in the upcoming 1.0 release in mid-July 2008, with VMWare support to follow shortly) while Haizea provides all the scheduling brains. Although the current Haizea TP1.0 release has been tested with OpenNebula, this integration has not been properly documented yet. We are working on a detailed guide on how to use OpenNebula and Haizea together, which will be released with the upcoming 1.0 release of OpenNebula in mid-July 2008 (along with Haizea TP1.1). If you want to toy around with OpenNebula and Haizea before then, don't hesitate to <a href="support.html">contact us</a>.</li>
-</ul>
-
 <div class="center">
 <img src="what_haizea_does.png" width="650" height="352" alt="Haizea can be used with OpenNebula or in simulation."/>
 </div>
+
+<p>You can use Haizea one of two ways. Haizea can be used as a standalone component or as a scheduling backend for a virtual infrastructure manager, such as <a href="http://www.opennebula.org/">OpenNebula</a>. So, if you're...</p>
+
+<ul>
+<li><strong>Using Haizea with OpenNebula</strong>: Haizea can be used as a drop-in replacement for <a href="http://www.opennebula.org/">OpenNebula</a>'s scheduling daemon. OpenNebula is a virtual infrastructure manager that enables the dynamic deployment and re-allocation of virtual machines on a pool of physical resources. OpenNebula and Haizea complement each other, since OpenNebula provides all the enactment muscle (OpenNebula can manage Xen and KVM virtual machines on a cluster, with VMWare support to follow shortly) while Haizea provides all the scheduling brains. The document <a href="doc_opennebula.html">"Using OpenNebula and Haizea to manage VMs on a cluster"</a> provides more details on how to use OpenNebula 1.0 and Haizea together.</li>
+
+<li><strong>Using Haizea on its own</strong>: In this case, you actually can't do all that much :-) Haizea is, primarily, a VM resource management component that can take lease requests and make scheduling decisions, but doesn't actually know anything about how to <em>enact</em> those decisions. For example, Haizea may determine at what times a set of VMs representing a lease must start and stop, but it doesn't actually know how to instruct a virtual machine manager to do these actions. Haizea can, however, simulate those enactment actions so, on its own, Haizea might be useful if you're doing scheduling research involving leases or VMs (in fact, the Haizea simulator has been used in <a href="pubs.html">a couple of papers</a>).</li>
+</ul>
+
+<p>You can find a couple (more specific) details about what you can do with Haizea in our <a href="features.html">list of features</a>.</p>
 
 <h2>Leasing as a fundamental abstraction</h2>
 
@@ -52,7 +55,7 @@
 
 <p>Maybe you're a scientist who needs to run some simulations. You have specific hardware requirements, but you're not particularly picky about when the simulations run, and probably won't even notice if they are interrupted at some point, as long as they finish running (correctly) at some point, maybe before a given deadline. A <a href="http://en.wikipedia.org/wiki/Job_scheduling">job scheduler</a>, and a compute cluster, would probably be a good fit for you.</p>
 
-<p>You could also be a software developer who wants to test his or her code on a pristine machine, which you would only need for a relatively short period of time. Plus, every time you use this machine, you'd like it to start up with the exact same pristine software environment. Oh, and you want your machine now. As in <em>right now</em>. One option could be to install a <a href="http://en.wikipedia.org/wiki/Virtual_machine">virtual machine</a> (VM) manager (such as Xen, VMWare, etc.) to start up these pristine machines as VMs on your own machine. Even better, you could directly to a cloud (like <a href="http://www.amazon.com/ec2/">Amazon EC2</a> or the <a href="http://workspace.globus.org/clouds/">Science Clouds</a>) and have those VMs appear automagically somewhere else, so you don't have to worry about setting up the VM manager or having a machine powerful enough to run those VMs.</p>
+<p>You could also be a software developer who wants to test his or her code on a pristine machine, which you would only need for a relatively short period of time. Plus, every time you use this machine, you'd like it to start up with the exact same pristine software environment. Oh, and you want your machine now. As in <em>right now</em>. One option could be to install a <a href="http://en.wikipedia.org/wiki/Virtual_machine">virtual machine</a> (VM) manager (such as Xen, VMWare, etc.) to start up these pristine machines as VMs on your own machine. Even better, you could go to a cloud (like <a href="http://www.amazon.com/ec2/">Amazon EC2</a> or the <a href="http://workspace.globus.org/clouds/">Science Clouds</a>) and have those VMs appear automagically somewhere else, so you don't have to worry about setting up the VM manager or having a machine powerful enough to run those VMs.</p>
 
 <p>Or perhaps you're a run-of-the-mill geek who wants his or her own web/mail/DNS/etc server. This server will presumably be running for months or even years with high availability: your server has to be running all the time, with no interruptions. There's a whole slew of hosting providers who can give you a dedicated server or a virtual private server. The latter are typically managed with VM-based datacenter managers.</p>
 
@@ -70,18 +73,19 @@ As you can see, there are a lot of resource provisioning scenarios in nature. Ho
 
 <p>Furthermore, if you don't get any of these dimensions, then you're being shortchanged by your resource lessor. For example, Amazon EC2 is very good at providing exactly the software environment you want, and reasonably good at providing the hardware you want (although you're limited to a few hardware configurations), but not so good at supporting a variety of availability periods.</p>
 
-<p>So, Haizea aims to support resource leasing along these three dimension. For now, Haizea supports two types of availability:</p>
+<p>So, Haizea aims to support resource leasing along these three dimension. For now, Haizea supports three types of availability:</p>
 
 <ul>
 <li><strong>Best-effort lease</strong>: Resources are provisioned as soon as they are available.</li>
 <li><strong>Advance reservation-style leases</strong> (or "AR leases"): Resources are provisioned during a strictly defined time period (e.g., from 2pm to 4pm).</li>
+<li><strong>Immediate leases</strong>: Resources must be provisioned right now, or not at all.</li>
 </ul>
 
 <p>
 Although there are many systems (particularly job-based systems) that support these two types availability, Haizea differs in that it efficiently schedules heterogeneous workloads (combining best-effort and AR leases), overcoming the utilization problems typically resulting from using ARs. Haizea does this by using virtual machines to implement leases. Virtual machines also enable Haizea to provide exactly the hardware and software requested by the user. Additionally, Haizea also manages the overhead of preparing a lease, to make sure that any deployment operations (such as transferring a VM disk image) are taken care of before the start of a lease, instead of being deducted from the lessee's allocation.
 </p>
 
-<p>In the future, Haizea will support additional lease types, such as immediate leases, urgent leases, periodic leases, deadline-driven leases, etc.</p>
+<p>In the future, Haizea will support additional lease types, such as urgent leases, periodic leases, deadline-driven leases, etc.</p>
 
 <h2>Haizea is extensible</h2>
 

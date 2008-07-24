@@ -24,17 +24,21 @@
 <a href="credits.html">Credits</a></div>
 <h1>Using OpenNebula and Haizea<br/>to manage VMs on a cluster</h1>
 
-<p><a href="http://www.opennebula.org/">OpenNebula</a> is a virtual infrastructure manager that enables the dynamic deployment and re-allocation of virtual machines on a pool of physical resources. Haizea can be used to extend OpenNebula's scheduling capabilities, allowing it to support advance reservation of resources and queueing of best effort requests (more generally, it allows you to <a href="features_leases.html">lease</a> your resources as VMs, with a variety of lease terms). OpenNebula and Haizea complement each other, since OpenNebula provides all the enactment muscle (OpenNebula can manage Xen and KVM VMs on a cluster, with VMWare support to follow shortly) and Haizea provides the scheduling brains. Using them together is very simple since Haizea can be installed as a drop-in replacement for OpenNebula's scheduling daemon (i.e., you can use the latest version of OpenNebula, without any modifications).</p>
+<p><a href="http://www.opennebula.org/">OpenNebula</a> is a virtual infrastructure manager that enables the dynamic deployment and re-allocation of virtual machines on a pool of physical resources. Haizea can be used to extend OpenNebula's scheduling capabilities, allowing it to support advance reservation of resources and queuing of best effort requests (more generally, it allows you to <a href="features_leases.html">lease</a> your resources as VMs, with a variety of lease terms). OpenNebula and Haizea complement each other, since OpenNebula provides all the enactment muscle (OpenNebula can manage Xen and KVM VMs on a cluster, with VMWare support to follow shortly) and Haizea provides the scheduling brains. Using them together is very simple since Haizea can be installed as a drop-in replacement for OpenNebula's scheduling daemon (i.e., you can use the latest version of OpenNebula, without any modifications).</p>
 
 <p>This document explains how to use OpenNebula and Haizea together, and explains how to submit requests to OpenNebula to use Haizea's scheduling capabilities.</p>
 
 <p>NOTE: Although Haizea supports scheduling multiple VMs in parallel (e.g., 16 VMs which must run at the same time, or not at all), the current 1.0 version of OpenNebula only allows VMs to be managed one at a time (OpenNebula 1.2 will include support for "VM groups"). As such, this document only explains how to schedule individual VMs. There is a "dirty hack" way of scheduling groups of VMs with Haizea and OpenNebula 1.0, but we're not including it here since OpenNebula 1.2 will make this issue moot. However, if you really really really need to schedule VMs as groups and can't wait for OpenNebula 1.2, please don't hesitate to <a href="support.html">contact us</a>.</p>
 
+<div class="warning">
+<strong>CAUTION:</strong> Please remember that, although we have tested Haizea considerably with OpenNebula 1.0, Haizea is still a <em>technology preview</em> and, thus, not a good choice for production environments (yet). There are a couple of known issues and limitations which are listed at the end of this document. If you need to use OpenNebula in a production environment, and don't need any of Haizea's scheduling features (advance reservations, queuing of requests, etc.), you may want to use OpenNebula's default scheduler instead.
+</div>
+
 <h2>Installing OpenNebula and Haizea</h2>
 
-<p>If you have not already done so, you will need to install OpenNebula and Haizea. Start by <a href="http://www.opennebula.org/doku.php?id=documentation">installing OpenNebula</a>, and then <a href="doc_install.html">installing Haizea</a>.</p>
+<p>If you have not already done so, you will need to install OpenNebula 1.0 and Haizea Technology Preview 1.1. Start by <a href="http://www.opennebula.org/doku.php?id=documentation:rel1.0:ig">installing OpenNebula</a>, and then <a href="doc_install.html">installing Haizea</a>.</p>
 
-<p>Before proceeding, you may want to follow the OpenNebula <a href="http://www.opennebula.org/doku.php?id=documentation">quickstart guide</a> to verify that your OpenNebula installation is working fine. The rest of this document assumes that OpenNebula is correctly installed, and that you know what a <em>virtual machine template</em> is ("VM templates" is how VMs are requested to OpenNebula, so we'll be working with them quite a bit). You may also want to follow the Haizea <a href="doc_quickstart">Quickstart Guide</a>, to verify that Haizea is correctly installed.</p>
+<p>Before proceeding, you may want to follow the OpenNebula <a href="http://www.opennebula.org/doku.php?id=documentation:rel1.0:qg">quickstart guide</a> to verify that your OpenNebula installation is working fine. The rest of this document assumes that OpenNebula is correctly installed, and that you know what a <em>virtual machine template</em> is ("VM templates" is how VMs are requested to OpenNebula, so we'll be working with them quite a bit). You may also want to follow the Haizea <a href="doc_quickstart.html">Quickstart Guide</a>, to verify that Haizea is correctly installed.</p>
 
 <h2>Configuring Haizea</h2>
 
@@ -94,7 +98,9 @@ When Haizea starts up, it will print out something like this:
 
 <p>This means that Haizea has correctly started up, accessed OpenNebula's database and detected that there are <em>N</em> physical nodes (the value of N will depend, of course, on how many nodes you have in your system).</p>
 
-<p><strong>NOTE</strong>: Haizea is a drop-in replacement for OpenNebula's default scheduler (<tt>mm_sched</tt>). Do not run Haizea and <tt>mm_sched</tt> at the same time, or funny things will happen.</p>
+<div class="warning">
+<p>Haizea is a drop-in replacement for OpenNebula's default scheduler (<tt>mm_sched</tt>). Do not run Haizea and <tt>mm_sched</tt> at the same time, or funny things will happen.</p>
+</div>
 
 <h2>A quick test</h2>
 
@@ -153,10 +159,12 @@ onevm submit ar.one
 
 <p>Notice how Haizea detected that OpenNebula had an AR request, and then scheduled it to start 30 seconds in the future. In fact, Haizea takes care to wake up at that time so the VM can start at exactly that time.</p>
 
-<p>NOTE: If you run <tt>onevm list</tt>, the request will still be shown as <tt>pending</tt>. OpenNebula doesn't track Haizea's internal states, so it will consider the request "pending" until Haizea starts up the VM. Future versions will provide more information on a VMs state.</p>
-
-<p>NOTE (2): Currently, Haizea has to poll OpenNebula every minute to ask if there are any new requests. An upcoming version of Haizea will support an event-based model where OpenNebula can send Haizea a notification as soon as a new request is received (so the user doesn't have to wait until the next time Haizea wakes up to process the request).</p>
-
+<div class="warning">
+<p>If you run <tt>onevm list</tt>, the request will still be shown as <tt>pending</tt>. OpenNebula doesn't track Haizea's internal states, so it will consider the request "pending" until Haizea starts up the VM. Future versions will provide more information on a VMs state.</p>
+</div>
+<div class="warning">
+<p>Currently, Haizea has to poll OpenNebula every minute to ask if there are any new requests. An upcoming version of Haizea will support an event-based model where OpenNebula can send Haizea a notification as soon as a new request is received (so the user doesn't have to wait until the next time Haizea wakes up to process the request).</p>
+</div>
 <p>When the VM is scheduled to start, you will see the following in the Haizea logs:</p>
 
 <pre class="shell">
@@ -196,7 +204,7 @@ onevm submit ar.one
     <ul>
 <li><tt>best_effort</tt>: The VM will be scheduled as soon as resources are available. If resources are not available right now, the request is put on a queue and it remains there until there are sufficient resources (requests are scheduled on a first-come-first-serve basis).</li>
 <li><tt>now</tt>: The VM will be scheduled right now. If resources are not available right now, the request is rejected.</li>
-    <li>Exact ISO timestamp: i.e., <tt>YYYY-MM-DD HH:MM:SS</tt>. The VM must start at exactly that time. If enought resources are not available at that time, the resource is not requested.</li>
+    <li>Exact ISO timestamp: i.e., <tt>YYYY-MM-DD HH:MM:SS</tt>. The VM must start at exactly that time. If enough resources are not available at that time, the resource is not requested.</li>
 <li>Relative ISO timestamp: For convenience's sake (and also for testing) this provides an easy way of specifying that a VM must start "at T time after the VM is submitted". The format would be +HH:MM:SS (the "+" is not ISO, but is used by Haizea to determine that it is a relative timestamp)</li>
     </ul>
 </li>
@@ -207,7 +215,7 @@ onevm submit ar.one
 <li><tt>preemptible</tt>: This option can be either <tt>yes</tt> or <tt>no</tt>. Haizea currently uses a very simple priority scheme where VMs are either preemptible or non-preemptible (furthermore, a non-preemptible VM can preempt preemptible VMs, while preemptible VMs can't preempt anything). If a VM is preemptible, and a preempting VM needs its resources, then the preemptible VM will be suspended while the preempting VM is running. Future versions of Haizea will include better priority schemes.</li>
 </ul>
 
-<p>Usually, you will want to use these options to create one of Haizea's <a href="features_leases">supported lease types</a>:</p>
+<p>Usually, you will want to use these options to create one of Haizea's <a href="features_leases.html">supported lease types</a>:</p>
 
 <h3>Advance reservations</h3>
 <p>When you need your VM available at a specific time, this is called an <em>advance reservation</em>, or AR. The VM we used above is an example of an AR:</p>
@@ -298,7 +306,16 @@ HAIZEA = [
 </pre>
 
 
+<h2>Known issues and limitations</h2>
 
+<p>Known issues and limitations when using Haizea with OpenNebula:</p>
+
+<ul>
+    <li>As pointed out in this guide, Haizea has to poll OpenNebula every minute to ask if there are any new requests. Additionally, OpenNebula has no way of notifying Haizea of a change of state in a VM (e.g., a VM that died, a suspend operation that finished before expected, etc.). An upcoming version of OpenNebula will add this feature, and Haizea (in turn) will support receiving events from OpenNebula (this includes being instantly notified of new requests, instead of having to poll OpenNebula periodically).</li>
+    <li>If a command sent to OpenNebula fails, Haizea currently ignores this. This will be fixed in Haizea TP 1.3. Nonetheless, OpenNebula commands run from Haizea shouldn't fail unless you're running incredibly heavy loads, or if you manually shutdown a VM managed by Haizea.</li>
+    <li>Haizea currently cannot do any image deployment with OpenNebula, and VM images are assumed to be predeployed on the physical nodes, or available on a shared NFS filesystem. An upcoming version of OpenNebula will allow OpenNebula and Haizea to work with a <em>transfer manager</em> to handle various VM deployment scenarios.</li>
+    <li>Haizea cannot enact cold migrations in OpenNebula (i.e., migrating a suspended VM to a different node if resources become available earlier on a different node than the one where the VM was suspended on). Haizea actually has all the scheduling code for this, and only the enactment "glue" is missing (should be added in TP 1.3 or 1.4)</li>
+</ul>
 
 <table border="0" align="center">
 <tr>
