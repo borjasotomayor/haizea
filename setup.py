@@ -1,13 +1,14 @@
 from distutils.core import setup
 
 setup(name='haizea',
-      version='TP1.0',
+      version='TP1.1',
       description='Haizea',
       author='University of Chicago',
       author_email='borja@cs.uchicago.edu',
       url='http://haizea.cs.uchicago.edu/',
       package_dir = {'': 'src'},
       packages=['haizea', 
+                'haizea.cli',
                 'haizea.common', 
                 'haizea.resourcemanager',
                 'haizea.resourcemanager.deployment',
