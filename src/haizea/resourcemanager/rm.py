@@ -45,6 +45,7 @@ import operator
 import signal
 import sys
 from time import sleep
+from math import ceil
 from mx.DateTime import now, TimeDelta
 
 class ResourceManager(object):
@@ -617,7 +618,7 @@ class RealClock(Clock):
 
 if __name__ == "__main__":
     from haizea.common.config import RMConfig
-    CONFIGFILE = "../../../etc/sample_opennebula.conf"
+    CONFIGFILE = "../../../etc/sample.conf"
     CONFIG = RMConfig.fromFile(CONFIGFILE)
     RM = ResourceManager(CONFIG)
     RM.start()
