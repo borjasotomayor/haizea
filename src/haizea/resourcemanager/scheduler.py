@@ -82,14 +82,6 @@ class Scheduler(object):
         self.completedleases = ds.LeaseTable(self)
         self.rejectedleases = ds.LeaseTable(self)
         self.pending_leases = []
-
-        deploy_type = self.rm.config.get_lease_deployment_type()
-        if deploy_type == constants.DEPLOYMENT_UNMANAGED:
-            self.deployment = UnmanagedDeployment(self)
-        elif deploy_type == constants.DEPLOYMENT_PREDEPLOY:
-            self.deployment = PredeployedImagesDeployment(self)
-        elif deploy_type == constants.DEPLOYMENT_TRANSFER:
-            self.deployment = ImageTransferDeployment(self)
             
         self.handlers = {}
         
@@ -105,6 +97,14 @@ class Scheduler(object):
                               on_start = Scheduler._handle_start_resume,
                               on_end   = Scheduler._handle_end_resume)
             
+        deploy_type = self.rm.config.get_lease_deployment_type()
+        if deploy_type == constants.DEPLOYMENT_UNMANAGED:
+            self.deployment = UnmanagedDeployment(self)
+        elif deploy_type == constants.DEPLOYMENT_PREDEPLOY:
+            self.deployment = PredeployedImagesDeployment(self)
+        elif deploy_type == constants.DEPLOYMENT_TRANSFER:
+            self.deployment = ImageTransferDeployment(self)
+
         self.maxres = self.rm.config.getMaxReservations()
         self.numbesteffortres = 0
     
@@ -174,6 +174,7 @@ class Scheduler(object):
         """Return True if there are any leases scheduled in the future"""
         return not self.scheduledleases.is_empty()    
 
+    # TODO: Replace this with a more general event handling system
     def notify_premature_end_vm(self, l, rr):
         self.rm.logger.info("LEASE-%i The VM has ended prematurely." % l.id, constants.SCHED)
         self._handle_end_rr(l, rr)
@@ -184,7 +185,7 @@ class Scheduler(object):
                 self.slottable.removeReservation(r)
         rr.oncomplete = constants.ONCOMPLETE_ENDLEASE
         rr.end = self.rm.clock.get_time()
-        self._handle_end_vm(l, rr)
+        self._handle_end_vm(l, rr, enact=False)
         nexttime = self.rm.clock.get_next_schedulable_time()
         if self.rm.config.isBackfilling():
             # We need to reevaluate the schedule to see if there are any future
@@ -244,10 +245,9 @@ class Scheduler(object):
                 for lease in leases:
                     self.preempt(lease, time=start)
 
-            # Add VM resource reservations
+            # Create VM resource reservations
             vmrr = ds.VMResourceReservation(lease_req, start, end, nodeassignment, res, constants.ONCOMPLETE_ENDLEASE, False)
             vmrr.state = constants.RES_STATE_SCHEDULED
-            lease_req.append_rr(vmrr)
 
             # Schedule deployment overhead
             self.deployment.schedule(lease_req, vmrr, nexttime)
@@ -255,6 +255,7 @@ class Scheduler(object):
             # Commit reservation to slot table
             # (we don't do this until the very end because the deployment overhead
             # scheduling could still throw an exception)
+            lease_req.append_rr(vmrr)
             self.slottable.addReservation(vmrr)
         except SlotFittingException, msg:
             raise SchedException, "The requested AR lease is infeasible. Reason: %s" % msg
@@ -497,7 +498,9 @@ class Scheduler(object):
         self.rm.logger.debug("LEASE-%i End of handleStartVM" % l.id, constants.SCHED)
         self.rm.logger.info("Started VMs for lease %i on nodes %s" % (l.id, rr.nodes.values()), constants.SCHED)
 
-    def _handle_end_vm(self, l, rr):
+    # TODO: Replace enact with a saner way of handling leases that have failed or
+    #       ended prematurely.
+    def _handle_end_vm(self, l, rr, enact=True):
         self.rm.logger.debug("LEASE-%i Start of handleEndVM" % l.id, constants.SCHED)
         self.rm.logger.edebug("LEASE-%i Before:" % l.id, constants.SCHED)
         l.print_contents()
