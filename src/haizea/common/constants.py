@@ -144,6 +144,7 @@ FORCETRANSFERT_OPT="force-transfer-time"
 REUSE_OPT="diskimage-reuse"
 AVOIDREDUNDANT_OPT="avoid-redundant-transfers"
 STATUS_INTERVAL_OPT="status-message-interval"
+CLOCK_OPT="clock"
 
 OPENNEBULA_SEC = "opennebula"
 DB_OPT = "db"
@@ -194,6 +195,9 @@ NODESELECTION_PREFERREUSE="prefer-imagereuse"
 DEPLOYMENT_UNMANAGED = "unmanaged"
 DEPLOYMENT_PREDEPLOY = "predeployed-images"
 DEPLOYMENT_TRANSFER = "imagetransfer"
+
+CLOCK_SIMULATED = "simulated"
+CLOCK_REAL = "real"
 
 # Graph configfile sections and options
 TITLE_OPT="title"
