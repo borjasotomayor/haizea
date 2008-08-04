@@ -19,12 +19,15 @@
 import logging
 
 class Logger(object):
-    def __init__(self, rm):
+    def __init__(self, rm, file = None):
         self.rm = rm
 
         self.logger = logging.getLogger("haizea")
         self.extremedebug = False
-        handler = logging.StreamHandler()
+        if file == None:
+            handler = logging.StreamHandler()
+        else:
+            handler = logging.FileHandler(file)
         formatter = logging.Formatter('%(message)s')
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
