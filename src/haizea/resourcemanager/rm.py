@@ -35,18 +35,24 @@ import haizea.resourcemanager.stats as stats
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
+from haizea.resourcemanager.frontends.rpc import RPCFrontend
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease 
 from haizea.resourcemanager.resourcepool import ResourcePool
 from haizea.resourcemanager.scheduler import Scheduler
+from haizea.resourcemanager.rpcserver import RPCServer
 from haizea.resourcemanager.log import Logger
 from haizea.common.utils import abstract, roundDateTime
 
 import operator
 import signal
-import sys
+import sys, os
 from time import sleep
 from math import ceil
 from mx.DateTime import now, TimeDelta
+
+DAEMON_STDOUT = DAEMON_STDIN = "/dev/null"
+DAEMON_STDERR = "/var/tmp/haizea.err"
+DEFAULT_LOGFILE = "/var/tmp/haizea.log"
 
 class ResourceManager(object):
     """The resource manager
@@ -57,58 +63,115 @@ class ResourceManager(object):
     
     """
     
-    def __init__(self, config):
+    def __init__(self, config, daemon=False, pidfile=None):
         """Initializes the resource manager.
         
         Argument:
         config -- a populated instance of haizea.common.config.RMConfig
-        
+        daemon -- True if Haizea must run as a daemon, False if it must
+                  run in the foreground
+        pidfile -- When running as a daemon, file to save pid to
         """
         self.config = config
         
         # Create the RM components
-
-        # Common components
-        self.logger = Logger(self)
         
-        # Mode-specific components
         mode = config.getMode()
+        clock = config.getClock()
 
-        if mode == "simulated":
+        if mode == "simulated" and clock == constants.CLOCK_SIMULATED:
+            # Simulations always run in the foreground
+            self.daemon = False
+            # Logger
+            self.logger = Logger(self)
             # The clock
             starttime = config.getInitialTime()
             self.clock = SimulatedClock(self, starttime)
+            self.rpc_server = None
+        elif mode == "opennebula" or (mode == "simulated" and clock == constants.CLOCK_REAL):
+            self.daemon = daemon
+            self.pidfile = pidfile
+            # Logger
+            if daemon:
+                self.logger = Logger(self, DEFAULT_LOGFILE)
+            else:
+                self.logger = Logger(self)
 
-            # Resource pool
-            self.resourcepool = ResourcePool(self)
-        
-            # Scheduler
-            self.scheduler = Scheduler(self)
-    
-            # Lease request frontends
-            # In simulation, we can only use the tracefile frontend
-            self.frontends = [TracefileFrontend(self, self.clock.get_start_time())]
-        elif mode == "opennebula":
-            
             # The clock
             wakeup_interval = config.get_wakeup_interval()
             non_sched = config.get_non_schedulable_interval()
             self.clock = RealClock(self, wakeup_interval, non_sched)
-    
-            # Resource pool
-            self.resourcepool = ResourcePool(self)
-    
-            # Scheduler
-            self.scheduler = Scheduler(self)
+            
+            # RPC server
+            self.rpc_server = RPCServer(self)
 
-            # Lease request frontends
-            # TODO: Get this from config file
+        # Resource pool
+        self.resourcepool = ResourcePool(self)
+    
+        # Scheduler
+        self.scheduler = Scheduler(self)
+    
+        # Lease request frontends
+        if mode == "simulated" and clock == constants.CLOCK_SIMULATED:
+            # In pure simulation, we can only use the tracefile frontend
+            self.frontends = [TracefileFrontend(self, self.clock.get_start_time())]
+        elif mode == "simulated" and clock == constants.CLOCK_REAL:
+            # In simulation with a real clock, only the RPC frontend can be used
+            self.frontends = [RPCFrontend(self)]
+        elif mode == "opennebula":
             self.frontends = [OpenNebulaFrontend(self)]
-
+            
         # Statistics collection 
         self.stats = stats.StatsCollection(self, self.config.getDataFile())
 
+    def daemonize(self):
+        """Daemonizes the Haizea process.
         
+        Based on code in:  http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/66012
+        
+        """
+        # First fork
+        try:
+            pid = os.fork()
+            if pid > 0: 
+                # Exit first parent
+                sys.exit(0) 
+        except OSError, e:
+            sys.stderr.write("Failed to daemonize Haizea: (%d) %s\n" % (e.errno, e.strerror))
+            sys.exit(1)
+    
+        # Decouple from parent environment.
+        os.chdir(".")
+        os.umask(0)
+        os.setsid()
+    
+        # Second fork
+        try:
+            pid = os.fork()
+            if pid > 0: 
+                # Exit second parent.
+                sys.exit(0) 
+        except OSError, e:
+            sys.stderr.write("Failed to daemonize Haizea: (%d) %s\n" % (e.errno, e.strerror))
+            sys.exit(2)
+            
+        # Open file descriptors and print start message
+        si = file(DAEMON_STDIN, 'r')
+        so = file(DAEMON_STDOUT, 'a+')
+        se = file(DAEMON_STDERR, 'a+', 0)
+        pid = os.getpid()
+        sys.stderr.write("\nStarted Haizea daemon with pid %i\n\n" % pid)
+        sys.stderr.flush()
+        file(self.pidfile,'w+').write("%i\n" % pid)
+        
+        # Redirect standard file descriptors.
+        os.close(sys.stdin.fileno())
+        os.close(sys.stdout.fileno())
+        os.close(sys.stderr.fileno())
+        os.dup2(si.fileno(), sys.stdin.fileno())
+        os.dup2(so.fileno(), sys.stdout.fileno())
+        os.dup2(se.fileno(), sys.stderr.fileno())
+
     def start(self):
         """Starts the resource manager"""
         self.logger.status("Starting resource manager", constants.RM)
@@ -123,6 +186,10 @@ class ResourceManager(object):
         self.stats.create_counter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
         self.stats.create_counter(constants.COUNTER_CPUUTILIZATION, constants.AVERAGE_TIMEWEIGHTED)
         
+        if self.daemon:
+            self.daemonize()
+        if self.rpc_server:
+            self.rpc_server.start()
         # Start the clock
         self.clock.run()
         
@@ -244,17 +311,8 @@ class ResourceManager(object):
         """Return True if there are any leases still "in the system" """
         return self.scheduler.exists_scheduled_leases() or not self.scheduler.is_queue_empty()
     
-    # TODO: Replace this with a more general event handling system
-    def notify_end_vm(self, lease, rr):
-        """Notifies the resource manager that a VM has ended prematurely.
-        
-        This message is passed along to the scheduler.
-        
-        Arguments:
-        lease -- Lease the VM belongs to
-        rr    -- Resource reservations where the premature end happened"""
-        self.scheduler.notify_premature_end_vm(lease, rr)
-
+    def notify_event(self, lease, event):
+        pass
 
     def cancel_lease(self, lease):
         """Cancels a lease.
