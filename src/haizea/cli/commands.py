@@ -20,21 +20,95 @@ from haizea.resourcemanager.rm import ResourceManager
 from haizea.traces.generators import generateTrace, generateImages
 from haizea.common.utils import gen_traceinj_name, unpickle
 from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, ImageConfig
+from haizea.cli.optionparser import OptionParser, Option
+import sys
+import os
 import os.path
-import optparse
+import errno
+import signal
+import time
+
+DEFAULT_CONFIG_LOCATIONS = ["/etc/haizea.conf",
+                            os.path.expanduser("~/.haizea/haizea.conf")]
+DEFAULT_PIDFILE = "/var/tmp/haizea.pid"
+
 
 def haizea(argv):
     p = OptionParser()
-    p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
+    p.add_option(Option("-c", "--conf", action="store", type="string", dest="conf"))
+    p.add_option(Option("-f", "--fg", action="store_true",  dest="foreground"))
+    p.add_option(Option("--stop", action="store_true",  dest="stop"))
 
     opt, args = p.parse_args(argv)
-    
-    configfile=opt.conf
-    config = RMConfig.fromFile(configfile)
-    
-    rm = ResourceManager(config)
+        
+    pidfile = DEFAULT_PIDFILE # TODO: Make configurable
 
-    rm.start()
+    if opt.stop == None:
+        # Start Haizea
+         
+        # Check if a daemon is already running
+        if os.path.exists(pidfile):
+            pf  = file(pidfile,'r')
+            pid = int(pf.read().strip())
+            pf.close()
+ 
+            try:
+                os.kill(pid, signal.SIG_DFL)
+            except OSError, (err, msg):
+                if err == errno.ESRCH:
+                    # Pidfile is stale. Remove it.
+                    os.remove(pidfile)
+                else:
+                    msg = "Unexpected error when checking pid file '%s'.\n%s\n" %(pidfile, msg)
+                    sys.stderr.write(msg)
+                    sys.exit(1)
+            else:
+                msg = "Haizea seems to be already running (pid %i)\n" % pid
+                sys.stderr.write(msg)
+                sys.exit(1)
+ 
+        configfile=opt.conf
+        if configfile == None:
+            # Look for config file in default locations
+            for loc in DEFAULT_CONFIG_LOCATIONS:
+                if os.path.exists(loc):
+                    config = RMConfig.fromFile(loc)
+                    break
+            else:
+                print >> sys.stdout, "No configuration file specified, and none found at default locations."
+                print >> sys.stdout, "Make sure a config file exists at:\n  -> %s" % "\n  -> ".join(DEFAULT_CONFIG_LOCATIONS)
+                print >> sys.stdout, "Or specify a configuration file with the --conf option."
+                exit(1)
+        else:
+            config = RMConfig.fromFile(configfile)
+        
+        daemon = not opt.foreground
+    
+        rm = ResourceManager(config, daemon, pidfile)
+    
+        rm.start()
+    elif opt.stop: # Stop Haizea
+        # Based on code in:  http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/66012
+        try:
+            pf  = file(pidfile,'r')
+            pid = int(pf.read().strip())
+            pf.close()
+        except IOError:
+            msg = "Could not stop, pid file '%s' missing.\n"
+            sys.stderr.write(msg % pidfile)
+            sys.exit(1)
+        try:
+           while 1:
+               os.kill(pid, signal.SIGTERM)
+               time.sleep(1)
+        except OSError, err:
+           err = str(err)
+           if err.find("No such process") > 0:
+               os.remove(pidfile)
+           else:
+               print str(err)
+               sys.exit(1)
+
 
 def haizea_generate_configs(argv):
     p = OptionParser()
@@ -127,31 +201,3 @@ def haizea_convert_data(argv):
         print lease_id, waitingtimes[lease_id].seconds, slowdowns[lease_id]
 
 
-class OptionParser (optparse.OptionParser):
-    def _init_parsing_state (self):
-        optparse.OptionParser._init_parsing_state(self)
-        self.option_seen = {}
-
-    def check_values (self, values, args):
-        for option in self.option_list:
-            if (isinstance(option, Option) and
-                option.required and
-                not self.option_seen.has_key(option)):
-                self.error("%s not supplied" % option)
-        return (values, args)
-    
-class Option (optparse.Option):
-    ATTRS = optparse.Option.ATTRS + ['required']
-
-    def _check_required (self):
-        if self.required and not self.takes_value():
-            raise optparse.OptionError(
-                "required flag set for option that doesn't take a value",
-                 self)
-
-    # Make sure _check_required() is called from the constructor!
-    CHECK_METHODS = optparse.Option.CHECK_METHODS + [_check_required]
-
-    def process (self, opt, value, values, parser):
-        optparse.Option.process(self, opt, value, values, parser)
-        parser.option_seen[self] = 1
