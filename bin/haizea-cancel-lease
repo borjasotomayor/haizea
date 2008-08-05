@@ -1,0 +1,6 @@
+#!/usr/bin/python
+
+from haizea.cli import rpc_commands
+import sys
+
+rpc_commands.haizea_cancel_lease(sys.argv)

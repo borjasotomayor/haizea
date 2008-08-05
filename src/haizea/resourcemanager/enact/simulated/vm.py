@@ -17,22 +17,36 @@
 # -------------------------------------------------------------------------- #
 
 from haizea.resourcemanager.enact.base import VMEnactmentBase
+import haizea.common.constants as constants
 
 class VMEnactment(VMEnactmentBase):
     def __init__(self, resourcepool):
         VMEnactmentBase.__init__(self, resourcepool)
         
     def start(self, action):
-        pass
+        for vnode in action.vnodes:
+            # Unpack action
+            pnode = action.vnodes[vnode].pnode
+            image = action.vnodes[vnode].diskimage
+            cpu = action.vnodes[vnode].resources.get_by_type(constants.RES_CPU)
+            memory = action.vnodes[vnode].resources.get_by_type(constants.RES_MEM)
+            self.logger.debug("Received request to start VM for L%iV%i on host %i, image=%s, cpu=%i, mem=%i"
+                         % (action.lease_haizea_id, vnode, pnode, image, cpu, memory), "SIMUL")
     
     def stop(self, action):
-        pass
+        for vnode in action.vnodes:
+            self.logger.debug("Received request to stop VM for L%iV%i"
+                         % (action.lease_haizea_id, vnode), "SIMUL")
 
     def suspend(self, action):
-        pass
+        for vnode in action.vnodes:
+            self.logger.debug("Received request to suspend VM for L%iV%i"
+                         % (action.lease_haizea_id, vnode), "SIMUL")
 
     def resume(self, action):
-        pass
+        for vnode in action.vnodes:
+            self.logger.debug("Received request to resume VM for L%iV%i"
+                         % (action.lease_haizea_id, vnode), "SIMUL")
 
     def verifySuspend(self, action):
         return 0

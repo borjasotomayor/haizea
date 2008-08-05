@@ -40,7 +40,7 @@ of structures:
 """
 
 from haizea.common.constants import state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
-from haizea.common.utils import roundDateTimeDelta, get_lease_id, pretty_nodemap, estimate_transfer_time
+from haizea.common.utils import roundDateTimeDelta, get_lease_id, pretty_nodemap, estimate_transfer_time, xmlrpc_marshall_singlevalue
 
 from operator import attrgetter
 from mx.DateTime import TimeDelta
@@ -121,6 +121,12 @@ class LeaseBase(object):
 
     def get_ending_reservations(self, time):
         return [r for r in self.rr if r.end <= time and r.state == RES_STATE_ACTIVE]
+
+    def get_active_reservations(self, time):
+        return [r for r in self.rr if r.start <= time and time <= r.end and r.state == RES_STATE_ACTIVE]
+
+    def get_scheduled_reservations(self):
+        return [r for r in self.rr if r.state == RES_STATE_SCHEDULED]
 
     def get_endtime(self):
         vmrr, resrr = self.get_last_vmrr()
@@ -213,7 +219,27 @@ class LeaseBase(object):
                 threshold = self.scheduler.rm.config.getBootOverhead() + self.estimate_suspend_resume_time(suspendrate)
             factor = self.scheduler.rm.config.getSuspendThresholdFactor() + 1
             return roundDateTimeDelta(threshold * factor)
-            
+        
+    def xmlrpc_marshall(self):
+        # Convert to something we can send through XMLRPC
+        l = {}
+        l["id"] = self.id
+        l["submit_time"] = xmlrpc_marshall_singlevalue(self.submit_time)
+        l["start_req"] = xmlrpc_marshall_singlevalue(self.start.requested)
+        l["start_sched"] = xmlrpc_marshall_singlevalue(self.start.scheduled)
+        l["start_actual"] = xmlrpc_marshall_singlevalue(self.start.actual)
+        l["duration_req"] = xmlrpc_marshall_singlevalue(self.duration.requested)
+        l["duration_acc"] = xmlrpc_marshall_singlevalue(self.duration.accumulated)
+        l["duration_actual"] = xmlrpc_marshall_singlevalue(self.duration.actual)
+        l["end"] = xmlrpc_marshall_singlevalue(self.end)
+        l["diskimage_id"] = self.diskimage_id
+        l["diskimage_size"] = self.diskimage_size
+        l["numnodes"] = self.numnodes
+        l["resources"] = `self.requested_resources`
+        l["preemptible"] = self.preemptible
+        l["state"] = self.state
+        l["rr"] = [rr.xmlrpc_marshall() for rr in self.rr]
+        return l
         
         
 class ARLease(LeaseBase):
@@ -235,6 +261,10 @@ class ARLease(LeaseBase):
         self.print_rrs(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------", DS)
     
+    def xmlrpc_marshall(self):
+        l = LeaseBase.xmlrpc_marshall(self)
+        l["type"] = "AR"
+        return l
 
         
 class BestEffortLease(LeaseBase):
@@ -269,6 +299,11 @@ class BestEffortLease(LeaseBase):
             time_on_dedicated = bound
         return time_on_loaded / time_on_dedicated
 
+    def xmlrpc_marshall(self):
+        l = LeaseBase.xmlrpc_marshall(self)
+        l["type"] = "BE"
+        return l
+
 
 class ImmediateLease(LeaseBase):
     def __init__(self, submit_time, duration, diskimage_id, 
@@ -287,6 +322,11 @@ class ImmediateLease(LeaseBase):
         self.logger.log(loglevel, "Type           : IMMEDIATE", DS)
         self.print_rrs(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------", DS)
+
+    def xmlrpc_marshall(self):
+        l = LeaseBase.xmlrpc_marshall(self)
+        l["type"] = "IM"
+        return l
 
 
 #-------------------------------------------------------------------#
@@ -311,6 +351,14 @@ class ResourceReservationBase(object):
         self.logger.log(loglevel, "End            : %s" % self.end, DS)
         self.logger.log(loglevel, "State          : %s" % rstate_str(self.state), DS)
         self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()]), DS) 
+                
+    def xmlrpc_marshall(self):
+        # Convert to something we can send through XMLRPC
+        rr = {}                
+        rr["start"] = xmlrpc_marshall_singlevalue(self.start)
+        rr["end"] = xmlrpc_marshall_singlevalue(self.end)
+        rr["state"] = self.state
+        return rr
                 
 class VMResourceReservation(ResourceReservationBase):
     def __init__(self, lease, start, end, nodes, res, oncomplete, backfill_reservation):
@@ -341,6 +389,12 @@ class VMResourceReservation(ResourceReservationBase):
     def is_preemptible(self):
         return self.lease.preemptible
 
+    def xmlrpc_marshall(self):
+        rr = ResourceReservationBase.xmlrpc_marshall(self)
+        rr["type"] = "VM"
+        rr["nodes"] = self.nodes.items()
+        return rr
+
         
 class SuspensionResourceReservation(ResourceReservationBase):
     def __init__(self, lease, start, end, res, nodes):
@@ -358,6 +412,12 @@ class SuspensionResourceReservation(ResourceReservationBase):
     def is_preemptible(self):
         return False        
         
+    def xmlrpc_marshall(self):
+        rr = ResourceReservationBase.xmlrpc_marshall(self)
+        rr["type"] = "SUSP"
+        rr["nodes"] = self.nodes.items()
+        return rr
+        
 class ResumptionResourceReservation(ResourceReservationBase):
     def __init__(self, lease, start, end, res, nodes):
         ResourceReservationBase.__init__(self, lease, start, end, res)
@@ -374,6 +434,11 @@ class ResumptionResourceReservation(ResourceReservationBase):
     def is_preemptible(self):
         return False        
         
+    def xmlrpc_marshall(self):
+        rr = ResourceReservationBase.xmlrpc_marshall(self)
+        rr["type"] = "RESM"
+        rr["nodes"] = self.nodes.items()
+        return rr
 
 #-------------------------------------------------------------------#
 #                                                                   #
@@ -402,6 +467,15 @@ class Queue(object):
     def length(self):
         return len(self.__q)
     
+    def has_lease(self, lease_id):
+        return (1 == len([l for l in self.__q if l.id == lease_id]))
+    
+    def get_lease(self, lease_id):
+        return [l for l in self.__q if l.id == lease_id][0]
+    
+    def remove_lease(self, lease):
+        self.__q.remove(lease)
+    
     def __iter__(self):
         return iter(self.__q)
         
@@ -409,6 +483,9 @@ class LeaseTable(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.entries = {}
+        
+    def has_lease(self, lease_id):
+        return self.entries.has_key(lease_id)
         
     def get_lease(self, lease_id):
         return self.entries[lease_id]
@@ -520,7 +597,6 @@ class ResourceTuple(object):
         for i, x in enumerate(self._res):
             r += "%s:%.2f " % (self.descriptions[i], x)
         return r
-
 
 class Timestamp(object):
     def __init__(self, requested):

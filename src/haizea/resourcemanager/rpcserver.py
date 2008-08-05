@@ -26,11 +26,11 @@ class RPCServer(object):
         self.rm = rm
         self.logger = self.rm.logger
         self.port = DEFAULT_HAIZEA_PORT
-        self.server = SimpleXMLRPCServer(("localhost", self.port))
+        self.server = SimpleXMLRPCServer(("localhost", self.port), allow_none=True)
         self.register_rpc(self.test_func)
         self.register_rpc(self.cancel_lease)
         self.register_rpc(self.get_leases)
-        self.register_rpc(self.get_lease_info)
+        self.register_rpc(self.get_lease)
         self.register_rpc(self.get_queue)
         self.register_rpc(self.notify_event)
 
@@ -51,16 +51,17 @@ class RPCServer(object):
         return 0
     
     def cancel_lease(self, lease_id):
-        pass
+        self.rm.cancel_lease(lease_id)
+        return 0
 
     def get_leases(self):
-        pass
+        return [l.xmlrpc_marshall() for l in self.rm.scheduler.scheduledleases.get_leases()]
 
-    def get_lease_info(self):
-        pass
+    def get_lease(self, lease_id):
+        return 0
 
     def get_queue(self):
-        pass
+        return [l.xmlrpc_marshall() for l in self.rm.queue]
 
     def notify_event(self, lease_id, enactment_id, event):
         pass

@@ -23,7 +23,7 @@ def add_rpc_options(op):
     op.add_option(Option("-s", "--server", action="store", type="string", dest="server", default="http://localhost:42493"))
 
 def create_rpc_proxy(server):
-    return xmlrpclib.ServerProxy(server)
+    return xmlrpclib.ServerProxy(server, allow_none=True)
 
 def haizea_request_lease(argv):
     p = OptionParser()
@@ -53,5 +53,56 @@ def haizea_request_lease(argv):
                             opt.cpu, opt.mem, opt.vmimage, opt.vmimagesize)
         print "Lease submitted correctly."
         print "Lease ID: %i" % lease_id
+    except Exception, msg:
+        print >> sys.stderr, "Error: %s" % msg
+        
+
+def haizea_cancel_lease(argv):
+    p = OptionParser()
+    add_rpc_options(p)
+    
+    p.add_option(Option("-l", "--lease", action="store", type="int", dest="lease"))
+
+    opt, args = p.parse_args(argv)
+
+    server = create_rpc_proxy(opt.server)
+    
+    try:
+        code = server.cancel_lease(opt.lease)
+    except Exception, msg:
+        print >> sys.stderr, "Error: %s" % msg
+        
+
+def haizea_list_leases(argv):
+    p = OptionParser()
+    add_rpc_options(p)
+    
+    opt, args = p.parse_args(argv)
+
+    server = create_rpc_proxy(opt.server)
+    
+    # TODO: Make this configurable. Ideally, use some sort of
+    # "console table printer"
+    fields = [("id",3),
+              ("type",4),
+              ("state",7),
+              ("start_req",19),
+              ("duration_req",9),
+              ("numnodes",3)]
+    
+    try:
+        leases = server.get_leases()
+        print "\33[1m\33[4m",
+        for (name,width) in fields:
+            width = max(len(name),width) + 1
+            centered = name.ljust(width)
+            print centered,
+        print "\33[0m"
+        for l in leases:
+            for (name,width) in fields:
+                value = l[name]
+                width = max(len(name),width)
+                print " %s" % str(value).ljust(width),
+            print
     except Exception, msg:
         print >> sys.stderr, "Error: %s" % msg

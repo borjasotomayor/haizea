@@ -311,21 +311,19 @@ class ResourceManager(object):
         """Return True if there are any leases still "in the system" """
         return self.scheduler.exists_scheduled_leases() or not self.scheduler.is_queue_empty()
     
-    def notify_event(self, lease, event):
-        pass
+    # TODO: Add more events. This is pending on actually getting interesting
+    # events in OpenNebula 1.2. For now, the only event is a prematurely
+    # ending VM.
+    def notify_event(self, lease_id, event):
+        self.scheduler.notify_event(lease_id, event)
 
-    def cancel_lease(self, lease):
+    def cancel_lease(self, lease_id):
         """Cancels a lease.
-        
-        TODO: Right now, a lease only gets cancelled if an enactment action
-        fails. If this happens, Haizea will continue running, but won't clean
-        up the lease (so, in effect, it will think resources are still being
-        used, and any future enactment actions for that lease will also fail)
         
         Arguments:
         lease -- Lease to cancel
         """
-        pass
+        self.scheduler.cancel_lease(lease_id)
 
             
 class Clock(object):
@@ -427,7 +425,7 @@ class SimulatedClock(Clock):
             
             # Notify the resource manager about the premature ends
             for rr in prematureends:
-                self.rm.notify_end_vm(rr.lease, rr)
+                self.rm.notify_event(rr.lease.id, constants.EVENT_END_VM)
                 
             # Process reservations starting/stopping at the current time and
             # check if there are any new requests.

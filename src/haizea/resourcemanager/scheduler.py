@@ -36,7 +36,7 @@ from haizea.resourcemanager.slottable import SlotTable, SlotFittingException
 from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeployment
 from haizea.resourcemanager.deployment.predeployed import PredeployedImagesDeployment
 from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeployment
-from haizea.resourcemanager.datastruct import ARLease, ImmediateLease 
+from haizea.resourcemanager.datastruct import ARLease, ImmediateLease, VMResourceReservation 
 
 
 class SchedException(Exception):
@@ -80,7 +80,6 @@ class Scheduler(object):
         self.queue = ds.Queue(self)
         self.scheduledleases = ds.LeaseTable(self)
         self.completedleases = ds.LeaseTable(self)
-        self.rejectedleases = ds.LeaseTable(self)
         self.pending_leases = []
             
         self.handlers = {}
@@ -174,23 +173,50 @@ class Scheduler(object):
         """Return True if there are any leases scheduled in the future"""
         return not self.scheduledleases.is_empty()    
 
-    # TODO: Replace this with a more general event handling system
-    def notify_premature_end_vm(self, l, rr):
-        self.rm.logger.info("LEASE-%i The VM has ended prematurely." % l.id, constants.SCHED)
-        self._handle_end_rr(l, rr)
-        if rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
-            rrs = l.next_rrs(rr)
-            for r in rrs:
-                l.remove_rr(r)
-                self.slottable.removeReservation(r)
-        rr.oncomplete = constants.ONCOMPLETE_ENDLEASE
-        rr.end = self.rm.clock.get_time()
-        self._handle_end_vm(l, rr, enact=False)
-        nexttime = self.rm.clock.get_next_schedulable_time()
-        if self.rm.config.isBackfilling():
-            # We need to reevaluate the schedule to see if there are any future
-            # reservations that we can slide back.
-            self.reevaluate_schedule(l, rr.nodes.values(), nexttime, [])
+    def cancel_lease(self, lease_id):
+        """Cancels a lease.
+        
+        Arguments:
+        lease_id -- ID of lease to cancel
+        """
+        time = self.rm.clock.get_time()
+        
+        self.rm.logger.info("Cancelling lease %i..." % lease_id, constants.SCHED)
+        if self.scheduledleases.has_lease(lease_id):
+            # The lease is either running, or scheduled to run
+            lease = self.scheduledleases.get_lease(lease_id)
+            
+            if lease.state == constants.LEASE_STATE_ACTIVE:
+                self.rm.logger.info("Lease %i is active. Stopping active reservation..." % lease_id, constants.SCHED)
+                rr = lease.get_active_reservations(time)[0]
+                if isinstance(rr, VMResourceReservation):
+                    self._handle_unscheduled_end_vm(lease, rr, enact=True)
+                # TODO: Handle cancelations in middle of suspensions and
+                # resumptions                
+            elif lease.state in [constants.LEASE_STATE_SCHEDULED, constants.LEASE_STATE_DEPLOYED]:
+                self.rm.logger.info("Lease %i is scheduled. Cancelling reservations." % lease_id, constants.SCHED)
+                rrs = lease.get_scheduled_reservations()
+                for r in rrs:
+                    lease.remove_rr(r)
+                    self.slottable.removeReservation(r)
+                lease.state = constants.LEASE_STATE_DONE
+                self.completedleases.add(lease)
+                self.scheduledleases.remove(lease)
+        elif self.queue.has_lease(lease_id):
+            # The lease is in the queue, waiting to be scheduled.
+            # Cancelling is as simple as removing it from the queue
+            self.rm.logger.info("Lease %i is in the queue. Removing..." % lease_id, constants.SCHED)
+            l = self.queue.get_lease(lease_id)
+            self.queue.remove_lease(lease)
+    
+    
+    def notify_event(self, lease_id, event):
+        time = self.rm.clock.get_time()
+        if event == constants.EVENT_END_VM:
+            lease = self.scheduledleases.get_lease(lease_id)
+            rr = lease.get_active_reservations(time)[0]
+            self._handle_unscheduled_end_vm(lease, rr, enact=False)
+
     
     def __process_ar_request(self, lease_req, nexttime):
         self.rm.logger.info("Received AR lease request #%i, %i nodes from %s to %s." % (lease_req.id, lease_req.numnodes, lease_req.start.requested, lease_req.start.requested + lease_req.duration.requested), constants.SCHED)
@@ -500,6 +526,7 @@ class Scheduler(object):
 
     # TODO: Replace enact with a saner way of handling leases that have failed or
     #       ended prematurely.
+    #       Possibly factor out the "clean up" code to a separate function
     def _handle_end_vm(self, l, rr, enact=True):
         self.rm.logger.debug("LEASE-%i Start of handleEndVM" % l.id, constants.SCHED)
         self.rm.logger.edebug("LEASE-%i Before:" % l.id, constants.SCHED)
@@ -528,6 +555,23 @@ class Scheduler(object):
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_IDLE, l.id)
         self.rm.logger.debug("LEASE-%i End of handleEndVM" % l.id, constants.SCHED)
         self.rm.logger.info("Stopped VMs for lease %i on nodes %s" % (l.id, rr.nodes.values()), constants.SCHED)
+
+    def _handle_unscheduled_end_vm(self, l, rr, enact=False):
+        self.rm.logger.info("LEASE-%i The VM has ended prematurely." % l.id, constants.SCHED)
+        self._handle_end_rr(l, rr)
+        if rr.oncomplete == constants.ONCOMPLETE_SUSPEND:
+            rrs = l.next_rrs(rr)
+            for r in rrs:
+                l.remove_rr(r)
+                self.slottable.removeReservation(r)
+        rr.oncomplete = constants.ONCOMPLETE_ENDLEASE
+        rr.end = self.rm.clock.get_time()
+        self._handle_end_vm(l, rr, enact=enact)
+        nexttime = self.rm.clock.get_next_schedulable_time()
+        if self.rm.config.isBackfilling():
+            # We need to reevaluate the schedule to see if there are any future
+            # reservations that we can slide back.
+            self.reevaluate_schedule(l, rr.nodes.values(), nexttime, [])
 
     def _handle_start_suspend(self, l, rr):
         self.rm.logger.debug("LEASE-%i Start of handleStartSuspend" % l.id, constants.SCHED)

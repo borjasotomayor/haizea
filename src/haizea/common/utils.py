@@ -19,6 +19,7 @@
 from mx import DateTime
 from math import ceil, floor
 from cPickle import dump, load, HIGHEST_PROTOCOL
+from datetime import datetime
 
 def gen_traceinj_name(tracefile, injectedfile):
     tracename=tracefile.split("/")[-1].split(".")[0]
@@ -90,3 +91,11 @@ def estimate_transfer_time(size, bandwidth):
     seconds = size / bandwidthMBs
     return roundDateTimeDelta(DateTime.TimeDelta(seconds = seconds)) 
  
+def xmlrpc_marshall_singlevalue(value):
+    if isinstance(value, DateTime.DateTimeType):
+        return datetime.fromtimestamp(value)
+    elif isinstance(value, DateTime.DateTimeDeltaType):
+        return value.seconds
+    else:
+        return value
+     

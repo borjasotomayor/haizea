@@ -33,7 +33,9 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         capacity = self.parseResourcesString(config.getResourcesPerPhysNode())
         
         self.nodes = [Node(self.resourcepool, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
-        
+        for n in self.nodes:
+            n.enactment_info = n.nod_id
+            
         # Image repository nodes
         imgcapacity = ds.ResourceTuple.create_empty()
         imgcapacity.set_by_type(constants.RES_NETOUT, self.bandwidth)

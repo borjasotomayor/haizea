@@ -118,7 +118,7 @@ class ResourcePool(object):
             self.vm.start(startAction)
         except Exception, msg:
             self.rm.logger.error("Enactment of start VM failed: %s" % msg, constants.RM)
-            self.rm.cancel_lease(lease)
+            self.rm.cancel_lease(lease.id)
         
     def stopVMs(self, lease, rr):
         stopAction = actions.VMEnactmentStopAction()
