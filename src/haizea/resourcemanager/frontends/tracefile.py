@@ -29,9 +29,9 @@ class TracefileFrontend(RequestFrontend):
         
         config = rm.config
 
-        tracefile = config.getTracefile()
-        injectfile = config.getInjectfile()
-        imagefile = config.getImagefile()
+        tracefile = config.get("tracefile")
+        injectfile = config.get("injectionfile")
+        imagefile = config.get("imagefile")
         
         # Read trace file
         # Requests is a list of lease requests
@@ -58,19 +58,16 @@ class TracefileFrontend(RequestFrontend):
                 r.resreq.setByType(constants.RES_DISK, imagesizes[i] + r.resreq.getByType(constants.RES_MEM))
         
         # Add runtime overhead, if necessary
-        overhead = config.getRuntimeOverhead()
-        if overhead != None:
+        add_overhead = config.get("add-overhead")
+        
+        if add_overhead != constants.RUNTIMEOVERHEAD_NONE:
+            slowdown_overhead = config.get("runtime-slowdown-overhead")
+            boot_overhead = config.get("bootshutdown-overhead")
             for r in self.requests:
-                if isinstance(r,BestEffortLease):
-                    r.addRuntimeOverhead(overhead)
-                elif isinstance(r,ARLease):
-                    if not config.overheadOnlyBestEffort():
-                        r.addRuntimeOverhead(overhead)
-
-        # Add boot + shutdown overhead
-        overhead = config.getBootOverhead()
-        for r in self.requests:
-            r.add_boot_overhead(overhead)
+                if add_overhead == constants.RUNTIMEOVERHEAD_ALL or (add_overhead == constants.RUNTIMEOVERHEAD_BE and isinstance(r,BestEffortLease)):
+                   if slowdown_overhead != 0:
+                       r.add_runtime_overhead(slowdown_overhead)
+                   r.add_boot_overhead(boot_overhead)
 
         # Make the scheduler reachable from the lease request
         for r in self.requests:

@@ -24,7 +24,7 @@ import haizea.traces.formats as formats
 def SWF(tracefile, config):
     file = open (tracefile, "r")
     requests = []
-    inittime = config.getInitialTime()
+    inittime = config.get("starttime")
     for line in file:
         if line[0]!=';':
             req = None

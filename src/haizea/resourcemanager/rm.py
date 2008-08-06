@@ -76,8 +76,8 @@ class ResourceManager(object):
         
         # Create the RM components
         
-        mode = config.getMode()
-        clock = config.getClock()
+        mode = config.get("mode")
+        clock = config.get("clock")
 
         if mode == "simulated" and clock == constants.CLOCK_SIMULATED:
             # Simulations always run in the foreground
@@ -85,7 +85,7 @@ class ResourceManager(object):
             # Logger
             self.logger = Logger(self)
             # The clock
-            starttime = config.getInitialTime()
+            starttime = config.get("starttime")
             self.clock = SimulatedClock(self, starttime)
             self.rpc_server = None
         elif mode == "opennebula" or (mode == "simulated" and clock == constants.CLOCK_REAL):
@@ -98,8 +98,8 @@ class ResourceManager(object):
                 self.logger = Logger(self)
 
             # The clock
-            wakeup_interval = config.get_wakeup_interval()
-            non_sched = config.get_non_schedulable_interval()
+            wakeup_interval = config.get("wakeup-interval")
+            non_sched = config.get("non-schedulable-interval")
             self.clock = RealClock(self, wakeup_interval, non_sched)
             
             # RPC server
@@ -122,7 +122,7 @@ class ResourceManager(object):
             self.frontends = [OpenNebulaFrontend(self)]
             
         # Statistics collection 
-        self.stats = stats.StatsCollection(self, self.config.getDataFile())
+        self.stats = stats.StatsCollection(self, self.config.get("datafile"))
 
     def daemonize(self):
         """Daemonizes the Haizea process.
@@ -385,7 +385,7 @@ class SimulatedClock(Clock):
         self.starttime = starttime
         self.time = starttime
         self.logger = self.rm.logger
-        self.statusinterval = self.rm.config.getStatusMessageInterval()
+        self.statusinterval = self.rm.config.get("status-message-interval")
        
     def get_time(self):
         """See docstring in base Clock class."""
@@ -515,7 +515,7 @@ class SimulatedClock(Clock):
         
         # We can also be done if we've specified that we want to stop when
         # the best-effort requests are all done or when they've all been submitted.
-        stopwhen = self.rm.config.stopWhen()
+        stopwhen = self.rm.config.get("stop-when")
         scheduledbesteffort = self.rm.scheduler.scheduledleases.get_leases(type = BestEffortLease)
         pendingbesteffort = [r for r in tracefrontend.requests if isinstance(r, BestEffortLease)]
         if stopwhen == constants.STOPWHEN_BEDONE:
@@ -673,8 +673,14 @@ class RealClock(Clock):
         sys.exit()
 
 if __name__ == "__main__":
-    from haizea.common.config import RMConfig
+    from haizea.resourcemanager.configfile import HaizeaConfig
+    from haizea.common.config import ConfigException
     CONFIGFILE = "../../../etc/sample.conf"
-    CONFIG = RMConfig.fromFile(CONFIGFILE)
+    try:
+        CONFIG = HaizeaConfig.from_file(CONFIGFILE)
+    except ConfigException, msg:
+        print >> sys.stderr, "Error in configuration file:"
+        print >> sys.stderr, msg
+        exit(1)        
     RM = ResourceManager(CONFIG)
     RM.start()

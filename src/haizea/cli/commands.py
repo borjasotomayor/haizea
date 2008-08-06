@@ -19,7 +19,8 @@
 from haizea.resourcemanager.rm import ResourceManager
 from haizea.traces.generators import generateTrace, generateImages
 from haizea.common.utils import gen_traceinj_name, unpickle
-from haizea.common.config import RMConfig, RMMultiConfig, TraceConfig, ImageConfig
+from haizea.resourcemanager.configfile import HaizeaConfig, HaizeaMultiConfig
+from haizea.common.config import ConfigException
 from haizea.cli.optionparser import OptionParser, Option
 import sys
 import os
@@ -67,21 +68,26 @@ def haizea(argv):
                 sys.stderr.write(msg)
                 sys.exit(1)
  
-        configfile=opt.conf
-        if configfile == None:
-            # Look for config file in default locations
-            for loc in DEFAULT_CONFIG_LOCATIONS:
-                if os.path.exists(loc):
-                    config = RMConfig.fromFile(loc)
-                    break
+        try:
+            configfile=opt.conf
+            if configfile == None:
+                # Look for config file in default locations
+                for loc in DEFAULT_CONFIG_LOCATIONS:
+                    if os.path.exists(loc):
+                        config = HaizeaConfig.from_file(loc)
+                        break
+                else:
+                    print >> sys.stdout, "No configuration file specified, and none found at default locations."
+                    print >> sys.stdout, "Make sure a config file exists at:\n  -> %s" % "\n  -> ".join(DEFAULT_CONFIG_LOCATIONS)
+                    print >> sys.stdout, "Or specify a configuration file with the --conf option."
+                    exit(1)
             else:
-                print >> sys.stdout, "No configuration file specified, and none found at default locations."
-                print >> sys.stdout, "Make sure a config file exists at:\n  -> %s" % "\n  -> ".join(DEFAULT_CONFIG_LOCATIONS)
-                print >> sys.stdout, "Or specify a configuration file with the --conf option."
-                exit(1)
-        else:
-            config = RMConfig.fromFile(configfile)
-        
+                config = HaizeaConfig.from_file(configfile)
+        except ConfigException, msg:
+            print >> sys.stderr, "Error in configuration file:"
+            print >> sys.stderr, msg
+            exit(1)
+            
         daemon = not opt.foreground
     
         rm = ResourceManager(config, daemon, pidfile)
@@ -118,11 +124,11 @@ def haizea_generate_configs(argv):
     opt, args = p.parse_args(argv)
     
     configfile=opt.conf
-    multiconfig = RMMultiConfig.fromFile(configfile)
+    multiconfig = HaizeaMultiConfig.from_file(configfile)
     
     dir = opt.dir
     
-    configs = multiconfig.getConfigs()
+    configs = multiconfig.get_configs()
     
     etcdir = os.path.abspath(dir)    
     if not os.path.exists(etcdir):
@@ -148,7 +154,7 @@ def haizea_generate_scripts(argv):
     opt, args = p.parse_args(argv)
     
     configfile=opt.conf
-    multiconfig = RMMultiConfig.fromFile(configfile)
+    multiconfig = HaizeaMultiConfig.from_file(configfile)
             
     try:
         from mako.template import Template
@@ -157,7 +163,7 @@ def haizea_generate_scripts(argv):
         print "You can download them at http://www.makotemplates.org/"
         exit(1)
 
-    configs = multiconfig.getConfigsToRun()
+    configs = multiconfig.get_configs_to_run()
     
     etcdir = os.path.abspath(opt.confdir)    
     if not os.path.exists(etcdir):

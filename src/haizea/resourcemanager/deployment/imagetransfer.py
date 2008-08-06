@@ -46,9 +46,9 @@ class ImageTransferDeployment(DeploymentBase):
         
     def schedule_for_ar(self, lease, vmrr, nexttime):
         config = self.scheduler.rm.config
-        mechanism = config.get_transfer_mechanism()
-        reusealg = config.getReuseAlg()
-        avoidredundant = config.isAvoidingRedundantTransfers()
+        mechanism = config.get("transfer-mechanism")
+        reusealg = config.get("diskimage-reuse")
+        avoidredundant = config.get("avoid-redundant-transfers")
         
         lease.state = constants.LEASE_STATE_SCHEDULED
         
@@ -104,9 +104,9 @@ class ImageTransferDeployment(DeploymentBase):
 
     def schedule_for_besteffort(self, lease, vmrr, nexttime):
         config = self.scheduler.rm.config
-        mechanism = config.get_transfer_mechanism()
-        reusealg = config.getReuseAlg()
-        avoidredundant = config.isAvoidingRedundantTransfers()
+        mechanism = config.get("transfer-mechanism")
+        reusealg = config.get("diskimage-reuse")
+        avoidredundant = config.get("avoid-redundant-transfers")
         earliest = self.find_earliest_starting_times(lease, nexttime)
         lease.state = constants.LEASE_STATE_SCHEDULED
         transferRRs = []
@@ -151,9 +151,9 @@ class ImageTransferDeployment(DeploymentBase):
     def find_earliest_starting_times(self, lease_req, nexttime):
         nodIDs = [n.nod_id for n in self.resourcepool.getNodes()]  
         config = self.scheduler.rm.config
-        mechanism = config.get_transfer_mechanism()       
-        reusealg = config.getReuseAlg()
-        avoidredundant = config.isAvoidingRedundantTransfers()
+        mechanism = config.get("transfer-mechanism")
+        reusealg = config.get("diskimage-reuse")
+        avoidredundant = config.get("avoid-redundant-transfers")
         
         # Figure out starting time assuming we have to transfer the image
         nextfifo = self.getNextFIFOTransferTime(nexttime)
@@ -302,7 +302,7 @@ class ImageTransferDeployment(DeploymentBase):
         bandwidth = self.resourcepool.imagenode_bandwidth
         imgTransferTime=req.estimate_image_transfer_time(bandwidth)
         config = self.scheduler.rm.config
-        mechanism = config.get_transfer_mechanism()  
+        mechanism = config.get("transfer-mechanism")
         startTime = self.getNextFIFOTransferTime(nexttime)
         
         newtransfers = []

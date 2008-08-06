@@ -819,7 +819,9 @@ class SlotTable(object):
         
         nodes = canfit.keys()
         
-        reusealg = self.rm.config.getReuseAlg()
+        # TODO: The deployment module should just provide a list of nodes
+        # it prefers
+        reusealg = self.rm.config.get("diskimage-reuse")
         nodeswithimg=[]
         if reusealg==constants.REUSE_IMAGECACHES:
             nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(diskImageID, start)

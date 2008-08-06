@@ -24,9 +24,9 @@ from pysqlite2 import dbapi2 as sqlite
 class VMEnactment(VMEnactmentBase):
     def __init__(self, resourcepool):
         VMEnactmentBase.__init__(self, resourcepool)
-        self.onevm = self.resourcepool.rm.config.getONEvm()
+        self.onevm = self.resourcepool.rm.config.get("onevm")
         
-        self.conn = sqlite.connect(self.resourcepool.rm.config.getONEDB())
+        self.conn = sqlite.connect(self.resourcepool.rm.config.get("one.db"))
         self.conn.row_factory = sqlite.Row
 
         

@@ -30,10 +30,10 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         ResourcePoolInfoBase.__init__(self, resourcepool)
         config = self.resourcepool.rm.config
         self.logger = self.resourcepool.rm.logger
-        self.suspendresumerate = config.getONESuspendResumeRate()
+        self.suspendresumerate = config.get("one.suspendresume-rate-estimate")
 
         # Get information about nodes from DB
-        conn = sqlite.connect(config.getONEDB())
+        conn = sqlite.connect(config.get("one.db"))
         conn.row_factory = sqlite.Row
         
         self.nodes = []

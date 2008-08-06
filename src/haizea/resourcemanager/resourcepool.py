@@ -39,14 +39,14 @@ class ResourcePool(object):
         
         self.imagenode_bandwidth = self.info.get_bandwidth()
         
-        self.reusealg = self.rm.config.getReuseAlg()
+        self.reusealg = self.rm.config.get("diskimage-reuse")
         if self.reusealg == constants.REUSE_IMAGECACHES:
-            self.maxcachesize = self.rm.config.getMaxCacheSize()
+            self.maxcachesize = self.rm.config.get("diskimage-cache-size")
         else:
             self.maxcachesize = None
             
     def loadEnactmentModules(self):
-        mode = self.rm.config.getMode()
+        mode = self.rm.config.get("mode")
         try:
             exec "import %s.%s as enact" % (constants.ENACT_PACKAGE, mode)
             self.info = enact.info(self) #IGNORE:E0602
@@ -78,7 +78,7 @@ class ResourcePool(object):
             taintedImage = None
             
             # TODO: Factor this out
-            lease_deployment_type = self.rm.config.get_lease_deployment_type()
+            lease_deployment_type = self.rm.config.get("lease-preparation")
             if lease_deployment_type == constants.DEPLOYMENT_UNMANAGED:
                 # If we assume predeployment, we mark that there is a new
                 # tainted image, but there is no need to go to the enactment
@@ -277,7 +277,7 @@ class ResourcePool(object):
         
     def checkImage(self, pnode, lease_id, vnode, imagefile):
         node = self.getNode(pnode)
-        if self.rm.config.getTransferType() == constants.TRANSFER_NONE:
+        if self.rm.config.get("lease-preparation") == constants.DEPLOYMENT_UNMANAGED:
             self.rm.logger.debug("Adding tainted image for L%iV%i in node %i" % (lease_id, vnode, pnode), constants.ENACT)
         elif self.reusealg == constants.REUSE_NONE:
             if not node.hasTaintedImage(lease_id, vnode, imagefile):

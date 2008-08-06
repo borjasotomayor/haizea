@@ -41,7 +41,7 @@ class Logger(object):
                     "EXTREMEDEBUG": 5,
                     "NOTSET": 0}
         
-        level = self.rm.config.getLogLevel()
+        level = self.rm.config.get("loglevel")
         self.logger.setLevel(self.loglevel[level])
         self.extremedebug = (level == "EXTREMEDEBUG")
 

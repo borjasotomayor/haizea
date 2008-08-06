@@ -96,7 +96,7 @@ class Scheduler(object):
                               on_start = Scheduler._handle_start_resume,
                               on_end   = Scheduler._handle_end_resume)
             
-        deploy_type = self.rm.config.get_lease_deployment_type()
+        deploy_type = self.rm.config.get("lease-preparation")
         if deploy_type == constants.DEPLOYMENT_UNMANAGED:
             self.deployment = UnmanagedDeployment(self)
         elif deploy_type == constants.DEPLOYMENT_PREDEPLOY:
@@ -104,7 +104,16 @@ class Scheduler(object):
         elif deploy_type == constants.DEPLOYMENT_TRANSFER:
             self.deployment = ImageTransferDeployment(self)
 
-        self.maxres = self.rm.config.getMaxReservations()
+        backfilling = self.rm.config.get("backfilling")
+        if backfilling == constants.BACKFILLING_OFF:
+            self.maxres = 0
+        elif backfilling == constants.BACKFILLING_AGGRESSIVE:
+            self.maxres = 1
+        elif backfilling == constants.BACKFILLING_CONSERVATIVE:
+            self.maxres = 1000000 # Arbitrarily large
+        elif backfilling == constants.BACKFILLING_INTERMEDIATE:
+            self.maxres = self.rm.config.get("backfilling-reservations")
+
         self.numbesteffortres = 0
     
     def schedule(self, nexttime):        
@@ -224,35 +233,27 @@ class Scheduler(object):
         self.rm.logger.debug("  Duration: %s" % lease_req.duration, constants.SCHED)
         self.rm.logger.debug("  ResReq  : %s" % lease_req.requested_resources, constants.SCHED)
         
-        if self.rm.config.getNodeSelectionPolicy() == constants.NODESELECTION_AVOIDPREEMPT:
-            avoidpreempt = True
-        else:
-            avoidpreempt = False
-
         accepted = False
         try:
-            self.__schedule_ar_lease(lease_req, avoidpreempt=avoidpreempt, nexttime=nexttime)
+            self.__schedule_ar_lease(lease_req, avoidpreempt=True, nexttime=nexttime)
             self.scheduledleases.add(lease_req)
             self.rm.stats.incr_counter(constants.COUNTER_ARACCEPTED, lease_req.id)
             accepted = True
         except SchedException, msg:
-            # If our first try avoided preemption, try again
+            # Our first try avoided preemption, try again
             # without avoiding preemption.
             # TODO: Roll this into the exact slot fitting algorithm
-            if avoidpreempt:
-                try:
-                    self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
-                    self.rm.logger.debug("LEASE-%i Trying again without avoiding preemption" % lease_req.id, constants.SCHED)
-                    self.__schedule_ar_lease(lease_req, nexttime, avoidpreempt=False)
-                    self.scheduledleases.add(lease_req)
-                    self.rm.stats.incr_counter(constants.COUNTER_ARACCEPTED, lease_req.id)
-                    accepted = True
-                except SchedException, msg:
-                    self.rm.stats.incr_counter(constants.COUNTER_ARREJECTED, lease_req.id)
-                    self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
-            else:
+            try:
+                self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
+                self.rm.logger.debug("LEASE-%i Trying again without avoiding preemption" % lease_req.id, constants.SCHED)
+                self.__schedule_ar_lease(lease_req, nexttime, avoidpreempt=False)
+                self.scheduledleases.add(lease_req)
+                self.rm.stats.incr_counter(constants.COUNTER_ARACCEPTED, lease_req.id)
+                accepted = True
+            except SchedException, msg:
                 self.rm.stats.incr_counter(constants.COUNTER_ARREJECTED, lease_req.id)
                 self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
+
         if accepted:
             self.rm.logger.info("AR lease request #%i has been accepted." % lease_req.id, constants.SCHED)
         else:
@@ -307,7 +308,7 @@ class Scheduler(object):
                     newqueue.enqueue(lease_req)
                     self.rm.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg), constants.SCHED)
                     self.rm.logger.info("Lease %i could not be scheduled at this time." % lease_req.id, constants.SCHED)
-                    if not self.rm.config.isBackfilling():
+                    if not self.is_backfilling():
                         done = True
         
         for lease in self.queue:
@@ -327,13 +328,13 @@ class Scheduler(object):
             # (only intra-node transfer)
             earliest = dict([(node+1, [nexttime, constants.REQTRANSFER_NO, None]) for node in range(req.numnodes)])
             
-        susptype = self.rm.config.getSuspensionType()
+        susptype = self.rm.config.get("suspension")
         if susptype == constants.SUSPENSION_NONE or (susptype == constants.SUSPENSION_SERIAL and req.numnodes == 1):
             cansuspend = False
         else:
             cansuspend = True
 
-        canmigrate = self.rm.config.isMigrationAllowed()
+        canmigrate = self.rm.config.get("migration")
         try:
             mustresume = (req.state == constants.LEASE_STATE_SUSPENDED)
             canreserve = self.canReserveBestEffort()
@@ -436,11 +437,11 @@ class Scheduler(object):
             self.queue.enqueue_in_order(req)
             self.rm.stats.incr_counter(constants.COUNTER_QUEUESIZE, req.id)
         else:
-            susptype = self.rm.config.getSuspensionType()
+            susptype = self.rm.config.get("suspension")
             timebeforesuspend = time - vmrr.start
             # TODO: Determine if it is in fact the initial VMRR or not. Right now
             # we conservatively overestimate
-            canmigrate = self.rm.config.isMigrationAllowed()
+            canmigrate = self.rm.config.get("migration")
             suspendthreshold = req.get_suspend_threshold(initial=False, suspendrate=suspendresumerate, migrating=canmigrate)
             # We can't suspend if we're under the suspend threshold
             suspendable = timebeforesuspend >= suspendthreshold
@@ -568,7 +569,7 @@ class Scheduler(object):
         rr.end = self.rm.clock.get_time()
         self._handle_end_vm(l, rr, enact=enact)
         nexttime = self.rm.clock.get_next_schedulable_time()
-        if self.rm.config.isBackfilling():
+        if self.is_backfilling():
             # We need to reevaluate the schedule to see if there are any future
             # reservations that we can slide back.
             self.reevaluate_schedule(l, rr.nodes.values(), nexttime, [])
@@ -647,3 +648,6 @@ class Scheduler(object):
     def updateNodeTransferState(self, nodes, state, lease_id):
         for n in nodes:
             self.rm.resourcepool.getNode(n).transfer_doing = state
+            
+    def is_backfilling(self):
+        return self.maxres > 0

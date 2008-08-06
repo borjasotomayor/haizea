@@ -47,7 +47,7 @@ class OpenNebulaFrontend(RequestFrontend):
         self.logger = self.rm.logger
         config = self.rm.config
 
-        self.conn = sqlite.connect(config.getONEDB())
+        self.conn = sqlite.connect(config.get("one.db"))
         self.conn.row_factory = sqlite.Row
         
     def getAccumulatedRequests(self):

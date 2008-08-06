@@ -25,12 +25,12 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
     def __init__(self, resourcepool):
         ResourcePoolInfoBase.__init__(self, resourcepool)
         config = self.resourcepool.rm.config
-        self.suspendresumerate = config.getSuspendResumeRate()
+        self.suspendresumerate = config.get("simul.suspendresume-rate")
                 
-        numnodes = config.getNumPhysicalNodes()
-        self.bandwidth = config.getBandwidth()        
+        numnodes = config.get("simul.nodes")
+        self.bandwidth = config.get("imagetransfer-bandwidth")
 
-        capacity = self.parseResourcesString(config.getResourcesPerPhysNode())
+        capacity = self.parse_resources_string(config.get("simul.resources"))
         
         self.nodes = [Node(self.resourcepool, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
         for n in self.nodes:
@@ -59,7 +59,8 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
                 (constants.RES_NETIN, constants.RESTYPE_INT, "Net (in)"),
                 (constants.RES_NETOUT, constants.RESTYPE_INT, "Net (out)")]
         
-    def parseResourcesString(self, resources):
+    def parse_resources_string(self, resources):
+        resources = resources.split(";")
         desc2type = dict([(x[2], x[0]) for x in self.getResourceTypes()])
         capacity=ds.ResourceTuple.create_empty()
         for r in resources:

@@ -39,7 +39,7 @@ of structures:
   * Duration: A wrapper around requested/accumulated/actual durations
 """
 
-from haizea.common.constants import state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMVM, TRANSFER_NONE
+from haizea.common.constants import state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMDISK
 from haizea.common.utils import roundDateTimeDelta, get_lease_id, pretty_nodemap, estimate_transfer_time, xmlrpc_marshall_singlevalue
 
 from operator import attrgetter
@@ -175,26 +175,26 @@ class LeaseBase(object):
     
     # TODO: Factor out into deployment modules
     def estimate_image_transfer_time(self, bandwidth):
-        forceTransferTime = self.scheduler.rm.config.getForceTransferTime()
+        forceTransferTime = self.scheduler.rm.config.get("force-imagetransfer-time")
         if forceTransferTime != None:
             return forceTransferTime
         else:      
             return estimate_transfer_time(self.diskimage_size, bandwidth)
         
     def estimate_migration_time(self, bandwidth):
-        whattomigrate = self.scheduler.rm.config.getMustMigrate()
+        whattomigrate = self.scheduler.rm.config.get("what-to-migrate")
         if whattomigrate == MIGRATE_NONE:
             return TimeDelta(seconds=0)
         else:
             if whattomigrate == MIGRATE_MEM:
                 mbtotransfer = self.requested_resources.get_by_type(RES_MEM)
-            elif whattomigrate == MIGRATE_MEMVM:
+            elif whattomigrate == MIGRATE_MEMDISK:
                 mbtotransfer = self.diskimage_size + self.requested_resources.get_by_type(RES_MEM)
             return estimate_transfer_time(mbtotransfer, bandwidth)
         
     # TODO: This whole function has to be rethought
     def get_suspend_threshold(self, initial, suspendrate, migrating=False, bandwidth=None):
-        threshold = self.scheduler.rm.config.getSuspendThreshold()
+        threshold = self.scheduler.rm.config.get("force-suspend-threshold")
         if threshold != None:
             # If there is a hard-coded threshold, use that
             return threshold
@@ -216,8 +216,8 @@ class LeaseBase(object):
                     threshold = self.estimate_suspend_resume_time(suspendrate) * 2
             else:
                 #threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime(suspendrate)
-                threshold = self.scheduler.rm.config.getBootOverhead() + self.estimate_suspend_resume_time(suspendrate)
-            factor = self.scheduler.rm.config.getSuspendThresholdFactor() + 1
+                threshold = self.scheduler.rm.config.get("bootshutdown-overhead") + self.estimate_suspend_resume_time(suspendrate)
+            factor = self.scheduler.rm.config.get("suspend-threshold-factor") + 1
             return roundDateTimeDelta(threshold * factor)
         
     def xmlrpc_marshall(self):
