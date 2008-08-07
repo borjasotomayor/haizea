@@ -219,7 +219,6 @@ class AccountingDataCollection(object):
         # Remove some data that won't be necessary in the reporting tools
         for l in leases.values():
             l.clear_rrs()
-            l.scheduler = None
             l.logger = None
             self.data.leases[l.id] = l
 

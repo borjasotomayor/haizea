@@ -122,7 +122,6 @@ class OpenNebulaFrontend(RequestFrontend):
         # Only one node for now
         leasereq.vnode_enactment_info = {}
         leasereq.vnode_enactment_info[1] = int(req["oid"])
-        leasereq.set_scheduler(self.rm.scheduler)
         return leasereq
     
     def create_ar_lease(self, req, attrs, haizea_param):
@@ -144,7 +143,6 @@ class OpenNebulaFrontend(RequestFrontend):
         # Only one node for now
         leasereq.vnode_enactment_info = {}
         leasereq.vnode_enactment_info[1] = int(req["oid"])
-        leasereq.set_scheduler(self.rm.scheduler)
         return leasereq
 
     def create_immediate_lease(self, req, attrs, haizea_param):
@@ -158,6 +156,5 @@ class OpenNebulaFrontend(RequestFrontend):
         # Only one node for now
         leasereq.vnode_enactment_info = {}
         leasereq.vnode_enactment_info[1] = int(req["oid"])
-        leasereq.set_scheduler(self.rm.scheduler)
         return leasereq
         

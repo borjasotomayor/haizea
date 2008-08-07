@@ -68,10 +68,6 @@ class TracefileFrontend(RequestFrontend):
                    if slowdown_overhead != 0:
                        r.add_runtime_overhead(slowdown_overhead)
                    r.add_boot_overhead(boot_overhead)
-
-        # Make the scheduler reachable from the lease request
-        for r in self.requests:
-            r.set_scheduler(rm.scheduler)
             
         num_besteffort = len([x for x in self.requests if isinstance(x,BestEffortLease)])
         num_ar = len([x for x in self.requests if isinstance(x,ARLease)])

@@ -87,11 +87,6 @@ class LeaseBase(object):
         self.vnode_enactment_info = None
         
         self.logger = logging.getLogger("LEASES")
-
-    # TODO: Remove the link to the scheduler, and pass all necessary information
-    # as parameters to methods.
-    def set_scheduler(self, scheduler):
-        self.scheduler = scheduler
         
     def print_contents(self, loglevel="VDEBUG"):
         self.logger.log(loglevel, "Lease ID       : %i" % self.id)
@@ -178,14 +173,19 @@ class LeaseBase(object):
     
     # TODO: Factor out into deployment modules
     def estimate_image_transfer_time(self, bandwidth):
-        forceTransferTime = self.scheduler.rm.config.get("force-imagetransfer-time")
+        from haizea.resourcemanager.rm import ResourceManager
+        config = ResourceManager.get_singleton().config
+        forceTransferTime = config.get("force-imagetransfer-time")
         if forceTransferTime != None:
             return forceTransferTime
         else:      
             return estimate_transfer_time(self.diskimage_size, bandwidth)
         
+    # TODO: Factor out
     def estimate_migration_time(self, bandwidth):
-        whattomigrate = self.scheduler.rm.config.get("what-to-migrate")
+        from haizea.resourcemanager.rm import ResourceManager
+        config = ResourceManager.get_singleton().config
+        whattomigrate = config.get("what-to-migrate")
         if whattomigrate == MIGRATE_NONE:
             return TimeDelta(seconds=0)
         else:
@@ -195,9 +195,11 @@ class LeaseBase(object):
                 mbtotransfer = self.diskimage_size + self.requested_resources.get_by_type(RES_MEM)
             return estimate_transfer_time(mbtotransfer, bandwidth)
         
-    # TODO: This whole function has to be rethought
+    # TODO: This whole function has to be rethought, and factored out
     def get_suspend_threshold(self, initial, suspendrate, migrating=False, bandwidth=None):
-        threshold = self.scheduler.rm.config.get("force-suspend-threshold")
+        from haizea.resourcemanager.rm import ResourceManager
+        config = ResourceManager.get_singleton().config
+        threshold = config.get("force-suspend-threshold")
         if threshold != None:
             # If there is a hard-coded threshold, use that
             return threshold
@@ -219,8 +221,8 @@ class LeaseBase(object):
                     threshold = self.estimate_suspend_resume_time(suspendrate) * 2
             else:
                 #threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime(suspendrate)
-                threshold = self.scheduler.rm.config.get("bootshutdown-overhead") + self.estimate_suspend_resume_time(suspendrate)
-            factor = self.scheduler.rm.config.get("suspend-threshold-factor") + 1
+                threshold = config.get("bootshutdown-overhead") + self.estimate_suspend_resume_time(suspendrate)
+            factor = config.get("suspend-threshold-factor") + 1
             return roundDateTimeDelta(threshold * factor)
         
     def xmlrpc_marshall(self):

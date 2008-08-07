@@ -66,7 +66,6 @@ class RPCFrontend(RequestFrontend):
             leasereq = ARLease(tSubmit, start, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
 
         leasereq.state = constants.LEASE_STATE_PENDING
-        leasereq.set_scheduler(self.rm.scheduler)
         
         self.accumulated.append(leasereq)
         
