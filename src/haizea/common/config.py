@@ -62,7 +62,7 @@ class Config(object):
     def __init__(self, config, sections):
         self.config = config
         self.sections = sections
-        self.__options = {}
+        self._options = {}
         
         self.__load_all()
         
@@ -136,10 +136,10 @@ class Config(object):
                 if not value in opt.valid:
                     raise ConfigException, "Invalid value specified for '%s.%s'. Valid values are %s" % (secname, optname, opt.valid)
                   
-        self.__options[opt.getter] = value
+        self._options[opt.getter] = value
         
     def get(self, opt):
-        return self.__options[opt]
+        return self._options[opt]
         
     @classmethod
     def from_file(cls, configfile):

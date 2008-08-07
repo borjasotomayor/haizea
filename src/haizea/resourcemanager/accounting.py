@@ -36,6 +36,9 @@ class AccountingData(object):
         # Lease data
         self.leases = {}
         
+        # Attributes
+        self.attrs = {}
+        
     def get_waiting_times(self):
         waiting_times = {}
         for lease_id in self.leases:
@@ -58,6 +61,10 @@ class AccountingDataCollection(object):
         self.rm = rm
         self.datafile = datafile   
         self.starttime = None
+        
+        attrs = self.rm.config.get_attrs()
+        for attr in attrs:
+            self.data.attrs[attr] = self.rm.config.get_attr(attr)
 
     def create_counter(self, counter_id, avgtype, initial=0):
         self.data.counters[counter_id] = initial

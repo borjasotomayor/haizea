@@ -16,11 +16,13 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.common.config import Section, Option, Config, OPTTYPE_INT, OPTTYPE_FLOAT, OPTTYPE_STRING, OPTTYPE_BOOLEAN, OPTTYPE_DATETIME, OPTTYPE_TIMEDELTA 
+from haizea.common.config import ConfigException, Section, Option, Config, OPTTYPE_INT, OPTTYPE_FLOAT, OPTTYPE_STRING, OPTTYPE_BOOLEAN, OPTTYPE_DATETIME, OPTTYPE_TIMEDELTA 
+from haizea.common.utils import generate_config_name
 import haizea.common.constants as constants
-import haizea.common.stats as stats
 import os.path
+import sys
 from mx.DateTime import TimeDelta
+import ConfigParser
 
 class HaizeaConfig(Config):
     def __init__(self, config):
@@ -108,8 +110,8 @@ class HaizeaConfig(Config):
                 utilization data, etc.). If omitted, no data will be saved.
                 """),
 
-         Option(name        = "profile",
-                getter      = "profile",
+         Option(name        = "attributes",
+                getter      = "attributes",
                 type        = OPTTYPE_STRING,
                 required    = False,
                 doc         = """
@@ -231,6 +233,19 @@ class HaizeaConfig(Config):
                  - mem: only the memory must be transferred
                  - mem+disk: both the memory and the VM disk image must be
                    transferred                
+                """),
+
+         Option(name        = "non-schedulable-interval",
+                getter      = "non-schedulable-interval",
+                type        = OPTTYPE_TIMEDELTA,
+                required    = False,
+                default     = TimeDelta(seconds=10),
+                doc         = """
+                The minimum amount of time that must pass between
+                when a request is scheduled to when it can actually start.
+                The default should be good for most configurations, but
+                may need to be increased if you're dealing with exceptionally
+                high loads.                
                 """)
 
         ]
@@ -530,80 +545,62 @@ class HaizeaConfig(Config):
                 Rate at which VMs are estimated to suspend (in MB of
                 memory per second)                
                 """),
-
-         Option(name        = "non-schedulable-interval",
-                getter      = "non-schedulable-interval",
-                type        = OPTTYPE_TIMEDELTA,
-                required    = False,
-                default     = TimeDelta(seconds=10),
-                doc         = """
-                The minimum amount of time that must pass between
-                when a request is scheduled to when it can actually start.
-                The default should be good for most configurations, but
-                may need to be increased if you're dealing with exceptionally
-                high loads.                
-                """)
         ]
         sections.append(opennebula)
 
         Config.__init__(self, config, sections)
         
+        self.attrs = {}
+        if self._options["attributes"] != None:
+            self.attrs = {}
+            attrs = self._options["attributes"].split(";")
+            for attr in attrs:
+                (k,v) = attr.split("=")
+                self.attrs[k] = v
+        
+    def get_attr(self, attr):
+        return self.attrs[attr]
+        
+    def get_attrs(self):
+        return self.attrs.keys()
 
 
 class HaizeaMultiConfig(Config):
+    
+    MULTI_SEC = "multi"
+    COMMON_SEC = "common"
+    TRACEDIR_OPT = "tracedir"
+    TRACEFILES_OPT = "tracefiles"
+    INJDIR_OPT = "injectiondir"
+    INJFILES_OPT = "injectionfiles"
+    DATADIR_OPT = "datadir"
+    
     def __init__(self, config):
-        Config.__init__(self, config)
+        # TODO: Define "multi" section as a Section object
+        Config.__init__(self, config, [])
         
-    def getProfiles(self):
+    def get_profiles(self):
         sections = set([s.split(":")[0] for s in self.config.sections()])
         # Remove multi and common sections
-        sections.difference_update([constants.COMMON_SEC, constants.MULTI_SEC])
+        sections.difference_update([self.COMMON_SEC, self.MULTI_SEC])
         return list(sections)
-    
-    def getProfilesSubset(self, sec):
-        profiles = self.config.get(sec, constants.PROFILES_OPT)
-        if profiles == "ALL":
-            profiles = self.getProfiles()
-        else:
-            profiles = profiles.split()
-        return profiles
 
-    def getTracesSubset(self, sec):
-        traces = self.config.get(sec, constants.TRACES_OPT)
-        if traces == "ALL":
-            traces = [os.path.basename(t) for t in self.getTracefiles()]
-        else:
-            traces = traces.split()
-            
-        return traces
-
-    def getInjSubset(self, sec):
-        injs = self.config.get(sec, constants.INJS_OPT)
-        if injs == "ALL":
-            injs = [os.path.basename(t) for t in self.getInjectfiles() if t!=None]
-            injs.append(None)
-        elif injs == "NONE":
-            injs = [None]
-        else:
-            injs = injs.split()
-        return injs
-
-    def getTracefiles(self):
-        dir = self.config.get(constants.MULTI_SEC, constants.TRACEDIR_OPT)
-        traces = self.config.get(constants.MULTI_SEC, constants.TRACEFILES_OPT).split()
+    def get_trace_files(self):
+        dir = self.config.get(self.MULTI_SEC, self.TRACEDIR_OPT)
+        traces = self.config.get(self.MULTI_SEC, self.TRACEFILES_OPT).split()
         return [dir + "/" + t for t in traces]
 
-    def getInjectfiles(self):
-        dir = self.config.get(constants.MULTI_SEC, constants.INJDIR_OPT)
-        inj = self.config.get(constants.MULTI_SEC, constants.INJFILES_OPT).split()
+    def get_inject_files(self):
+        dir = self.config.get(self.MULTI_SEC, self.INJDIR_OPT)
+        inj = self.config.get(self.MULTI_SEC, self.INJFILES_OPT).split()
         inj = [dir + "/" + i for i in inj]
         inj.append(None)
         return inj
     
-    def getConfigs(self):
-        profiles = self.getProfiles()
-        tracefiles = self.getTracefiles()
-        injectfiles = self.getInjectfiles()
+    def get_configs(self):
+        profiles = self.get_profiles()
+        tracefiles = self.get_trace_files()
+        injectfiles = self.get_inject_files()
 
         configs = []
         for profile in profiles:
@@ -622,54 +619,37 @@ class HaizeaMultiConfig(Config):
                             profileconfig.set(s_noprefix, item[0], item[1])
                             
                     # The tracefile section may have not been created
-                    if not profileconfig.has_section(constants.TRACEFILE_SEC):
-                        profileconfig.add_section(constants.TRACEFILE_SEC)
+                    if not profileconfig.has_section("tracefile"):
+                        profileconfig.add_section("tracefile")
 
                     # Add tracefile option
-                    profileconfig.set(constants.TRACEFILE_SEC, constants.TRACEFILE_OPT, tracefile)
+                    profileconfig.set("tracefile", "tracefile", tracefile)
                     
                     # Add injected file option
                     if injectfile == None:
                         inj = "None"
                     else:
                         inj = injectfile
-                    profileconfig.set(constants.TRACEFILE_SEC, constants.INJFILE_OPT, inj)
+                    profileconfig.set("tracefile", "injectionfile", inj)
 
-                    # Add datadir option
-                    datadirname = genDataDirName(profile, tracefile, injectfile)
-                    basedatadir = self.config.get(constants.MULTI_SEC, constants.BASEDATADIR_OPT)
-                    # TODO: Change this so there will be a single directory with all the
-                    # data files, instead of multiple directories
-                    datafile = basedatadir + "/" + datadirname + "/haizea.dat"
-                    profileconfig.set(constants.GENERAL_SEC, constants.DATAFILE_OPT, datadir)
+                    # Add datafile option
+                    datadir = self.config.get(self.MULTI_SEC, self.DATADIR_OPT)
+                    datafilename = generate_config_name(profile, tracefile, injectfile)
+                    datafile = datadir + "/" + datafilename + ".dat"
+                    profileconfig.set("general", "datafile", datafile)
                     
-                    # Set profile option (only used internally)
-                    profileconfig.set(constants.GENERAL_SEC, constants.PROFILE_OPT, profile)
+                    # Set "attributes" option (only used internally)
+                    attrs = {"profile":profile}
+                    # TODO: Load additional attributes from trace/injfiles
+                    attrs_str = ",".join(["%s=%s" % (k,v) for (k,v) in attrs.items()])
+                    profileconfig.set("general", "attributes", attrs_str)
                     
-                    c = RMConfig(profileconfig)
+                    try:
+                        c = HaizeaConfig(profileconfig)
+                    except ConfigException, msg:
+                        print >> sys.stderr, "Error in configuration file:"
+                        print >> sys.stderr, msg
+                        exit(1)
                     configs.append(c)
         
-        return configs
-
-            
-    def getConfigsToRun(self):
-        configs = self.getConfigs()
-        
-        # TODO: Come up with a new way to filter what gets run or not
-        #profiles = self.getProfilesSubset(constants.RUN_SEC)
-        #traces = self.getTracesSubset(constants.RUN_SEC)
-        #injs = self.getInjSubset(constants.RUN_SEC)
-        
-#        confs = []
-#        for c in configs:
-#            p = c.getProfile()
-#            t = os.path.basename(c.getTracefile())
-#            i = c.getInjectfile()
-#            if i != None: 
-#                i = os.path.basename(i)
-#
-#            if p in profiles and t in traces and i in injs:
-#                confs.append(c)
-#
-#        return confs
         return configs

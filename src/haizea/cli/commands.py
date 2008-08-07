@@ -17,8 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 from haizea.resourcemanager.rm import ResourceManager
-from haizea.traces.generators import generateTrace, generateImages
-from haizea.common.utils import gen_traceinj_name, unpickle
+from haizea.common.utils import generate_config_name, unpickle
 from haizea.resourcemanager.configfile import HaizeaConfig, HaizeaMultiConfig
 from haizea.common.config import ConfigException
 from haizea.cli.optionparser import OptionParser, Option
@@ -135,11 +134,11 @@ def haizea_generate_configs(argv):
         os.makedirs(etcdir)
         
     for c in configs:
-        profile = c.getProfile()
-        tracefile = c.getTracefile()
-        injfile = c.getInjectfile()
-        name = gen_traceinj_name(tracefile, injfile)
-        configfile = etcdir + "/%s_%s.conf" % (profile, name)
+        profile = c.get_attr("profile")
+        tracefile = c.get("tracefile")
+        injfile = c.get("injectionfile")
+        configname = generate_config_name(profile, tracefile, injfile)
+        configfile = etcdir + "/%s.conf" % configname
         fc = open(configfile, "w")
         c.config.write(fc)
         fc.close()
@@ -163,7 +162,7 @@ def haizea_generate_scripts(argv):
         print "You can download them at http://www.makotemplates.org/"
         exit(1)
 
-    configs = multiconfig.get_configs_to_run()
+    configs = multiconfig.get_configs()
     
     etcdir = os.path.abspath(opt.confdir)    
     if not os.path.exists(etcdir):
@@ -171,14 +170,14 @@ def haizea_generate_scripts(argv):
         
     templatedata = []    
     for c in configs:
-        profile = c.getProfile()
-        tracefile = c.getTracefile()
-        injfile = c.getInjectfile()
-        datafile = c.getDataFile()
-        name = gen_traceinj_name(tracefile, injfile)
+        profile = c.get_attr("profile")
+        tracefile = c.get("tracefile")
+        injfile = c.get("injectionfile")
+        datafile = c.get("datafile")
+        configname = generate_config_name(profile, tracefile, injfile)
         if not opt.onlymissing or not os.path.exists(datafile):
-            configfile = etcdir + "/%s_%s.conf" % (profile, name)
-            templatedata.append((profile, name, configfile))
+            configfile = etcdir + "/%s.conf" % configname
+            templatedata.append((configname, configfile))
 
     template = Template(filename=opt.template)
     print template.render(configs=templatedata, etcdir=etcdir)

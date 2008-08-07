@@ -21,20 +21,17 @@ from math import ceil, floor
 from cPickle import dump, load, HIGHEST_PROTOCOL
 from datetime import datetime
 
-def gen_traceinj_name(tracefile, injectedfile):
+def generate_config_name(profile, tracefile, injectedfile):
     tracename=tracefile.split("/")[-1].split(".")[0]
     
-    if injectedfile != None:
+    if injectedfile != None and injectedfile != "None":
         injectname=injectedfile.split("/")[-1].split(".")[0]
         name = tracename + "+" + injectname
     else:
         name = tracename
-    
+            
+    name = profile + "_" + name
     return name
-
-def genDataDirName(profile, tracefile, injectedfile):
-    name = gen_traceinj_name(tracefile, injectedfile)
-    return profile + "/" + name + "/"    
     
 def roundDateTimeDelta(d):
     return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))
