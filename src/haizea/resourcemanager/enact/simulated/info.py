@@ -20,10 +20,12 @@ from haizea.resourcemanager.resourcepool import Node
 from haizea.resourcemanager.enact.base import ResourcePoolInfoBase
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
+import logging
 
 class ResourcePoolInfo(ResourcePoolInfoBase):
     def __init__(self, resourcepool):
         ResourcePoolInfoBase.__init__(self, resourcepool)
+        self.logger = logging.getLogger("ENACT.SIMUL.INFO")
         config = self.resourcepool.rm.config
         self.suspendresumerate = config.get("simul.suspendresume-rate")
                 

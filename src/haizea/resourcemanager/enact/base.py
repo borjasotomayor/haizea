@@ -22,7 +22,6 @@ import haizea.resourcemanager.datastruct as ds
 class ResourcePoolInfoBase(object):
     def __init__(self, resourcepool):
         self.resourcepool = resourcepool
-        self.logger = resourcepool.rm.logger
         
         resourcetypes = self.getResourceTypes() #IGNORE:E1111
         ds.ResourceTuple.set_resource_types(resourcetypes)
@@ -56,12 +55,10 @@ class ResourcePoolInfoBase(object):
 class StorageEnactmentBase(object):
     def __init__(self, resourcepool):
         self.resourcepool = resourcepool
-        self.logger = resourcepool.rm.logger
     
 class VMEnactmentBase(object):
     def __init__(self, resourcepool):
         self.resourcepool = resourcepool
-        self.logger = resourcepool.rm.logger
         
     def start(self, vms): abstract()
     

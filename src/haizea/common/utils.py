@@ -95,4 +95,23 @@ def xmlrpc_marshall_singlevalue(value):
         return value.seconds
     else:
         return value
+    
+class Singleton(object):
+     """ 
+     A singleton base class. 
+     Based on: http://code.activestate.com/recipes/52558/
+     """
+     _singleton = None
+     def __new__(cls, *args, **kwargs):
+         if cls._singleton == None:
+             cls._singleton = object.__new__(cls, *args, **kwargs)
+         return cls._singleton
+     
+     @classmethod
+     def get_singleton(cls):
+         if '_singleton' not in vars(cls):
+             return None
+         else:
+             return cls._singleton
+
      

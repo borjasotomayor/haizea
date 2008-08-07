@@ -16,14 +16,15 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+import logging
 
 class DeploymentBase(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.slottable = scheduler.slottable
         self.resourcepool = scheduler.rm.resourcepool
-        self.logger = scheduler.rm.logger
-        
+        self.logger = logging.getLogger("DEPLOY")
+
         
 class DeploymentSchedException(Exception):
     pass

@@ -17,6 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 import threading
+import logging
 from SimpleXMLRPCServer import SimpleXMLRPCServer
 
 DEFAULT_HAIZEA_PORT = 42493
@@ -24,7 +25,7 @@ DEFAULT_HAIZEA_PORT = 42493
 class RPCServer(object):
     def __init__(self, rm):
         self.rm = rm
-        self.logger = self.rm.logger
+        self.logger = logging.getLogger("RPCSERVER")
         self.port = DEFAULT_HAIZEA_PORT
         self.server = SimpleXMLRPCServer(("localhost", self.port), allow_none=True)
         self.register_rpc(self.test_func)
@@ -43,11 +44,11 @@ class RPCServer(object):
         self.server.register_function(func)
         
     def serve(self):
-        self.logger.info("RPC server started on port %i" % self.port, "RPC")
+        self.logger.info("RPC server started on port %i" % self.port)
         self.server.serve_forever()        
         
     def test_func(self):
-        self.logger.info("Test RPC function called", "RPC")
+        self.logger.info("Test RPC function called")
         return 0
     
     def cancel_lease(self, lease_id):

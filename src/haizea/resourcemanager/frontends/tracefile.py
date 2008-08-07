@@ -21,12 +21,12 @@ from haizea.resourcemanager.frontends.base import RequestFrontend
 import haizea.traces.readers as tracereaders
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
 import operator
-
+import logging
 
 class TracefileFrontend(RequestFrontend):
     def __init__(self, rm, starttime):
         RequestFrontend.__init__(self, rm)
-        
+        self.logger = logging.getLogger("TRACEFILE")
         config = rm.config
 
         tracefile = config.get("tracefile")
@@ -35,7 +35,7 @@ class TracefileFrontend(RequestFrontend):
         
         # Read trace file
         # Requests is a list of lease requests
-        self.rm.logger.info("Loading tracefile %s" % tracefile, constants.TRACE)
+        #self.logger.info("Loading tracefile %s" % tracefile)
 
         self.requests = None
         if tracefile.endswith(".swf"):
@@ -44,13 +44,13 @@ class TracefileFrontend(RequestFrontend):
             self.requests = tracereaders.LWF(tracefile, starttime)
     
         if injectfile != None:
-            self.rm.logger.info("Loading injection file %s" % injectfile, constants.TRACE)
+            self.logger.info("Loading injection file %s" % injectfile)
             injectedleases = tracereaders.LWF(injectfile, starttime)
             self.requests += injectedleases
             self.requests.sort(key=operator.attrgetter("submit_time"))
 
         if imagefile != None:
-            self.rm.logger.info("Loading image file %s" % imagefile, constants.TRACE)
+            self.logger.info("Loading image file %s" % imagefile)
             imagesizes, images = tracereaders.IMG(imagefile)
             for r, i in zip(self.requests, images):
                 r.vmimage = i
@@ -75,7 +75,7 @@ class TracefileFrontend(RequestFrontend):
             
         num_besteffort = len([x for x in self.requests if isinstance(x,BestEffortLease)])
         num_ar = len([x for x in self.requests if isinstance(x,ARLease)])
-        self.rm.logger.info("Loaded workload with %i requests (%i best-effort + %i AR)" % (num_besteffort+num_ar, num_besteffort, num_ar), constants.TRACE)
+        #self.logger.info("Loaded workload with %i requests (%i best-effort + %i AR)" % (num_besteffort+num_ar, num_besteffort, num_ar))
         
         
     def getAccumulatedRequests(self):

@@ -19,11 +19,14 @@
 from haizea.resourcemanager.enact.base import VMEnactmentBase
 import haizea.common.constants as constants
 import commands
+import logging
 from pysqlite2 import dbapi2 as sqlite
 
 class VMEnactment(VMEnactmentBase):
     def __init__(self, resourcepool):
         VMEnactmentBase.__init__(self, resourcepool)
+        self.logger = logging.getLogger("ENACT.ONE.VM")
+
         self.onevm = self.resourcepool.rm.config.get("onevm")
         
         self.conn = sqlite.connect(self.resourcepool.rm.config.get("one.db"))
@@ -31,9 +34,9 @@ class VMEnactment(VMEnactmentBase):
 
         
     def run_command(self, cmd):
-        self.logger.debug("Running command: %s" % cmd, constants.ONE)
+        self.logger.debug("Running command: %s" % cmd)
         (status, output) = commands.getstatusoutput(cmd)
-        self.logger.debug("Returned status=%i, output='%s'" % (status, output), constants.ONE)
+        self.logger.debug("Returned status=%i, output='%s'" % (status, output))
         return status, output
 
     def start(self, action):
@@ -46,12 +49,12 @@ class VMEnactment(VMEnactmentBase):
             memory = action.vnodes[vnode].resources.get_by_type(constants.RES_MEM)
             
             self.logger.debug("Received request to start VM for L%iV%i on host %i, image=%s, cpu=%i, mem=%i"
-                         % (action.lease_haizea_id, vnode, hostID, image, cpu, memory), constants.ONE)
+                         % (action.lease_haizea_id, vnode, hostID, image, cpu, memory))
 
             cmd = "%s deploy %i %i" % (self.onevm, vmid, hostID)
             status, output = self.run_command(cmd)
             if status == 0:
-                self.logger.debug("Command returned succesfully.", constants.ONE)
+                self.logger.debug("Command returned succesfully.")
             else:
                 raise Exception, "Error when running onevm deploy (status=%i, output='%s')" % (status, output)
             
@@ -62,7 +65,7 @@ class VMEnactment(VMEnactmentBase):
             cmd = "%s shutdown %i" % (self.onevm, vmid)
             status, output = self.run_command(cmd)
             if status == 0:
-                self.logger.debug("Command returned succesfully.", constants.ONE)
+                self.logger.debug("Command returned succesfully.")
             else:
                 raise Exception, "Error when running onevm shutdown (status=%i, output='%s')" % (status, output)
 
@@ -73,7 +76,7 @@ class VMEnactment(VMEnactmentBase):
             cmd = "%s suspend %i" % (self.onevm, vmid)
             status, output = self.run_command(cmd)
             if status == 0:
-                self.logger.debug("Command returned succesfully.", constants.ONE)
+                self.logger.debug("Command returned succesfully.")
             else:
                 raise Exception, "Error when running onevm suspend (status=%i, output='%s')" % (status, output)
         
@@ -84,7 +87,7 @@ class VMEnactment(VMEnactmentBase):
             cmd = "%s resume %i" % (self.onevm, vmid)
             status, output = self.run_command(cmd)
             if status == 0:
-                self.logger.debug("Command returned succesfully.", constants.ONE)
+                self.logger.debug("Command returned succesfully.")
             else:
                 raise Exception, "Error when running onevm resume (status=%i, output='%s')" % (status, output)
 
@@ -99,9 +102,9 @@ class VMEnactment(VMEnactmentBase):
             onevm = cur.fetchone()        
             state = onevm["state"]
             if state == 5:
-                self.logger.debug("Suspend of L%iV%i correct." % (action.lease_haizea_id, vnode), constants.ONE)
+                self.logger.debug("Suspend of L%iV%i correct." % (action.lease_haizea_id, vnode))
             else:
-                self.logger.warning("ONE did not complete suspend  of L%iV%i on time. State is %i" % (action.lease_haizea_id, vnode, state), constants.ONE)
+                self.logger.warning("ONE did not complete suspend  of L%iV%i on time. State is %i" % (action.lease_haizea_id, vnode, state))
                 result = 1
         return result
         
@@ -116,9 +119,9 @@ class VMEnactment(VMEnactmentBase):
             onevm = cur.fetchone()        
             state = onevm["state"]
             if state == 3:
-                self.logger.debug("Resume of L%iV%i correct." % (action.lease_haizea_id, vnode), constants.ONE)
+                self.logger.debug("Resume of L%iV%i correct." % (action.lease_haizea_id, vnode))
             else:
-                self.logger.warning("ONE did not complete resume of L%iV%i on time. State is %i" % (action.lease_haizea_id, vnode, state), constants.ONE)
+                self.logger.warning("ONE did not complete resume of L%iV%i on time. State is %i" % (action.lease_haizea_id, vnode, state))
                 result = 1
         return result
 

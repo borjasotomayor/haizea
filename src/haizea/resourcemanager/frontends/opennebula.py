@@ -44,7 +44,7 @@ class OpenNebulaFrontend(RequestFrontend):
     def __init__(self, rm):
         self.rm = rm
         self.processed = []
-        self.logger = self.rm.logger
+        self.logger = self.logger
         config = self.rm.config
 
         self.conn = sqlite.connect(config.get("one.db"))

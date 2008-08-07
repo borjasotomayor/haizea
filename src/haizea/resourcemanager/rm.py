@@ -40,10 +40,10 @@ from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, Immediat
 from haizea.resourcemanager.resourcepool import ResourcePool
 from haizea.resourcemanager.scheduler import Scheduler
 from haizea.resourcemanager.rpcserver import RPCServer
-from haizea.resourcemanager.log import Logger
-from haizea.common.utils import abstract, roundDateTime
+from haizea.common.utils import abstract, roundDateTime, Singleton
 
 import operator
+import logging
 import signal
 import sys, os
 from time import sleep
@@ -54,7 +54,7 @@ DAEMON_STDOUT = DAEMON_STDIN = "/dev/null"
 DAEMON_STDERR = "/var/tmp/haizea.err"
 DEFAULT_LOGFILE = "/var/tmp/haizea.log"
 
-class ResourceManager(object):
+class ResourceManager(Singleton):
     """The resource manager
     
     This class is the root of Haizea. Pretty much everything else (scheduler,
@@ -78,12 +78,13 @@ class ResourceManager(object):
         
         mode = config.get("mode")
         clock = config.get("clock")
-
+        
         if mode == "simulated" and clock == constants.CLOCK_SIMULATED:
             # Simulations always run in the foreground
             self.daemon = False
-            # Logger
-            self.logger = Logger(self)
+            
+            self.init_logging()
+
             # The clock
             starttime = config.get("starttime")
             self.clock = SimulatedClock(self, starttime)
@@ -91,11 +92,8 @@ class ResourceManager(object):
         elif mode == "opennebula" or (mode == "simulated" and clock == constants.CLOCK_REAL):
             self.daemon = daemon
             self.pidfile = pidfile
-            # Logger
-            if daemon:
-                self.logger = Logger(self, DEFAULT_LOGFILE)
-            else:
-                self.logger = Logger(self)
+
+            self.init_logging()
 
             # The clock
             wakeup_interval = config.get("wakeup-interval")
@@ -123,7 +121,23 @@ class ResourceManager(object):
             
         # Statistics collection 
         self.accounting = accounting.AccountingDataCollection(self, self.config.get("datafile"))
+        
+        self.logger = logging.getLogger("RM")
 
+    def init_logging(self):       
+        from haizea.resourcemanager.log import HaizeaLogger
+        logger = logging.getLogger("")
+        if self.daemon:
+            handler = logging.FileHandler(file)
+        else:
+            handler = logging.StreamHandler()
+        formatter = logging.Formatter('[%(haizeatime)s] %(name)-15s  - %(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        level = logging.getLevelName(self.config.get("loglevel"))
+        logger.setLevel(level)
+        logging.setLoggerClass(HaizeaLogger)
+        
     def daemonize(self):
         """Daemonizes the Haizea process.
         
@@ -174,7 +188,7 @@ class ResourceManager(object):
 
     def start(self):
         """Starts the resource manager"""
-        self.logger.status("Starting resource manager", constants.RM)
+        self.logger.info("Starting resource manager")
 
         # Create counters to keep track of interesting data.
         self.accounting.create_counter(constants.COUNTER_ARACCEPTED, constants.AVERAGE_NONE)
@@ -196,7 +210,7 @@ class ResourceManager(object):
     def stop(self):
         """Stops the resource manager"""
         
-        self.logger.status("Stopping resource manager", constants.RM)
+        self.logger.status("Stopping resource manager")
         
         # Stop collecting data (this finalizes counters)
         self.accounting.stop()
@@ -204,9 +218,9 @@ class ResourceManager(object):
         # TODO: When gracefully stopping mid-scheduling, we need to figure out what to
         #       do with leases that are still running.
 
-        self.logger.status("  Completed best-effort leases: %i" % self.accounting.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
-        self.logger.status("  Accepted AR leases: %i" % self.accounting.data.counters[constants.COUNTER_ARACCEPTED], constants.RM)
-        self.logger.status("  Rejected AR leases: %i" % self.accounting.data.counters[constants.COUNTER_ARREJECTED], constants.RM)
+        self.logger.status("  Completed best-effort leases: %i" % self.accounting.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED])
+        self.logger.status("  Accepted AR leases: %i" % self.accounting.data.counters[constants.COUNTER_ARACCEPTED])
+        self.logger.status("  Rejected AR leases: %i" % self.accounting.data.counters[constants.COUNTER_ARREJECTED])
         
         # In debug mode, dump the lease descriptors.
         for lease in self.scheduler.completedleases.entries.values():
@@ -255,7 +269,7 @@ class ResourceManager(object):
             self.scheduler.schedule(nexttime)
         except Exception, msg:
             # Exit if something goes horribly wrong
-            self.logger.error("Exception in scheduling function. Dumping state..." , constants.RM)
+            self.logger.error("Exception in scheduling function. Dumping state..." )
             self.print_stats("ERROR", verbose=True)
             raise      
 
@@ -267,7 +281,7 @@ class ResourceManager(object):
             self.scheduler.process_reservations(time)
         except Exception, msg:
             # Exit if something goes horribly wrong
-            self.logger.error("Exception when processing reservations. Dumping state..." , constants.RM)
+            self.logger.error("Exception when processing reservations. Dumping state..." )
             self.print_stats("ERROR", verbose=True)
             raise      
 
@@ -283,25 +297,25 @@ class ResourceManager(object):
         
         # Print clock stats and the next changepoint in slot table
         self.clock.print_stats(loglevel)
-        self.logger.log(loglevel, "Next change point (in slot table): %s" % self.get_next_changepoint(), constants.RM)
+        self.logger.log(loglevel, "Next change point (in slot table): %s" % self.get_next_changepoint())
 
         # Print descriptors of scheduled leases
         scheduled = self.scheduler.scheduledleases.entries.keys()
-        self.logger.log(loglevel, "Scheduled requests: %i" % len(scheduled), constants.RM)
+        self.logger.log(loglevel, "Scheduled requests: %i" % len(scheduled))
         if verbose and len(scheduled)>0:
-            self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", constants.RM)
+            self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
             for k in scheduled:
                 lease = self.scheduler.scheduledleases.get_lease(k)
                 lease.print_contents(loglevel=loglevel)
-            self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", constants.RM)
+            self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
         # Print queue size and descriptors of queued leases
-        self.logger.log(loglevel, "Queue size: %i" % self.scheduler.queue.length(), constants.RM)
+        self.logger.log(loglevel, "Queue size: %i" % self.scheduler.queue.length())
         if verbose and self.scheduler.queue.length()>0:
-            self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", constants.RM)
+            self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
             for lease in self.scheduler.queue:
                 lease.print_contents(loglevel=loglevel)
-            self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^", constants.RM)
+            self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
     def get_next_changepoint(self):
         """Return next changepoint in the slot table"""
@@ -319,7 +333,7 @@ class ResourceManager(object):
             self.scheduler.notify_event(lease_id, event)
         except Exception, msg:
             # Exit if something goes horribly wrong
-            self.logger.error("Exception when notifying an event for lease %i. Dumping state..." % lease_id , constants.RM)
+            self.logger.error("Exception when notifying an event for lease %i. Dumping state..." % lease_id )
             self.print_stats("ERROR", verbose=True)
             raise            
         
@@ -333,7 +347,7 @@ class ResourceManager(object):
             self.scheduler.cancel_lease(lease_id)
         except Exception, msg:
             # Exit if something goes horribly wrong
-            self.logger.error("Exception when canceling lease %i. Dumping state..." % lease_id, constants.RM)
+            self.logger.error("Exception when canceling lease %i. Dumping state..." % lease_id)
             self.print_stats("ERROR", verbose=True)
             raise          
 
@@ -397,7 +411,7 @@ class SimulatedClock(Clock):
         Clock.__init__(self, rm)
         self.starttime = starttime
         self.time = starttime
-        self.logger = self.rm.logger
+        self.logger = logging.getLogger("CLOCK")
         self.statusinterval = self.rm.config.get("status-message-interval")
        
     def get_time(self):
@@ -426,7 +440,7 @@ class SimulatedClock(Clock):
         The simulated clock can only work in conjunction with the
         tracefile request frontend.
         """
-        self.rm.logger.status("Starting simulated clock", constants.CLOCK)
+        self.logger.status("Starting simulated clock")
         self.rm.accounting.start(self.get_start_time())
         prevstatustime = self.time
         done = False
@@ -458,7 +472,7 @@ class SimulatedClock(Clock):
             self.time, done = self.__get_next_time()
                     
         # Stop the resource manager
-        self.rm.logger.status("Stopping simulated clock", constants.CLOCK)
+        self.logger.status("Stopping simulated clock")
         self.rm.stop()
         
     def print_stats(self, loglevel):
@@ -467,13 +481,13 @@ class SimulatedClock(Clock):
         
     def __print_status(self):
         """Prints status summary."""
-        self.logger.status("STATUS ---Begin---", constants.RM)
-        self.logger.status("STATUS Completed best-effort leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
-        self.logger.status("STATUS Queue size: %i" % self.rm.accounting.data.counters[constants.COUNTER_QUEUESIZE], constants.RM)
-        self.logger.status("STATUS Best-effort reservations: %i" % self.rm.scheduler.numbesteffortres, constants.RM)
-        self.logger.status("STATUS Accepted AR leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_ARACCEPTED], constants.RM)
-        self.logger.status("STATUS Rejected AR leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_ARREJECTED], constants.RM)
-        self.logger.status("STATUS ----End----", constants.RM)        
+        self.logger.status("STATUS ---Begin---")
+        self.logger.status("STATUS Completed best-effort leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED])
+        self.logger.status("STATUS Queue size: %i" % self.rm.accounting.data.counters[constants.COUNTER_QUEUESIZE])
+        self.logger.status("STATUS Best-effort reservations: %i" % self.rm.scheduler.numbesteffortres)
+        self.logger.status("STATUS Accepted AR leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_ARACCEPTED])
+        self.logger.status("STATUS Rejected AR leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_ARREJECTED])
+        self.logger.status("STATUS ----End----")        
     
     def __get_next_time(self):
         """Determines what is the next point in time to skip to.
@@ -490,9 +504,9 @@ class SimulatedClock(Clock):
         nextchangepoint = self.rm.get_next_changepoint()
         nextprematureend = self.rm.scheduler.slottable.getNextPrematureEnd(self.time)
         nextreqtime = tracefrontend.getNextReqTime()
-        self.rm.logger.debug("Next change point (in slot table): %s" % nextchangepoint, constants.CLOCK)
-        self.rm.logger.debug("Next request time: %s" % nextreqtime, constants.CLOCK)
-        self.rm.logger.debug("Next premature end: %s" % nextprematureend, constants.CLOCK)
+        self.logger.debug("Next change point (in slot table): %s" % nextchangepoint)
+        self.logger.debug("Next request time: %s" % nextreqtime)
+        self.logger.debug("Next premature end: %s" % nextprematureend)
         
         # The previous time is now
         prevtime = self.time
@@ -541,7 +555,7 @@ class SimulatedClock(Clock):
         # If we didn't arrive at a new time, and we're not done, we've fallen into
         # an infinite loop. This is A Bad Thing(tm).
         if newtime == prevtime and done != True:
-            self.rm.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." , constants.CLOCK)
+            self.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." )
             self.rm.print_stats("ERROR", verbose=True)
             raise Exception, "Simulated clock has fallen into an infinite loop."
         
@@ -579,6 +593,7 @@ class RealClock(Clock):
             self.lastwakeup = None
         else:
             self.lastwakeup = roundDateTime(now())
+        self.logger = logging.getLogger("CLOCK")
         self.starttime = self.get_time()
         self.nextschedulable = None
         self.nextperiodicwakeup = None
@@ -616,7 +631,7 @@ class RealClock(Clock):
         The clock keeps on tickin' until a SIGINT signal (Ctrl-C if running in the
         foreground) or a SIGTERM signal is received.
         """
-        self.rm.logger.status("Starting clock", constants.CLOCK)
+        self.logger.status("Starting clock")
         self.rm.accounting.start(self.get_start_time())
         
         signal.signal(signal.SIGINT, self.signalhandler_gracefulstop)
@@ -625,14 +640,14 @@ class RealClock(Clock):
         done = False
         # Main loop
         while not done:
-            self.rm.logger.status("Waking up to manage resources", constants.CLOCK)
+            self.logger.status("Waking up to manage resources")
             
             # Save the waking time. We want to use a consistent time in the 
             # resource manager operations (if we use now(), we'll get a different
             # time every time)
             if not self.fastforward:
                 self.lastwakeup = roundDateTime(self.get_time())
-            self.rm.logger.status("Wake-up time recorded as %s" % self.lastwakeup, constants.CLOCK)
+            self.logger.status("Wake-up time recorded as %s" % self.lastwakeup)
                 
             # Next schedulable time
             self.nextschedulable = roundDateTime(self.lastwakeup + self.non_sched)
@@ -657,11 +672,11 @@ class RealClock(Clock):
                 # We need to wake up earlier to handle a slot table event
                 nextwakeup = nextchangepoint
                 self.rm.scheduler.slottable.getNextChangePoint(self.lastwakeup)
-                self.rm.logger.status("Going back to sleep. Waking up at %s to handle slot table event." % nextwakeup, constants.CLOCK)
+                self.logger.status("Going back to sleep. Waking up at %s to handle slot table event." % nextwakeup)
             else:
                 # Nothing to do before waking up
                 nextwakeup = self.nextperiodicwakeup
-                self.rm.logger.status("Going back to sleep. Waking up at %s to see if something interesting has happened by then." % nextwakeup, constants.CLOCK)
+                self.logger.status("Going back to sleep. Waking up at %s to see if something interesting has happened by then." % nextwakeup)
             
             # Sleep
             if not self.fastforward:
@@ -680,8 +695,8 @@ class RealClock(Clock):
             sigstr = " (SIGTERM)"
         elif signum == signal.SIGINT:
             sigstr = " (SIGINT)"
-        self.rm.logger.status("Received signal %i%s" %(signum, sigstr), constants.CLOCK)
-        self.rm.logger.status("Stopping gracefully...", constants.CLOCK)
+        self.logger.status("Received signal %i%s" %(signum, sigstr))
+        self.logger.status("Stopping gracefully...")
         self.rm.stop()
         sys.exit()
 
@@ -694,6 +709,7 @@ if __name__ == "__main__":
     except ConfigException, msg:
         print >> sys.stderr, "Error in configuration file:"
         print >> sys.stderr, msg
-        exit(1)        
+        exit(1)
+    from haizea.resourcemanager.rm import ResourceManager
     RM = ResourceManager(CONFIG)
     RM.start()

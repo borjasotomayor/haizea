@@ -62,17 +62,17 @@ class ImageTransferDeployment(DeploymentBase):
         end = lease.start.requested + lease.duration.requested
         for (vnode, pnode) in nodeassignment.items():
             lease_id = lease.id
-            self.logger.debug("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (lease.diskimage_id, vnode, pnode), constants.SCHED)
+            self.logger.debug("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (lease.diskimage_id, vnode, pnode))
 
             if reusealg == constants.REUSE_IMAGECACHES:
                 if self.resourcepool.isInPool(pnode, lease.diskimage_id, start):
-                    self.logger.debug("No need to schedule an image transfer (reusing an image in pool)", constants.SCHED)
+                    self.logger.debug("No need to schedule an image transfer (reusing an image in pool)")
                     mustpool[vnode] = pnode                            
                 else:
-                    self.logger.debug("Need to schedule a transfer.", constants.SCHED)
+                    self.logger.debug("Need to schedule a transfer.")
                     musttransfer[vnode] = pnode
             else:
-                self.logger.debug("Need to schedule a transfer.", constants.SCHED)
+                self.logger.debug("Need to schedule a transfer.")
                 musttransfer[vnode] = pnode
 
         if len(musttransfer) == 0:
@@ -85,7 +85,7 @@ class ImageTransferDeployment(DeploymentBase):
                 for vnode, pnode in musttransfer:
                     if transferRRs.has_key(pnode):
                         # We've already scheduled a transfer to this node. Reuse it.
-                        self.logger.debug("No need to schedule an image transfer (reusing an existing transfer)", constants.SCHED)
+                        self.logger.debug("No need to schedule an image transfer (reusing an existing transfer)")
                         transferRR = transferRRs[pnode]
                         transferRR.piggyback(lease_id, vnode, pnode, end)
                     else:
@@ -116,18 +116,18 @@ class ImageTransferDeployment(DeploymentBase):
             reqtransfer = earliest[pnode][1]
             if reqtransfer == constants.REQTRANSFER_COWPOOL:
                 # Add to pool
-                self.logger.debug("Reusing image for V%i->P%i." % (vnode, pnode), constants.SCHED)
+                self.logger.debug("Reusing image for V%i->P%i." % (vnode, pnode))
                 self.resourcepool.addToPool(pnode, lease.diskimage_id, lease.id, vnode, vmrr.end)
             elif reqtransfer == constants.REQTRANSFER_PIGGYBACK:
                 # We can piggyback on an existing transfer
                 transferRR = earliest[pnode][2]
                 transferRR.piggyback(lease.id, vnode, pnode)
-                self.logger.debug("Piggybacking transfer for V%i->P%i on existing transfer in lease %i." % (vnode, pnode, transferRR.lease.id), constants.SCHED)
+                self.logger.debug("Piggybacking transfer for V%i->P%i on existing transfer in lease %i." % (vnode, pnode, transferRR.lease.id))
                 piggybacking.append(transferRR)
             else:
                 # Transfer
                 musttransfer[vnode] = pnode
-                self.logger.debug("Must transfer V%i->P%i." % (vnode, pnode), constants.SCHED)
+                self.logger.debug("Must transfer V%i->P%i." % (vnode, pnode))
         if len(musttransfer)>0:
             transferRRs = self.scheduleImageTransferFIFO(lease, musttransfer, nexttime)
             endtransfer = transferRRs[-1].end
@@ -366,7 +366,7 @@ class ImageTransferDeployment(DeploymentBase):
 
     @staticmethod
     def handle_start_filetransfer(sched, lease, rr):
-        sched.rm.logger.debug("LEASE-%i Start of handleStartFileTransfer" % lease.id, constants.SCHED)
+        sched.rm.logger.debug("LEASE-%i Start of handleStartFileTransfer" % lease.id)
         lease.print_contents()
         if lease.state == constants.LEASE_STATE_SCHEDULED or lease.state == constants.LEASE_STATE_DEPLOYED:
             lease.state = constants.LEASE_STATE_DEPLOYING
@@ -376,12 +376,12 @@ class ImageTransferDeployment(DeploymentBase):
             pass # This shouldn't happen
         lease.print_contents()
         sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_TRANSFER, lease.id)
-        sched.logger.debug("LEASE-%i End of handleStartFileTransfer" % lease.id, constants.SCHED)
-        sched.logger.info("Starting image transfer for lease %i" % (lease.id), constants.SCHED)
+        sched.logger.debug("LEASE-%i End of handleStartFileTransfer" % lease.id)
+        sched.logger.info("Starting image transfer for lease %i" % (lease.id))
 
     @staticmethod
     def handle_end_filetransfer(sched, lease, rr):
-        sched.rm.logger.debug("LEASE-%i Start of handleEndFileTransfer" % lease.id, constants.SCHED)
+        sched.rm.logger.debug("LEASE-%i Start of handleEndFileTransfer" % lease.id)
         lease.print_contents()
         if lease.state == constants.LEASE_STATE_DEPLOYING:
             lease.state = constants.LEASE_STATE_DEPLOYED
@@ -410,8 +410,8 @@ class ImageTransferDeployment(DeploymentBase):
             # TODO: Migrating
         lease.print_contents()
         sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_IDLE, lease.id)
-        sched.rm.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id, constants.SCHED)
-        sched.rm.logger.info("Completed image transfer for lease %i" % (lease.id), constants.SCHED)
+        sched.rm.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id)
+        sched.rm.logger.info("Completed image transfer for lease %i" % (lease.id))
 
 class FileTransferResourceReservation(ResourceReservationBase):
     def __init__(self, lease, res, start=None, end=None):
@@ -421,12 +421,12 @@ class FileTransferResourceReservation(ResourceReservationBase):
         # Dictionary of  physnode -> [ (lease_id, vnode)* ]
         self.transfers = {}
 
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
+    def print_contents(self, loglevel="VDEBUG"):
         ResourceReservationBase.print_contents(self, loglevel)
-        self.logger.log(loglevel, "Type           : FILE TRANSFER", constants.DS)
-        self.logger.log(loglevel, "Deadline       : %s" % self.deadline, constants.DS)
-        self.logger.log(loglevel, "File           : %s" % self.file, constants.DS)
-        self.logger.log(loglevel, "Transfers      : %s" % self.transfers, constants.DS)
+        self.logger.log(loglevel, "Type           : FILE TRANSFER")
+        self.logger.log(loglevel, "Deadline       : %s" % self.deadline)
+        self.logger.log(loglevel, "File           : %s" % self.file)
+        self.logger.log(loglevel, "Transfers      : %s" % self.transfers)
         
     def piggyback(self, lease_id, vnode, physnode):
         if self.transfers.has_key(physnode):

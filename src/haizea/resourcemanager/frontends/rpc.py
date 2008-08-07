@@ -28,7 +28,7 @@ HAIZEA_DURATION_UNLIMITED = "unlimited"
 class RPCFrontend(RequestFrontend):
     def __init__(self, rm):
         self.rm = rm
-        self.logger = self.rm.logger
+        self.logger = self.logger
         self.accumulated = []
         config = self.rm.config
         self.rm.rpc_server.register_rpc(self.create_lease)

@@ -21,6 +21,7 @@ from haizea.resourcemanager.enact.base import ResourcePoolInfoBase
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
 from pysqlite2 import dbapi2 as sqlite
+import logging
 
 oneattr2haizea = { "TOTALCPU": constants.RES_CPU,
                    "TOTALMEMORY": constants.RES_MEM }
@@ -29,7 +30,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
     def __init__(self, resourcepool):
         ResourcePoolInfoBase.__init__(self, resourcepool)
         config = self.resourcepool.rm.config
-        self.logger = self.resourcepool.rm.logger
+        self.logger = logging.getLogger("ENACT.ONE.INFO")
         self.suspendresumerate = config.get("one.suspendresume-rate-estimate")
 
         # Get information about nodes from DB
@@ -59,7 +60,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
             node.enactment_info = int(enactID)
             self.nodes.append(node)
             
-        self.logger.info("Fetched %i nodes from ONE db" % len(self.nodes), constants.ONE)
+        self.logger.info("Fetched %i nodes from ONE db" % len(self.nodes))
         
         # Image repository nodes
         # TODO: No image transfers in OpenNebula yet

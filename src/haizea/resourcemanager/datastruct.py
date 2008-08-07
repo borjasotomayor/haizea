@@ -39,12 +39,14 @@ of structures:
   * Duration: A wrapper around requested/accumulated/actual durations
 """
 
-from haizea.common.constants import state_str, rstate_str, DS, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMDISK
+from haizea.common.constants import state_str, rstate_str, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMDISK, LOGLEVEL_VDEBUG
 from haizea.common.utils import roundDateTimeDelta, get_lease_id, pretty_nodemap, estimate_transfer_time, xmlrpc_marshall_singlevalue
 
 from operator import attrgetter
 from mx.DateTime import TimeDelta
 from math import floor
+
+import logging
 
 
 #-------------------------------------------------------------------#
@@ -83,31 +85,32 @@ class LeaseBase(object):
         # Enactment information. Should only be manipulated by enactment module
         self.enactment_info = None
         self.vnode_enactment_info = None
+        
+        self.logger = logging.getLogger("LEASES")
 
     # TODO: Remove the link to the scheduler, and pass all necessary information
     # as parameters to methods.
     def set_scheduler(self, scheduler):
         self.scheduler = scheduler
-        self.logger = scheduler.rm.logger
         
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
-        self.logger.log(loglevel, "Lease ID       : %i" % self.id, DS)
-        self.logger.log(loglevel, "Submission time: %s" % self.submit_time, DS)
-        self.logger.log(loglevel, "Duration       : %s" % self.duration, DS)
-        self.logger.log(loglevel, "State          : %s" % state_str(self.state), DS)
-        self.logger.log(loglevel, "VM image       : %s" % self.diskimage_id, DS)
-        self.logger.log(loglevel, "VM image size  : %s" % self.diskimage_size, DS)
-        self.logger.log(loglevel, "Num nodes      : %s" % self.numnodes, DS)
-        self.logger.log(loglevel, "Resource req   : %s" % self.requested_resources, DS)
-        self.logger.log(loglevel, "VM image map   : %s" % pretty_nodemap(self.vmimagemap), DS)
-        self.logger.log(loglevel, "Mem image map  : %s" % pretty_nodemap(self.memimagemap), DS)
+    def print_contents(self, loglevel="VDEBUG"):
+        self.logger.log(loglevel, "Lease ID       : %i" % self.id)
+        self.logger.log(loglevel, "Submission time: %s" % self.submit_time)
+        self.logger.log(loglevel, "Duration       : %s" % self.duration)
+        self.logger.log(loglevel, "State          : %s" % state_str(self.state))
+        self.logger.log(loglevel, "VM image       : %s" % self.diskimage_id)
+        self.logger.log(loglevel, "VM image size  : %s" % self.diskimage_size)
+        self.logger.log(loglevel, "Num nodes      : %s" % self.numnodes)
+        self.logger.log(loglevel, "Resource req   : %s" % self.requested_resources)
+        self.logger.log(loglevel, "VM image map   : %s" % pretty_nodemap(self.vmimagemap))
+        self.logger.log(loglevel, "Mem image map  : %s" % pretty_nodemap(self.memimagemap))
 
-    def print_rrs(self, loglevel="EXTREMEDEBUG"):
-        self.logger.log(loglevel, "RESOURCE RESERVATIONS", DS)
-        self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~", DS)
+    def print_rrs(self, loglevel="VDEBUG"):
+        self.logger.log(loglevel, "RESOURCE RESERVATIONS")
+        self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~")
         for r in self.rr:
             r.print_contents(loglevel)
-            self.logger.log(loglevel, "##", DS)
+            self.logger.log(loglevel, "##")
             
         
     def has_starting_reservations(self, time):
@@ -253,13 +256,13 @@ class ARLease(LeaseBase):
         LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
         
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
-        self.logger.log(loglevel, "__________________________________________________", DS)
+    def print_contents(self, loglevel="VDEBUG"):
+        self.logger.log(loglevel, "__________________________________________________")
         LeaseBase.print_contents(self, loglevel)
-        self.logger.log(loglevel, "Type           : AR", DS)
-        self.logger.log(loglevel, "Start time     : %s" % self.start, DS)
+        self.logger.log(loglevel, "Type           : AR")
+        self.logger.log(loglevel, "Start time     : %s" % self.start)
         self.print_rrs(loglevel)
-        self.logger.log(loglevel, "--------------------------------------------------", DS)
+        self.logger.log(loglevel, "--------------------------------------------------")
     
     def xmlrpc_marshall(self):
         l = LeaseBase.xmlrpc_marshall(self)
@@ -280,13 +283,13 @@ class BestEffortLease(LeaseBase):
         LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
 
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
-        self.logger.log(loglevel, "__________________________________________________", DS)
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
+        self.logger.log(loglevel, "__________________________________________________")
         LeaseBase.print_contents(self, loglevel)
-        self.logger.log(loglevel, "Type           : BEST-EFFORT", DS)
-        self.logger.log(loglevel, "Images Avail @ : %s" % self.imagesavail, DS)
+        self.logger.log(loglevel, "Type           : BEST-EFFORT")
+        self.logger.log(loglevel, "Images Avail @ : %s" % self.imagesavail)
         self.print_rrs(loglevel)
-        self.logger.log(loglevel, "--------------------------------------------------", DS)
+        self.logger.log(loglevel, "--------------------------------------------------")
         
     def get_waiting_time(self):
         return self.start.actual - self.submit_time
@@ -316,12 +319,12 @@ class ImmediateLease(LeaseBase):
         LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
 
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
-        self.logger.log(loglevel, "__________________________________________________", DS)
+    def print_contents(self, loglevel="VDEBUG"):
+        self.logger.log(loglevel, "__________________________________________________")
         LeaseBase.print_contents(self, loglevel)
-        self.logger.log(loglevel, "Type           : IMMEDIATE", DS)
+        self.logger.log(loglevel, "Type           : IMMEDIATE")
         self.print_rrs(loglevel)
-        self.logger.log(loglevel, "--------------------------------------------------", DS)
+        self.logger.log(loglevel, "--------------------------------------------------")
 
     def xmlrpc_marshall(self):
         l = LeaseBase.xmlrpc_marshall(self)
@@ -344,13 +347,13 @@ class ResourceReservationBase(object):
         self.end = end
         self.state = None
         self.resources_in_pnode = res
-        self.logger = lease.scheduler.rm.logger
+        self.logger = logging.getLogger("LEASES")
                         
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
-        self.logger.log(loglevel, "Start          : %s" % self.start, DS)
-        self.logger.log(loglevel, "End            : %s" % self.end, DS)
-        self.logger.log(loglevel, "State          : %s" % rstate_str(self.state), DS)
-        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()]), DS) 
+    def print_contents(self, loglevel="VDEBUG"):
+        self.logger.log(loglevel, "Start          : %s" % self.start)
+        self.logger.log(loglevel, "End            : %s" % self.end)
+        self.logger.log(loglevel, "State          : %s" % rstate_str(self.state))
+        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()])) 
                 
     def xmlrpc_marshall(self):
         # Convert to something we can send through XMLRPC
@@ -378,13 +381,13 @@ class VMResourceReservation(ResourceReservationBase):
         else:
             self.prematureend = None 
 
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
+    def print_contents(self, loglevel="VDEBUG"):
         ResourceReservationBase.print_contents(self, loglevel)
         if self.prematureend != None:
-            self.logger.log(loglevel, "Premature end  : %s" % self.prematureend, DS)
-        self.logger.log(loglevel, "Type           : VM", DS)
-        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes), DS)
-        self.logger.log(loglevel, "On Complete    : %s" % self.oncomplete, DS)
+            self.logger.log(loglevel, "Premature end  : %s" % self.prematureend)
+        self.logger.log(loglevel, "Type           : VM")
+        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
+        self.logger.log(loglevel, "On Complete    : %s" % self.oncomplete)
         
     def is_preemptible(self):
         return self.lease.preemptible
@@ -401,10 +404,10 @@ class SuspensionResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
+    def print_contents(self, loglevel="VDEBUG"):
         ResourceReservationBase.print_contents(self, loglevel)
-        self.logger.log(loglevel, "Type           : SUSPEND", DS)
-        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes), DS)
+        self.logger.log(loglevel, "Type           : SUSPEND")
+        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
         
     # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
     # has wider implications (with a non-trivial handling). For now, we leave them 
@@ -423,10 +426,10 @@ class ResumptionResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
-    def print_contents(self, loglevel="EXTREMEDEBUG"):
+    def print_contents(self, loglevel="VDEBUG"):
         ResourceReservationBase.print_contents(self, loglevel)
-        self.logger.log(loglevel, "Type           : RESUME", DS)
-        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes), DS)
+        self.logger.log(loglevel, "Type           : RESUME")
+        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
 
     # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
     # has wider implications (with a non-trivial handling). For now, we leave them 

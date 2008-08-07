@@ -42,7 +42,7 @@ class HaizeaConfig(Config):
                 type        = OPTTYPE_STRING,
                 required    = False,
                 default     = "INFO",
-                valid       = ["STATUS","INFO","DEBUG","EXTREMEDEBUG"],
+                valid       = ["STATUS","INFO","DEBUG","VDEBUG"],
                 doc         = """
                 Controls the level (and amount) of 
                 log messages. Valid values are:
@@ -50,7 +50,7 @@ class HaizeaConfig(Config):
                  - STATUS: Only print status messages
                  - INFO: Slightly more verbose that STATUS
                  - DEBUG: Prints information useful for debugging the scheduler.
-                 - EXTREMEDEBUG: Prints very verbose information
+                 - VDEBUG: Prints very verbose information
                    on the scheduler's internal data structures. Use only
                    for short runs.        
                 """),
