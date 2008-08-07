@@ -315,15 +315,28 @@ class ResourceManager(object):
     # events in OpenNebula 1.2. For now, the only event is a prematurely
     # ending VM.
     def notify_event(self, lease_id, event):
-        self.scheduler.notify_event(lease_id, event)
-
+        try:
+            self.scheduler.notify_event(lease_id, event)
+        except Exception, msg:
+            # Exit if something goes horribly wrong
+            self.logger.error("Exception when notifying an event for lease %i. Dumping state..." % lease_id , constants.RM)
+            self.print_stats("ERROR", verbose=True)
+            raise            
+        
     def cancel_lease(self, lease_id):
         """Cancels a lease.
         
         Arguments:
         lease -- Lease to cancel
-        """
-        self.scheduler.cancel_lease(lease_id)
+        """    
+        try:
+            self.scheduler.cancel_lease(lease_id)
+        except Exception, msg:
+            # Exit if something goes horribly wrong
+            self.logger.error("Exception when canceling lease %i. Dumping state..." % lease_id, constants.RM)
+            self.print_stats("ERROR", verbose=True)
+            raise          
+
 
             
 class Clock(object):

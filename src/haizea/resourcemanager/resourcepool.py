@@ -39,11 +39,15 @@ class ResourcePool(object):
         
         self.imagenode_bandwidth = self.info.get_bandwidth()
         
-        self.reusealg = self.rm.config.get("diskimage-reuse")
-        if self.reusealg == constants.REUSE_IMAGECACHES:
-            self.maxcachesize = self.rm.config.get("diskimage-cache-size")
+        self.lease_deployment_type = self.rm.config.get("lease-preparation")
+        if self.lease_deployment_type == constants.DEPLOYMENT_TRANSFER:
+            self.reusealg = self.rm.config.get("diskimage-reuse")
+            if self.reusealg == constants.REUSE_IMAGECACHES:
+                self.maxcachesize = self.rm.config.get("diskimage-cache-size")
+            else:
+                self.maxcachesize = None
         else:
-            self.maxcachesize = None
+            self.reusealg = None
             
     def loadEnactmentModules(self):
         mode = self.rm.config.get("mode")

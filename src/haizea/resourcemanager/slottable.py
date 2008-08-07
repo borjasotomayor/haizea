@@ -177,8 +177,9 @@ class SlotTable(object):
         # Inefficient, but ok since this query seldom happens
         res = [i.value for i in self.reservationsByEnd if isinstance(i.value, ds.VMResourceReservation) and i.value.prematureend > after]
         if len(res) > 0:
-            res.sort()
-            return res[0].prematureend
+            prematureends = [r.prematureend for r in res]
+            prematureends.sort()
+            return prematureends[0]
         else:
             return None
     
@@ -405,9 +406,9 @@ class SlotTable(object):
 
     def findLeasesToPreempt(self, mustpreempt, startTime, endTime):
         def comparepreemptability(rrX, rrY):
-            if rrX.lease.tSubmit > rrY.lease.submit_time:
+            if rrX.lease.submit_time > rrY.lease.submit_time:
                 return constants.BETTER
-            elif rrX.lease.tSubmit < rrY.lease.submit_time:
+            elif rrX.lease.submit_time < rrY.lease.submit_time:
                 return constants.WORSE
             else:
                 return constants.EQUAL        
@@ -821,10 +822,12 @@ class SlotTable(object):
         
         # TODO: The deployment module should just provide a list of nodes
         # it prefers
-        reusealg = self.rm.config.get("diskimage-reuse")
         nodeswithimg=[]
-        if reusealg==constants.REUSE_IMAGECACHES:
-            nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(diskImageID, start)
+        self.lease_deployment_type = self.rm.config.get("lease-preparation")
+        if self.lease_deployment_type == constants.DEPLOYMENT_TRANSFER:
+            reusealg = self.rm.config.get("diskimage-reuse")
+            if reusealg==constants.REUSE_IMAGECACHES:
+                nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(diskImageID, start)
 
         # Compares node x and node y. 
         # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)
