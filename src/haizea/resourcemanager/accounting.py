@@ -23,7 +23,7 @@ import haizea.resourcemanager.datastruct as ds
 from haizea.common.utils import pickle
 from errno import EEXIST
 
-class StatsData(object):
+class AccountingData(object):
     def __init__(self):
         # Counters
         self.counters = {}
@@ -52,9 +52,9 @@ class StatsData(object):
                 slowdowns[lease_id] = lease.get_slowdown()
         return slowdowns
 
-class StatsCollection(object):
+class AccountingDataCollection(object):
     def __init__(self, rm, datafile):
-        self.data = StatsData()
+        self.data = AccountingData()
         self.rm = rm
         self.datafile = datafile   
         self.starttime = None

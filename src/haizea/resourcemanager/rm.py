@@ -31,7 +31,7 @@ This module provides the following classes:
 * RealClock: A clock that advances in realtime.
 """
 
-import haizea.resourcemanager.stats as stats
+import haizea.resourcemanager.accounting as accounting
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
@@ -122,7 +122,7 @@ class ResourceManager(object):
             self.frontends = [OpenNebulaFrontend(self)]
             
         # Statistics collection 
-        self.stats = stats.StatsCollection(self, self.config.get("datafile"))
+        self.accounting = accounting.AccountingDataCollection(self, self.config.get("datafile"))
 
     def daemonize(self):
         """Daemonizes the Haizea process.
@@ -177,14 +177,14 @@ class ResourceManager(object):
         self.logger.status("Starting resource manager", constants.RM)
 
         # Create counters to keep track of interesting data.
-        self.stats.create_counter(constants.COUNTER_ARACCEPTED, constants.AVERAGE_NONE)
-        self.stats.create_counter(constants.COUNTER_ARREJECTED, constants.AVERAGE_NONE)
-        self.stats.create_counter(constants.COUNTER_IMACCEPTED, constants.AVERAGE_NONE)
-        self.stats.create_counter(constants.COUNTER_IMREJECTED, constants.AVERAGE_NONE)
-        self.stats.create_counter(constants.COUNTER_BESTEFFORTCOMPLETED, constants.AVERAGE_NONE)
-        self.stats.create_counter(constants.COUNTER_QUEUESIZE, constants.AVERAGE_TIMEWEIGHTED)
-        self.stats.create_counter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
-        self.stats.create_counter(constants.COUNTER_CPUUTILIZATION, constants.AVERAGE_TIMEWEIGHTED)
+        self.accounting.create_counter(constants.COUNTER_ARACCEPTED, constants.AVERAGE_NONE)
+        self.accounting.create_counter(constants.COUNTER_ARREJECTED, constants.AVERAGE_NONE)
+        self.accounting.create_counter(constants.COUNTER_IMACCEPTED, constants.AVERAGE_NONE)
+        self.accounting.create_counter(constants.COUNTER_IMREJECTED, constants.AVERAGE_NONE)
+        self.accounting.create_counter(constants.COUNTER_BESTEFFORTCOMPLETED, constants.AVERAGE_NONE)
+        self.accounting.create_counter(constants.COUNTER_QUEUESIZE, constants.AVERAGE_TIMEWEIGHTED)
+        self.accounting.create_counter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
+        self.accounting.create_counter(constants.COUNTER_CPUUTILIZATION, constants.AVERAGE_TIMEWEIGHTED)
         
         if self.daemon:
             self.daemonize()
@@ -199,21 +199,21 @@ class ResourceManager(object):
         self.logger.status("Stopping resource manager", constants.RM)
         
         # Stop collecting data (this finalizes counters)
-        self.stats.stop()
+        self.accounting.stop()
 
         # TODO: When gracefully stopping mid-scheduling, we need to figure out what to
         #       do with leases that are still running.
 
-        self.logger.status("  Completed best-effort leases: %i" % self.stats.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
-        self.logger.status("  Accepted AR leases: %i" % self.stats.data.counters[constants.COUNTER_ARACCEPTED], constants.RM)
-        self.logger.status("  Rejected AR leases: %i" % self.stats.data.counters[constants.COUNTER_ARREJECTED], constants.RM)
+        self.logger.status("  Completed best-effort leases: %i" % self.accounting.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
+        self.logger.status("  Accepted AR leases: %i" % self.accounting.data.counters[constants.COUNTER_ARACCEPTED], constants.RM)
+        self.logger.status("  Rejected AR leases: %i" % self.accounting.data.counters[constants.COUNTER_ARREJECTED], constants.RM)
         
         # In debug mode, dump the lease descriptors.
         for lease in self.scheduler.completedleases.entries.values():
             lease.print_contents()
             
         # Write all collected data to disk
-        self.stats.save_to_disk()
+        self.accounting.save_to_disk()
         
     def process_requests(self, nexttime):
         """Process any new requests in the request frontend
@@ -414,7 +414,7 @@ class SimulatedClock(Clock):
         tracefile request frontend.
         """
         self.rm.logger.status("Starting simulated clock", constants.CLOCK)
-        self.rm.stats.start(self.get_start_time())
+        self.rm.accounting.start(self.get_start_time())
         prevstatustime = self.time
         done = False
         # Main loop
@@ -455,11 +455,11 @@ class SimulatedClock(Clock):
     def __print_status(self):
         """Prints status summary."""
         self.logger.status("STATUS ---Begin---", constants.RM)
-        self.logger.status("STATUS Completed best-effort leases: %i" % self.rm.stats.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
-        self.logger.status("STATUS Queue size: %i" % self.rm.stats.data.counters[constants.COUNTER_QUEUESIZE], constants.RM)
+        self.logger.status("STATUS Completed best-effort leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED], constants.RM)
+        self.logger.status("STATUS Queue size: %i" % self.rm.accounting.data.counters[constants.COUNTER_QUEUESIZE], constants.RM)
         self.logger.status("STATUS Best-effort reservations: %i" % self.rm.scheduler.numbesteffortres, constants.RM)
-        self.logger.status("STATUS Accepted AR leases: %i" % self.rm.stats.data.counters[constants.COUNTER_ARACCEPTED], constants.RM)
-        self.logger.status("STATUS Rejected AR leases: %i" % self.rm.stats.data.counters[constants.COUNTER_ARREJECTED], constants.RM)
+        self.logger.status("STATUS Accepted AR leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_ARACCEPTED], constants.RM)
+        self.logger.status("STATUS Rejected AR leases: %i" % self.rm.accounting.data.counters[constants.COUNTER_ARREJECTED], constants.RM)
         self.logger.status("STATUS ----End----", constants.RM)        
     
     def __get_next_time(self):
@@ -529,7 +529,7 @@ class SimulatedClock(Clock):
         # an infinite loop. This is A Bad Thing(tm).
         if newtime == prevtime and done != True:
             self.rm.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." , constants.CLOCK)
-            self.rm.printStats("ERROR", verbose=True)
+            self.rm.print_stats("ERROR", verbose=True)
             raise Exception, "Simulated clock has fallen into an infinite loop."
         
         return newtime, done
@@ -604,7 +604,7 @@ class RealClock(Clock):
         foreground) or a SIGTERM signal is received.
         """
         self.rm.logger.status("Starting clock", constants.CLOCK)
-        self.rm.stats.start(self.get_start_time())
+        self.rm.accounting.start(self.get_start_time())
         
         signal.signal(signal.SIGINT, self.signalhandler_gracefulstop)
         signal.signal(signal.SIGTERM, self.signalhandler_gracefulstop)
