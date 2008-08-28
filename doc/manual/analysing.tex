@@ -1,0 +1,42 @@
+While Haizea is running, it collects data that can be analysed offline (accepted/rejected leases, waiting times, etc.). This data is saved to disk when Haizea stops running so, for now, this information is (in practice) only useful for simulation experiments. In the future, Haizea will save data periodically to disk so it can also be analysed online.
+
+The file where the collected data will be saved is specified in the datafile option of the general section:
+
+\begin{wideshellverbatim}
+[general]
+...
+
+datafile: /var/tmp/haizea.dat
+
+...
+\end{wideshellverbatim}
+
+Haizea currently includes no tools to easily convert this datafile into an easily readable format (like a graph) although these will eventually be added to Haizea. For now, if you want to access the data collected by Haizea, you will have to do so programatically. The data file contains a pickled \texttt{StatsData} object (see module \texttt{haizea.resourcemanager.stats}) with all the information collected during a simulation experiment. An example of how this file is unpickled, and some of its information accessed, can be found in function \texttt{haizea\_convert\_data} in module \texttt{haizea.cli.commands}.
+
+The \texttt{StatsData} object contains the following information:
+
+\begin{description}
+ \item[Counter lists] Haizea keeps tracks of several metrics, such as the number of accepted AR leases or the number of best-effort leases completed, and keeps a log of how these metrics varied over time. In particular, it keeps track of the following:
+\begin{itemize}
+
+ \item \texttt{COUNTER\_ARACCEPTED}: Number of accepted AR leases.
+ \item \texttt{COUNTER\_ARREJECTED}: Number of rejected AR leases.
+ \item \texttt{COUNTER\_IMACCEPTED}: Number of accepted immediate leases.
+ \item \texttt{COUNTER\_IMREJECTED}: Number of rejected immediate leases.
+ \item \texttt{COUNTER\_BESTEFFORTCOMPLETED}: Number of completed best-effort leases.
+ \item \texttt{COUNTER\_QUEUESIZE}: Queue size (best-effort leases)
+ \item \texttt{COUNTER\_DISKUSAGE}: Total disk space used by VM images in the node pool.
+ \item \texttt{COUNTER\_CPUUTILIZATION}: Percentage of CPUs used in node pool.
+\end{itemize}
+      A "counter list" (which should more appropriately be called a "metric log") includes an entry for each time a metric changes. Each entry is a tuple (time, lease\_id, value, average). If the metric is not associated with any particular lease, then the lease ID will be \texttt{None}. The average is a running average which will be \texttt{None} when it does not make sense to keep an average (e.g., the number of accepted AR requests).
+\item[Node state log] A dictionary with one entry per physical node. Each entry has a list with the state of a physical node at certain points in time. The possible states are:
+\begin{itemize}
+ \item  \texttt{DOING\_IDLE}: The node is idle.
+ \item \texttt{DOING\_VM\_RUN}: The node is running a VM.
+ \item \texttt{DOING\_VM\_SUSPEND}: The node is suspending a VM.
+ \item \texttt{DOING\_VM\_RESUME}: The node is resuming a VM.
+ \item \texttt{DOING\_TRANSFER\_NOVM}: The node is idle, and an image transfer is in progress.
+\end{itemize}
+      This information is only useful if you have one VM per physical node. The node state log will be modified in future versions of Haizea to provide more useful utilization data for configurations that have more than one VM per physical node.
+\item[Lease descriptors] The lease descriptors (i.e., \texttt{ARLease}, \texttt{BestEffortLease}, or \texttt{ImmediateLease} objects) of all the leases that have been scheduled are included in the object. The resource reservations are removed, as it would make the datafile too big. However, this still conserves interesting metrics like starting and ending times, waiting times, etc.
+\end{description}

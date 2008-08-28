@@ -155,3 +155,7 @@ text-align:center;
 		padding:10px 30px 30px 30px;
 		float:right;
 	}
+
+#manualframe {
+    border: 1px solid #999;
+}

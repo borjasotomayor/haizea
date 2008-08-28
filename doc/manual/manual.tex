@@ -1,0 +1,86 @@
+\documentclass[a4paper,11pt]{scrbook}
+\usepackage[pdftex]{graphicx}
+\usepackage{url}
+\usepackage{fullpage}
+\usepackage{html}
+\usepackage{notes}
+
+\include{utils}
+
+\begin{document}
+\frontmatter
+\title{The Haizea Manual}
+\author{Borja Sotomayor}
+
+\begin{latexonly}
+\input{title}
+\end{latexonly}
+\begin{htmlonly}
+\maketitle
+\end{htmlonly}
+
+
+\tableofcontents
+
+\chapter{Preface}
+\input{intro}
+
+\mainmatter
+
+\part{Fundamental Concepts}
+
+\chapter{What is Haizea?}
+
+\chapter{Resource leases}
+
+
+\part{Using Haizea}
+
+Foobar foobaz 
+
+\chapter{Installing Haizea}
+
+\input{install}
+
+\chapter{Quickstart guide}
+
+\input{quickstart}
+
+\chapter{Running scheduling simulations}
+
+\input{simulation}
+
+\chapter{Haizea and OpenNebula}
+
+\input{opennebula}
+
+\chapter{Analysing scheduling data}
+
+\input{analysing}
+
+
+%\part{Advanced Topics}
+
+%\chapter{Haizea's resource and leasing model}
+
+%\chapter{Scheduling algorithms}
+
+%\chapter{The Haizea architecture}
+
+%\section{Extending Haizea}
+
+\part{Appendices}
+\appendix
+
+\chapter{Command-line interface reference}
+
+\input{appendix_cli}
+
+\chapter{Configuration file reference}
+
+\input{appendix_conf}
+
+\chapter{LWF file format}
+
+
+\end{document}

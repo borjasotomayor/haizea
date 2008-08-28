@@ -1,0 +1,63 @@
+
+\section{Interactive simulations}
+
+\section{Unattended simulations}
+
+\section{Scheduling options}
+
+\section{Running multiple unattended simulations}
+
+Haizea's regular configuration file (the one that is provided to the haizea command) allows for, at most, one tracefile to be used. However, when running simulations, it is often necessary to run through multiple tracefiles in a variety of configurations to compare the results of each tracefile/configuration combination. The "multi-configuration" file allows you to easily do just this. It is similar to the regular configuration file (all the options are the same), but it allows you to specify multiple tracefiles and multiple configuration profiles.
+
+The multi-configuration file must contain a section called "\texttt{multi}" where you must specify the following:
+
+\begin{itemize}
+\item The tracefiles you want to use
+\item The "injected tracefiles" you want to use. In our own experiments, we found that it was easier to create workloads starting from a base workload and then "injecting" different types of workloads (e.g., a base workload of best-effort leases where AR leases of varying characteristics are "injected"). You can, of course, not specify any injected tracefiles.
+\item The directory where Haizea should store all the information it collects during the simulation (scheduling metrics, utilization information, etc.)
+\end{itemize}
+
+The [multi] section should look like this:
+
+\begin{wideshellverbatim}
+[multi]
+tracedir: Directory with tracefiles
+tracefiles: Tracefiles to use in experiments
+injectiondir: Directory with injectable tracefiles
+injectionfiles: Injectable tracefiles
+basedatadir: Directory where raw data will be saved
+\end{wideshellverbatim}
+
+Next, for each section you would ordinarily include in a regular configuration file, you can include common options (shared by all profiles) and profile-specific options. For example, assuming you want to specify options in the general and simulation sections, and you want to create two profiles called nobackfilling and withbackfilling, you would have to create the following sections:
+
+\begin{wideshellverbatim}
+[common:general]
+...
+
+[common:simulation]
+...
+
+[nobackfilling:general]
+...
+
+[nobackfilling:simulation]
+...
+
+[withbackfilling:general]
+...
+
+[withbackfilling:simulation]
+...
+\end{wideshellverbatim}
+
+An example multi-configuration file is provided in /usr/share/haizea/etc/sample-multi.conf. Using this file, or once you've created your own, you can use the haizea-generate-configs to create the individual configuration files (one for every combination of tracefile, injected tracefile, and profile):
+
+\begin{wideshellverbatim}
+haizea-generate-configs -c config -d dir
+\end{wideshellverbatim}
+
+The -c parameter is used to specify the multi-config file, and the -d parameter is used to specify where the configuration files should be created. Since running each configuration individually would be cumbersome, you can also use the haizea-generate-script command to generate a script that will run through all the generated configuration files. This command requires Mako Templates for Python, so make sure you install Mako before using haizea-generate-scripts. Haizea currently includes two script templates: one to generate a BASH script that will call haizea with each individual configuration file, and one to generate a basic Condor submission script. For example, to generate the BASH script, you would run the command like this:
+
+\begin{wideshellverbatim}
+haizea-generate-scripts -c config -d dir -t /usr/share/haizea/etc/run.sh.template
+\end{wideshellverbatim}

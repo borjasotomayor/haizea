@@ -22,88 +22,13 @@
 <a href="support.html">Support</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="pubs.html">Publications</a>&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;
 <a href="credits.html">Credits</a></div>
-<h1>Running Multiple Simulation Experiments</h1>
+<h1>The Haizea Manual</h1>
 
-<p>
-Haizea's regular configuration file (the one that is provided
-to the <tt>haizea</tt> command) allows for, at most, one tracefile to
-be used. However, when running simulations, it is often necessary
-to run through multiple tracefiles in a variety of configurations to 
-compare the results of each tracefile/configuration combination.
-The "multi-configuration" file allows you to easily do just this.
-It is similar to the regular configuration file (all the options
-are the same), but it allows you to specify multiple tracefiles
-and multiple configuration profiles.
-</p>
-
-<p>
-The multi-configuration file must contain a section called "multi"
-where you must specify the following:
-</p>
-
-<ul>
-<li>The tracefiles you want to use</li>
-<li>The "injected tracefiles" you want to use. In our own experiments, we found that it was easier to create workloads starting from a base workload and then "injecting" different types of workloads (e.g., a base workload of best-effort leases where AR leases of varying characteristics are "injected"). You can, of course, not specify any injected tracefiles.</li>
-<li>The directory where Haizea should store all the information it collects during the simulation (scheduling metrics, utilization information, etc.)</li>
-</ul>
-
-<p>The <tt>[multi]</tt> section should look like this:</p>
-
-<pre class="shell">
-[multi]
-tracedir: <em>Directory with tracefiles</em>
-tracefiles: <em>Tracefiles to use in experiments</em>
-injectiondir: <em>Directory with injectable tracefiles</em>
-injectionfiles: <em>Injectable tracefiles</em>
-basedatadir: <em>Directory where raw data will be saved</em>
-</pre>
-
-<p>
-Next, for each section you would ordinarily include
-in a regular configuration file, you can include common options 
-(shared by all profiles) and profile-specific options. For example,
-assuming you want to specify options in the <tt>general</tt> and
-<tt>simulation</tt> sections, and you want to create two profiles
-called <tt>nobackfilling</tt> and <tt>withbackfilling</tt>, you would
-have to create the following sections:
-</p>
-
-<pre class="shell">
-[common:general]
-...
-
-[common:simulation]
-...
-
-[nobackfilling:general]
-...
-
-[nobackfilling:simulation]
-...
-
-[withbackfilling:general]
-...
-
-[withbackfilling:simulation]
-...
-</pre>
-
-<p>
-An example multi-configuration file is provided in <tt>/usr/share/haizea/etc/sample-multi.conf</tt>. Using this file, or once you've created your own, you can use the <tt>haizea-generate-configs</tt> to create the individual configuration files (one for every combination of tracefile, injected tracefile, and profile):
-</p>
-
-<pre class="shell">
-haizea-generate-configs -c <em>config</em> -d <em>dir</em>
-</pre>
-
-<p>
-The <tt>-c</tt> parameter is used to specify the multi-config file, and the <tt>-d</tt> parameter is used to specify where the configuration files should be created. Since running each configuration individually would be cumbersome, you can
-also use the <tt>haizea-generate-script</tt> command to generate a script that will run through all the generated configuration files. This command requires <a href="http://www.makotemplates.org/">Mako Templates for Python</a>, so make sure you install Mako before using <tt>haizea-generate-scripts</tt>. Haizea currently includes two script templates: one to generate a BASH script that will call <tt>haizea</tt> with each individual configuration file, and one to generate a basic Condor submission script. For example, to generate the BASH script, you would run the command like this:
-</p>
-
-<pre class="shell">
-haizea-generate-scripts -c <em>config</em> -d <em>dir</em> -t /usr/share/haizea/etc/run.sh.template
-</pre>
+<div class="center">
+<object data="manual/index.html" type="text/html" width="750" height="500" id="manualframe">
+  alt : <a href="manual/index.html">test.html</a>
+</object>
+</div>
 
 <p>
 </p>
