@@ -128,15 +128,18 @@ class ResourceManager(Singleton):
         from haizea.resourcemanager.log import HaizeaLogger
         logger = logging.getLogger("")
         if self.daemon:
-            handler = logging.FileHandler(file)
+            handler = logging.FileHandler(self.config.get("logfile"))
         else:
             handler = logging.StreamHandler()
-        formatter = logging.Formatter('[%(haizeatime)s] %(name)-15s  - %(message)s')
+        formatter = logging.Formatter('[%(haizeatime)s] %(name)-7s %(message)s')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         level = logging.getLevelName(self.config.get("loglevel"))
         logger.setLevel(level)
         logging.setLoggerClass(HaizeaLogger)
+        #if self.daemon:
+        #    logger.info("Logging to file %s" % self.config.get("logfile"))
+
         
     def daemonize(self):
         """Daemonizes the Haizea process.
@@ -282,7 +285,7 @@ class ResourceManager(Singleton):
         except Exception, msg:
             # Exit if something goes horribly wrong
             self.logger.error("Exception when processing reservations. Dumping state..." )
-            self.print_stats("ERROR", verbose=True)
+            self.print_stats(logging.getLevelName("ERROR"), verbose=True)
             raise      
 
         
@@ -703,7 +706,7 @@ class RealClock(Clock):
 if __name__ == "__main__":
     from haizea.resourcemanager.configfile import HaizeaConfig
     from haizea.common.config import ConfigException
-    CONFIGFILE = "../../../etc/sample.conf"
+    CONFIGFILE = "../../../etc/sample_trace.conf"
     try:
         CONFIG = HaizeaConfig.from_file(CONFIGFILE)
     except ConfigException, msg:

@@ -88,7 +88,7 @@ class LeaseBase(object):
         
         self.logger = logging.getLogger("LEASES")
         
-    def print_contents(self, loglevel="VDEBUG"):
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "Lease ID       : %i" % self.id)
         self.logger.log(loglevel, "Submission time: %s" % self.submit_time)
         self.logger.log(loglevel, "Duration       : %s" % self.duration)
@@ -100,7 +100,7 @@ class LeaseBase(object):
         self.logger.log(loglevel, "VM image map   : %s" % pretty_nodemap(self.vmimagemap))
         self.logger.log(loglevel, "Mem image map  : %s" % pretty_nodemap(self.memimagemap))
 
-    def print_rrs(self, loglevel="VDEBUG"):
+    def print_rrs(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "RESOURCE RESERVATIONS")
         self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~")
         for r in self.rr:
@@ -244,6 +244,7 @@ class LeaseBase(object):
         l["preemptible"] = self.preemptible
         l["state"] = self.state
         l["rr"] = [rr.xmlrpc_marshall() for rr in self.rr]
+                
         return l
         
         
@@ -258,7 +259,7 @@ class ARLease(LeaseBase):
         LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
         
-    def print_contents(self, loglevel="VDEBUG"):
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "__________________________________________________")
         LeaseBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : AR")
@@ -321,7 +322,7 @@ class ImmediateLease(LeaseBase):
         LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
 
-    def print_contents(self, loglevel="VDEBUG"):
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "__________________________________________________")
         LeaseBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : IMMEDIATE")
@@ -351,7 +352,7 @@ class ResourceReservationBase(object):
         self.resources_in_pnode = res
         self.logger = logging.getLogger("LEASES")
                         
-    def print_contents(self, loglevel="VDEBUG"):
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "Start          : %s" % self.start)
         self.logger.log(loglevel, "End            : %s" % self.end)
         self.logger.log(loglevel, "State          : %s" % rstate_str(self.state))
@@ -383,7 +384,7 @@ class VMResourceReservation(ResourceReservationBase):
         else:
             self.prematureend = None 
 
-    def print_contents(self, loglevel="VDEBUG"):
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         ResourceReservationBase.print_contents(self, loglevel)
         if self.prematureend != None:
             self.logger.log(loglevel, "Premature end  : %s" % self.prematureend)
@@ -406,7 +407,7 @@ class SuspensionResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
-    def print_contents(self, loglevel="VDEBUG"):
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         ResourceReservationBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : SUSPEND")
         self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
@@ -428,7 +429,7 @@ class ResumptionResourceReservation(ResourceReservationBase):
         ResourceReservationBase.__init__(self, lease, start, end, res)
         self.nodes = nodes
 
-    def print_contents(self, loglevel="VDEBUG"):
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         ResourceReservationBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : RESUME")
         self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
