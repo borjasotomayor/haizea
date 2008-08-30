@@ -20,6 +20,7 @@ from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, Immediat
 from haizea.resourcemanager.frontends.base import RequestFrontend
 from haizea.common.utils import roundDateTime
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO
+import logging
 
 HAIZEA_START_NOW = "now"
 HAIZEA_START_BESTEFFORT = "best_effort"
@@ -28,7 +29,7 @@ HAIZEA_DURATION_UNLIMITED = "unlimited"
 class RPCFrontend(RequestFrontend):
     def __init__(self, rm):
         self.rm = rm
-        self.logger = self.logger
+        self.logger = logging.getLogger("RPCREQ")
         self.accumulated = []
         config = self.rm.config
         self.rm.rpc_server.register_rpc(self.create_lease)

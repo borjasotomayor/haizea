@@ -24,6 +24,7 @@ from pysqlite2 import dbapi2 as sqlite
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO
 from haizea.common.utils import roundDateTime
 import operator
+import logging
 
 HAIZEA_PARAM = "HAIZEA"
 HAIZEA_START = "START"
@@ -44,7 +45,7 @@ class OpenNebulaFrontend(RequestFrontend):
     def __init__(self, rm):
         self.rm = rm
         self.processed = []
-        self.logger = self.logger
+        self.logger = logging.getLogger("ONEREQ")
         config = self.rm.config
 
         self.conn = sqlite.connect(config.get("one.db"))
