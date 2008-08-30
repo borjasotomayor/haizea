@@ -33,6 +33,7 @@ class RPCServer(object):
         self.register_rpc(self.get_leases)
         self.register_rpc(self.get_lease)
         self.register_rpc(self.get_queue)
+        self.register_rpc(self.get_hosts)
         self.register_rpc(self.notify_event)
 
     def start(self):
@@ -62,7 +63,10 @@ class RPCServer(object):
         return 0
 
     def get_queue(self):
-        return [l.xmlrpc_marshall() for l in self.rm.queue]
+        return [l.xmlrpc_marshall() for l in self.rm.scheduler.queue]
+
+    def get_hosts(self):
+        return [h.xmlrpc_marshall() for h in self.rm.resourcepool.nodes]
 
     def notify_event(self, lease_id, enactment_id, event):
         pass
