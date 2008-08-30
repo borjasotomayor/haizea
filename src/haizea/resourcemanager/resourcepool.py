@@ -488,6 +488,15 @@ class Node(object):
         else:
             return self.vm_doing
 
+    def xmlrpc_marshall(self):
+        # Convert to something we can send through XMLRPC
+        h = {}
+        h["id"] = self.nod_id
+        h["hostname"] = self.hostname
+        h["cpu"] = self.capacity.get_by_type(constants.RES_CPU)
+        h["mem"] = self.capacity.get_by_type(constants.RES_MEM)
+                
+        return h
         
 class File(object):
     def __init__(self, filename, filesize):
