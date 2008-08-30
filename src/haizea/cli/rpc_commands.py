@@ -16,93 +16,155 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 from haizea.cli.optionparser import OptionParser, Option
+from haizea.common.constants import state_str
+from mx.DateTime import TimeDelta
+import haizea.common.defaults as defaults
+from haizea.cli import Command
 import xmlrpclib
 import sys
+from mx.DateTime import ISO
 
-def add_rpc_options(op):
-    op.add_option(Option("-s", "--server", action="store", type="string", dest="server", default="http://localhost:42493"))
+class RPCCommand(Command):
+    def __init__(self, argv):
+        Command.__init__(self, argv)
+        self.optparser.add_option(Option("-s", "--server", action="store", type="string", dest="server", default=defaults.RPC_URI))
 
-def create_rpc_proxy(server):
-    return xmlrpclib.ServerProxy(server, allow_none=True)
+    def create_rpc_proxy(self, server):
+        return xmlrpclib.ServerProxy(server, allow_none=True)
 
-def haizea_request_lease(argv):
-    p = OptionParser()
-    add_rpc_options(p)
-    
-    p.add_option(Option("-t", "--start", action="store", type="string", dest="start"))
-    p.add_option(Option("-d", "--duration", action="store", type="string", dest="duration"))
-    p.add_option(Option("-n", "--numnodes", action="store", type="int", dest="numnodes"))
-    p.add_option(Option("--preemptible", action="store_true", dest="preemptible"))
-    p.add_option(Option("--non-preemptible", action="store_false", dest="preemptible"))
-    p.add_option(Option("-c", "--cpu", action="store", type="float", dest="cpu"))
-    p.add_option(Option("-m", "--mem", action="store", type="int", dest="mem"))
-    p.add_option(Option("-i", "--vmimage", action="store", type="string", dest="vmimage"))
-    p.add_option(Option("-z", "--vmimagesize", action="store", type="int", dest="vmimagesize"))
-
-    opt, args = p.parse_args(argv)
-
-    if opt.preemptible == None:
-        preemptible = False
-    else:
-        preemptible = opt.preemptible
+class haizea_request_lease(RPCCommand):
+    def __init__(self, argv):
+        RPCCommand.__init__(self, argv)
         
-    server = create_rpc_proxy(opt.server)
-    
-    try:
-        lease_id = server.create_lease(opt.start, opt.duration, preemptible, opt.numnodes, 
-                            opt.cpu, opt.mem, opt.vmimage, opt.vmimagesize)
-        print "Lease submitted correctly."
-        print "Lease ID: %i" % lease_id
-    except Exception, msg:
-        print >> sys.stderr, "Error: %s" % msg
+        self.optparser.add_option(Option("-t", "--start", action="store", type="string", dest="start"))
+        self.optparser.add_option(Option("-d", "--duration", action="store", type="string", dest="duration"))
+        self.optparser.add_option(Option("-n", "--numnodes", action="store", type="int", dest="numnodes"))
+        self.optparser.add_option(Option("--preemptible", action="store_true", dest="preemptible"))
+        self.optparser.add_option(Option("--non-preemptible", action="store_false", dest="preemptible"))
+        self.optparser.add_option(Option("-c", "--cpu", action="store", type="float", dest="cpu"))
+        self.optparser.add_option(Option("-m", "--mem", action="store", type="int", dest="mem"))
+        self.optparser.add_option(Option("-i", "--vmimage", action="store", type="string", dest="vmimage"))
+        self.optparser.add_option(Option("-z", "--vmimagesize", action="store", type="int", dest="vmimagesize"))
         
-
-def haizea_cancel_lease(argv):
-    p = OptionParser()
-    add_rpc_options(p)
-    
-    p.add_option(Option("-l", "--lease", action="store", type="int", dest="lease"))
-
-    opt, args = p.parse_args(argv)
-
-    server = create_rpc_proxy(opt.server)
-    
-    try:
-        code = server.cancel_lease(opt.lease)
-    except Exception, msg:
-        print >> sys.stderr, "Error: %s" % msg
+        self.parse_options()
         
+    def run(self):
+        if self.opt.preemptible == None:
+            preemptible = False
+        else:
+            preemptible = self.opt.preemptible
+            
+        server = self.create_rpc_proxy(self.opt.server)
+        
+        try:
+            lease_id = server.create_lease(self.opt.start, self.opt.duration, preemptible, self.opt.numnodes, 
+                                self.opt.cpu, self.opt.mem, self.opt.vmimage, self.opt.vmimagesize)
+            print "Lease submitted correctly."
+            print "Lease ID: %i" % lease_id
+        except Exception, msg:
+            print >> sys.stderr, "Error: %s" % msg
+        
+class haizea_cancel_lease(RPCCommand):
+    def __init__(self, argv):
+        RPCCommand.__init__(self, argv)
+        
+        self.optparser.add_option(Option("-l", "--lease", action="store", type="int", dest="lease"))
+        
+        self.parse_options()
+        
+    def run(self):
+        server = self.create_rpc_proxy(self.opt.server)
+        
+        try:
+            code = server.cancel_lease(self.opt.lease)
+        except Exception, msg:
+            print >> sys.stderr, "Error: %s" % msg
+        
+class haizea_list_leases(RPCCommand):
+    def __init__(self, argv):
+        RPCCommand.__init__(self, argv)
+                
+        self.parse_options()
+        
+    def run(self):
+        server = self.create_rpc_proxy(self.opt.server)
+        
+        fields = [("id","ID", 3),
+                  ("type","Type", 4),
+                  ("state","State", 9),
+                  ("start_req", "Starting time", 22),
+                  ("duration_req", "Duration", 12),
+                  ("numnodes", "Nodes", 3)]
+        
+        try:
+            leases = server.get_leases()
+            console_table_printer(fields, leases)
+        except Exception, msg:
+            print >> sys.stderr, "Error: %s" % msg
 
-def haizea_list_leases(argv):
-    p = OptionParser()
-    add_rpc_options(p)
-    
-    opt, args = p.parse_args(argv)
+class haizea_list_hosts(RPCCommand):
+    def __init__(self, argv):
+        RPCCommand.__init__(self, argv)
+                
+        self.parse_options()
+        
+    def run(self):
+        server = self.create_rpc_proxy(self.opt.server)
+        
+        fields = [("id","ID", 3),
+                  ("hostname","Hostname", 10),
+                  ("cpu","CPUs", 6),
+                  ("mem", "Mem", 6)]
+        
+        try:
+            hosts = server.get_hosts()
+            console_table_printer(fields, hosts)
+        except Exception, msg:
+            print >> sys.stderr, "Error: %s" % msg
 
-    server = create_rpc_proxy(opt.server)
+class haizea_show_queue(RPCCommand):
+    def __init__(self, argv):
+        RPCCommand.__init__(self, argv)
+                
+        self.parse_options()
+        
+    def run(self):
+        server = self.create_rpc_proxy(self.opt.server)
+        
+        fields = [("id","ID", 3),
+                  ("type","Type", 4),
+                  ("state","State", 9),
+                  ("start_sched", "Sched. Start time", 22),
+                  ("duration_req", "Duration", 12),
+                  ("numnodes", "Nodes", 3)]
+        
+        try:
+            leases = server.get_queue()
+            console_table_printer(fields, leases)
+        except Exception, msg:
+            print >> sys.stderr, "Error: %s" % msg
+
+def console_table_printer(fields, values):
+    print "\33[1m\33[4m",
+    for (name,pname,width) in fields:
+        width = max(len(pname),width) + 1
+        centered = pname.ljust(width)
+        print centered,
+    print "\33[0m"
+    for v in values:
+        for (name,pname,width) in fields:
+            value = pretty_print_rpcvalue(name, v[name])
+            width = max(len(name),width)
+            print " %s" % str(value).ljust(width),
+        print
     
-    # TODO: Make this configurable. Ideally, use some sort of
-    # "console table printer"
-    fields = [("id",3),
-              ("type",4),
-              ("state",7),
-              ("start_req",19),
-              ("duration_req",9),
-              ("numnodes",3)]
-    
-    try:
-        leases = server.get_leases()
-        print "\33[1m\33[4m",
-        for (name,width) in fields:
-            width = max(len(name),width) + 1
-            centered = name.ljust(width)
-            print centered,
-        print "\33[0m"
-        for l in leases:
-            for (name,width) in fields:
-                value = l[name]
-                width = max(len(name),width)
-                print " %s" % str(value).ljust(width),
-            print
-    except Exception, msg:
-        print >> sys.stderr, "Error: %s" % msg
+def pretty_print_rpcvalue(name, value):
+    if name == "state":
+        value = state_str(value)
+    elif name == "duration_req":
+        value = TimeDelta(seconds=value)
+    elif name == "start_req":
+        if value != None:
+            value = ISO.ParseDateTime(value.value)
+
+    return value

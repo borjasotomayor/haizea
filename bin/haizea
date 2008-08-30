@@ -8,4 +8,5 @@ try:
 except:
 	pass
 	
-commands.haizea(sys.argv)
+c = commands.haizea(sys.argv)
+c.run()

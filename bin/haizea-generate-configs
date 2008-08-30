@@ -3,4 +3,5 @@
 from haizea.cli import commands
 import sys
 
-commands.haizea_generate_configs(sys.argv)
+c = commands.haizea_generate_configs(sys.argv)
+c.run()
