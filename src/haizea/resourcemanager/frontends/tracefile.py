@@ -26,7 +26,7 @@ import logging
 class TracefileFrontend(RequestFrontend):
     def __init__(self, rm, starttime):
         RequestFrontend.__init__(self, rm)
-        self.logger = logging.getLogger("TRACEFILE")
+        self.logger = logging.getLogger("TFILE")
         config = rm.config
 
         tracefile = config.get("tracefile")
@@ -35,8 +35,7 @@ class TracefileFrontend(RequestFrontend):
         
         # Read trace file
         # Requests is a list of lease requests
-        #self.logger.info("Loading tracefile %s" % tracefile)
-
+        self.logger.info("Loading tracefile %s" % tracefile)
         self.requests = None
         if tracefile.endswith(".swf"):
             self.requests = tracereaders.SWF(tracefile, config)
@@ -71,7 +70,7 @@ class TracefileFrontend(RequestFrontend):
             
         num_besteffort = len([x for x in self.requests if isinstance(x,BestEffortLease)])
         num_ar = len([x for x in self.requests if isinstance(x,ARLease)])
-        #self.logger.info("Loaded workload with %i requests (%i best-effort + %i AR)" % (num_besteffort+num_ar, num_besteffort, num_ar))
+        self.logger.info("Loaded workload with %i requests (%i best-effort + %i AR)" % (num_besteffort+num_ar, num_besteffort, num_ar))
         
         
     def getAccumulatedRequests(self):
