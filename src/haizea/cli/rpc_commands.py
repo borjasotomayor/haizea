@@ -27,28 +27,62 @@ from mx.DateTime import ISO
 class RPCCommand(Command):
     def __init__(self, argv):
         Command.__init__(self, argv)
-        self.optparser.add_option(Option("-s", "--server", action="store", type="string", dest="server", default=defaults.RPC_URI))
+        self.optparser.add_option(Option("-s", "--server", action="store", type="string", dest="server", default=defaults.RPC_URI,
+                                         help = """
+                                         Option documentation goes here
+                                         """))
 
     def create_rpc_proxy(self, server):
         return xmlrpclib.ServerProxy(server, allow_none=True)
 
 class haizea_request_lease(RPCCommand):
+    """Documentation goes here"""
+    
+    name = "haizea-request-lease"
+    
     def __init__(self, argv):
         RPCCommand.__init__(self, argv)
         
-        self.optparser.add_option(Option("-t", "--start", action="store", type="string", dest="start"))
-        self.optparser.add_option(Option("-d", "--duration", action="store", type="string", dest="duration"))
-        self.optparser.add_option(Option("-n", "--numnodes", action="store", type="int", dest="numnodes"))
-        self.optparser.add_option(Option("--preemptible", action="store_true", dest="preemptible"))
-        self.optparser.add_option(Option("--non-preemptible", action="store_false", dest="preemptible"))
-        self.optparser.add_option(Option("-c", "--cpu", action="store", type="float", dest="cpu"))
-        self.optparser.add_option(Option("-m", "--mem", action="store", type="int", dest="mem"))
-        self.optparser.add_option(Option("-i", "--vmimage", action="store", type="string", dest="vmimage"))
-        self.optparser.add_option(Option("-z", "--vmimagesize", action="store", type="int", dest="vmimagesize"))
-        
-        self.parse_options()
+        self.optparser.add_option(Option("-t", "--start", action="store", type="string", dest="start",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-d", "--duration", action="store", type="string", dest="duration",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-n", "--numnodes", action="store", type="int", dest="numnodes",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("--preemptible", action="store_true", dest="preemptible",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("--non-preemptible", action="store_false", dest="preemptible",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-c", "--cpu", action="store", type="float", dest="cpu",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-m", "--mem", action="store", type="int", dest="mem",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-i", "--vmimage", action="store", type="string", dest="vmimage",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-z", "--vmimagesize", action="store", type="int", dest="vmimagesize",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
         
     def run(self):
+        self.parse_options()
+        
         if self.opt.preemptible == None:
             preemptible = False
         else:
@@ -65,14 +99,21 @@ class haizea_request_lease(RPCCommand):
             print >> sys.stderr, "Error: %s" % msg
         
 class haizea_cancel_lease(RPCCommand):
+    """Documentation goes here"""
+    
+    name = "haizea-cancel-lease"
+    
     def __init__(self, argv):
         RPCCommand.__init__(self, argv)
         
-        self.optparser.add_option(Option("-l", "--lease", action="store", type="int", dest="lease"))
-        
-        self.parse_options()
+        self.optparser.add_option(Option("-l", "--lease", action="store", type="int", dest="lease",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
         
     def run(self):
+        self.parse_options()
+        
         server = self.create_rpc_proxy(self.opt.server)
         
         try:
@@ -81,12 +122,16 @@ class haizea_cancel_lease(RPCCommand):
             print >> sys.stderr, "Error: %s" % msg
         
 class haizea_list_leases(RPCCommand):
+    """Documentation goes here"""
+    
+    name = "haizea-list-leases"
+    
     def __init__(self, argv):
         RPCCommand.__init__(self, argv)
                 
+    def run(self):
         self.parse_options()
         
-    def run(self):
         server = self.create_rpc_proxy(self.opt.server)
         
         fields = [("id","ID", 3),
@@ -103,12 +148,16 @@ class haizea_list_leases(RPCCommand):
             print >> sys.stderr, "Error: %s" % msg
 
 class haizea_list_hosts(RPCCommand):
+    """Documentation goes here"""
+    
+    name = "haizea-list-hosts"
+    
     def __init__(self, argv):
         RPCCommand.__init__(self, argv)
                 
+    def run(self):
         self.parse_options()
         
-    def run(self):
         server = self.create_rpc_proxy(self.opt.server)
         
         fields = [("id","ID", 3),
@@ -123,12 +172,16 @@ class haizea_list_hosts(RPCCommand):
             print >> sys.stderr, "Error: %s" % msg
 
 class haizea_show_queue(RPCCommand):
+    """Documentation goes here"""
+    
+    name = "haizea-show-queue"
+    
     def __init__(self, argv):
         RPCCommand.__init__(self, argv)
                 
+    def run(self):
         self.parse_options()
         
-    def run(self):
         server = self.create_rpc_proxy(self.opt.server)
         
         fields = [("id","ID", 3),

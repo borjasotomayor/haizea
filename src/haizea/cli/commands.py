@@ -31,16 +31,29 @@ import time
 
 
 class haizea(Command):
+    """Documentation goes here"""
+    
+    name = "haizea"
+    
     def __init__(self, argv):
         Command.__init__(self, argv)
         
-        self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf"))
-        self.optparser.add_option(Option("-f", "--fg", action="store_true",  dest="foreground"))
-        self.optparser.add_option(Option("--stop", action="store_true",  dest="stop"))
-        
-        self.parse_options()
-        
+        self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-f", "--fg", action="store_true",  dest="foreground",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("--stop", action="store_true",  dest="stop",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+                
     def run(self):
+        self.parse_options()
+
         pidfile = defaults.DAEMON_PIDFILE # TODO: Make configurable
 
         if self.opt.stop == None:
@@ -115,15 +128,25 @@ class haizea(Command):
                    sys.exit(1)
 
 class haizea_generate_configs(Command):
+    """Documentation goes here"""
+    
+    name = "haizea-generate-configs"
+
     def __init__(self, argv):
         Command.__init__(self, argv)
         
-        self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        self.optparser.add_option(Option("-d", "--dir", action="store", type="string", dest="dir", required=True))
-        
+        self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True,
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-d", "--dir", action="store", type="string", dest="dir", required=True,
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+                
+    def run(self):    
         self.parse_options()
         
-    def run(self):    
         configfile=self.opt.conf
         multiconfig = HaizeaMultiConfig.from_file(configfile)
         
@@ -146,17 +169,33 @@ class haizea_generate_configs(Command):
             fc.close()
 
 class haizea_generate_scripts(Command):
+    """Documentation goes here"""
+    
+    name = "haizea-generate-scripts"
+
     def __init__(self, argv):
         Command.__init__(self, argv)
         
-        self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True))
-        self.optparser.add_option(Option("-t", "--template", action="store", type="string", dest="template", required=True))
-        self.optparser.add_option(Option("-d", "--confdir", action="store", type="string", dest="confdir", required=True))
-        self.optparser.add_option(Option("-m", "--only-missing", action="store_true",  dest="onlymissing"))
-        
+        self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf", required=True,
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-t", "--template", action="store", type="string", dest="template", required=True,
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-d", "--confdir", action="store", type="string", dest="confdir", required=True,
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-m", "--only-missing", action="store_true",  dest="onlymissing",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+                
+    def run(self):        
         self.parse_options()
         
-    def run(self):        
         configfile=self.opt.conf
         multiconfig = HaizeaMultiConfig.from_file(configfile)
                 
@@ -189,18 +228,37 @@ class haizea_generate_scripts(Command):
 
 
 class haizea_convert_data(Command):
+    """Documentation goes here"""
+    
+    name = "haizea-convert-data"
+
     def __init__(self, argv):
         Command.__init__(self, argv)
         
-        self.optparser.add_option(Option("-d", "--datafiles", action="store", type="string", dest="datafiles", required=True))
-        self.optparser.add_option(Option("-s", "--summary", action="store_true",  dest="summary"))
-        self.optparser.add_option(Option("-l", "--lease-stats", action="store", type="string", dest="lease"))
-        self.optparser.add_option(Option("-t", "--include-attributes", action="store_true", dest="attributes"))
-        self.optparser.add_option(Option("-f", "--format", action="store", type="string", dest="format"))
-        
-        self.parse_options()
-        
+        self.optparser.add_option(Option("-d", "--datafiles", action="store", type="string", dest="datafiles", required=True,
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-s", "--summary", action="store_true",  dest="summary",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-l", "--lease-stats", action="store", type="string", dest="lease",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-t", "--include-attributes", action="store_true", dest="attributes",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+        self.optparser.add_option(Option("-f", "--format", action="store", type="string", dest="format",
+                                         help = """
+                                         Option documentation goes here
+                                         """))
+                
     def run(self):            
+        self.parse_options()
+
         datafile=self.opt.datafiles
         
         stats = unpickle(datafile)
