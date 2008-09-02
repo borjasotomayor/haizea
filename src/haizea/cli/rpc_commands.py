@@ -29,14 +29,16 @@ class RPCCommand(Command):
         Command.__init__(self, argv)
         self.optparser.add_option(Option("-s", "--server", action="store", type="string", dest="server", default=defaults.RPC_URI,
                                          help = """
-                                         Option documentation goes here
-                                         """))
+                                         Haizea RPC server URI. If not specified, the default %s is used
+                                         """ % defaults.RPC_URI))
 
     def create_rpc_proxy(self, server):
         return xmlrpclib.ServerProxy(server, allow_none=True)
 
 class haizea_request_lease(RPCCommand):
-    """Documentation goes here"""
+    """
+    Requests a new lease.
+    """
     
     name = "haizea-request-lease"
     
@@ -45,39 +47,39 @@ class haizea_request_lease(RPCCommand):
         
         self.optparser.add_option(Option("-t", "--start", action="store", type="string", dest="start",
                                          help = """
-                                         Option documentation goes here
+                                         Starting time. Can be an ISO timestamp, "best_effort", or "now"
                                          """))
         self.optparser.add_option(Option("-d", "--duration", action="store", type="string", dest="duration",
                                          help = """
-                                         Option documentation goes here
+                                         Duration. Can be an ISO timestamp or "unlimited"
                                          """))
         self.optparser.add_option(Option("-n", "--numnodes", action="store", type="int", dest="numnodes",
                                          help = """
-                                         Option documentation goes here
+                                         Number of nodes.
                                          """))
         self.optparser.add_option(Option("--preemptible", action="store_true", dest="preemptible",
                                          help = """
-                                         Option documentation goes here
+                                         Specifies a preemptible lease.
                                          """))
         self.optparser.add_option(Option("--non-preemptible", action="store_false", dest="preemptible",
                                          help = """
-                                         Option documentation goes here
+                                         Specifies a non-preemptible lease.
                                          """))
         self.optparser.add_option(Option("-c", "--cpu", action="store", type="float", dest="cpu",
                                          help = """
-                                         Option documentation goes here
+                                         Percentage of CPU (must be 0 < c <= 1.0)
                                          """))
         self.optparser.add_option(Option("-m", "--mem", action="store", type="int", dest="mem",
                                          help = """
-                                         Option documentation goes here
+                                         Memory per node (in MB)
                                          """))
         self.optparser.add_option(Option("-i", "--vmimage", action="store", type="string", dest="vmimage",
                                          help = """
-                                         Option documentation goes here
+                                         Disk image identifier.
                                          """))
         self.optparser.add_option(Option("-z", "--vmimagesize", action="store", type="int", dest="vmimagesize",
                                          help = """
-                                         Option documentation goes here
+                                         Disk image size.
                                          """))
         
     def run(self):
@@ -99,7 +101,9 @@ class haizea_request_lease(RPCCommand):
             print >> sys.stderr, "Error: %s" % msg
         
 class haizea_cancel_lease(RPCCommand):
-    """Documentation goes here"""
+    """
+    Cancel a lease.
+    """
     
     name = "haizea-cancel-lease"
     
@@ -108,7 +112,7 @@ class haizea_cancel_lease(RPCCommand):
         
         self.optparser.add_option(Option("-l", "--lease", action="store", type="int", dest="lease",
                                          help = """
-                                         Option documentation goes here
+                                         ID of lease to cancel.
                                          """))
         
     def run(self):
@@ -122,7 +126,9 @@ class haizea_cancel_lease(RPCCommand):
             print >> sys.stderr, "Error: %s" % msg
         
 class haizea_list_leases(RPCCommand):
-    """Documentation goes here"""
+    """
+    List all active leases in the system (i.e., not including completed or cancelled leases)
+    """
     
     name = "haizea-list-leases"
     
@@ -148,7 +154,9 @@ class haizea_list_leases(RPCCommand):
             print >> sys.stderr, "Error: %s" % msg
 
 class haizea_list_hosts(RPCCommand):
-    """Documentation goes here"""
+    """
+    List hosts managed by Haizea
+    """
     
     name = "haizea-list-hosts"
     
@@ -172,7 +180,9 @@ class haizea_list_hosts(RPCCommand):
             print >> sys.stderr, "Error: %s" % msg
 
 class haizea_show_queue(RPCCommand):
-    """Documentation goes here"""
+    """
+    Show the contents of the Haizea queue
+    """
     
     name = "haizea-show-queue"
     
@@ -193,7 +203,10 @@ class haizea_show_queue(RPCCommand):
         
         try:
             leases = server.get_queue()
-            console_table_printer(fields, leases)
+            if len(leases) == 0:
+                print "Queue is empty."
+            else:
+                console_table_printer(fields, leases)
         except Exception, msg:
             print >> sys.stderr, "Error: %s" % msg
 
