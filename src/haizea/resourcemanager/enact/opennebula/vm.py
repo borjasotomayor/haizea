@@ -91,7 +91,7 @@ class VMEnactment(VMEnactmentBase):
             else:
                 raise Exception, "Error when running onevm resume (status=%i, output='%s')" % (status, output)
 
-    def verifySuspend(self, action):
+    def verify_suspend(self, action):
         # TODO: Do a single query
         result = 0
         for vnode in action.vnodes:
@@ -108,7 +108,7 @@ class VMEnactment(VMEnactmentBase):
                 result = 1
         return result
         
-    def verifyResume(self, action):
+    def verify_resume(self, action):
         # TODO: Do a single query
         result = 0
         for vnode in action.vnodes:

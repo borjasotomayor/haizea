@@ -23,13 +23,37 @@ class UnmanagedDeployment(DeploymentBase):
     def __init__(self, scheduler):
         DeploymentBase.__init__(self, scheduler)
     
+    # Add dummy disk images
     def schedule(self, lease, vmrr, nexttime):
         lease.state = constants.LEASE_STATE_DEPLOYED
+        for (vnode, pnode) in vmrr.nodes.items():
+            self.resourcepool.add_diskimage(pnode, lease.diskimage_id, lease.diskimage_size, lease.id, vnode)
             
     def find_earliest_starting_times(self, lease_req, nexttime):
-        nodIDs = [n.nod_id for n in self.resourcepool.getNodes()]
-        earliest = dict([(node, [nexttime, constants.REQTRANSFER_NO, None]) for node in nodIDs])
+        nod_ids = [n.nod_id for n in self.resourcepool.get_nodes()]
+        earliest = dict([(node, [nexttime, constants.REQTRANSFER_NO, None]) for node in nod_ids])
         return earliest
             
     def cancel_deployment(self, lease):
         pass
+    
+    def check(self, lease, vmrr):
+        # Check that all the required disk images are available,
+        # and determine what their physical filenames are.
+        # Note that it is the enactment module's responsibility to
+        # mark an image as correctly deployed. The check we do here
+        # is (1) to catch scheduling errors (i.e., the image transfer
+        # was not scheduled).
+        
+        for (vnode, pnode) in vmrr.nodes.items():
+            node = self.resourcepool.get_node(pnode)
+            
+            diskimage = node.get_diskimage(lease.id, vnode, lease.diskimage_id)
+            if diskimage == None:
+                raise Exception, "ERROR: No image for L%iV%i is on node %i" % (lease.id, vnode, pnode)
+        
+        return True
+
+    def cleanup(self, lease, vmrr):
+        for vnode, pnode in lease.vmimagemap.items():
+                self.resourcepool.remove_diskimage(pnode, lease.id, vnode)

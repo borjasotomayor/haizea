@@ -37,7 +37,6 @@ from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.frontends.rpc import RPCFrontend
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease 
-from haizea.resourcemanager.resourcepool import ResourcePool
 from haizea.resourcemanager.scheduler import Scheduler
 from haizea.resourcemanager.rpcserver import RPCServer
 from haizea.common.utils import abstract, roundDateTime, Singleton
@@ -102,9 +101,6 @@ class ResourceManager(Singleton):
             
             # RPC server
             self.rpc_server = RPCServer(self)
-
-        # Resource pool
-        self.resourcepool = ResourcePool(self)
     
         # Scheduler
         self.scheduler = Scheduler(self)
@@ -273,7 +269,7 @@ class ResourceManager(Singleton):
         except Exception, msg:
             # Exit if something goes horribly wrong
             self.logger.error("Exception in scheduling function. Dumping state..." )
-            self.print_stats("ERROR", verbose=True)
+            self.print_stats(logging.getLevelName("ERROR"), verbose=True)
             raise      
 
     def process_reservations(self, time):
@@ -353,7 +349,6 @@ class ResourceManager(Singleton):
             self.logger.error("Exception when canceling lease %i. Dumping state..." % lease_id)
             self.print_stats("ERROR", verbose=True)
             raise          
-
 
             
 class Clock(object):

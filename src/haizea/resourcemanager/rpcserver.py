@@ -66,7 +66,7 @@ class RPCServer(object):
         return [l.xmlrpc_marshall() for l in self.rm.scheduler.queue]
 
     def get_hosts(self):
-        return [h.xmlrpc_marshall() for h in self.rm.resourcepool.nodes]
+        return [h.xmlrpc_marshall() for h in self.rm.scheduler.resourcepool.nodes]
 
     def notify_event(self, lease_id, enactment_id, event):
         pass

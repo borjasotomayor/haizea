@@ -22,7 +22,7 @@ class DeploymentBase(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.slottable = scheduler.slottable
-        self.resourcepool = scheduler.rm.resourcepool
+        self.resourcepool = scheduler.resourcepool
         self.logger = logging.getLogger("DEPLOY")
 
         

@@ -102,16 +102,16 @@ class AccountingDataCollection(object):
             self.append_stat(counter_id, initial, time = time)
         
         # Start the doing
-        numnodes = self.rm.resourcepool.getNumNodes()
+        numnodes = self.rm.scheduler.resourcepool.get_num_nodes()
         for n in range(numnodes):
             self.data.nodes[n+1] = [(time, constants.DOING_IDLE)]
 
     def tick(self):
         time = self.rm.clock.get_time()
         # Update the doing
-        for node in self.rm.resourcepool.nodes:
+        for node in self.rm.scheduler.resourcepool.nodes:
             nodenum = node.nod_id
-            doing = node.getState()
+            doing = node.get_state()
             (lasttime, lastdoing) = self.data.nodes[nodenum][-1]
             if doing == lastdoing:
                 # No need to update
@@ -141,7 +141,7 @@ class AccountingDataCollection(object):
                 self.data.counter_lists[counter_id] = self.add_timeweighted_average(l)
         
         # Stop the doing
-        for node in self.rm.resourcepool.nodes:
+        for node in self.rm.scheduler.resourcepool.nodes:
             nodenum = node.nod_id
             doing = node.vm_doing
             (lasttime, lastdoing) = self.data.nodes[nodenum][-1]
@@ -192,7 +192,7 @@ class AccountingDataCollection(object):
         return stats          
     
     def normalize_doing(self):
-        nodes = dict([(i+1, []) for i in range(self.rm.resourcepool.getNumNodes())])
+        nodes = dict([(i+1, []) for i in range(self.rm.scheduler.resourcepool.get_num_nodes())])
         for n in self.data.nodes:
             nodes[n] = []
             prevtime = None

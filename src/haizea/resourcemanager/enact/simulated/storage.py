@@ -26,5 +26,5 @@ class StorageEnactment(StorageEnactmentBase):
     def __init__(self, resourcepool):
         StorageEnactmentBase.__init__(self, resourcepool)
         
-    def resolveToFile(self, lease_id, vnode, diskImageID):
+    def resolve_to_file(self, lease_id, vnode, diskImageID):
         return "%s/%s-L%iV%i" % (baseWorkingPath, diskImageID, lease_id, vnode)

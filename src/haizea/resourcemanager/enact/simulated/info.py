@@ -45,16 +45,16 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         self.FIFOnode = Node(self.resourcepool, numnodes+1, "FIFOnode", imgcapacity)
         self.EDFnode = Node(self.resourcepool, numnodes+2, "EDFnode", imgcapacity)
         
-    def getNodes(self):
+    def get_nodes(self):
         return self.nodes
     
-    def getEDFNode(self):
+    def get_edf_Node(self):
         return self.EDFnode
     
-    def getFIFONode(self):
+    def get_fifo_node(self):
         return self.FIFOnode
     
-    def getResourceTypes(self):
+    def get_resource_types(self):
         return [(constants.RES_CPU, constants.RESTYPE_FLOAT, "CPU"),
                 (constants.RES_MEM,  constants.RESTYPE_INT, "Mem"),
                 (constants.RES_DISK, constants.RESTYPE_INT, "Disk"),
@@ -63,7 +63,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         
     def parse_resources_string(self, resources):
         resources = resources.split(";")
-        desc2type = dict([(x[2], x[0]) for x in self.getResourceTypes()])
+        desc2type = dict([(x[2], x[0]) for x in self.get_resource_types()])
         capacity=ds.ResourceTuple.create_empty()
         for r in resources:
             resourcename = r.split(",")[0]
@@ -71,7 +71,7 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
             capacity.set_by_type(desc2type[resourcename], int(resourcecapacity))
         return capacity
 
-    def getSuspendResumeRate(self):
+    def get_suspendresume_rate(self):
         return self.suspendresumerate
 
     def get_bandwidth(self):

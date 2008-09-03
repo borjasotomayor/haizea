@@ -23,15 +23,15 @@ class ResourcePoolInfoBase(object):
     def __init__(self, resourcepool):
         self.resourcepool = resourcepool
         
-        resourcetypes = self.getResourceTypes() #IGNORE:E1111
+        resourcetypes = self.get_resource_types() #IGNORE:E1111
         ds.ResourceTuple.set_resource_types(resourcetypes)
 
         
-    def getNodes(self): 
+    def get_nodes(self): 
         """ Returns the nodes in the resource pool. """
         abstract()
         
-    def getFIFOnode(self):
+    def get_fifo_node(self):
         """ Returns the image node for FIFO transfers
         
         Note that this function will disappear as soon
@@ -40,7 +40,7 @@ class ResourcePoolInfoBase(object):
         """
         abstract()
 
-    def getEDFnode(self):
+    def get_edf_node(self):
         """ Returns the image node for EDF transfers
         
         Note that this function will disappear as soon
@@ -49,7 +49,7 @@ class ResourcePoolInfoBase(object):
         """
         abstract()
         
-    def getResourceTypes(self):
+    def get_resource_types(self):
         abstract()
         
 class StorageEnactmentBase(object):

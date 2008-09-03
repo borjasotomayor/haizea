@@ -37,6 +37,7 @@ from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeployment
 from haizea.resourcemanager.deployment.predeployed import PredeployedImagesDeployment
 from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeployment
 from haizea.resourcemanager.datastruct import ARLease, ImmediateLease, VMResourceReservation 
+from haizea.resourcemanager.resourcepool import ResourcePool
 
 import logging
 
@@ -76,12 +77,16 @@ class Scheduler(object):
     """
     def __init__(self, rm):
         self.rm = rm
-        self.logger = logging.getLogger("SCHEDULER")
+        self.logger = logging.getLogger("SCHED")
+        self.resourcepool = ResourcePool(self)
         self.slottable = SlotTable(self)
         self.queue = ds.Queue(self)
         self.scheduledleases = ds.LeaseTable(self)
         self.completedleases = ds.LeaseTable(self)
         self.pending_leases = []
+            
+        for n in self.resourcepool.get_nodes():
+            self.slottable.add_node(n)
             
         self.handlers = {}
         
@@ -219,6 +224,21 @@ class Scheduler(object):
             l = self.queue.get_lease(lease_id)
             self.queue.remove_lease(lease)
     
+    def fail_lease(self, lease_id):
+        """Transitions a lease to a failed state, and does any necessary cleaning up
+        
+        TODO: For now, just use the cancelling algorithm
+        
+        Arguments:
+        lease -- Lease to fail
+        """    
+        try:
+            self.cancel_lease(lease_id)
+        except Exception, msg:
+            # Exit if something goes horribly wrong
+            self.logger.error("Exception when failing lease %i. Dumping state..." % lease_id)
+            self.print_stats("ERROR", verbose=True)
+            raise          
     
     def notify_event(self, lease_id, event):
         time = self.rm.clock.get_time()
@@ -351,16 +371,16 @@ class Scheduler(object):
                 # Update VM image mappings, since we might be resuming
                 # in different nodes.
                 for vnode, pnode in req.vmimagemap.items():
-                    self.rm.resourcepool.removeImage(pnode, req.id, vnode)
+                    self.resourcepool.remove_diskimage(pnode, req.id, vnode)
                 req.vmimagemap = vmrr.nodes
                 for vnode, pnode in req.vmimagemap.items():
-                    self.rm.resourcepool.addTaintedImageToNode(pnode, req.diskimage_id, req.diskimage_size, req.id, vnode)
+                    self.resourcepool.add_diskimage(pnode, req.diskimage_id, req.diskimage_size, req.id, vnode)
                 
                 # Update RAM file mappings
                 for vnode, pnode in req.memimagemap.items():
-                    self.rm.resourcepool.removeRAMFileFromNode(pnode, req.id, vnode)
+                    self.resourcepool.remove_ramfile(pnode, req.id, vnode)
                 for vnode, pnode in vmrr.nodes.items():
-                    self.rm.resourcepool.addRAMFileToNode(pnode, req.id, vnode, req.requested_resources.get_by_type(constants.RES_MEM))
+                    self.resourcepool.add_ramfile(pnode, req.id, vnode, req.requested_resources.get_by_type(constants.RES_MEM))
                     req.memimagemap[vnode] = pnode
                     
             # Add resource reservations
@@ -417,7 +437,7 @@ class Scheduler(object):
         self.logger.vdebug("Lease before preemption:")
         req.print_contents()
         vmrr, susprr  = req.get_last_vmrr()
-        suspendresumerate = self.rm.resourcepool.info.getSuspendResumeRate()
+        suspendresumerate = self.resourcepool.info.get_suspendresume_rate()
         
         if vmrr.state == constants.RES_STATE_SCHEDULED and vmrr.start >= time:
             self.logger.info("... lease #%i has been cancelled and requeued." % req.id)
@@ -431,7 +451,7 @@ class Scheduler(object):
                 req.remove_rr(susprr)
                 self.slottable.removeReservation(susprr)
             for vnode, pnode in req.vmimagemap.items():
-                self.rm.resourcepool.removeImage(pnode, req.id, vnode)
+                self.resourcepool.removeImage(pnode, req.id, vnode)
             self.deployment.cancel_deployment(req)
             req.vmimagemap = {}
             self.scheduledleases.remove(req)
@@ -464,7 +484,7 @@ class Scheduler(object):
                     req.remove_rr(resmrr)
                     self.slottable.removeReservation(resmrr)
                 for vnode, pnode in req.vmimagemap.items():
-                    self.rm.resourcepool.removeImage(pnode, req.id, vnode)
+                    self.resourcepool.removeImage(pnode, req.id, vnode)
                 self.deployment.cancel_deployment(req)
                 req.vmimagemap = {}
                 self.scheduledleases.remove(req)
@@ -507,7 +527,7 @@ class Scheduler(object):
             l.start.actual = now_time
             
             try:
-                self.rm.resourcepool.startVMs(l, rr)
+                self.resourcepool.start_vms(l, rr)
                 # The next two lines have to be moved somewhere more
                 # appropriate inside the resourcepool module
                 for (vnode, pnode) in rr.nodes.items():
@@ -537,14 +557,13 @@ class Scheduler(object):
         l.duration.accumulate_duration(diff)
         rr.state = constants.RES_STATE_DONE
         if rr.oncomplete == constants.ONCOMPLETE_ENDLEASE:
-            self.rm.resourcepool.stopVMs(l, rr)
+            self.resourcepool.stop_vms(l, rr)
             l.state = constants.LEASE_STATE_DONE
             l.duration.actual = l.duration.accumulated
             l.end = now_time
             self.completedleases.add(l)
             self.scheduledleases.remove(l)
-            for vnode, pnode in l.vmimagemap.items():
-                self.rm.resourcepool.removeImage(pnode, l.id, vnode)
+            self.deployment.cleanup(l, rr)
             if isinstance(l, ds.BestEffortLease):
                 self.rm.accounting.incr_counter(constants.COUNTER_BESTEFFORTCOMPLETED, l.id)
        
@@ -578,9 +597,9 @@ class Scheduler(object):
         self.logger.debug("LEASE-%i Start of handleStartSuspend" % l.id)
         l.print_contents()
         rr.state = constants.RES_STATE_ACTIVE
-        self.rm.resourcepool.suspendVMs(l, rr)
+        self.resourcepool.suspend_vms(l, rr)
         for vnode, pnode in rr.nodes.items():
-            self.rm.resourcepool.addRAMFileToNode(pnode, l.id, vnode, l.requested_resources.get_by_type(constants.RES_MEM))
+            self.resourcepool.add_ramfile(pnode, l.id, vnode, l.requested_resources.get_by_type(constants.RES_MEM))
             l.memimagemap[vnode] = pnode
         l.print_contents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_VM_SUSPEND, l.id)
@@ -591,7 +610,7 @@ class Scheduler(object):
         self.logger.debug("LEASE-%i Start of handleEndSuspend" % l.id)
         l.print_contents()
         # TODO: React to incomplete suspend
-        self.rm.resourcepool.verifySuspend(l, rr)
+        self.resourcepool.verify_suspend(l, rr)
         rr.state = constants.RES_STATE_DONE
         l.state = constants.LEASE_STATE_SUSPENDED
         self.scheduledleases.remove(l)
@@ -605,7 +624,7 @@ class Scheduler(object):
     def _handle_start_resume(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleStartResume" % l.id)
         l.print_contents()
-        self.rm.resourcepool.resumeVMs(l, rr)
+        self.resourcepool.resume_vms(l, rr)
         rr.state = constants.RES_STATE_ACTIVE
         l.print_contents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_VM_RESUME, l.id)
@@ -616,10 +635,10 @@ class Scheduler(object):
         self.logger.debug("LEASE-%i Start of handleEndResume" % l.id)
         l.print_contents()
         # TODO: React to incomplete resume
-        self.rm.resourcepool.verifyResume(l, rr)
+        self.resourcepool.verify_resume(l, rr)
         rr.state = constants.RES_STATE_DONE
         for vnode, pnode in rr.nodes.items():
-            self.rm.resourcepool.removeRAMFileFromNode(pnode, l.id, vnode)
+            self.resourcepool.remove_ramfile(pnode, l.id, vnode)
         l.print_contents()
         self.updateNodeVMState(rr.nodes.values(), constants.DOING_IDLE, l.id)
         self.logger.debug("LEASE-%i End of handleEndResume" % l.id)
@@ -643,11 +662,11 @@ class Scheduler(object):
                         
     def updateNodeVMState(self, nodes, state, lease_id):
         for n in nodes:
-            self.rm.resourcepool.getNode(n).vm_doing = state
+            self.resourcepool.get_node(n).vm_doing = state
 
     def updateNodeTransferState(self, nodes, state, lease_id):
         for n in nodes:
-            self.rm.resourcepool.getNode(n).transfer_doing = state
+            self.resourcepool.get_node(n).transfer_doing = state
             
     def is_backfilling(self):
         return self.maxres > 0

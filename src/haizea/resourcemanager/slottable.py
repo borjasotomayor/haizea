@@ -39,8 +39,8 @@ class Node(object):
         self.resourcepoolnode = resourcepoolnode
         
     @classmethod
-    def fromResourcePoolNode(cls, node):
-        capacity = node.getCapacity()
+    def from_resourcepool_node(cls, node):
+        capacity = node.get_capacity()
         return cls(capacity, capacity, node)
 
 class NodeList(object):
@@ -82,8 +82,8 @@ class SlotTable(object):
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.rm = scheduler.rm
+        self.resourcepool = scheduler.resourcepool
         self.logger = logging.getLogger("SLOTTABLE")
-        self.resourcepool = scheduler.rm.resourcepool
         self.nodes = NodeList()
         self.reservations = []
         self.reservationsByStart = []
@@ -91,22 +91,10 @@ class SlotTable(object):
         self.availabilitycache = {}
         self.changepointcache = None
         
-        # Create nodes
-        for n in self.resourcepool.getNodes():
-            self.nodes.add(Node.fromResourcePoolNode(n))
-                
-        # Create image nodes
-        FIFOnode = self.resourcepool.getFIFORepositoryNode()
-        EDFnode = self.resourcepool.getEDFRepositoryNode()
-                
-        if FIFOnode != None and EDFnode != None:
-            self.nodes.add(Node.fromResourcePoolNode(FIFOnode))
-            self.nodes.add(Node.fromResourcePoolNode(EDFnode))
-            
-            self.FIFOnode = FIFOnode.nod_id
-            self.EDFnode = EDFnode.nod_id
-
         self.availabilitywindow = AvailabilityWindow(self)
+
+    def add_node(self, resourcepoolnode):
+        self.nodes.add(Node.from_resourcepool_node(resourcepoolnode))
 
     def dirty(self):
         # You're a dirty, dirty slot table and you should be
@@ -496,7 +484,7 @@ class SlotTable(object):
         numnodes = lease.numnodes
         resreq = lease.requested_resources
         preemptible = lease.preemptible
-        suspendresumerate = self.resourcepool.info.getSuspendResumeRate()
+        suspendresumerate = self.resourcepool.info.get_suspendresume_rate()
 
         #
         # STEP 1: TAKE INTO ACCOUNT VM RESUMPTION (IF ANY)
@@ -516,7 +504,7 @@ class SlotTable(object):
             # TODO: Get bandwidth another way. Right now, the
             # image node bandwidth is the same as the bandwidt
             # in the other nodes, but this won't always be true.
-            migratetime = lease.estimate_migration_time(self.rm.resourcepool.imagenode_bandwidth)
+            migratetime = lease.estimate_migration_time(self.rm.scheduler.resourcepool.info.get_bandwidth())
             earliesttransfer = self.rm.clock.get_time() + migratetime
 
             for n in earliest:
@@ -729,7 +717,7 @@ class SlotTable(object):
         return start, end, canfit, mustsuspend
 
     def suspend(self, lease, time):
-        suspendresumerate = self.resourcepool.info.getSuspendResumeRate()
+        suspendresumerate = self.resourcepool.info.get_suspendresume_rate()
         
         (vmrr, susprr) = lease.get_last_vmrr()
         vmrrnew = copy.copy(vmrr)
@@ -825,11 +813,11 @@ class SlotTable(object):
         # TODO: The deployment module should just provide a list of nodes
         # it prefers
         nodeswithimg=[]
-        self.lease_deployment_type = self.rm.config.get("lease-preparation")
-        if self.lease_deployment_type == constants.DEPLOYMENT_TRANSFER:
-            reusealg = self.rm.config.get("diskimage-reuse")
-            if reusealg==constants.REUSE_IMAGECACHES:
-                nodeswithimg = self.rm.resourcepool.getNodesWithImgInPool(diskImageID, start)
+        #self.lease_deployment_type = self.rm.config.get("lease-preparation")
+        #if self.lease_deployment_type == constants.DEPLOYMENT_TRANSFER:
+        #    reusealg = self.rm.config.get("diskimage-reuse")
+        #    if reusealg==constants.REUSE_IMAGECACHES:
+        #        nodeswithimg = self.resourcepool.getNodesWithImgInPool(diskImageID, start)
 
         # Compares node x and node y. 
         # Returns "x is ??? than y" (???=BETTER/WORSE/EQUAL)

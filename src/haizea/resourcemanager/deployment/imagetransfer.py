@@ -26,9 +26,28 @@ import copy
 class ImageTransferDeployment(DeploymentBase):
     def __init__(self, scheduler):
         DeploymentBase.__init__(self, scheduler)
+        
+        # TODO: The following two should be merged into
+        # something like this:
+        #    self.imageNode = self.info.getImageNode()
+        self.FIFOnode = self.info.getFIFONode()
+        self.EDFnode = self.info.getEDFNode()
+        
         self.transfersEDF = []
         self.transfersFIFO = []
         self.completedTransfers = []
+        
+        self.lease_deployment_type = self.rm.config.get("lease-preparation")
+        if self.lease_deployment_type == constants.DEPLOYMENT_TRANSFER:
+            self.reusealg = self.rm.config.get("diskimage-reuse")
+            if self.reusealg == constants.REUSE_IMAGECACHES:
+                self.maxcachesize = self.rm.config.get("diskimage-cache-size")
+            else:
+                self.maxcachesize = None
+        else:
+            self.reusealg = None
+        
+        self.imagenode_bandwidth = self.info.get_bandwidth()
         
         self.scheduler.register_handler(type     = FileTransferResourceReservation, 
                                         on_start = ImageTransferDeployment.handle_start_filetransfer,
@@ -404,7 +423,7 @@ class ImageTransferDeployment(DeploymentBase):
                     if maxend==None or end>maxend:
                         maxend=end
                 # TODO: ENACTMENT: Verify the image was transferred correctly
-                sched.rm.resourcepool.addImageToNode(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
+                self.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
         elif lease.state == constants.LEASE_STATE_SUSPENDED:
             pass
             # TODO: Migrating
@@ -412,6 +431,118 @@ class ImageTransferDeployment(DeploymentBase):
         sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_IDLE, lease.id)
         sched.rm.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id)
         sched.rm.logger.info("Completed image transfer for lease %i" % (lease.id))
+        
+    def add_diskimages(self, nod_id, imagefile, imagesize, vnodes, timeout=None):
+        self.logger.debug("Adding image for leases=%s in nod_id=%i" % (vnodes, nod_id))
+        self.getNode(nod_id).printFiles()
+
+        if self.reusealg == constants.REUSE_NONE:
+            for (lease_id, vnode) in vnodes:
+                img = VMImageFile(imagefile, imagesize, masterimg=False)
+                img.addMapping(lease_id, vnode)
+                self.getNode(nod_id).addFile(img)
+        elif self.reusealg == constants.REUSE_IMAGECACHES:
+            # Sometimes we might find that the image is already deployed
+            # (although unused). In that case, don't add another copy to
+            # the pool. Just "reactivate" it.
+            if self.getNode(nod_id).isInPool(imagefile):
+                for (lease_id, vnode) in vnodes:
+                    self.getNode(nod_id).addToPool(imagefile, lease_id, vnode, timeout)
+            else:
+                img = VMImageFile(imagefile, imagesize, masterimg=True)
+                img.timeout = timeout
+                for (lease_id, vnode) in vnodes:
+                    img.addMapping(lease_id, vnode)
+                if self.maxcachesize != constants.CACHESIZE_UNLIMITED:
+                    poolsize = self.getNode(nod_id).getPoolSize()
+                    reqsize = poolsize + imagesize
+                    if reqsize > self.maxcachesize:
+                        desiredsize = self.maxcachesize - imagesize
+                        self.logger.debug("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize))
+                        self.getNode(nod_id).printFiles()
+                        success = self.getNode(nod_id).purgePoolDownTo(self.maxcachesize)
+                        if not success:
+                            self.logger.debug("Unable to add to pool. Creating tainted image instead.")
+                            # If unsuccessful, this just means we couldn't add the image
+                            # to the pool. We will have to create tainted images to be used
+                            # only by these leases
+                            for (lease_id, vnode) in vnodes:
+                                img = VMImageFile(imagefile, imagesize, masterimg=False)
+                                img.addMapping(lease_id, vnode)
+                                self.getNode(nod_id).addFile(img)
+                        else:
+                            self.getNode(nod_id).addFile(img)
+                    else:
+                        self.getNode(nod_id).addFile(img)
+                else:
+                    self.getNode(nod_id).addFile(img)
+                    
+        self.getNode(nod_id).printFiles()
+        
+        self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())        
+        
+#    def checkImage(self, pnode, lease_id, vnode, imagefile):
+#        node = self.getNode(pnode)
+#        if self.rm.config.get("lease-preparation") == constants.DEPLOYMENT_UNMANAGED:
+#            self.logger.debug("Adding tainted image for L%iV%i in node %i" % (lease_id, vnode, pnode))
+#        elif self.reusealg == constants.REUSE_NONE:
+#            if not node.hasTaintedImage(lease_id, vnode, imagefile):
+#                self.logger.debug("ERROR: Image for L%iV%i is not deployed on node %i" % (lease_id, vnode, pnode))
+#        elif self.reusealg == constants.REUSE_IMAGECACHES:
+#            poolentry = node.getPoolEntry(imagefile, lease_id=lease_id, vnode=vnode)
+#            if poolentry == None:
+#                # Not necessarily an error. Maybe the pool was full, and
+#                # we had to fall back on creating a tainted image right
+#                # when the image was transferred. We have to check this.
+#                if not node.hasTaintedImage(lease_id, vnode, imagefile):
+#                    self.logger.error("ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (lease_id, vnode, pnode))
+#            else:
+#                # Create tainted image
+#                self.logger.debug("Adding tainted image for L%iV%i in node %i" % (lease_id, vnode, pnode))
+#                node.printFiles()
+#                img = VMImageFile(imagefile, poolentry.filesize, masterimg=False)
+#                img.addMapping(lease_id, vnode)
+#                node.addFile(img)
+#                node.printFiles()
+#                self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
+        
+        
+    def check(self, lease, vmrr):
+        # Check that all the required disk images are available,
+        # and determine what their physical filenames are.
+        # Note that it is the enactment module's responsibility to
+        # mark an image as correctly deployed. The check we do here
+        # is (1) to catch scheduling errors (i.e., the image transfer
+        # was not scheduled) and (2) to create disk images if
+        # we can reuse a reusable image in the node'.
+        # TODO: However, we're assuming CoW, which means the enactment
+        # must support it too. If we can't assume CoW, we would have to
+        # make a copy of the master image (which takes time), and should
+        # be scheduled.
+        
+        for (vnode, pnode) in vmrr.nodes.items():
+            node = self.resourcepool.getNode(pnode)
+            
+            taintedImage = None
+            
+            taintedImage = node.get_diskimage(lease.id, vnode, lease.diskimage_id)
+            if self.reusealg == constants.REUSE_NONE:
+                if taintedImage == None:
+                    raise Exception, "ERROR: No image for L%iV%i is on node %i" % (lease.id, vnode, pnode)
+            elif self.reusealg == constants.REUSE_IMAGECACHES:
+                poolentry = node.getPoolEntry(lease.diskimage_id, lease_id=lease.id, vnode=vnode)
+                if poolentry == None:
+                    # Not necessarily an error. Maybe the pool was full, and
+                    # we had to fall back on creating a tainted image right
+                    # when the image was transferred. We have to check this.
+                    if taintedImage == None:
+                        raise Exception, "ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (lease.id, vnode, pnode)
+                else:
+                    # Create tainted image
+                    taintedImage = self.addTaintedImageToNode(pnode, lease.diskimage_id, lease.diskimage_size, lease.id, vnode)
+                    # ENACTMENT
+                    # self.storage.createCopyFromCache(pnode, lease.diskImageSize)
+
 
 class FileTransferResourceReservation(ResourceReservationBase):
     def __init__(self, lease, res, start=None, end=None):

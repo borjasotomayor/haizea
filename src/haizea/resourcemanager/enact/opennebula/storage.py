@@ -23,5 +23,5 @@ class StorageEnactment(StorageEnactmentBase):
         StorageEnactmentBase.__init__(self, resourcepool)
         self.imagepath="/images/playground/borja"
         
-    def resolveToFile(self, lease_id, vnode, diskImageID):
+    def resolve_to_file(self, lease_id, vnode, diskImageID):
         return "%s/%s/%s.img" % (self.imagepath, diskImageID, diskImageID)

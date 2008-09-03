@@ -21,7 +21,7 @@ class EnactmentAction(object):
         self.lease_haizea_id = None
         self.lease_enactment_info = None
             
-    def fromRR(self, rr):
+    def from_rr(self, rr):
         self.lease_haizea_id = rr.lease.id
         self.lease_enactment_info = rr.lease.enactment_info
         
@@ -37,8 +37,8 @@ class VMEnactmentAction(EnactmentAction):
         EnactmentAction.__init__(self)
         self.vnodes = {}
     
-    def fromRR(self, rr):
-        EnactmentAction.fromRR(self, rr)
+    def from_rr(self, rr):
+        EnactmentAction.from_rr(self, rr)
         # TODO: This is very kludgy
         if rr.lease.vnode_enactment_info == None:
             self.vnodes = dict([(vnode+1, VNode(None)) for vnode in range(rr.lease.numnodes)])

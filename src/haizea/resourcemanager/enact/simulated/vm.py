@@ -50,8 +50,8 @@ class VMEnactment(VMEnactmentBase):
             self.logger.debug("Received request to resume VM for L%iV%i"
                          % (action.lease_haizea_id, vnode))
 
-    def verifySuspend(self, action):
+    def verify_suspend(self, action):
         return 0
     
-    def verifyResume(self, action):
+    def verify_resume(self, action):
         return 0

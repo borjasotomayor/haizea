@@ -67,23 +67,23 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
         self.FIFOnode = None
         self.EDFnode = None
         
-    def getNodes(self):
+    def get_nodes(self):
         return self.nodes
     
-    def getEDFNode(self):
+    def get_edf_node(self):
         return self.EDFnode
     
-    def getFIFONode(self):
+    def get_fifo_node(self):
         return self.FIFOnode
     
-    def getResourceTypes(self):
+    def get_resource_types(self):
         return [(constants.RES_CPU, constants.RESTYPE_FLOAT, "CPU"),
                 (constants.RES_MEM,  constants.RESTYPE_INT, "Mem"),
                 (constants.RES_DISK, constants.RESTYPE_INT, "Disk"),
                 (constants.RES_NETIN, constants.RESTYPE_INT, "Net (in)"),
                 (constants.RES_NETOUT, constants.RESTYPE_INT, "Net (out)")]
         
-    def getSuspendResumeRate(self):
+    def get_suspendresume_rate(self):
         return self.suspendresumerate
 
     def get_bandwidth(self):
