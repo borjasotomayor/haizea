@@ -30,24 +30,21 @@ class ImageTransferDeployment(DeploymentBase):
         # TODO: The following two should be merged into
         # something like this:
         #    self.imageNode = self.info.getImageNode()
-        self.FIFOnode = self.info.getFIFONode()
-        self.EDFnode = self.info.getEDFNode()
+        self.fifo_node = self.resourcepool.deployment.get_fifo_node()
+        self.edf_node = self.resourcepool.deployment.get_edf_node()
         
-        self.transfersEDF = []
-        self.transfersFIFO = []
-        self.completedTransfers = []
-        
-        self.lease_deployment_type = self.rm.config.get("lease-preparation")
-        if self.lease_deployment_type == constants.DEPLOYMENT_TRANSFER:
-            self.reusealg = self.rm.config.get("diskimage-reuse")
-            if self.reusealg == constants.REUSE_IMAGECACHES:
-                self.maxcachesize = self.rm.config.get("diskimage-cache-size")
-            else:
-                self.maxcachesize = None
+        self.transfers_edf = []
+        self.transfers_fifo = []
+        self.completed_transfers = []
+
+        config = self.scheduler.rm.config
+        self.reusealg = config.get("diskimage-reuse")
+        if self.reusealg == constants.REUSE_IMAGECACHES:
+            self.maxcachesize = config.get("diskimage-cache-size")
         else:
-            self.reusealg = None
+            self.maxcachesize = None
         
-        self.imagenode_bandwidth = self.info.get_bandwidth()
+        self.imagenode_bandwidth = self.resourcepool.deployment.get_bandwidth()
         
         self.scheduler.register_handler(type     = FileTransferResourceReservation, 
                                         on_start = ImageTransferDeployment.handle_start_filetransfer,
@@ -84,7 +81,7 @@ class ImageTransferDeployment(DeploymentBase):
             self.logger.debug("Scheduling image transfer of '%s' from vnode %i to physnode %i" % (lease.diskimage_id, vnode, pnode))
 
             if reusealg == constants.REUSE_IMAGECACHES:
-                if self.resourcepool.isInPool(pnode, lease.diskimage_id, start):
+                if self.resourcepool.exists_reusable_image(pnode, lease.diskimage_id, start):
                     self.logger.debug("No need to schedule an image transfer (reusing an image in pool)")
                     mustpool[vnode] = pnode                            
                 else:
@@ -108,18 +105,18 @@ class ImageTransferDeployment(DeploymentBase):
                         transferRR = transferRRs[pnode]
                         transferRR.piggyback(lease_id, vnode, pnode, end)
                     else:
-                        filetransfer = self.scheduleImageTransferEDF(lease, {vnode:pnode}, nexttime)                 
+                        filetransfer = self.schedule_imagetransfer_edf(lease, {vnode:pnode}, nexttime)                 
                         transferRRs[pnode] = filetransfer
                         lease.appendRR(filetransfer)
             elif mechanism == constants.TRANSFER_MULTICAST:
-                filetransfer = self.scheduleImageTransferEDF(lease, musttransfer, nexttime)
+                filetransfer = self.schedule_imagetransfer_edf(lease, musttransfer, nexttime)
                 lease.append_rr(filetransfer)
  
         # No chance of scheduling exception at this point. It's safe
         # to add entries to the pools
         if reusealg == constants.REUSE_IMAGECACHES:
             for (vnode, pnode) in mustpool.items():
-                self.resourcepool.addToPool(pnode, lease.diskImageID, lease_id, vnode, start)
+                self.resourcepool.add_mapping_to_existing_reusable_image(pnode, lease.diskimage_id, lease.id, vnode, start)
 
     def schedule_for_besteffort(self, lease, vmrr, nexttime):
         config = self.scheduler.rm.config
@@ -136,7 +133,7 @@ class ImageTransferDeployment(DeploymentBase):
             if reqtransfer == constants.REQTRANSFER_COWPOOL:
                 # Add to pool
                 self.logger.debug("Reusing image for V%i->P%i." % (vnode, pnode))
-                self.resourcepool.addToPool(pnode, lease.diskimage_id, lease.id, vnode, vmrr.end)
+                self.resourcepool.add_mapping_to_existing_reusable_image(pnode, lease.diskimage_id, lease.id, vnode, vmrr.end)
             elif reqtransfer == constants.REQTRANSFER_PIGGYBACK:
                 # We can piggyback on an existing transfer
                 transferRR = earliest[pnode][2]
@@ -148,7 +145,7 @@ class ImageTransferDeployment(DeploymentBase):
                 musttransfer[vnode] = pnode
                 self.logger.debug("Must transfer V%i->P%i." % (vnode, pnode))
         if len(musttransfer)>0:
-            transferRRs = self.scheduleImageTransferFIFO(lease, musttransfer, nexttime)
+            transferRRs = self.schedule_imagetransfer_fifo(lease, musttransfer, nexttime)
             endtransfer = transferRRs[-1].end
             lease.imagesavail = endtransfer
         else:
@@ -168,16 +165,16 @@ class ImageTransferDeployment(DeploymentBase):
         
 
     def find_earliest_starting_times(self, lease_req, nexttime):
-        nodIDs = [n.nod_id for n in self.resourcepool.getNodes()]  
+        nodIDs = [n.nod_id for n in self.resourcepool.get_nodes()]  
         config = self.scheduler.rm.config
         mechanism = config.get("transfer-mechanism")
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
         
         # Figure out starting time assuming we have to transfer the image
-        nextfifo = self.getNextFIFOTransferTime(nexttime)
+        nextfifo = self.get_next_fifo_transfer_time(nexttime)
         
-        imgTransferTime=lease_req.estimate_image_transfer_time(self.resourcepool.imagenode_bandwidth)
+        imgTransferTime=lease_req.estimate_image_transfer_time(self.imagenode_bandwidth)
         
         # Find worst-case earliest start time
         if lease_req.numnodes == 1:
@@ -196,7 +193,7 @@ class ImageTransferDeployment(DeploymentBase):
         
         # Check if we can reuse images
         if reusealg==constants.REUSE_IMAGECACHES:
-            nodeswithimg = self.resourcepool.getNodesWithImgInPool(lease_req.diskimage_id)
+            nodeswithimg = self.resourcepool.get_nodes_with_reusable_image(lease_req.diskimage_id)
             for node in nodeswithimg:
                 earliest[node] = [nexttime, constants.REQTRANSFER_COWPOOL]
         
@@ -208,7 +205,7 @@ class ImageTransferDeployment(DeploymentBase):
                 # TODO
             if mechanism == constants.TRANSFER_MULTICAST:                
                 # We can only piggyback on transfers that haven't started yet
-                transfers = [t for t in self.transfersFIFO if t.state == constants.RES_STATE_SCHEDULED]
+                transfers = [t for t in self.transfers_fifo if t.state == constants.RES_STATE_SCHEDULED]
                 for t in transfers:
                     if t.file == lease_req.diskImageID:
                         startTime = t.end
@@ -219,19 +216,19 @@ class ImageTransferDeployment(DeploymentBase):
 
         return earliest
 
-    def scheduleImageTransferEDF(self, req, vnodes, nexttime):
+    def schedule_imagetransfer_edf(self, req, vnodes, nexttime):
         # Estimate image transfer time 
-        bandwidth = self.resourcepool.imagenode_bandwidth
+        bandwidth = self.resourcepool.deployment.get_bandwidth()
         imgTransferTime=req.estimate_image_transfer_time(bandwidth)
 
         # Determine start time
-        activetransfers = [t for t in self.transfersEDF if t.state == constants.RES_STATE_ACTIVE]
+        activetransfers = [t for t in self.transfers_edf if t.state == constants.RES_STATE_ACTIVE]
         if len(activetransfers) > 0:
             startTime = activetransfers[-1].end
         else:
             startTime = nexttime
         
-        transfermap = dict([(copy.copy(t), t) for t in self.transfersEDF if t.state == constants.RES_STATE_SCHEDULED])
+        transfermap = dict([(copy.copy(t), t) for t in self.transfers_edf if t.state == constants.RES_STATE_SCHEDULED])
         newtransfers = transfermap.keys()
         
         res = {}
@@ -239,7 +236,7 @@ class ImageTransferDeployment(DeploymentBase):
         resimgnode.set_by_type(constants.RES_NETOUT, bandwidth)
         resnode = ds.ResourceTuple.create_empty()
         resnode.set_by_type(constants.RES_NETIN, bandwidth)
-        res[self.slottable.EDFnode] = resimgnode
+        res[self.edf_node.nod_id] = resimgnode
         for n in vnodes.values():
             res[n] = resnode
         
@@ -307,22 +304,22 @@ class ImageTransferDeployment(DeploymentBase):
         for t in newtransfers:
             if t == newtransfer:
                 self.slottable.addReservation(t)
-                self.transfersEDF.append(t)
+                self.transfers_edf.append(t)
             else:
                 tOld = transfermap[t]
-                self.transfersEDF.remove(tOld)
-                self.transfersEDF.append(t)
+                self.transfers_edf.remove(tOld)
+                self.transfers_edf.append(t)
                 self.slottable.updateReservationWithKeyChange(tOld, t)
         
         return newtransfer
     
-    def scheduleImageTransferFIFO(self, req, reqtransfers, nexttime):
+    def schedule_imagetransfer_fifo(self, req, reqtransfers, nexttime):
         # Estimate image transfer time 
-        bandwidth = self.resourcepool.imagenode_bandwidth
+        bandwidth = self.imagenode_bandwidth
         imgTransferTime=req.estimate_image_transfer_time(bandwidth)
         config = self.scheduler.rm.config
         mechanism = config.get("transfer-mechanism")
-        startTime = self.getNextFIFOTransferTime(nexttime)
+        startTime = self.get_next_fifo_transfer_time(nexttime)
         
         newtransfers = []
         
@@ -338,7 +335,7 @@ class ImageTransferDeployment(DeploymentBase):
             resimgnode.set_by_type(constants.RES_NETOUT, bandwidth)
             resnode = ds.ResourceTuple.create_empty()
             resnode.set_by_type(constants.RES_NETIN, bandwidth)
-            res[self.slottable.FIFOnode] = resimgnode
+            res[self.fifo_node.nod_id] = resimgnode
             for n in reqtransfers.values():
                 res[n] = resnode
             newtransfer = FileTransferResourceReservation(req, res)
@@ -353,12 +350,12 @@ class ImageTransferDeployment(DeploymentBase):
             self.slottable.addReservation(newtransfer)
             newtransfers.append(newtransfer)
             
-        self.transfersFIFO += newtransfers
+        self.transfers_fifo += newtransfers
         
         return newtransfers
     
-    def getNextFIFOTransferTime(self, nexttime):
-        transfers = [t for t in self.transfersFIFO if t.state != constants.RES_STATE_DONE]
+    def get_next_fifo_transfer_time(self, nexttime):
+        transfers = [t for t in self.transfers_fifo if t.state != constants.RES_STATE_DONE]
         if len(transfers) > 0:
             startTime = transfers[-1].end
         else:
@@ -366,7 +363,7 @@ class ImageTransferDeployment(DeploymentBase):
         return startTime
 
     def __remove_from_fifo_transfers(self, lease_id):
-        transfers = [t for t in self.transfersFIFO if t.state != constants.RES_STATE_DONE]
+        transfers = [t for t in self.transfers_fifo if t.state != constants.RES_STATE_DONE]
         toremove = []
         for t in transfers:
             for pnode in t.transfers:
@@ -381,7 +378,7 @@ class ImageTransferDeployment(DeploymentBase):
                 self.slottable.removeReservation(t)
                 toremove.append(t)
         for t in toremove:
-            self.transfersFIFO.remove(t)
+            self.transfers_fifo.remove(t)
 
     @staticmethod
     def handle_start_filetransfer(sched, lease, rr):
@@ -423,93 +420,63 @@ class ImageTransferDeployment(DeploymentBase):
                     if maxend==None or end>maxend:
                         maxend=end
                 # TODO: ENACTMENT: Verify the image was transferred correctly
-                self.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
-        elif lease.state == constants.LEASE_STATE_SUSPENDED:
-            pass
-            # TODO: Migrating
+                sched.deployment.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
+
         lease.print_contents()
         sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_IDLE, lease.id)
         sched.rm.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id)
         sched.rm.logger.info("Completed image transfer for lease %i" % (lease.id))
         
-    def add_diskimages(self, nod_id, imagefile, imagesize, vnodes, timeout=None):
-        self.logger.debug("Adding image for leases=%s in nod_id=%i" % (vnodes, nod_id))
-        self.getNode(nod_id).printFiles()
+    def add_diskimages(self, pnode_id, diskimage_id, diskimage_size, vnodes, timeout):
+        self.logger.debug("Adding image for leases=%s in nod_id=%i" % (vnodes, pnode_id))
+
+        pnode = self.resourcepool.get_node(pnode_id)
 
         if self.reusealg == constants.REUSE_NONE:
             for (lease_id, vnode) in vnodes:
-                img = VMImageFile(imagefile, imagesize, masterimg=False)
-                img.addMapping(lease_id, vnode)
-                self.getNode(nod_id).addFile(img)
+                self.resourcepool.add_diskimage(pnode_id, diskimage_id, diskimage_size, lease_id, vnode)
         elif self.reusealg == constants.REUSE_IMAGECACHES:
             # Sometimes we might find that the image is already deployed
             # (although unused). In that case, don't add another copy to
             # the pool. Just "reactivate" it.
-            if self.getNode(nod_id).isInPool(imagefile):
+            if pnode.exists_reusable_image(diskimage_id):
                 for (lease_id, vnode) in vnodes:
-                    self.getNode(nod_id).addToPool(imagefile, lease_id, vnode, timeout)
+                    pnode.add_mapping_to_existing_reusable_image(diskimage_id, lease_id, vnode, timeout)
             else:
-                img = VMImageFile(imagefile, imagesize, masterimg=True)
-                img.timeout = timeout
-                for (lease_id, vnode) in vnodes:
-                    img.addMapping(lease_id, vnode)
-                if self.maxcachesize != constants.CACHESIZE_UNLIMITED:
-                    poolsize = self.getNode(nod_id).getPoolSize()
-                    reqsize = poolsize + imagesize
-                    if reqsize > self.maxcachesize:
-                        desiredsize = self.maxcachesize - imagesize
-                        self.logger.debug("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (nod_id, reqsize, desiredsize))
-                        self.getNode(nod_id).printFiles()
-                        success = self.getNode(nod_id).purgePoolDownTo(self.maxcachesize)
-                        if not success:
-                            self.logger.debug("Unable to add to pool. Creating tainted image instead.")
-                            # If unsuccessful, this just means we couldn't add the image
-                            # to the pool. We will have to create tainted images to be used
-                            # only by these leases
-                            for (lease_id, vnode) in vnodes:
-                                img = VMImageFile(imagefile, imagesize, masterimg=False)
-                                img.addMapping(lease_id, vnode)
-                                self.getNode(nod_id).addFile(img)
-                        else:
-                            self.getNode(nod_id).addFile(img)
-                    else:
-                        self.getNode(nod_id).addFile(img)
+                if self.maxcachesize == constants.CACHESIZE_UNLIMITED:
+                    can_add_to_cache = True
                 else:
-                    self.getNode(nod_id).addFile(img)
+                    # We may have to remove images from the cache
+                    cachesize = pnode.get_reusable_images_size()
+                    reqsize = cachesize + diskimage_size
+                    if reqsize > self.maxcachesize:
+                        # Have to shrink cache
+                        desiredsize = self.maxcachesize - diskimage_size
+                        self.logger.debug("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (pnode_id, reqsize, desiredsize))
+                        pnode.print_files()
+                        success = pnode.purge_downto(self.maxcachesize)
+                        if not success:
+                            can_add_to_cache = False
+                        else:
+                            can_add_to_cache = True
+                    else:
+                        can_add_to_cache = True
+                        
+                if can_add_to_cache:
+                    self.resourcepool.add_reusable_image(pnode_id, diskimage_id, diskimage_size, vnodes, timeout)
+                else:
+                    # This just means we couldn't add the image
+                    # to the pool. We will have to create disk images to be used
+                    # only by these leases
+                    self.logger.debug("Unable to add to pool. Must create individual disk images instead.")
+                    for (lease_id, vnode) in vnodes:
+                        self.resourcepool.add_diskimage(pnode_id, diskimage_id, diskimage_size, lease_id, vnode)
                     
-        self.getNode(nod_id).printFiles()
-        
-        self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())        
-        
-#    def checkImage(self, pnode, lease_id, vnode, imagefile):
-#        node = self.getNode(pnode)
-#        if self.rm.config.get("lease-preparation") == constants.DEPLOYMENT_UNMANAGED:
-#            self.logger.debug("Adding tainted image for L%iV%i in node %i" % (lease_id, vnode, pnode))
-#        elif self.reusealg == constants.REUSE_NONE:
-#            if not node.hasTaintedImage(lease_id, vnode, imagefile):
-#                self.logger.debug("ERROR: Image for L%iV%i is not deployed on node %i" % (lease_id, vnode, pnode))
-#        elif self.reusealg == constants.REUSE_IMAGECACHES:
-#            poolentry = node.getPoolEntry(imagefile, lease_id=lease_id, vnode=vnode)
-#            if poolentry == None:
-#                # Not necessarily an error. Maybe the pool was full, and
-#                # we had to fall back on creating a tainted image right
-#                # when the image was transferred. We have to check this.
-#                if not node.hasTaintedImage(lease_id, vnode, imagefile):
-#                    self.logger.error("ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (lease_id, vnode, pnode))
-#            else:
-#                # Create tainted image
-#                self.logger.debug("Adding tainted image for L%iV%i in node %i" % (lease_id, vnode, pnode))
-#                node.printFiles()
-#                img = VMImageFile(imagefile, poolentry.filesize, masterimg=False)
-#                img.addMapping(lease_id, vnode)
-#                node.addFile(img)
-#                node.printFiles()
-#                self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.getMaxDiskUsage())
+        pnode.print_files()
         
         
     def check(self, lease, vmrr):
-        # Check that all the required disk images are available,
-        # and determine what their physical filenames are.
+        # Check that all the required disk images are available.
         # Note that it is the enactment module's responsibility to
         # mark an image as correctly deployed. The check we do here
         # is (1) to catch scheduling errors (i.e., the image transfer
@@ -520,29 +487,30 @@ class ImageTransferDeployment(DeploymentBase):
         # make a copy of the master image (which takes time), and should
         # be scheduled.
         
-        for (vnode, pnode) in vmrr.nodes.items():
-            node = self.resourcepool.getNode(pnode)
+        for (vnode, pnode_id) in vmrr.nodes.items():
+            pnode = self.resourcepool.get_node(pnode_id)
             
-            taintedImage = None
-            
-            taintedImage = node.get_diskimage(lease.id, vnode, lease.diskimage_id)
+            diskimage = pnode.get_diskimage(lease.id, vnode, lease.diskimage_id)
             if self.reusealg == constants.REUSE_NONE:
-                if taintedImage == None:
+                if diskimage == None:
                     raise Exception, "ERROR: No image for L%iV%i is on node %i" % (lease.id, vnode, pnode)
             elif self.reusealg == constants.REUSE_IMAGECACHES:
-                poolentry = node.getPoolEntry(lease.diskimage_id, lease_id=lease.id, vnode=vnode)
-                if poolentry == None:
+                reusable_image = pnode.get_reusable_image(lease.diskimage_id, lease_id=lease.id, vnode=vnode)
+                if reusable_image == None:
                     # Not necessarily an error. Maybe the pool was full, and
                     # we had to fall back on creating a tainted image right
                     # when the image was transferred. We have to check this.
-                    if taintedImage == None:
-                        raise Exception, "ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (lease.id, vnode, pnode)
+                    if diskimage == None:
+                        raise Exception, "ERROR: Image for L%iV%i is not in pool on node %i, and there is no tainted image" % (lease.id, vnode, pnode_id)
                 else:
                     # Create tainted image
-                    taintedImage = self.addTaintedImageToNode(pnode, lease.diskimage_id, lease.diskimage_size, lease.id, vnode)
+                    self.resourcepool.add_diskimage(pnode_id, lease.diskimage_id, lease.diskimage_size, lease.id, vnode)
                     # ENACTMENT
                     # self.storage.createCopyFromCache(pnode, lease.diskImageSize)
 
+    def cleanup(self, lease, vmrr):
+        for vnode, pnode in lease.vmimagemap.items():
+            self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
 
 class FileTransferResourceReservation(ResourceReservationBase):
     def __init__(self, lease, res, start=None, end=None):

@@ -16,15 +16,12 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.enact.base import StorageEnactmentBase
+from haizea.resourcemanager.enact.base import DeploymentEnactmentBase
 
-baseCachePath="/vm/cache"
-baseWorkingPath="/vm/working"
-stagingPath="/vm/staging"
-
-class StorageEnactment(StorageEnactmentBase):
+class DeploymentEnactment(DeploymentEnactmentBase):
     def __init__(self, resourcepool):
-        StorageEnactmentBase.__init__(self, resourcepool)
+        DeploymentEnactmentBase.__init__(self, resourcepool)
+        self.imagepath="/images/playground/borja"
         
     def resolve_to_file(self, lease_id, vnode, diskImageID):
-        return "%s/%s-L%iV%i" % (baseWorkingPath, diskImageID, lease_id, vnode)
+        return "%s/%s/%s.img" % (self.imagepath, diskImageID, diskImageID)

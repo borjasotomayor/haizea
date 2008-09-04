@@ -83,7 +83,7 @@ class SlotTable(object):
         self.scheduler = scheduler
         self.rm = scheduler.rm
         self.resourcepool = scheduler.resourcepool
-        self.logger = logging.getLogger("SLOTTABLE")
+        self.logger = logging.getLogger("SLOT")
         self.nodes = NodeList()
         self.reservations = []
         self.reservationsByStart = []
@@ -485,6 +485,7 @@ class SlotTable(object):
         resreq = lease.requested_resources
         preemptible = lease.preemptible
         suspendresumerate = self.resourcepool.info.get_suspendresume_rate()
+        migration_bandwidth = self.resourcepool.info.get_migration_bandwidth()
 
         #
         # STEP 1: TAKE INTO ACCOUNT VM RESUMPTION (IF ANY)
@@ -501,10 +502,7 @@ class SlotTable(object):
         if mustresume and canmigrate:
             # If we have to resume this lease, make sure that
             # we have enough time to transfer the images.
-            # TODO: Get bandwidth another way. Right now, the
-            # image node bandwidth is the same as the bandwidt
-            # in the other nodes, but this won't always be true.
-            migratetime = lease.estimate_migration_time(self.rm.scheduler.resourcepool.info.get_bandwidth())
+            migratetime = lease.estimate_migration_time(migration_bandwidth)
             earliesttransfer = self.rm.clock.get_time() + migratetime
 
             for n in earliest:

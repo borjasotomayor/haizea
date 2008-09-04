@@ -26,11 +26,17 @@ class ResourcePoolInfoBase(object):
         resourcetypes = self.get_resource_types() #IGNORE:E1111
         ds.ResourceTuple.set_resource_types(resourcetypes)
 
-        
     def get_nodes(self): 
         """ Returns the nodes in the resource pool. """
         abstract()
         
+    def get_resource_types(self):
+        abstract()
+        
+class DeploymentEnactmentBase(object):
+    def __init__(self, resourcepool):
+        self.resourcepool = resourcepool
+
     def get_fifo_node(self):
         """ Returns the image node for FIFO transfers
         
@@ -48,13 +54,6 @@ class ResourcePoolInfoBase(object):
         their respective algorithms)
         """
         abstract()
-        
-    def get_resource_types(self):
-        abstract()
-        
-class StorageEnactmentBase(object):
-    def __init__(self, resourcepool):
-        self.resourcepool = resourcepool
     
 class VMEnactmentBase(object):
     def __init__(self, resourcepool):

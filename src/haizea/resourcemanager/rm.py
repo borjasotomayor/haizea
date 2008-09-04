@@ -333,7 +333,7 @@ class ResourceManager(Singleton):
         except Exception, msg:
             # Exit if something goes horribly wrong
             self.logger.error("Exception when notifying an event for lease %i. Dumping state..." % lease_id )
-            self.print_stats("ERROR", verbose=True)
+            self.print_stats(logging.getLevelName("ERROR"), verbose=True)
             raise            
         
     def cancel_lease(self, lease_id):
@@ -347,7 +347,7 @@ class ResourceManager(Singleton):
         except Exception, msg:
             # Exit if something goes horribly wrong
             self.logger.error("Exception when canceling lease %i. Dumping state..." % lease_id)
-            self.print_stats("ERROR", verbose=True)
+            self.print_stats(logging.getLevelName("ERROR"), verbose=True)
             raise          
 
             

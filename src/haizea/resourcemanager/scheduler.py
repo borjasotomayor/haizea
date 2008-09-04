@@ -37,7 +37,7 @@ from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeployment
 from haizea.resourcemanager.deployment.predeployed import PredeployedImagesDeployment
 from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeployment
 from haizea.resourcemanager.datastruct import ARLease, ImmediateLease, VMResourceReservation 
-from haizea.resourcemanager.resourcepool import ResourcePool
+from haizea.resourcemanager.resourcepool import ResourcePool, ResourcePoolWithReusableImages
 
 import logging
 
@@ -78,14 +78,17 @@ class Scheduler(object):
     def __init__(self, rm):
         self.rm = rm
         self.logger = logging.getLogger("SCHED")
-        self.resourcepool = ResourcePool(self)
+        if self.rm.config.get("diskimage-reuse") == constants.REUSE_IMAGECACHES:
+            self.resourcepool = ResourcePoolWithReusableImages(self)
+        else:
+            self.resourcepool = ResourcePool(self)
         self.slottable = SlotTable(self)
         self.queue = ds.Queue(self)
         self.scheduledleases = ds.LeaseTable(self)
         self.completedleases = ds.LeaseTable(self)
         self.pending_leases = []
             
-        for n in self.resourcepool.get_nodes():
+        for n in self.resourcepool.get_nodes() + self.resourcepool.get_aux_nodes():
             self.slottable.add_node(n)
             
         self.handlers = {}
@@ -233,11 +236,12 @@ class Scheduler(object):
         lease -- Lease to fail
         """    
         try:
+            raise
             self.cancel_lease(lease_id)
         except Exception, msg:
             # Exit if something goes horribly wrong
             self.logger.error("Exception when failing lease %i. Dumping state..." % lease_id)
-            self.print_stats("ERROR", verbose=True)
+            self.rm.print_stats(logging.getLevelName("ERROR"), verbose=True)
             raise          
     
     def notify_event(self, lease_id, event):
@@ -451,7 +455,7 @@ class Scheduler(object):
                 req.remove_rr(susprr)
                 self.slottable.removeReservation(susprr)
             for vnode, pnode in req.vmimagemap.items():
-                self.resourcepool.removeImage(pnode, req.id, vnode)
+                self.resourcepool.remove_diskimage(pnode, req.id, vnode)
             self.deployment.cancel_deployment(req)
             req.vmimagemap = {}
             self.scheduledleases.remove(req)
@@ -484,7 +488,7 @@ class Scheduler(object):
                     req.remove_rr(resmrr)
                     self.slottable.removeReservation(resmrr)
                 for vnode, pnode in req.vmimagemap.items():
-                    self.resourcepool.removeImage(pnode, req.id, vnode)
+                    self.resourcepool.remove_diskimage(pnode, req.id, vnode)
                 self.deployment.cancel_deployment(req)
                 req.vmimagemap = {}
                 self.scheduledleases.remove(req)
@@ -527,6 +531,7 @@ class Scheduler(object):
             l.start.actual = now_time
             
             try:
+                self.deployment.check(l, rr)
                 self.resourcepool.start_vms(l, rr)
                 # The next two lines have to be moved somewhere more
                 # appropriate inside the resourcepool module

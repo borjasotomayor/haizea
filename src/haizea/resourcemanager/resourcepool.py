@@ -23,12 +23,13 @@ import logging
 
 class ResourcePool(object):
     def __init__(self, scheduler):
+        self.scheduler = scheduler
         self.rm = scheduler.rm
-        self.logger = logging.getLogger("RESOURCEPOOL")
+        self.logger = logging.getLogger("RPOOL")
                 
         self.info = None
         self.vm = None
-        self.storage = None
+        self.deployment = None
 
         self.load_enactment_modules()
         
@@ -41,7 +42,7 @@ class ResourcePool(object):
             exec "import %s.%s as enact" % (constants.ENACT_PACKAGE, mode)
             self.info = enact.info(self) #IGNORE:E0602
             self.vm = enact.vm(self) #IGNORE:E0602
-            self.storage = enact.storage(self) #IGNORE:E0602
+            self.deployment = enact.deployment(self) #IGNORE:E0602
         except Exception, msg:
             self.logger.error("Unable to load enactment modules for mode '%s'" % mode)
             raise                
@@ -50,9 +51,7 @@ class ResourcePool(object):
     def start_vms(self, lease, rr):
         start_action = actions.VMEnactmentStartAction()
         start_action.from_rr(rr)
-        
-        # TODO: Get tainted image
-        
+                
         for (vnode, pnode) in rr.nodes.items():
             node = self.get_node(pnode)
             diskimage = node.get_diskimage(lease.id, vnode, lease.diskimage_id)
@@ -64,7 +63,7 @@ class ResourcePool(object):
             self.vm.start(start_action)
         except Exception, msg:
             self.logger.error("Enactment of start VM failed: %s" % msg)
-            self.rm.fail_lease(lease.id)
+            self.scheduler.fail_lease(lease.id)
         
     def stop_vms(self, lease, rr):
         stop_action = actions.VMEnactmentStopAction()
@@ -123,6 +122,14 @@ class ResourcePool(object):
     
     def get_nodes(self):
         return self.nodes
+    
+    # An auxiliary node is a host whose resources are going to be scheduled, but
+    # where no VMs are actually going to run. For example, a disk image repository node.
+    def get_aux_nodes(self):
+        # TODO: We're only asking the deployment enactment module for auxiliary nodes.
+        # There might be a scenario where the info enactment module also reports
+        # auxiliary nodes.
+        return self.deployment.get_aux_nodes()
 
     def get_num_nodes(self):
         return len(self.nodes)
@@ -132,11 +139,17 @@ class ResourcePool(object):
         
     def add_diskimage(self, pnode, diskimage_id, imagesize, lease_id, vnode):
         self.logger.debug("Adding disk image for L%iV%i in pnode=%i" % (lease_id, vnode, pnode))
+        
+        self.logger.vdebug("Files BEFORE:")
         self.get_node(pnode).print_files()
-        imagefile = self.storage.resolve_to_file(lease_id, vnode, diskimage_id)
+        
+        imagefile = self.deployment.resolve_to_file(lease_id, vnode, diskimage_id)
         img = DiskImageFile(imagefile, imagesize, lease_id, vnode, diskimage_id)
         self.get_node(pnode).add_file(img)
+
+        self.logger.vdebug("Files AFTER:")
         self.get_node(pnode).print_files()
+        
         self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
         return img
             
@@ -234,7 +247,7 @@ class Node(object):
         images = ""
         if len(self.files) > 0:
             images = ", ".join([str(img) for img in self.files])
-        self.logger.vdebug("Node %i has %iMB %s" % (self.nod_id, self.get_disk_usage(), images))
+        self.logger.vdebug("Node %i files: %iMB %s" % (self.nod_id, self.get_disk_usage(), images))
 
     def get_state(self):
         if self.vm_doing == constants.DOING_IDLE and self.transfer_doing == constants.DOING_TRANSFER:
@@ -279,26 +292,51 @@ class RAMImageFile(File):
     def __str__(self):
         return "(RAM L%iv%i %s)" % (self.lease_id, self.vnode, self.filename)
     
-class ResourcePoolWithReusableImages(object):
+class ResourcePoolWithReusableImages(ResourcePool):
     def __init__(self, scheduler):
         ResourcePool.__init__(self, scheduler)
+        
+        self.nodes = [NodeWithReusableImages.from_node(n) for n in self.nodes]
     
-    def remove_diskimage(self, pnode, lease, vnode):
-        ResourcePool.remove_diskimage(self, pnode, lease, vnode)
-        self.logger.debug("Removing pooled images for L%iV%i in node %i" % (lease, vnode, pnode))
-        toremove = []
-        for img in node.getPoolImages():
+    def add_reusable_image(self, pnode, diskimage_id, imagesize, mappings, timeout):
+        self.logger.debug("Adding reusable image for %s in pnode=%i" % (mappings, pnode))
+        
+        self.logger.vdebug("Files BEFORE:")
+        self.get_node(pnode).print_files()
+        
+        imagefile = "reusable-%s" % diskimage_id
+        img = ReusableDiskImageFile(imagefile, imagesize, diskimage_id, timeout)
+        for (lease_id, vnode) in mappings:
+            img.add_mapping(lease_id, vnode)
+
+        self.get_node(pnode).add_reusable_image(img)
+
+        self.logger.vdebug("Files AFTER:")
+        self.get_node(pnode).print_files()
+        
+        self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
+        return img
+    
+    def add_mapping_to_existing_reusable_image(self, pnode_id, diskimage_id, lease_id, vnode, timeout):
+        self.get_node(pnode_id).add_mapping_to_existing_reusable_image(diskimage_id, lease_id, vnode, timeout)
+    
+    def remove_diskimage(self, pnode_id, lease, vnode):
+        ResourcePool.remove_diskimage(self, pnode_id, lease, vnode)
+        self.logger.debug("Removing cached images for L%iV%i in node %i" % (lease, vnode, pnode_id))
+        for img in self.get_node(pnode_id).get_reusable_images():
             if (lease, vnode) in img.mappings:
                 img.mappings.remove((lease, vnode))
-            node.printFiles()
+            self.get_node(pnode_id).print_files()
             # Keep image around, even if it isn't going to be used
             # by any VMs. It might be reused later on.
             # It will be purged if space has to be made available
             # for other images
-        for img in toremove:
-            node.files.remove(img)
-        node.printFiles()
+        
+    def get_nodes_with_reusable_image(self, diskimage_id, after = None):
+        return [n.nod_id for n in self.nodes if n.exists_reusable_image(diskimage_id, after=after)]
 
+    def exists_reusable_image(self, pnode_id, diskimage_id, after):
+        return self.get_node(pnode_id).exists_reusable_image(diskimage_id, after = after)
     
     
 class NodeWithReusableImages(Node):
@@ -306,16 +344,25 @@ class NodeWithReusableImages(Node):
         Node.__init__(self, resourcepool, nod_id, hostname, capacity)
         self.reusable_images = []
 
-    def add_mapping_to_existing_reusable_image(self, imagefile, lease_id, vnode, timeout):
-        for f in self.files:
-            if f.filename == imagefile:
+    @classmethod
+    def from_node(cls, n):
+        node = cls(n.resourcepool, n.nod_id, n.hostname, n.capacity)
+        node.enactment_info = n.enactment_info
+        return node
+    
+    def add_reusable_image(self, f):
+        self.reusable_images.append(f)
+
+    def add_mapping_to_existing_reusable_image(self, diskimage_id, lease_id, vnode, timeout):
+        for f in self.reusable_images:
+            if f.diskimage_id == diskimage_id:
                 f.add_mapping(lease_id, vnode)
                 f.update_timeout(timeout)
                 break  # Ugh
         self.print_files()
             
-    def get_reusable_image(self, imagefile, after = None, lease_id=None, vnode=None):
-        images = [i for i in self.reusable_images if i.filename == imagefile]
+    def get_reusable_image(self, diskimage_id, after = None, lease_id=None, vnode=None):
+        images = [i for i in self.reusable_images if i.diskimage_id == diskimage_id]
         if after != None:
             images = [i for i in images if i.timeout >= after]
         if lease_id != None and vnode != None:
@@ -364,12 +411,19 @@ class NodeWithReusableImages(Node):
                     success = True
         return success
 
+    def print_files(self):
+        Node.print_files(self)
+        images = ""
+        if len(self.reusable_images) > 0:
+            images = ", ".join([str(img) for img in self.reusable_images])
+        self.logger.vdebug("Node %i reusable images: %iMB %s" % (self.nod_id, self.get_reusable_images_size(), images))
+
 class ReusableDiskImageFile(File):
-    def __init__(self, filename, filesize, diskimage_id):
+    def __init__(self, filename, filesize, diskimage_id, timeout):
         File.__init__(self, filename, filesize)
         self.diskimage_id = diskimage_id
         self.mappings = set([])
-        self.timeout = None
+        self.timeout = timeout
         
     def add_mapping(self, lease_id, vnode):
         self.mappings.add((lease_id, vnode))

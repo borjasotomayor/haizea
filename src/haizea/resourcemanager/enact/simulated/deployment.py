@@ -16,49 +16,44 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+from haizea.resourcemanager.enact.base import DeploymentEnactmentBase
 from haizea.resourcemanager.resourcepool import Node
-from haizea.resourcemanager.enact.base import ResourcePoolInfoBase
-import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
+import haizea.common.constants as constants
 import logging
 
-class ResourcePoolInfo(ResourcePoolInfoBase):
+baseCachePath="/vm/cache"
+baseWorkingPath="/vm/working"
+stagingPath="/vm/staging"
+
+class DeploymentEnactment(DeploymentEnactmentBase):
     def __init__(self, resourcepool):
-        ResourcePoolInfoBase.__init__(self, resourcepool)
+        DeploymentEnactmentBase.__init__(self, resourcepool)
         self.logger = logging.getLogger("ENACT.SIMUL.INFO")
         config = self.resourcepool.rm.config
-        self.suspendresumerate = config.get("simul.suspendresume-rate")
                 
+        self.bandwidth = config.get("imagetransfer-bandwidth")
+                
+        # Image repository nodes
         numnodes = config.get("simul.nodes")
+        
+        imgcapacity = ds.ResourceTuple.create_empty()
+        imgcapacity.set_by_type(constants.RES_NETOUT, self.bandwidth)
 
-        capacity = self.parse_resources_string(config.get("simul.resources"))
+        self.fifo_node = Node(self.resourcepool, numnodes+1, "FIFOnode", imgcapacity)
+        self.edf_node = Node(self.resourcepool, numnodes+2, "EDFnode", imgcapacity)
         
-        self.nodes = [Node(self.resourcepool, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
-        for n in self.nodes:
-            n.enactment_info = n.nod_id
-        
-    def get_nodes(self):
-        return self.nodes
+    def get_edf_node(self):
+        return self.edf_node
     
-    def get_resource_types(self):
-        return [(constants.RES_CPU, constants.RESTYPE_FLOAT, "CPU"),
-                (constants.RES_MEM,  constants.RESTYPE_INT, "Mem"),
-                (constants.RES_DISK, constants.RESTYPE_INT, "Disk"),
-                (constants.RES_NETIN, constants.RESTYPE_INT, "Net (in)"),
-                (constants.RES_NETOUT, constants.RESTYPE_INT, "Net (out)")]
-        
-    def parse_resources_string(self, resources):
-        resources = resources.split(";")
-        desc2type = dict([(x[2], x[0]) for x in self.get_resource_types()])
-        capacity=ds.ResourceTuple.create_empty()
-        for r in resources:
-            resourcename = r.split(",")[0]
-            resourcecapacity = r.split(",")[1]
-            capacity.set_by_type(desc2type[resourcename], int(resourcecapacity))
-        return capacity
-
-    def get_suspendresume_rate(self):
-        return self.suspendresumerate
+    def get_fifo_node(self):
+        return self.fifo_node       
     
-    def get_migration_bandwidth(self):
-        return 100 # TODO: Get from config file
+    def get_aux_nodes(self):
+        return [self.edf_node, self.fifo_node] 
+    
+    def get_bandwidth(self):
+        return self.bandwidth
+        
+    def resolve_to_file(self, lease_id, vnode, diskimage_id):
+        return "%s/%s-L%iV%i" % (baseWorkingPath, diskimage_id, lease_id, vnode)
