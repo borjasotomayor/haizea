@@ -96,7 +96,7 @@ class haizea(Command):
                             break
                     else:
                         print >> sys.stdout, "No configuration file specified, and none found at default locations."
-                        print >> sys.stdout, "Make sure a config file exists at:\n  -> %s" % "\n  -> ".join(DEFAULT_CONFIG_LOCATIONS)
+                        print >> sys.stdout, "Make sure a config file exists at:\n  -> %s" % "\n  -> ".join(defaults.CONFIG_LOCATIONS)
                         print >> sys.stdout, "Or specify a configuration file with the --conf option."
                         exit(1)
                 else:
