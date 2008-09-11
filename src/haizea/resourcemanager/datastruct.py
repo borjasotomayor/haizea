@@ -21,7 +21,7 @@ which is in a module of its own) used by Haizea. The module provides four types
 of structures:
 
 * Lease data structures
-  * LeaseBase: Base class for leases
+  * Lease: Base class for leases
   * ARLease: Advance reservation lease
   * BestEffortLease: Best-effort lease
   * ImmediateLease: Immediate lease
@@ -39,8 +39,8 @@ of structures:
   * Duration: A wrapper around requested/accumulated/actual durations
 """
 
-from haizea.common.constants import state_str, rstate_str, RES_STATE_SCHEDULED, RES_STATE_ACTIVE, RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMDISK, LOGLEVEL_VDEBUG
-from haizea.common.utils import roundDateTimeDelta, get_lease_id, pretty_nodemap, estimate_transfer_time, xmlrpc_marshall_singlevalue
+from haizea.common.constants import RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMDISK, LOGLEVEL_VDEBUG
+from haizea.common.utils import round_datetime_delta, get_lease_id, pretty_nodemap, estimate_transfer_time, xmlrpc_marshall_singlevalue
 
 from operator import attrgetter
 from mx.DateTime import TimeDelta
@@ -56,7 +56,41 @@ import logging
 #-------------------------------------------------------------------#
 
 
-class LeaseBase(object):
+class Lease(object):
+    # Lease states
+    STATE_NEW = 0
+    STATE_PENDING = 1
+    STATE_REJECTED = 2
+    STATE_SCHEDULED = 3
+    STATE_QUEUED = 4
+    STATE_CANCELLED = 5
+    STATE_PREPARING = 6
+    STATE_READY = 7
+    STATE_ACTIVE = 8
+    STATE_SUSPENDING = 9
+    STATE_SUSPENDED = 10
+    STATE_MIGRATING = 11
+    STATE_RESUMING = 12
+    STATE_RESUMED_READY = 13
+    STATE_DONE = 14
+    STATE_FAIL = 15
+    
+    state_str = {STATE_NEW : "New",
+                 STATE_PENDING : "Pending",
+                 STATE_REJECTED : "Rejected",
+                 STATE_SCHEDULED : "Scheduled",
+                 STATE_QUEUED : "Queued",
+                 STATE_CANCELLED : "Cancelled",
+                 STATE_PREPARING : "Preparing",
+                 STATE_READY : "Ready",
+                 STATE_ACTIVE : "Active",
+                 STATE_SUSPENDING : "Suspending",
+                 STATE_SUSPENDED : "Suspended",
+                 STATE_MIGRATING : "Migrating",
+                 STATE_RESUMING : "Resuming",
+                 STATE_DONE : "Done",
+                 STATE_FAIL : "Fail"}
+    
     def __init__(self, submit_time, start, duration, diskimage_id, 
                  diskimage_size, numnodes, requested_resources, preemptible):
         # Lease ID (read only)
@@ -77,11 +111,12 @@ class LeaseBase(object):
 
         # Bookkeeping attributes
         # (keep track of the lease's state, resource reservations, etc.)
-        self.state = None
-        self.vmimagemap = {}
+        self.state = Lease.STATE_NEW
+        self.diskimagemap = {}
         self.memimagemap = {}
-        self.rr = []
-        
+        self.deployment_rrs = []
+        self.vm_rrs = []
+
         # Enactment information. Should only be manipulated by enactment module
         self.enactment_info = None
         self.vnode_enactment_info = None
@@ -92,138 +127,49 @@ class LeaseBase(object):
         self.logger.log(loglevel, "Lease ID       : %i" % self.id)
         self.logger.log(loglevel, "Submission time: %s" % self.submit_time)
         self.logger.log(loglevel, "Duration       : %s" % self.duration)
-        self.logger.log(loglevel, "State          : %s" % state_str(self.state))
-        self.logger.log(loglevel, "VM image       : %s" % self.diskimage_id)
-        self.logger.log(loglevel, "VM image size  : %s" % self.diskimage_size)
+        self.logger.log(loglevel, "State          : %s" % Lease.state_str[self.state])
+        self.logger.log(loglevel, "Disk image     : %s" % self.diskimage_id)
+        self.logger.log(loglevel, "Disk image size: %s" % self.diskimage_size)
         self.logger.log(loglevel, "Num nodes      : %s" % self.numnodes)
         self.logger.log(loglevel, "Resource req   : %s" % self.requested_resources)
-        self.logger.log(loglevel, "VM image map   : %s" % pretty_nodemap(self.vmimagemap))
+        self.logger.log(loglevel, "Disk image map : %s" % pretty_nodemap(self.diskimagemap))
         self.logger.log(loglevel, "Mem image map  : %s" % pretty_nodemap(self.memimagemap))
 
     def print_rrs(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "RESOURCE RESERVATIONS")
         self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~")
-        for r in self.rr:
+        for r in self.vm_rrs:
             r.print_contents(loglevel)
             self.logger.log(loglevel, "##")
-            
-        
-    def has_starting_reservations(self, time):
-        return len(self.get_starting_reservations(time)) > 0
-
-    def has_ending_reservations(self, time):
-        return len(self.get_ending_reservations(time)) > 0
-
-    def get_starting_reservations(self, time):
-        return [r for r in self.rr if r.start <= time and r.state == RES_STATE_SCHEDULED]
-
-    def get_ending_reservations(self, time):
-        return [r for r in self.rr if r.end <= time and r.state == RES_STATE_ACTIVE]
-
-    def get_active_reservations(self, time):
-        return [r for r in self.rr if r.start <= time and time <= r.end and r.state == RES_STATE_ACTIVE]
-
-    def get_scheduled_reservations(self):
-        return [r for r in self.rr if r.state == RES_STATE_SCHEDULED]
 
     def get_endtime(self):
-        vmrr, resrr = self.get_last_vmrr()
+        vmrr = self.get_last_vmrr()
         return vmrr.end
 
-    
-    def append_rr(self, rr):
-        self.rr.append(rr)
-
-    def next_rrs(self, rr):
-        return self.rr[self.rr.index(rr)+1:]
-
-    def prev_rr(self, rr):
-        return self.rr[self.rr.index(rr)-1]
+    def append_vmrr(self, vmrr):
+        self.vm_rrs.append(vmrr)
 
     def get_last_vmrr(self):
-        if isinstance(self.rr[-1],VMResourceReservation):
-            return (self.rr[-1], None)
-        elif isinstance(self.rr[-1],SuspensionResourceReservation):
-            return (self.rr[-2], self.rr[-1])
+        return self.vm_rrs[-1]
 
-    def replace_rr(self, rrold, rrnew):
-        self.rr[self.rr.index(rrold)] = rrnew
+    def update_vmrr(self, rrold, rrnew):
+        self.vm_rrs[self.vm_rrs.index(rrold)] = rrnew
     
-    def remove_rr(self, rr):
-        if not rr in self.rr:
-            raise Exception, "Tried to remove an RR not contained in this lease"
+    def remove_vmrr(self, vmrr):
+        if not vmrr in self.vm_rrs:
+            raise Exception, "Tried to remove an VM RR not contained in this lease"
         else:
-            self.rr.remove(rr)
+            self.vm_rrs.remove(vmrr)
 
     def clear_rrs(self):
-        self.rr = []
-        
+        self.deployment_rrs = []
+        self.vm_rrs = []
         
     def add_boot_overhead(self, t):
         self.duration.incr(t)        
 
     def add_runtime_overhead(self, percent):
-        self.duration.incr_by_percent(percent)      
-        
-        
-    def estimate_suspend_resume_time(self, rate):
-        time = float(self.requested_resources.get_by_type(RES_MEM)) / rate
-        time = roundDateTimeDelta(TimeDelta(seconds = time))
-        return time
-    
-    # TODO: Factor out into deployment modules
-    def estimate_image_transfer_time(self, bandwidth):
-        from haizea.resourcemanager.rm import ResourceManager
-        config = ResourceManager.get_singleton().config
-        forceTransferTime = config.get("force-imagetransfer-time")
-        if forceTransferTime != None:
-            return forceTransferTime
-        else:      
-            return estimate_transfer_time(self.diskimage_size, bandwidth)
-        
-    # TODO: Factor out
-    def estimate_migration_time(self, bandwidth):
-        from haizea.resourcemanager.rm import ResourceManager
-        config = ResourceManager.get_singleton().config
-        whattomigrate = config.get("what-to-migrate")
-        if whattomigrate == MIGRATE_NONE:
-            return TimeDelta(seconds=0)
-        else:
-            if whattomigrate == MIGRATE_MEM:
-                mbtotransfer = self.requested_resources.get_by_type(RES_MEM)
-            elif whattomigrate == MIGRATE_MEMDISK:
-                mbtotransfer = self.diskimage_size + self.requested_resources.get_by_type(RES_MEM)
-            return estimate_transfer_time(mbtotransfer, bandwidth)
-        
-    # TODO: This whole function has to be rethought, and factored out
-    def get_suspend_threshold(self, initial, suspendrate, migrating=False, bandwidth=None):
-        from haizea.resourcemanager.rm import ResourceManager
-        config = ResourceManager.get_singleton().config
-        threshold = config.get("force-suspend-threshold")
-        if threshold != None:
-            # If there is a hard-coded threshold, use that
-            return threshold
-        else:
-            # deploytime needs to be factored out of here
-#            transfertype = self.scheduler.rm.config.getTransferType()
-#            if transfertype == TRANSFER_NONE:
-#                deploytime = TimeDelta(seconds=0)
-#            else: 
-#                deploytime = self.estimateImageTransferTime()
-            # The threshold will be a multiple of the overhead
-            if not initial:
-                # Overestimating, just in case (taking into account that the lease may be
-                # resumed, but also suspended again)
-                if migrating:
-                    threshold = self.estimate_suspend_resume_time(suspendrate) * 2
-                    #threshold = self.estimate_migration_time(bandwidth) + self.estimate_suspend_resume_time(suspendrate) * 2
-                else:
-                    threshold = self.estimate_suspend_resume_time(suspendrate) * 2
-            else:
-                #threshold = self.scheduler.rm.config.getBootOverhead() + deploytime + self.estimateSuspendResumeTime(suspendrate)
-                threshold = config.get("bootshutdown-overhead") + self.estimate_suspend_resume_time(suspendrate)
-            factor = config.get("suspend-threshold-factor") + 1
-            return roundDateTimeDelta(threshold * factor)
+        self.duration.incr_by_percent(percent)
         
     def xmlrpc_marshall(self):
         # Convert to something we can send through XMLRPC
@@ -243,12 +189,12 @@ class LeaseBase(object):
         l["resources"] = `self.requested_resources`
         l["preemptible"] = self.preemptible
         l["state"] = self.state
-        l["rr"] = [rr.xmlrpc_marshall() for rr in self.rr]
+        l["vm_rrs"] = [vmrr.xmlrpc_marshall() for vmrr in self.vm_rrs]
                 
         return l
         
         
-class ARLease(LeaseBase):
+class ARLease(Lease):
     def __init__(self, submit_time, start, duration, diskimage_id, 
                  diskimage_size, numnodes, resreq, preemptible,
                  # AR-specific parameters:
@@ -256,24 +202,24 @@ class ARLease(LeaseBase):
         start = Timestamp(start)
         duration = Duration(duration)
         duration.known = realdur # ONLY for simulation
-        LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
+        Lease.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
         
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "__________________________________________________")
-        LeaseBase.print_contents(self, loglevel)
+        Lease.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : AR")
         self.logger.log(loglevel, "Start time     : %s" % self.start)
         self.print_rrs(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------")
     
     def xmlrpc_marshall(self):
-        l = LeaseBase.xmlrpc_marshall(self)
+        l = Lease.xmlrpc_marshall(self)
         l["type"] = "AR"
         return l
 
         
-class BestEffortLease(LeaseBase):
+class BestEffortLease(Lease):
     def __init__(self, submit_time, duration, diskimage_id, 
                  diskimage_size, numnodes, resreq, preemptible,
                  # BE-specific parameters:
@@ -283,12 +229,12 @@ class BestEffortLease(LeaseBase):
         duration.known = realdur # ONLY for simulation
         # When the images will be available
         self.imagesavail = None        
-        LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
+        Lease.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "__________________________________________________")
-        LeaseBase.print_contents(self, loglevel)
+        Lease.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : BEST-EFFORT")
         self.logger.log(loglevel, "Images Avail @ : %s" % self.imagesavail)
         self.print_rrs(loglevel)
@@ -306,12 +252,12 @@ class BestEffortLease(LeaseBase):
         return time_on_loaded / time_on_dedicated
 
     def xmlrpc_marshall(self):
-        l = LeaseBase.xmlrpc_marshall(self)
+        l = Lease.xmlrpc_marshall(self)
         l["type"] = "BE"
         return l
 
 
-class ImmediateLease(LeaseBase):
+class ImmediateLease(Lease):
     def __init__(self, submit_time, duration, diskimage_id, 
                  diskimage_size, numnodes, resreq, preemptible,
                  # Immediate-specific parameters:
@@ -319,18 +265,18 @@ class ImmediateLease(LeaseBase):
         start = Timestamp(None) # i.e., start on a best-effort basis
         duration = Duration(duration)
         duration.known = realdur # ONLY for simulation
-        LeaseBase.__init__(self, submit_time, start, duration, diskimage_id,
+        Lease.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "__________________________________________________")
-        LeaseBase.print_contents(self, loglevel)
+        Lease.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : IMMEDIATE")
         self.print_rrs(loglevel)
         self.logger.log(loglevel, "--------------------------------------------------")
 
     def xmlrpc_marshall(self):
-        l = LeaseBase.xmlrpc_marshall(self)
+        l = Lease.xmlrpc_marshall(self)
         l["type"] = "IM"
         return l
 
@@ -343,7 +289,17 @@ class ImmediateLease(LeaseBase):
 #-------------------------------------------------------------------#
 
         
-class ResourceReservationBase(object):
+class ResourceReservation(object):
+    
+    # Resource reservation states
+    STATE_SCHEDULED = 0
+    STATE_ACTIVE = 1
+    STATE_DONE = 2
+
+    state_str = {STATE_SCHEDULED : "Scheduled",
+                 STATE_ACTIVE : "Active",
+                 STATE_DONE : "Done"}
+    
     def __init__(self, lease, start, end, res):
         self.lease = lease
         self.start = start
@@ -355,8 +311,8 @@ class ResourceReservationBase(object):
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "Start          : %s" % self.start)
         self.logger.log(loglevel, "End            : %s" % self.end)
-        self.logger.log(loglevel, "State          : %s" % rstate_str(self.state))
-        self.logger.log(loglevel, "Resources      : \n%s" % "\n".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()])) 
+        self.logger.log(loglevel, "State          : %s" % ResourceReservation.state_str[self.state])
+        self.logger.log(loglevel, "Resources      : \n                         %s" % "\n                         ".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()])) 
                 
     def xmlrpc_marshall(self):
         # Convert to something we can send through XMLRPC
@@ -366,16 +322,31 @@ class ResourceReservationBase(object):
         rr["state"] = self.state
         return rr
                 
-class VMResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, nodes, res, oncomplete, backfill_reservation):
-        ResourceReservationBase.__init__(self, lease, start, end, res)
+class VMResourceReservation(ResourceReservation):
+    def __init__(self, lease, start, end, nodes, res, backfill_reservation):
+        ResourceReservation.__init__(self, lease, start, end, res)
         self.nodes = nodes
-        self.oncomplete = oncomplete
         self.backfill_reservation = backfill_reservation
+        self.resm_rrs = []
+        self.susp_rrs = []
 
         # ONLY for simulation
-        if lease.duration.known != None:
-            remdur = lease.duration.get_remaining_known_duration()
+        self.__update_prematureend()
+
+    def update_start(self, time):
+        self.start = time
+        # ONLY for simulation
+        self.__update_prematureend()
+
+    def update_end(self, time):
+        self.end = time
+        # ONLY for simulation
+        self.__update_prematureend()
+        
+    # ONLY for simulation
+    def __update_prematureend(self):
+        if self.lease.duration.known != None:
+            remdur = self.lease.duration.get_remaining_known_duration()
             rrdur = self.end - self.start
             if remdur < rrdur:
                 self.prematureend = self.start + remdur
@@ -384,33 +355,40 @@ class VMResourceReservation(ResourceReservationBase):
         else:
             self.prematureend = None 
 
+    def is_suspending(self):
+        return len(self.susp_rrs) > 0
+
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
-        ResourceReservationBase.print_contents(self, loglevel)
-        if self.prematureend != None:
-            self.logger.log(loglevel, "Premature end  : %s" % self.prematureend)
+        for resmrr in self.resm_rrs:
+            resmrr.print_contents(loglevel)
+            self.logger.log(loglevel, "--")
         self.logger.log(loglevel, "Type           : VM")
         self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
-        self.logger.log(loglevel, "On Complete    : %s" % self.oncomplete)
+        if self.prematureend != None:
+            self.logger.log(loglevel, "Premature end  : %s" % self.prematureend)
+        ResourceReservation.print_contents(self, loglevel)
+        for susprr in self.susp_rrs:
+            self.logger.log(loglevel, "--")
+            susprr.print_contents(loglevel)
         
     def is_preemptible(self):
         return self.lease.preemptible
 
     def xmlrpc_marshall(self):
-        rr = ResourceReservationBase.xmlrpc_marshall(self)
+        rr = ResourceReservation.xmlrpc_marshall(self)
         rr["type"] = "VM"
         rr["nodes"] = self.nodes.items()
         return rr
 
         
-class SuspensionResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, res, nodes):
-        ResourceReservationBase.__init__(self, lease, start, end, res)
-        self.nodes = nodes
+class SuspensionResourceReservation(ResourceReservation):
+    def __init__(self, lease, start, end, res, vmrr):
+        ResourceReservation.__init__(self, lease, start, end, res)
+        self.vmrr = vmrr
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
-        ResourceReservationBase.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : SUSPEND")
-        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
+        ResourceReservation.print_contents(self, loglevel)
         
     # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
     # has wider implications (with a non-trivial handling). For now, we leave them 
@@ -419,20 +397,18 @@ class SuspensionResourceReservation(ResourceReservationBase):
         return False        
         
     def xmlrpc_marshall(self):
-        rr = ResourceReservationBase.xmlrpc_marshall(self)
+        rr = ResourceReservation.xmlrpc_marshall(self)
         rr["type"] = "SUSP"
-        rr["nodes"] = self.nodes.items()
         return rr
         
-class ResumptionResourceReservation(ResourceReservationBase):
-    def __init__(self, lease, start, end, res, nodes):
-        ResourceReservationBase.__init__(self, lease, start, end, res)
-        self.nodes = nodes
+class ResumptionResourceReservation(ResourceReservation):
+    def __init__(self, lease, start, end, res, vmrr):
+        ResourceReservation.__init__(self, lease, start, end, res)
+        self.vmrr = vmrr
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
-        ResourceReservationBase.print_contents(self, loglevel)
+        ResourceReservation.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : RESUME")
-        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
 
     # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
     # has wider implications (with a non-trivial handling). For now, we leave them 
@@ -441,10 +417,14 @@ class ResumptionResourceReservation(ResourceReservationBase):
         return False        
         
     def xmlrpc_marshall(self):
-        rr = ResourceReservationBase.xmlrpc_marshall(self)
+        rr = ResourceReservation.xmlrpc_marshall(self)
         rr["type"] = "RESM"
-        rr["nodes"] = self.nodes.items()
         return rr
+
+class MigrationResourceReservation(ResourceReservation):
+    def __init__(self, lease, start, end, res, vmrr):
+        ResourceReservation.__init__(self, lease, start, end, res)
+        self.vmrr = vmrr
 
 #-------------------------------------------------------------------#
 #                                                                   #
@@ -510,6 +490,10 @@ class LeaseTable(object):
             return self.entries.values()
         else:
             return [e for e in self.entries.values() if isinstance(e, type)]
+
+    def get_leases_by_state(self, state):
+        return [e for e in self.entries.values() if e.state == state]
+
     
     # TODO: Should be moved to slottable module
     def getNextLeasesScheduledInNodes(self, time, nodes):
@@ -629,9 +613,9 @@ class Duration(object):
             
     def incr_by_percent(self, pct):
         factor = 1 + float(pct)/100
-        self.requested = roundDateTimeDelta(self.requested * factor)
+        self.requested = round_datetime_delta(self.requested * factor)
         if self.known != None:
-            self.requested = roundDateTimeDelta(self.known * factor)
+            self.requested = round_datetime_delta(self.known * factor)
         
     def accumulate_duration(self, t):
         self.accumulated += t

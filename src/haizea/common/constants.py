@@ -16,15 +16,6 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-# Types of tracefiles
-TRACE_CSV=0
-TRACE_SWF=1
-TRACE_GWF=2
-
-# Types of leases
-LEASE_BESTEFFORT = 0
-LEASE_AR = 1
-
 # Types of resources
 RES_CPU = 0
 RES_MEM = 1
@@ -35,53 +26,6 @@ RES_DISK = 4
 # Types of types of resources
 RESTYPE_FLOAT = 0
 RESTYPE_INT = 1
-
-# Types of file transfers
-TRANSFER_DEPLOY = 0
-TRANSFER_MIGRATE = 1
-
-# On complete
-ONCOMPLETE_ENDLEASE = 0
-ONCOMPLETE_SUSPEND = 1
-
-# Lease states
-LEASE_STATE_PENDING = 0
-LEASE_STATE_SCHEDULED = 1
-LEASE_STATE_DEPLOYING = 2
-LEASE_STATE_DEPLOYED = 3
-LEASE_STATE_ACTIVE = 4
-LEASE_STATE_SUSPENDED = 5
-LEASE_STATE_DONE = 6
-
-def state_str(s):
-    if s == LEASE_STATE_PENDING:
-        return "Pending"
-    elif s == LEASE_STATE_SCHEDULED:
-        return "Scheduled"
-    elif s == LEASE_STATE_DEPLOYING:
-        return "Deploying"
-    elif s == LEASE_STATE_DEPLOYED:
-        return "Deployed"
-    elif s == LEASE_STATE_ACTIVE:
-        return "Active"
-    elif s == LEASE_STATE_SUSPENDED:
-        return "Suspended"
-    elif s == LEASE_STATE_DONE:
-        return "Done"
-
-# Resource reservation states
-RES_STATE_SCHEDULED = 0
-RES_STATE_ACTIVE = 1
-RES_STATE_DONE = 2
-
-def rstate_str(s):
-    if s == RES_STATE_SCHEDULED:
-        return "Scheduled"
-    elif s == RES_STATE_ACTIVE:
-        return "Active"
-    elif s == RES_STATE_DONE:
-        return "Done"
-
 
 
 COMMON_SEC="common"
@@ -99,6 +43,9 @@ BACKFILLING_INTERMEDIATE="intermediate"
 SUSPENSION_NONE="none"
 SUSPENSION_SERIAL="serial-only"
 SUSPENSION_ALL="all"
+
+SUSPRES_EXCLUSION_LOCAL="local"
+SUSPRES_EXCLUSION_GLOBAL="global"
 
 MIGRATE_NONE="nothing"
 MIGRATE_MEM="mem"
@@ -136,55 +83,7 @@ BETTER = -1
 EQUAL = 0
 WORSE = 1
 
-
-# Types of final tables in report generation
-TABLE_FINALVALUE="final-value"
-TABLE_FINALTIME="final-time"
-TABLE_FINALAVG="final-avg"
-
-# Trace config file secs and opts
-INTERVAL_SEC = "interval"
-NUMNODES_SEC = "numnodes"
-DURATION_SEC = "duration"
-DEADLINE_SEC = "deadline"
-IMAGES_SEC = "images"
-WORKLOAD_SEC = "workload"
-
-DURATION_OPT = "duration"
-
-DISTRIBUTION_OPT = "distribution"
-MIN_OPT = "min"
-MAX_OPT = "max"
-ITEMS_OPT = "items"
-ITEMSPROBS_OPT = "itemswithprobs"
-MEAN_OPT = "mean"
-STDEV_OPT = "stdev"
-
-PERCENT_OPT = "percent"
-NUMNODES_OPT = "numnodes"
-
-
-DIST_UNIFORM = "uniform"
-DIST_EXPLICIT = "explicit"
-
-# Image config file secs and opts
-IMAGES_OPT="images"
-DISTRIBUTION_OPT="distribution"
-LENGTH_OPT="filelength"
-SIZE_SEC="size"
-
-CLIP_PERCENTSUBMITTED = "percent"
-CLIP_TIMESTAMP = "timestamp"
-CLIP_LASTSUBMISSION = "last-submission"
-CLIP_NOCLIP = "noclip"
-
 CACHESIZE_UNLIMITED = -1
-
-REPORT_ALL="all"
-REPORT_BASH="bash"
-REPORT_CONDOR="condor"
-REPORT_SINGLE_PROFILE="singletrace"
-REPORT_SINGLE_TRACE="singleprofile"
 
 DOING_IDLE=0
 DOING_TRANSFER=1
