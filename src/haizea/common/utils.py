@@ -33,10 +33,10 @@ def generate_config_name(profile, tracefile, injectedfile):
     name = profile + "_" + name
     return name
     
-def roundDateTimeDelta(d):
+def round_datetime_delta(d):
     return DateTime.DateTimeDelta(d.day, d.hour, d.minute, int(ceil(d.second)))
 
-def roundDateTime(d):
+def round_datetime(d):
     d += DateTime.TimeDelta(seconds=0.5)
     return DateTime.DateTime(d.year, d.month, d.day, d.hour, d.minute, int(floor(d.second)))
 
@@ -86,7 +86,7 @@ def pretty_nodemap(nodes):
 def estimate_transfer_time(size, bandwidth):
     bandwidthMBs = float(bandwidth) / 8
     seconds = size / bandwidthMBs
-    return roundDateTimeDelta(DateTime.TimeDelta(seconds = seconds)) 
+    return round_datetime_delta(DateTime.TimeDelta(seconds = seconds)) 
  
 def xmlrpc_marshall_singlevalue(value):
     if isinstance(value, DateTime.DateTimeType):

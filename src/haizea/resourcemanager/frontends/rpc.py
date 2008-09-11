@@ -18,7 +18,7 @@
 import haizea.common.constants as constants
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease, ResourceTuple
 from haizea.resourcemanager.frontends.base import RequestFrontend
-from haizea.common.utils import roundDateTime
+from haizea.common.utils import round_datetime
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO
 import logging
 
@@ -43,7 +43,7 @@ class RPCFrontend(RequestFrontend):
         return True
             
     def create_lease(self, start, duration, preemptible, numnodes, cpu, mem, vmimage, vmimagesize):
-        tSubmit = roundDateTime(self.rm.clock.get_time())
+        tSubmit = round_datetime(self.rm.clock.get_time())
         resreq = ResourceTuple.create_empty()
         resreq.set_by_type(constants.RES_CPU, float(cpu))
         resreq.set_by_type(constants.RES_MEM, int(mem))        
@@ -61,12 +61,10 @@ class RPCFrontend(RequestFrontend):
         else:
             if start[0] == "+":
                 # Relative time
-                start = roundDateTime(tSubmit + ISO.ParseTime(start[1:]))
+                start = round_datetime(tSubmit + ISO.ParseTime(start[1:]))
             else:
                 start = ISO.ParseDateTime(start)
             leasereq = ARLease(tSubmit, start, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
-
-        leasereq.state = constants.LEASE_STATE_PENDING
         
         self.accumulated.append(leasereq)
         

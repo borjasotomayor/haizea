@@ -16,6 +16,7 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+from haizea.resourcemanager.datastruct import Lease
 from haizea.resourcemanager.deployment.base import DeploymentBase
 import haizea.common.constants as constants
 
@@ -25,7 +26,7 @@ class UnmanagedDeployment(DeploymentBase):
     
     # Add dummy disk images
     def schedule(self, lease, vmrr, nexttime):
-        lease.state = constants.LEASE_STATE_DEPLOYED
+        lease.state = Lease.STATE_READY
         for (vnode, pnode) in vmrr.nodes.items():
             self.resourcepool.add_diskimage(pnode, lease.diskimage_id, lease.diskimage_size, lease.id, vnode)
             
@@ -55,5 +56,5 @@ class UnmanagedDeployment(DeploymentBase):
         return True
 
     def cleanup(self, lease, vmrr):
-        for vnode, pnode in lease.vmimagemap.items():
+        for vnode, pnode in lease.diskimagemap.items():
                 self.resourcepool.remove_diskimage(pnode, lease.id, vnode)

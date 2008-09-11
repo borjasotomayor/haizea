@@ -22,7 +22,7 @@ from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, Immediat
 from haizea.common.utils import UNIX2DateTime
 from pysqlite2 import dbapi2 as sqlite
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO
-from haizea.common.utils import roundDateTime
+from haizea.common.utils import round_datetime
 import operator
 import logging
 
@@ -116,7 +116,7 @@ class OpenNebulaFrontend(RequestFrontend):
         tSubmit, vmimage, vmimagesize, numnodes, resreq, duration, preemptible = self.get_common_attrs(req, attrs, haizea_param)
  
         leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
-        leasereq.state = constants.LEASE_STATE_PENDING
+
         # Enactment info should be changed to the "array id" when groups
         # are implemented in OpenNebula
         leasereq.enactment_info = int(req["oid"])
@@ -133,11 +133,11 @@ class OpenNebulaFrontend(RequestFrontend):
             # Relative time
             # For testing, should be:
             # tStart = tSubmit + ISO.ParseTime(tStart[1:])
-            start = roundDateTime(self.rm.clock.get_time() + ISO.ParseTime(start[1:]))
+            start = round_datetime(self.rm.clock.get_time() + ISO.ParseTime(start[1:]))
         else:
             start = ISO.ParseDateTime(start)
         leasereq = ARLease(tSubmit, start, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
-        leasereq.state = constants.LEASE_STATE_PENDING
+
         # Enactment info should be changed to the "array id" when groups
         # are implemented in OpenNebula
         leasereq.enactmentInfo = int(req["oid"])
@@ -150,7 +150,7 @@ class OpenNebulaFrontend(RequestFrontend):
         tSubmit, vmimage, vmimagesize, numnodes, resreq, duration, preemptible = self.get_common_attrs(req, attrs, haizea_param)
  
         leasereq = ImmediateLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
-        leasereq.state = constants.LEASE_STATE_PENDING
+
         # Enactment info should be changed to the "array id" when groups
         # are implemented in OpenNebula
         leasereq.enactment_info = int(req["oid"])

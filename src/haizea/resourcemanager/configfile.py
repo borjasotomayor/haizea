@@ -199,17 +199,28 @@ class HaizeaConfig(Config):
              - all: any lease can be suspended                
             """),
 
-     Option(name        = "suspend-threshold-factor",
-            getter      = "suspend-threshold-factor",
+     Option(name        = "suspendresume-exclusion",
+            getter      = "suspendresume-exclusion",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            default     = constants.SUSPRES_EXCLUSION_LOCAL,
+            valid       = [constants.SUSPRES_EXCLUSION_LOCAL,
+                           constants.SUSPRES_EXCLUSION_GLOBAL],
+            doc         = """
+            Documentation            
+            """),
+
+     Option(name        = "scheduling-threshold-factor",
+            getter      = "scheduling-threshold-factor",
             type        = OPTTYPE_INT,
             required    = False,
-            default     = 0,
+            default     = 1,
             doc         = """
             Documentation                
             """),
 
-     Option(name        = "force-suspend-threshold",
-            getter      = "force-suspend-threshold",
+     Option(name        = "force-scheduling-threshold",
+            getter      = "force-scheduling-threshold",
             type        = OPTTYPE_TIMEDELTA,
             required    = False,
             doc         = """

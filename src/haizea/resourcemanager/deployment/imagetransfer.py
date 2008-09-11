@@ -19,7 +19,8 @@
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
 from haizea.resourcemanager.deployment.base import DeploymentBase, DeploymentSchedException
-from haizea.resourcemanager.datastruct import ResourceReservationBase, ARLease, BestEffortLease
+from haizea.resourcemanager.datastruct import ResourceReservation, Lease, ARLease, BestEffortLease
+from haizea.common.utils import estimate_transfer_time
 
 import copy
 
@@ -66,7 +67,7 @@ class ImageTransferDeployment(DeploymentBase):
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
         
-        lease.state = constants.LEASE_STATE_SCHEDULED
+        lease.state = Lease.STATE_SCHEDULED
         
         if avoidredundant:
             pass # TODO
@@ -92,7 +93,7 @@ class ImageTransferDeployment(DeploymentBase):
                 musttransfer[vnode] = pnode
 
         if len(musttransfer) == 0:
-            lease.state = constants.LEASE_STATE_DEPLOYED
+            lease.state = Lease.STATE_READY
         else:
             if mechanism == constants.TRANSFER_UNICAST:
                 # Dictionary of transfer RRs. Key is the physical node where
@@ -124,7 +125,7 @@ class ImageTransferDeployment(DeploymentBase):
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
         earliest = self.find_earliest_starting_times(lease, nexttime)
-        lease.state = constants.LEASE_STATE_SCHEDULED
+        lease.state = Lease.STATE_SCHEDULED
         transferRRs = []
         musttransfer = {}
         piggybacking = []
@@ -151,14 +152,14 @@ class ImageTransferDeployment(DeploymentBase):
         else:
             # TODO: Not strictly correct. Should mark the lease
             # as deployed when piggybacked transfers have concluded
-            lease.state = constants.LEASE_STATE_DEPLOYED
+            lease.state = Lease.STATE_READY
         if len(piggybacking) > 0: 
             endtimes = [t.end for t in piggybacking]
             if len(musttransfer) > 0:
                 endtimes.append(endtransfer)
             lease.imagesavail = max(endtimes)
         if len(musttransfer)==0 and len(piggybacking)==0:
-            lease.state = constants.LEASE_STATE_DEPLOYED
+            lease.state = Lease.STATE_READY
             lease.imagesavail = nexttime
         for rr in transferRRs:
             lease.append_rr(rr)
@@ -174,7 +175,7 @@ class ImageTransferDeployment(DeploymentBase):
         # Figure out starting time assuming we have to transfer the image
         nextfifo = self.get_next_fifo_transfer_time(nexttime)
         
-        imgTransferTime=lease_req.estimate_image_transfer_time(self.imagenode_bandwidth)
+        imgTransferTime=self.estimate_image_transfer_time(lease_req, self.imagenode_bandwidth)
         
         # Find worst-case earliest start time
         if lease_req.numnodes == 1:
@@ -205,7 +206,7 @@ class ImageTransferDeployment(DeploymentBase):
                 # TODO
             if mechanism == constants.TRANSFER_MULTICAST:                
                 # We can only piggyback on transfers that haven't started yet
-                transfers = [t for t in self.transfers_fifo if t.state == constants.RES_STATE_SCHEDULED]
+                transfers = [t for t in self.transfers_fifo if t.state == ResourceReservation.STATE_SCHEDULED]
                 for t in transfers:
                     if t.file == lease_req.diskImageID:
                         startTime = t.end
@@ -219,16 +220,16 @@ class ImageTransferDeployment(DeploymentBase):
     def schedule_imagetransfer_edf(self, req, vnodes, nexttime):
         # Estimate image transfer time 
         bandwidth = self.resourcepool.deployment.get_bandwidth()
-        imgTransferTime=req.estimate_image_transfer_time(bandwidth)
+        imgTransferTime=self.estimate_image_transfer_time(req, bandwidth)
 
         # Determine start time
-        activetransfers = [t for t in self.transfers_edf if t.state == constants.RES_STATE_ACTIVE]
+        activetransfers = [t for t in self.transfers_edf if t.state == ResourceReservation.STATE_ACTIVE]
         if len(activetransfers) > 0:
             startTime = activetransfers[-1].end
         else:
             startTime = nexttime
         
-        transfermap = dict([(copy.copy(t), t) for t in self.transfers_edf if t.state == constants.RES_STATE_SCHEDULED])
+        transfermap = dict([(copy.copy(t), t) for t in self.transfers_edf if t.state == ResourceReservation.STATE_SCHEDULED])
         newtransfers = transfermap.keys()
         
         res = {}
@@ -242,7 +243,7 @@ class ImageTransferDeployment(DeploymentBase):
         
         newtransfer = FileTransferResourceReservation(req, res)
         newtransfer.deadline = req.start.requested
-        newtransfer.state = constants.RES_STATE_SCHEDULED
+        newtransfer.state = ResourceReservation.STATE_SCHEDULED
         newtransfer.file = req.diskimage_id
         for vnode, pnode in vnodes.items():
             newtransfer.piggyback(req.id, vnode, pnode)
@@ -316,7 +317,7 @@ class ImageTransferDeployment(DeploymentBase):
     def schedule_imagetransfer_fifo(self, req, reqtransfers, nexttime):
         # Estimate image transfer time 
         bandwidth = self.imagenode_bandwidth
-        imgTransferTime=req.estimate_image_transfer_time(bandwidth)
+        imgTransferTime=self.estimate_image_transfer_time(req, bandwidth)
         config = self.scheduler.rm.config
         mechanism = config.get("transfer-mechanism")
         startTime = self.get_next_fifo_transfer_time(nexttime)
@@ -342,7 +343,7 @@ class ImageTransferDeployment(DeploymentBase):
             newtransfer.start = startTime
             newtransfer.end = startTime+imgTransferTime
             newtransfer.deadline = None
-            newtransfer.state = constants.RES_STATE_SCHEDULED
+            newtransfer.state = ResourceReservation.STATE_SCHEDULED
             newtransfer.file = req.diskimage_id
             for vnode in reqtransfers:
                 physnode = reqtransfers[vnode]
@@ -354,8 +355,17 @@ class ImageTransferDeployment(DeploymentBase):
         
         return newtransfers
     
+    def estimate_image_transfer_time(self, lease, bandwidth):
+        from haizea.resourcemanager.rm import ResourceManager
+        config = ResourceManager.get_singleton().config
+        forceTransferTime = config.get("force-imagetransfer-time")
+        if forceTransferTime != None:
+            return forceTransferTime
+        else:      
+            return estimate_transfer_time(lease.diskimage_size, bandwidth)    
+    
     def get_next_fifo_transfer_time(self, nexttime):
-        transfers = [t for t in self.transfers_fifo if t.state != constants.RES_STATE_DONE]
+        transfers = [t for t in self.transfers_fifo if t.state != ResourceReservation.STATE_DONE]
         if len(transfers) > 0:
             startTime = transfers[-1].end
         else:
@@ -363,7 +373,7 @@ class ImageTransferDeployment(DeploymentBase):
         return startTime
 
     def __remove_from_fifo_transfers(self, lease_id):
-        transfers = [t for t in self.transfers_fifo if t.state != constants.RES_STATE_DONE]
+        transfers = [t for t in self.transfers_fifo if t.state != ResourceReservation.STATE_DONE]
         toremove = []
         for t in transfers:
             for pnode in t.transfers:
@@ -384,12 +394,10 @@ class ImageTransferDeployment(DeploymentBase):
     def handle_start_filetransfer(sched, lease, rr):
         sched.rm.logger.debug("LEASE-%i Start of handleStartFileTransfer" % lease.id)
         lease.print_contents()
-        if lease.state == constants.LEASE_STATE_SCHEDULED or lease.state == constants.LEASE_STATE_DEPLOYED:
-            lease.state = constants.LEASE_STATE_DEPLOYING
-            rr.state = constants.RES_STATE_ACTIVE
+        if lease.state == Lease.STATE_SCHEDULED or lease.state == Lease.STATE_READY:
+            lease.state = Lease.STATE_PREPARING
+            rr.state = ResourceReservation.STATE_ACTIVE
             # TODO: Enactment
-        elif lease.state == constants.LEASE_STATE_SUSPENDED:
-            pass # This shouldn't happen
         lease.print_contents()
         sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_TRANSFER, lease.id)
         sched.logger.debug("LEASE-%i End of handleStartFileTransfer" % lease.id)
@@ -399,9 +407,9 @@ class ImageTransferDeployment(DeploymentBase):
     def handle_end_filetransfer(sched, lease, rr):
         sched.rm.logger.debug("LEASE-%i Start of handleEndFileTransfer" % lease.id)
         lease.print_contents()
-        if lease.state == constants.LEASE_STATE_DEPLOYING:
-            lease.state = constants.LEASE_STATE_DEPLOYED
-            rr.state = constants.RES_STATE_DONE
+        if lease.state == Lease.STATE_PREPARING:
+            lease.state = Lease.STATE_READY
+            rr.state = ResourceReservation.STATE_DONE
             for physnode in rr.transfers:
                 vnodes = rr.transfers[physnode]
                 
@@ -512,16 +520,16 @@ class ImageTransferDeployment(DeploymentBase):
         for vnode, pnode in lease.vmimagemap.items():
             self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
 
-class FileTransferResourceReservation(ResourceReservationBase):
+class FileTransferResourceReservation(ResourceReservation):
     def __init__(self, lease, res, start=None, end=None):
-        ResourceReservationBase.__init__(self, lease, start, end, res)
+        ResourceReservation.__init__(self, lease, start, end, res)
         self.deadline = None
         self.file = None
         # Dictionary of  physnode -> [ (lease_id, vnode)* ]
         self.transfers = {}
 
     def print_contents(self, loglevel="VDEBUG"):
-        ResourceReservationBase.print_contents(self, loglevel)
+        ResourceReservation.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : FILE TRANSFER")
         self.logger.log(loglevel, "Deadline       : %s" % self.deadline)
         self.logger.log(loglevel, "File           : %s" % self.file)

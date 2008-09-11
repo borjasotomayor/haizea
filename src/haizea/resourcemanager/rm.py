@@ -36,10 +36,10 @@ import haizea.common.constants as constants
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.frontends.rpc import RPCFrontend
-from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease 
+from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ImmediateLease 
 from haizea.resourcemanager.scheduler import Scheduler
 from haizea.resourcemanager.rpcserver import RPCServer
-from haizea.common.utils import abstract, roundDateTime, Singleton
+from haizea.common.utils import abstract, round_datetime, Singleton
 
 import operator
 import logging
@@ -250,18 +250,9 @@ class ResourceManager(Singleton):
         for frontend in self.frontends:
             requests += frontend.getAccumulatedRequests()
         requests.sort(key=operator.attrgetter("submit_time"))
-                
-        ar_leases = [req for req in requests if isinstance(req, ARLease)]
-        be_leases = [req for req in requests if isinstance(req, BestEffortLease)]
-        im_leases = [req for req in requests if isinstance(req, ImmediateLease)]
         
-        # Queue best-effort
-        for req in be_leases:
-            self.scheduler.enqueue(req)
-            
-        # Add AR leases and immediate leases
-        for req in ar_leases + im_leases:
-            self.scheduler.add_pending_lease(req)
+        for req in requests:
+            self.scheduler.request_lease(req)
         
         # Run the scheduling function.
         try:
@@ -299,12 +290,12 @@ class ResourceManager(Singleton):
         self.logger.log(loglevel, "Next change point (in slot table): %s" % self.get_next_changepoint())
 
         # Print descriptors of scheduled leases
-        scheduled = self.scheduler.scheduledleases.entries.keys()
+        scheduled = self.scheduler.leases.entries.keys()
         self.logger.log(loglevel, "Scheduled requests: %i" % len(scheduled))
         if verbose and len(scheduled)>0:
             self.logger.log(loglevel, "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
             for k in scheduled:
-                lease = self.scheduler.scheduledleases.get_lease(k)
+                lease = self.scheduler.leases.get_lease(k)
                 lease.print_contents(loglevel=loglevel)
             self.logger.log(loglevel, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 
@@ -541,10 +532,10 @@ class SimulatedClock(Clock):
         # We can also be done if we've specified that we want to stop when
         # the best-effort requests are all done or when they've all been submitted.
         stopwhen = self.rm.config.get("stop-when")
-        scheduledbesteffort = self.rm.scheduler.scheduledleases.get_leases(type = BestEffortLease)
+        besteffort = self.rm.scheduler.leases.get_leases(type = BestEffortLease)
         pendingbesteffort = [r for r in tracefrontend.requests if isinstance(r, BestEffortLease)]
         if stopwhen == constants.STOPWHEN_BEDONE:
-            if self.rm.scheduler.isQueueEmpty() and len(scheduledbesteffort) + len(pendingbesteffort) == 0:
+            if self.rm.scheduler.isQueueEmpty() and len(besteffort) + len(pendingbesteffort) == 0:
                 done = True
         elif stopwhen == constants.STOPWHEN_BESUBMITTED:
             if len(pendingbesteffort) == 0:
@@ -554,7 +545,7 @@ class SimulatedClock(Clock):
         # an infinite loop. This is A Bad Thing(tm).
         if newtime == prevtime and done != True:
             self.logger.error("Simulated clock has fallen into an infinite loop. Dumping state..." )
-            self.rm.print_stats("ERROR", verbose=True)
+            self.rm.print_stats(logging.getLevelName("ERROR"), verbose=True)
             raise Exception, "Simulated clock has fallen into an infinite loop."
         
         return newtime, done
@@ -590,7 +581,7 @@ class RealClock(Clock):
         if not self.fastforward:
             self.lastwakeup = None
         else:
-            self.lastwakeup = roundDateTime(now())
+            self.lastwakeup = round_datetime(now())
         self.logger = logging.getLogger("CLOCK")
         self.starttime = self.get_time()
         self.nextschedulable = None
@@ -644,11 +635,11 @@ class RealClock(Clock):
             # resource manager operations (if we use now(), we'll get a different
             # time every time)
             if not self.fastforward:
-                self.lastwakeup = roundDateTime(self.get_time())
+                self.lastwakeup = round_datetime(self.get_time())
             self.logger.status("Wake-up time recorded as %s" % self.lastwakeup)
                 
             # Next schedulable time
-            self.nextschedulable = roundDateTime(self.lastwakeup + self.non_sched)
+            self.nextschedulable = round_datetime(self.lastwakeup + self.non_sched)
             
             # Wake up the resource manager
             self.rm.process_reservations(self.lastwakeup)
@@ -660,9 +651,9 @@ class RealClock(Clock):
             if self.lastwakeup + self.quantum <= time_now:
                 quantums = (time_now - self.lastwakeup) / self.quantum
                 quantums = int(ceil(quantums)) * self.quantum
-                self.nextperiodicwakeup = roundDateTime(self.lastwakeup + quantums)
+                self.nextperiodicwakeup = round_datetime(self.lastwakeup + quantums)
             else:
-                self.nextperiodicwakeup = roundDateTime(self.lastwakeup + self.quantum)
+                self.nextperiodicwakeup = round_datetime(self.lastwakeup + self.quantum)
             
             # Determine if there's anything to do before the next wakeup time
             nextchangepoint = self.rm.get_next_changepoint()
@@ -701,7 +692,7 @@ class RealClock(Clock):
 if __name__ == "__main__":
     from haizea.resourcemanager.configfile import HaizeaConfig
     from haizea.common.config import ConfigException
-    CONFIGFILE = "../../../etc/sample_trace.conf"
+    CONFIGFILE = "../../../etc/suspendresume.conf"
     try:
         CONFIG = HaizeaConfig.from_file(CONFIGFILE)
     except ConfigException, msg:

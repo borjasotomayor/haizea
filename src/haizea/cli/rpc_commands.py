@@ -15,13 +15,13 @@
 # See the License for the specific language governing permissions and        #
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
-from haizea.cli.optionparser import OptionParser, Option
-from haizea.common.constants import state_str
-from mx.DateTime import TimeDelta
 import haizea.common.defaults as defaults
+from haizea.resourcemanager.datastruct import Lease
+from haizea.cli.optionparser import OptionParser, Option
 from haizea.cli import Command
 import xmlrpclib
 import sys
+from mx.DateTime import TimeDelta
 from mx.DateTime import ISO
 
 class RPCCommand(Command):
@@ -226,7 +226,7 @@ def console_table_printer(fields, values):
     
 def pretty_print_rpcvalue(name, value):
     if name == "state":
-        value = state_str(value)
+        value = Lease.state_str[value]
     elif name == "duration_req":
         value = TimeDelta(seconds=value)
     elif name == "start_req":
