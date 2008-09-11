@@ -20,7 +20,6 @@ from mx.DateTime import ISO, TimeDelta
 from operator import attrgetter, itemgetter
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
-from haizea.common.utils import roundDateTimeDelta
 import bisect
 import copy
 import logging
@@ -96,6 +95,9 @@ class SlotTable(object):
     def add_node(self, resourcepoolnode):
         self.nodes.add(Node.from_resourcepool_node(resourcepoolnode))
 
+    def is_empty(self):
+        return (len(self.reservationsByStart) == 0)
+
     def dirty(self):
         # You're a dirty, dirty slot table and you should be
         # ashamed of having outdated caches!
@@ -154,13 +156,27 @@ class SlotTable(object):
         res = bystart & byend
         return list(res)
     
-    def getReservationsStartingBetween(self, start, end):
+    def get_reservations_starting_between(self, start, end):
         startitem = KeyValueWrapper(start, None)
         enditem = KeyValueWrapper(end, None)
         startpos = bisect.bisect_left(self.reservationsByStart, startitem)
+        endpos = bisect.bisect_right(self.reservationsByStart, enditem)
+        res = [x.value for x in self.reservationsByStart[startpos:endpos]]
+        return res
+
+    def get_reservations_ending_between(self, start, end):
+        startitem = KeyValueWrapper(start, None)
+        enditem = KeyValueWrapper(end, None)
+        startpos = bisect.bisect_left(self.reservationsByEnd, startitem)
         endpos = bisect.bisect_right(self.reservationsByEnd, enditem)
         res = [x.value for x in self.reservationsByStart[startpos:endpos]]
         return res
+    
+    def get_reservations_starting_at(self, time):
+        return self.get_reservations_starting_between(time, time)
+
+    def get_reservations_ending_at(self, time):
+        return self.get_reservations_ending_between(time, time)
     
     # ONLY for simulation
     def getNextPrematureEnd(self, after):
@@ -181,7 +197,7 @@ class SlotTable(object):
     def getReservationsWithChangePointsAfter(self, after):
         item = KeyValueWrapper(after, None)
         startpos = bisect.bisect_right(self.reservationsByStart, item)
-        bystart = set([x.value for x in self.reservationsByStart[startpos:]])
+        bystart = set([x.value for x in self.reservationsByStart[:startpos]])
         endpos = bisect.bisect_right(self.reservationsByEnd, item)
         byend = set([x.value for x in self.reservationsByEnd[endpos:]])
         res = bystart | byend
@@ -267,93 +283,6 @@ class SlotTable(object):
         if p != None:
             self.changepointcache.pop()
         return p
-    
-
-    def suspend(self, lease, time):
-        suspendresumerate = self.resourcepool.info.get_suspendresume_rate()
-        
-        (vmrr, susprr) = lease.get_last_vmrr()
-        vmrrnew = copy.copy(vmrr)
-        
-        suspendtime = lease.estimate_suspend_resume_time(suspendresumerate)
-        vmrrnew.end = time - suspendtime
-            
-        vmrrnew.oncomplete = constants.ONCOMPLETE_SUSPEND
-
-        self.updateReservationWithKeyChange(vmrr, vmrrnew)
-       
-        if susprr != None:
-            lease.remove_rr(susprr)
-            self.removeReservation(susprr)
-        
-        mappings = vmrr.nodes
-        suspres = {}
-        for n in mappings.values():
-            r = ds.ResourceTuple.create_empty()
-            r.set_by_type(constants.RES_MEM, vmrr.resources_in_pnode[n].get_by_type(constants.RES_MEM))
-            r.set_by_type(constants.RES_DISK, vmrr.resources_in_pnode[n].get_by_type(constants.RES_DISK))
-            suspres[n] = r
-        
-        newsusprr = ds.SuspensionResourceReservation(lease, time - suspendtime, time, suspres, mappings)
-        newsusprr.state = constants.RES_STATE_SCHEDULED
-        lease.append_rr(newsusprr)
-        self.addReservation(newsusprr)
-        
-
-    def slideback(self, lease, earliest):
-        (vmrr, susprr) = lease.get_last_vmrr()
-        vmrrnew = copy.copy(vmrr)
-        nodes = vmrrnew.nodes.values()
-        if lease.state == constants.LEASE_STATE_SUSPENDED:
-            resmrr = lease.prev_rr(vmrr)
-            originalstart = resmrr.start
-        else:
-            resmrr = None
-            originalstart = vmrrnew.start
-        cp = self.findChangePointsAfter(after=earliest, until=originalstart, nodes=nodes)
-        cp = [earliest] + cp
-        newstart = None
-        for p in cp:
-            self.availabilitywindow.initWindow(p, lease.requested_resources, canpreempt=False)
-            self.availabilitywindow.printContents()
-            if self.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
-                (end, canfit) = self.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
-                if end == originalstart and set(nodes) <= set(canfit.keys()):
-                    self.logger.debug("Can slide back to %s" % p)
-                    newstart = p
-                    break
-        if newstart == None:
-            # Can't slide back. Leave as is.
-            pass
-        else:
-            diff = originalstart - newstart
-            if resmrr != None:
-                resmrrnew = copy.copy(resmrr)
-                resmrrnew.start -= diff
-                resmrrnew.end -= diff
-                self.updateReservationWithKeyChange(resmrr, resmrrnew)
-            vmrrnew.start -= diff
-            
-            # If the lease was going to be suspended, check to see if
-            # we don't need to suspend any more.
-            remdur = lease.duration.get_remaining_duration()
-            if susprr != None and vmrrnew.end - newstart >= remdur: 
-                vmrrnew.end = vmrrnew.start + remdur
-                vmrrnew.oncomplete = constants.ONCOMPLETE_ENDLEASE
-                lease.remove_rr(susprr)
-                self.removeReservation(susprr)
-            else:
-                vmrrnew.end -= diff
-            # ONLY for simulation
-            if vmrrnew.prematureend != None:
-                vmrrnew.prematureend -= diff
-            self.updateReservationWithKeyChange(vmrr, vmrrnew)
-            self.dirty()
-            self.logger.vdebug("New lease descriptor (after slideback):")
-            lease.print_contents()
-
-
-
         
     def isFull(self, time):
         nodes = self.getAvailability(time)
