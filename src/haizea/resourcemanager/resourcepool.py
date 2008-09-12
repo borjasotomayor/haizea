@@ -75,6 +75,12 @@ class ResourcePool(object):
             self.rm.fail_lease(lease)
          
     def suspend_vms(self, lease, rr):
+        # Add memory image files
+        for vnode in rr.vnodes:
+            pnode = rr.vmrr.nodes[vnode]
+            self.add_ramfile(pnode, lease.id, vnode, lease.requested_resources.get_by_type(constants.RES_MEM))
+
+        # Enact suspend
         suspend_action = actions.VMEnactmentSuspendAction()
         suspend_action.from_rr(rr)
         try:
@@ -95,6 +101,12 @@ class ResourcePool(object):
     #    pass
     
     def resume_vms(self, lease, rr):
+        # Remove memory image files
+        for vnode in rr.vnodes:
+            pnode = rr.vmrr.nodes[vnode]
+            self.remove_ramfile(pnode, lease.id, vnode)
+
+        # Enact resume
         resume_action = actions.VMEnactmentResumeAction()
         resume_action.from_rr(rr)
         try:
@@ -196,12 +208,6 @@ class Node(object):
         # enactment-specific information
         self.enactment_info = None
         
-        # Kludgy way of keeping track of utilization
-        # TODO: Compute this information based on the lease reservations,
-        # either on the fly or when Haizea stops running.
-        self.transfer_doing = constants.DOING_IDLE
-        self.vm_doing = constants.DOING_IDLE
-        
     def get_capacity(self):
         return self.capacity
            
@@ -248,12 +254,6 @@ class Node(object):
         if len(self.files) > 0:
             images = ", ".join([str(img) for img in self.files])
         self.logger.vdebug("Node %i files: %iMB %s" % (self.nod_id, self.get_disk_usage(), images))
-
-    def get_state(self):
-        if self.vm_doing == constants.DOING_IDLE and self.transfer_doing == constants.DOING_TRANSFER:
-            return constants.DOING_TRANSFER_NOVM
-        else:
-            return self.vm_doing
 
     def xmlrpc_marshall(self):
         # Convert to something we can send through XMLRPC

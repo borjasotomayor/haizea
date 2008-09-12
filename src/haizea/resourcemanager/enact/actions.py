@@ -39,11 +39,7 @@ class VMEnactmentAction(EnactmentAction):
     
     def from_rr(self, rr):
         EnactmentAction.from_rr(self, rr)
-        # TODO: This is very kludgy
-        if rr.lease.vnode_enactment_info == None:
-            self.vnodes = dict([(vnode+1, VNode(None)) for vnode in range(rr.lease.numnodes)])
-        else:
-            self.vnodes = dict([(vnode, VNode(info)) for (vnode, info) in rr.lease.vnode_enactment_info.items()])
+        self.vnodes = dict([(vnode, VNode(info)) for (vnode, info) in rr.lease.vnode_enactment_info.items()])
 
 class VMEnactmentStartAction(VMEnactmentAction):
     def __init__(self):
@@ -57,9 +53,17 @@ class VMEnactmentSuspendAction(VMEnactmentAction):
     def __init__(self):
         VMEnactmentAction.__init__(self)
 
+    def from_rr(self, rr):
+        VMEnactmentAction.from_rr(self, rr)
+        self.vnodes = dict([(k, v) for (k,v) in self.vnodes.items() if k in rr.vnodes])
+
 class VMEnactmentResumeAction(VMEnactmentAction):
     def __init__(self):
         VMEnactmentAction.__init__(self)
+
+    def from_rr(self, rr):
+        VMEnactmentAction.from_rr(self, rr)
+        self.vnodes = dict([(k, v) for (k,v) in self.vnodes.items() if k in rr.vnodes])
 
 class VMEnactmentConfirmSuspendAction(VMEnactmentAction):
     def __init__(self):

@@ -88,6 +88,7 @@ class Lease(object):
                  STATE_SUSPENDED : "Suspended",
                  STATE_MIGRATING : "Migrating",
                  STATE_RESUMING : "Resuming",
+                 STATE_RESUMED_READY: "Resumed-Ready",
                  STATE_DONE : "Done",
                  STATE_FAIL : "Fail"}
     
@@ -119,7 +120,7 @@ class Lease(object):
 
         # Enactment information. Should only be manipulated by enactment module
         self.enactment_info = None
-        self.vnode_enactment_info = None
+        self.vnode_enactment_info = dict([(n+1, None) for n in range(numnodes)])
         
         self.logger = logging.getLogger("LEASES")
         
@@ -382,13 +383,20 @@ class VMResourceReservation(ResourceReservation):
 
         
 class SuspensionResourceReservation(ResourceReservation):
-    def __init__(self, lease, start, end, res, vmrr):
+    def __init__(self, lease, start, end, res, vnodes, vmrr):
         ResourceReservation.__init__(self, lease, start, end, res)
         self.vmrr = vmrr
+        self.vnodes = vnodes
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "Type           : SUSPEND")
         ResourceReservation.print_contents(self, loglevel)
+        
+    def is_first(self):
+        return (self == self.vmrr.susp_rrs[0])
+
+    def is_last(self):
+        return (self == self.vmrr.susp_rrs[-1])
         
     # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
     # has wider implications (with a non-trivial handling). For now, we leave them 
@@ -402,17 +410,24 @@ class SuspensionResourceReservation(ResourceReservation):
         return rr
         
 class ResumptionResourceReservation(ResourceReservation):
-    def __init__(self, lease, start, end, res, vmrr):
+    def __init__(self, lease, start, end, res, vnodes, vmrr):
         ResourceReservation.__init__(self, lease, start, end, res)
         self.vmrr = vmrr
+        self.vnodes = vnodes
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         ResourceReservation.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : RESUME")
 
-    # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
+    def is_first(self):
+        return (self == self.vmrr.resm_rrs[0])
+
+    def is_last(self):
+        return (self == self.vmrr.resm_rrs[-1])
+
+    # TODO: Resumption RRs should be preemptible, but preempting a resumption RR
     # has wider implications (with a non-trivial handling). For now, we leave them 
-    # as non-preemptible, since the probability of preempting a suspension RR is slim.
+    # as non-preemptible, since the probability of preempting a resumption RR is slim.
     def is_preemptible(self):
         return False        
         

@@ -399,7 +399,6 @@ class ImageTransferDeployment(DeploymentBase):
             rr.state = ResourceReservation.STATE_ACTIVE
             # TODO: Enactment
         lease.print_contents()
-        sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_TRANSFER, lease.id)
         sched.logger.debug("LEASE-%i End of handleStartFileTransfer" % lease.id)
         sched.logger.info("Starting image transfer for lease %i" % (lease.id))
 
@@ -431,7 +430,6 @@ class ImageTransferDeployment(DeploymentBase):
                 sched.deployment.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
 
         lease.print_contents()
-        sched.updateNodeTransferState(rr.transfers.keys(), constants.DOING_IDLE, lease.id)
         sched.rm.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id)
         sched.rm.logger.info("Completed image transfer for lease %i" % (lease.id))
         

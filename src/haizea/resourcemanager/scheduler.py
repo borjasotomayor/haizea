@@ -160,10 +160,7 @@ class Scheduler(object):
             self.handlers[type(rr)].on_start(self, rr.lease, rr)
 
         util = self.slottable.getUtilization(nowtime)
-        self.rm.accounting.append_stat(constants.COUNTER_CPUUTILIZATION, util)
-        # TODO: Should be moved to rm.py
-        self.rm.accounting.tick()
-        
+        self.rm.accounting.append_stat(constants.COUNTER_CPUUTILIZATION, util)        
         
     def register_handler(self, type, on_start, on_end):
         handler = ReservationEventHandler(on_start=on_start, on_end=on_end)
@@ -734,6 +731,10 @@ class Scheduler(object):
         if mustsuspend:
             self.__schedule_suspension(vmrr, end)
         
+        # Compensate for any overestimation
+        if (vmrr.end - vmrr.start) > remaining_duration:
+            vmrr.end = vmrr.start + remaining_duration
+        
         susp_str = res_str = ""
         if mustresume:
             res_str = " (resuming)"
@@ -783,46 +784,159 @@ class Scheduler(object):
                 
         return start, end, canfit
 
-    def __schedule_resumption(self, vmrr, resume_at):
-        resumetime = self.__estimate_resume_time(vmrr.lease)
-        vmrr.update_start(resume_at + resumetime)
-        
-        mappings = vmrr.nodes
-        resmres = {}
-        for n in mappings.values():
-            r = ds.ResourceTuple.create_empty()
-            r.set_by_type(constants.RES_MEM, vmrr.resources_in_pnode[n].get_by_type(constants.RES_MEM))
-            r.set_by_type(constants.RES_DISK, vmrr.resources_in_pnode[n].get_by_type(constants.RES_DISK))
-            resmres[n] = r
-        resmrr = ds.ResumptionResourceReservation(vmrr.lease, resume_at, resume_at + resumetime, resmres, vmrr)
-        resmrr.state = ResourceReservation.STATE_SCHEDULED
+    # TODO: There is a LOT of common code between __schedule_resumption and 
+    # __schedule_suspension. This has to be factored out.
+    # Also, we need to "consolidate" RRs when doing local exclusion.
 
-        vmrr.resm_rrs.append(resmrr)        
+    def __schedule_resumption(self, vmrr, resume_at):
+        from haizea.resourcemanager.rm import ResourceManager
+        config = ResourceManager.get_singleton().config
+        resm_exclusion = config.get("suspendresume-exclusion")        
+        rate = self.resourcepool.info.get_suspendresume_rate()
+
+        if resume_at < vmrr.start or resume_at > vmrr.end:
+            raise SchedException, "Tried to schedule a resumption at %s, which is outside the VMRR's duration (%s-%s)" % (resume_at, vmrr.start, vmrr.end)
+
+        resume_rrs = []
+        if resm_exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
+            # Global exclusion (which represents, e.g., reading the memory image files
+            # from a global file system) meaning no two suspensions can happen at the same
+            # time in the entire resource pool.
+            start = resume_at
+            for (vnode,pnode) in vmrr.nodes.items():
+                mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                single_resm_time = self.__compute_suspend_resume_time(mem, rate)
+                end = start + single_resm_time
+
+                r = ds.ResourceTuple.create_empty()
+                r.set_by_type(constants.RES_MEM, mem)
+                r.set_by_type(constants.RES_DISK, mem)
+                resmres = {pnode: r}
+                vnodes = [vnode]
+                resmrr = ds.ResumptionResourceReservation(vmrr.lease, start, end, resmres, vnodes, vmrr)
+                resmrr.state = ResourceReservation.STATE_SCHEDULED
+                resume_rrs.append(resmrr)
+                
+                start = end
+        elif resm_exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
+            # Local exclusion (which represents, e.g., reading the memory image files
+            # from a local file system) means no two resumptions can happen at the same
+            # time in the same physical node.
+            vnodes_in_pnode = {}
+            for (vnode,pnode) in vmrr.nodes.items():
+                vnodes_in_pnode.setdefault(pnode, []).append(vnode)
+            for pnode in vnodes_in_pnode:
+                start = resume_at
+                for vnode in vnodes_in_pnode[pnode]:
+                    mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                    single_resm_time = self.__compute_suspend_resume_time(mem, rate)
+                    end = start + single_resm_time
+    
+                    r = ds.ResourceTuple.create_empty()
+                    r.set_by_type(constants.RES_MEM, mem)
+                    r.set_by_type(constants.RES_DISK, mem)
+                    resmres = {pnode: r}
+                    vnodes = [vnode]
+                    resmrr = ds.ResumptionResourceReservation(vmrr.lease, start, end, resmres, vnodes, vmrr)
+                    resmrr.state = ResourceReservation.STATE_SCHEDULED
+                    resume_rrs.append(resmrr)
+                
+                    start = end
+                
+            resume_rrs.sort(key=attrgetter("start"))
+            
+        resm_end = resume_rrs[-1].end
+        if resm_end > vmrr.end:
+            raise SchedException, "Determined resumption would end at %s, after the VMRR's end (%s) -- Resume time not being properly estimated?" % (resm_end, vmrr.end)
+        
+        vmrr.update_start(resm_end)
+        for resmrr in resume_rrs:
+            vmrr.resm_rrs.append(resmrr)        
+           
     
     def __schedule_suspension(self, vmrr, suspend_by):
-        suspendtime = self.__estimate_suspend_time(vmrr.lease)
-        vmrr.update_end(suspend_by - suspendtime)
-        
-        mappings = vmrr.nodes
-        suspres = {}
-        for n in mappings.values():
-            r = ds.ResourceTuple.create_empty()
-            r.set_by_type(constants.RES_MEM, vmrr.resources_in_pnode[n].get_by_type(constants.RES_MEM))
-            r.set_by_type(constants.RES_DISK, vmrr.resources_in_pnode[n].get_by_type(constants.RES_DISK))
-            suspres[n] = r
-        
-        susprr = ds.SuspensionResourceReservation(vmrr.lease, suspend_by - suspendtime, suspend_by, suspres, vmrr)
-        susprr.state = ResourceReservation.STATE_SCHEDULED
-        
-        vmrr.susp_rrs.append(susprr)        
+        from haizea.resourcemanager.rm import ResourceManager
+        config = ResourceManager.get_singleton().config
+        susp_exclusion = config.get("suspendresume-exclusion")        
+        rate = self.resourcepool.info.get_suspendresume_rate()
 
+        if suspend_by < vmrr.start or suspend_by > vmrr.end:
+            raise SchedException, "Tried to schedule a suspension by %s, which is outside the VMRR's duration (%s-%s)" % (suspend_by, vmrr.start, vmrr.end)
+
+        suspend_rrs = []
+        if susp_exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
+            # Global exclusion (which represents, e.g., saving the memory image files
+            # to a global file system) means no two suspensions can happen at the same
+            # time in the entire resource pool.
+            end = suspend_by
+            for (vnode,pnode) in vmrr.nodes.items():
+                mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                single_susp_time = self.__compute_suspend_resume_time(mem, rate)
+                start = end - single_susp_time
+
+                r = ds.ResourceTuple.create_empty()
+                r.set_by_type(constants.RES_MEM, mem)
+                r.set_by_type(constants.RES_DISK, mem)
+                suspres = {pnode: r}
+                vnodes = [vnode]
+                susprr = ds.SuspensionResourceReservation(vmrr.lease, start, end, suspres, vnodes, vmrr)
+                susprr.state = ResourceReservation.STATE_SCHEDULED
+                suspend_rrs.append(susprr)
+                
+                end = start
+                
+            suspend_rrs.reverse()
+        elif susp_exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
+            # Local exclusion (which represents, e.g., saving the memory image files
+            # to a local file system) means no two suspensions can happen at the same
+            # time in the same physical node.
+            vnodes_in_pnode = {}
+            for (vnode,pnode) in vmrr.nodes.items():
+                vnodes_in_pnode.setdefault(pnode, []).append(vnode)
+            for pnode in vnodes_in_pnode:
+                end = suspend_by
+                for vnode in vnodes_in_pnode[pnode]:
+                    mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                    single_susp_time = self.__compute_suspend_resume_time(mem, rate)
+                    start = end - single_susp_time
+    
+                    r = ds.ResourceTuple.create_empty()
+                    r.set_by_type(constants.RES_MEM, mem)
+                    r.set_by_type(constants.RES_DISK, mem)
+                    suspres = {pnode: r}
+                    vnodes = [vnode]
+                    susprr = ds.SuspensionResourceReservation(vmrr.lease, start, end, suspres, vnodes, vmrr)
+                    susprr.state = ResourceReservation.STATE_SCHEDULED
+                    suspend_rrs.append(susprr)
+                    
+                    end = start
+                
+            suspend_rrs.sort(key=attrgetter("start"))
+            
+        susp_start = suspend_rrs[0].start
+        if susp_start < vmrr.start:
+            raise SchedException, "Determined suspension should start at %s, before the VMRR's start (%s) -- Suspend time not being properly estimated?" % (susp_start, vmrr.start)
+        
+        vmrr.update_end(susp_start)
+        for susprr in suspend_rrs:
+            vmrr.susp_rrs.append(susprr)        
+
+    def __compute_suspend_resume_time(self, mem, rate):
+        time = float(mem) / rate
+        time = round_datetime_delta(TimeDelta(seconds = time))
+        return time
+    
     def __estimate_suspend_resume_time(self, lease):
         from haizea.resourcemanager.rm import ResourceManager
         config = ResourceManager.get_singleton().config
+        susp_exclusion = config.get("suspendresume-exclusion")        
         rate = self.resourcepool.info.get_suspendresume_rate()
-        time = float(lease.requested_resources.get_by_type(constants.RES_MEM)) / rate
-        time = round_datetime_delta(TimeDelta(seconds = time))
-        return time
+        mem = lease.requested_resources.get_by_type(constants.RES_MEM)
+        if susp_exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
+            return lease.numnodes * self.__compute_suspend_resume_time(mem, rate)
+        elif susp_exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
+            # Overestimating
+            return lease.numnodes * self.__compute_suspend_resume_time(mem, rate)
 
     def __estimate_suspend_time(self, lease):
         return self.__estimate_suspend_resume_time(lease)
@@ -1221,7 +1335,6 @@ class Scheduler(object):
             # No enactment to do here, since all the suspend/resume actions are
             # handled during the suspend/resume RRs
         l.print_contents()
-        self.updateNodeVMState(rr.nodes.values(), constants.DOING_VM_RUN, l.id)
         self.logger.debug("LEASE-%i End of handleStartVM" % l.id)
         self.logger.info("Started VMs for lease %i on nodes %s" % (l.id, rr.nodes.values()))
 
@@ -1252,7 +1365,6 @@ class Scheduler(object):
                 self.numbesteffortres -= 1
         self.logger.vdebug("LEASE-%i After:" % l.id)
         l.print_contents()
-        self.updateNodeVMState(rr.nodes.values(), constants.DOING_IDLE, l.id)
         self.logger.debug("LEASE-%i End of handleEndVM" % l.id)
         self.logger.info("Stopped VMs for lease %i on nodes %s" % (l.id, rr.nodes.values()))
 
@@ -1277,13 +1389,14 @@ class Scheduler(object):
         l.print_contents()
         rr.state = ResourceReservation.STATE_ACTIVE
         self.resourcepool.suspend_vms(l, rr)
-        for vnode, pnode in rr.vmrr.nodes.items():
-            self.resourcepool.add_ramfile(pnode, l.id, vnode, l.requested_resources.get_by_type(constants.RES_MEM))
+        for vnode in rr.vnodes:
+            pnode = rr.vmrr.nodes[vnode]
             l.memimagemap[vnode] = pnode
-        l.print_contents()
-        self.updateNodeVMState(rr.vmrr.nodes.values(), constants.DOING_VM_SUSPEND, l.id)
+        if rr.is_first():
+            l.state = Lease.STATE_SUSPENDING
+            l.print_contents()
+            self.logger.info("Suspending lease %i..." % (l.id))
         self.logger.debug("LEASE-%i End of handleStartSuspend" % l.id)
-        self.logger.info("Suspending lease %i..." % (l.id))
 
     def _handle_end_suspend(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleEndSuspend" % l.id)
@@ -1291,11 +1404,10 @@ class Scheduler(object):
         # TODO: React to incomplete suspend
         self.resourcepool.verify_suspend(l, rr)
         rr.state = ResourceReservation.STATE_DONE
-        l.state = Lease.STATE_SUSPENDED
-        self.queue.enqueue_in_order(l)
-        self.rm.accounting.incr_counter(constants.COUNTER_QUEUESIZE, l.id)
+        if rr.is_last():
+            l.state = Lease.STATE_SUSPENDED
+            self.__enqueue_in_order(l)
         l.print_contents()
-        self.updateNodeVMState(rr.vmrr.nodes.values(), constants.DOING_IDLE, l.id)
         self.logger.debug("LEASE-%i End of handleEndSuspend" % l.id)
         self.logger.info("Lease %i suspended." % (l.id))
 
@@ -1304,10 +1416,11 @@ class Scheduler(object):
         l.print_contents()
         self.resourcepool.resume_vms(l, rr)
         rr.state = ResourceReservation.STATE_ACTIVE
-        l.print_contents()
-        self.updateNodeVMState(rr.vmrr.nodes.values(), constants.DOING_VM_RESUME, l.id)
+        if rr.is_first():
+            l.state = Lease.STATE_RESUMING
+            l.print_contents()
+            self.logger.info("Resuming lease %i..." % (l.id))
         self.logger.debug("LEASE-%i End of handleStartResume" % l.id)
-        self.logger.info("Resuming lease %i..." % (l.id))
 
     def _handle_end_resume(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleEndResume" % l.id)
@@ -1315,12 +1428,13 @@ class Scheduler(object):
         # TODO: React to incomplete resume
         self.resourcepool.verify_resume(l, rr)
         rr.state = ResourceReservation.STATE_DONE
+        if rr.is_last():
+            l.state = Lease.STATE_RESUMED_READY
+            self.logger.info("Resumed lease %i" % (l.id))
         for vnode, pnode in rr.vmrr.nodes.items():
             self.resourcepool.remove_ramfile(pnode, l.id, vnode)
         l.print_contents()
-        self.updateNodeVMState(rr.vmrr.nodes.values(), constants.DOING_IDLE, l.id)
         self.logger.debug("LEASE-%i End of handleEndResume" % l.id)
-        self.logger.info("Resumed lease %i" % (l.id))
 
     def _handle_start_migrate(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleStartMigrate" % l.id)
@@ -1357,26 +1471,12 @@ class Scheduler(object):
     def _handle_end_rr(self, l, rr):
         self.slottable.removeReservation(rr)
 
-
-
-    def __enqueue_in_order(self, req):
-        self.rm.accounting.incr_counter(constants.COUNTER_QUEUESIZE, req.id)
-        self.queue.enqueue_in_order(req)
-
-    
-    
+    def __enqueue_in_order(self, lease):
+        self.rm.accounting.incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
+        self.queue.enqueue_in_order(lease)
         
     def __can_reserve_besteffort_in_future(self):
         return self.numbesteffortres < self.maxres
-    
-                        
-    def updateNodeVMState(self, nodes, state, lease_id):
-        for n in nodes:
-            self.resourcepool.get_node(n).vm_doing = state
-
-    def updateNodeTransferState(self, nodes, state, lease_id):
-        for n in nodes:
-            self.resourcepool.get_node(n).transfer_doing = state
-            
+                
     def is_backfilling(self):
         return self.maxres > 0

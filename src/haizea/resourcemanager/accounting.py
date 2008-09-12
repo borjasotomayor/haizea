@@ -29,9 +29,6 @@ class AccountingData(object):
         self.counters = {}
         self.counter_lists = {}
         self.counter_avg_type = {}
-    
-        # What are the nodes doing?
-        self.nodes = {}      
         
         # Lease data
         self.leases = {}
@@ -100,27 +97,7 @@ class AccountingDataCollection(object):
         for counter_id in self.data.counters:
             initial = self.data.counters[counter_id]
             self.append_stat(counter_id, initial, time = time)
-        
-        # Start the doing
-        numnodes = self.rm.scheduler.resourcepool.get_num_nodes()
-        for n in range(numnodes):
-            self.data.nodes[n+1] = [(time, constants.DOING_IDLE)]
 
-    def tick(self):
-        time = self.rm.clock.get_time()
-        # Update the doing
-        for node in self.rm.scheduler.resourcepool.nodes:
-            nodenum = node.nod_id
-            doing = node.get_state()
-            (lasttime, lastdoing) = self.data.nodes[nodenum][-1]
-            if doing == lastdoing:
-                # No need to update
-                pass
-            else:
-                if lasttime == time:
-                    self.data.nodes[nodenum][-1] = (time, doing)
-                else:
-                    self.data.nodes[nodenum].append((time, doing))
         
     def stop(self):
         time = self.rm.clock.get_time()
@@ -139,16 +116,6 @@ class AccountingDataCollection(object):
                 self.data.counter_lists[counter_id] = self.add_average(l)
             elif avgtype == constants.AVERAGE_TIMEWEIGHTED:
                 self.data.counter_lists[counter_id] = self.add_timeweighted_average(l)
-        
-        # Stop the doing
-        for node in self.rm.scheduler.resourcepool.nodes:
-            nodenum = node.nod_id
-            doing = node.vm_doing
-            (lasttime, lastdoing) = self.data.nodes[nodenum][-1]
-            if time != lasttime:
-                self.data.nodes[nodenum].append((time, doing))
-                
-        self.normalize_doing()
             
     def normalize_times(self, data):
         return [((v[0] - self.starttime).seconds, v[1], v[2]) for v in data]
@@ -190,20 +157,6 @@ class AccountingDataCollection(object):
             stats.append((v[0], v[1], value, avg))
         
         return stats          
-    
-    def normalize_doing(self):
-        nodes = dict([(i+1, []) for i in range(self.rm.scheduler.resourcepool.get_num_nodes())])
-        for n in self.data.nodes:
-            nodes[n] = []
-            prevtime = None
-            prevdoing = None
-            for (time, doing) in self.data.nodes[n]:
-                if prevtime != None:
-                    difftime = (time-prevtime).seconds
-                    nodes[n].append((difftime, prevdoing))
-                prevtime = time
-                prevdoing = doing
-        self.data.nodes = nodes
     
     def save_to_disk(self):
         try:
