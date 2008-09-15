@@ -18,8 +18,8 @@
 
 from haizea.resourcemanager.enact.opennebula.info import ResourcePoolInfo
 from haizea.resourcemanager.enact.opennebula.vm import VMEnactment
-from haizea.resourcemanager.enact.opennebula.storage import StorageEnactment
+from haizea.resourcemanager.enact.simulated.deployment import DeploymentEnactment
 
 info=ResourcePoolInfo
-storage=StorageEnactment
+deployment=DeploymentEnactment
 vm=VMEnactment

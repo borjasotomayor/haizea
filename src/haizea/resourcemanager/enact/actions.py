@@ -69,6 +69,14 @@ class VMEnactmentConfirmSuspendAction(VMEnactmentAction):
     def __init__(self):
         VMEnactmentAction.__init__(self)
 
+    def from_rr(self, rr):
+        VMEnactmentAction.from_rr(self, rr)
+        self.vnodes = dict([(k, v) for (k,v) in self.vnodes.items() if k in rr.vnodes])
+
 class VMEnactmentConfirmResumeAction(VMEnactmentAction):
     def __init__(self):
         VMEnactmentAction.__init__(self)
+
+    def from_rr(self, rr):
+        VMEnactmentAction.from_rr(self, rr)
+        self.vnodes = dict([(k, v) for (k,v) in self.vnodes.items() if k in rr.vnodes])

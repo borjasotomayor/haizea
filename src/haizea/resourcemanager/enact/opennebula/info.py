@@ -56,25 +56,17 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
                 if oneattr2haizea.has_key(name):
                     capacity.set_by_type(oneattr2haizea[name], int(attr["value"]))
             capacity.set_by_type(constants.RES_CPU, capacity.get_by_type(constants.RES_CPU) / 100.0)
+            capacity.set_by_type(constants.RES_MEM, capacity.get_by_type(constants.RES_MEM) / 1024.0)
             node = Node(self.resourcepool, nod_id, hostname, capacity)
             node.enactment_info = int(enactID)
             self.nodes.append(node)
             
         self.logger.info("Fetched %i nodes from ONE db" % len(self.nodes))
-        
-        # Image repository nodes
-        # TODO: No image transfers in OpenNebula yet
-        self.FIFOnode = None
-        self.EDFnode = None
+        for n in self.nodes:
+            self.logger.debug("%i %s %s" % (n.nod_id, n.hostname, n.capacity))
         
     def get_nodes(self):
         return self.nodes
-    
-    def get_edf_node(self):
-        return self.EDFnode
-    
-    def get_fifo_node(self):
-        return self.FIFOnode
     
     def get_resource_types(self):
         return [(constants.RES_CPU, constants.RESTYPE_FLOAT, "CPU"),
