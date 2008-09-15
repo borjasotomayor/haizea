@@ -248,7 +248,7 @@ class ResourceManager(Singleton):
         # Get requests from frontend
         requests = []
         for frontend in self.frontends:
-            requests += frontend.getAccumulatedRequests()
+            requests += frontend.get_accumulated_requests()
         requests.sort(key=operator.attrgetter("submit_time"))
         
         for req in requests:
@@ -492,7 +492,7 @@ class SimulatedClock(Clock):
         tracefrontend = self.__get_trace_frontend()
         nextchangepoint = self.rm.get_next_changepoint()
         nextprematureend = self.rm.scheduler.slottable.getNextPrematureEnd(self.time)
-        nextreqtime = tracefrontend.getNextReqTime()
+        nextreqtime = tracefrontend.get_next_request_time()
         self.logger.debug("Next change point (in slot table): %s" % nextchangepoint)
         self.logger.debug("Next request time: %s" % nextreqtime)
         self.logger.debug("Next premature end: %s" % nextprematureend)
@@ -526,7 +526,7 @@ class SimulatedClock(Clock):
             
         # If there's no more leases in the system, and no more pending requests,
         # then we're done.
-        if not self.rm.exists_leases_in_rm() and not tracefrontend.existsPendingReq():
+        if not self.rm.exists_leases_in_rm() and not tracefrontend.exists_more_requests():
             done = True
         
         # We can also be done if we've specified that we want to stop when
@@ -667,11 +667,22 @@ class RealClock(Clock):
                 nextwakeup = self.nextperiodicwakeup
                 self.logger.status("Going back to sleep. Waking up at %s to see if something interesting has happened by then." % nextwakeup)
             
+            # The only exit condition from the real clock is if the stop_when_no_more_leases
+            # is set to True, and there's no more work left to do.
+            stop_when_no_more_leases = self.rm.config.get("stop-when-no-more-leases")
+            if stop_when_no_more_leases and not self.rm.exists_leases_in_rm():
+                done = True
+            
             # Sleep
-            if not self.fastforward:
-                sleep((nextwakeup - now()).seconds)
-            else:
-                self.lastwakeup = nextwakeup
+            if not done:
+                if not self.fastforward:
+                    sleep((nextwakeup - now()).seconds)
+                else:
+                    self.lastwakeup = nextwakeup
+
+        # Stop the resource manager
+        self.logger.status("Stopping real clock")
+        self.rm.stop()
           
     def print_stats(self, loglevel):
         """See docstring in base Clock class."""

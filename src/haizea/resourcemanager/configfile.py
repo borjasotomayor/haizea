@@ -562,7 +562,7 @@ class HaizeaConfig(Config):
 
      Option(name        = "onevm",
             getter      = "onevm",
-            type        = OPTTYPE_INT,
+            type        = OPTTYPE_STRING,
             required    = True,
             doc         = """
             Location of OpenNebula "onevm" command.                
@@ -577,6 +577,20 @@ class HaizeaConfig(Config):
             Rate at which VMs are estimated to suspend (in MB of
             memory per second)                
             """),
+            
+     Option(name        = "stop-when-no-more-leases",
+            getter      = "stop-when-no-more-leases",
+            type        = OPTTYPE_BOOLEAN,
+            required    = False,
+            default     = False,
+            doc         = """
+            This option is useful for testing and running experiments.
+            If set to True, Haizea will stop when there are no more leases
+            to process (which allows you to tun Haizea+OpenNebula unattended,
+            and count on it stopping when there are no more leases to process).
+            For now, this only makes sense if you're seeding Haizea with requests from
+            the start (otherwise, it will start and immediately stop).
+            """),            
     ]
     sections.append(opennebula)
     
