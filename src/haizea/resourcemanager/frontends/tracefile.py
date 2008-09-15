@@ -17,7 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 import haizea.common.constants as constants
-from haizea.resourcemanager.frontends.base import RequestFrontend
+from haizea.resourcemanager.frontends import RequestFrontend
 import haizea.traces.readers as tracereaders
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
 import operator
@@ -73,7 +73,7 @@ class TracefileFrontend(RequestFrontend):
         self.logger.info("Loaded workload with %i requests (%i best-effort + %i AR)" % (num_besteffort+num_ar, num_besteffort, num_ar))
         
         
-    def getAccumulatedRequests(self):
+    def get_accumulated_requests(self):
         # When reading from a trace file, there are no
         # "accumulated requests". Rather, we just take whatever
         # requests are in the trace up to the current time
@@ -83,11 +83,11 @@ class TracefileFrontend(RequestFrontend):
         self.requests = [r for r in self.requests if r.submit_time > time]   
         return nowreq              
 
-    def existsPendingReq(self):
+    def exists_more_requests(self):
         return len(self.requests) != 0
 
-    def getNextReqTime(self):
-        if self.existsPendingReq():
+    def get_next_request_time(self):
+        if self.exists_more_requests():
             return self.requests[0].submit_time
         else:
             return None

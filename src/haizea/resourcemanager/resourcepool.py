@@ -94,12 +94,6 @@ class ResourcePool(object):
         verify_suspend_action.from_rr(rr)
         self.vm.verify_suspend(verify_suspend_action)
     
-    # TODO
-    # The following should be implemented to handle asynchronous
-    # notifications of a suspend completing.
-    #def suspendDone(self, lease, rr):
-    #    pass
-    
     def resume_vms(self, lease, rr):
         # Remove memory image files
         for vnode in rr.vnodes:
@@ -119,18 +113,6 @@ class ResourcePool(object):
         verify_resume_action = actions.VMEnactmentConfirmResumeAction()
         verify_resume_action.from_rr(rr)
         self.vm.verify_resume(verify_resume_action)    
-        
-    # TODO
-    # The following should be implemented to handle asynchronous
-    # notifications of a resume completing.
-    #def resumeDone(self, lease, rr):
-    #    pass
-
-    # TODO
-    # The following should be implemented to handle asynchronous
-    # notifications of a VM ending
-    #def notify_vm_done(self, lease, rr):
-    #    pass
     
     def get_nodes(self):
         return self.nodes

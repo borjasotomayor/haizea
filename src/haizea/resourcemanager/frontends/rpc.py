@@ -17,16 +17,16 @@
 # -------------------------------------------------------------------------- #
 import haizea.common.constants as constants
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease, ResourceTuple
-from haizea.resourcemanager.frontends.base import RequestFrontend
+from haizea.resourcemanager.frontends import RequestFrontend
 from haizea.common.utils import round_datetime
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO
 import logging
 
-HAIZEA_START_NOW = "now"
-HAIZEA_START_BESTEFFORT = "best_effort"
-HAIZEA_DURATION_UNLIMITED = "unlimited"
-
 class RPCFrontend(RequestFrontend):
+    HAIZEA_START_NOW = "now"
+    HAIZEA_START_BESTEFFORT = "best_effort"
+    HAIZEA_DURATION_UNLIMITED = "unlimited"
+
     def __init__(self, rm):
         self.rm = rm
         self.logger = logging.getLogger("RPCREQ")
@@ -34,12 +34,12 @@ class RPCFrontend(RequestFrontend):
         config = self.rm.config
         self.rm.rpc_server.register_rpc(self.create_lease)
 
-    def getAccumulatedRequests(self):
+    def get_accumulated_requests(self):
         acc = self.accumulated
         self.accumulated = []
         return acc
     
-    def existsMoreRequests(self): 
+    def exists_more_requests(self): 
         return True
             
     def create_lease(self, start, duration, preemptible, numnodes, cpu, mem, vmimage, vmimagesize):

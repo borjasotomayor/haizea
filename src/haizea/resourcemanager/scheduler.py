@@ -32,7 +32,7 @@ This module provides the following classes:
 
 import haizea.resourcemanager.datastruct as ds
 import haizea.common.constants as constants
-from haizea.common.utils import round_datetime_delta, estimate_transfer_time
+from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time
 from haizea.resourcemanager.slottable import SlotTable, SlotFittingException
 from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeployment
 from haizea.resourcemanager.deployment.predeployed import PredeployedImagesDeployment
@@ -604,7 +604,7 @@ class Scheduler(object):
                     changepoints[-1][1] = nodes[:]
         else:
             if not canmigrate:
-                vmrr, susprr = lease.get_last_vmrr()
+                vmrr = lease.get_last_vmrr()
                 curnodes = set(vmrr.nodes.values())
             else:
                 curnodes=None
@@ -1322,7 +1322,7 @@ class Scheduler(object):
         self.logger.debug("LEASE-%i Start of handleEndVM" % l.id)
         self.logger.vdebug("LEASE-%i Before:" % l.id)
         l.print_contents()
-        now_time = self.rm.clock.get_time()
+        now_time = round_datetime(self.rm.clock.get_time())
         diff = now_time - rr.start
         l.duration.accumulate_duration(diff)
         rr.state = ResourceReservation.STATE_DONE

@@ -16,3 +16,12 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+from haizea.common.utils import abstract
+
+class RequestFrontend(object):
+    def __init__(self, rm):
+        self.rm = rm
+    
+    def get_accumulated_requests(self): abstract()
+    
+    def exists_more_requests(self): abstract()
