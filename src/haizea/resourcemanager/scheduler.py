@@ -783,10 +783,57 @@ class Scheduler(object):
                     break        
                 
         return start, end, canfit
+    
+    def __compute_susprem_times(self, vmrr, time, direction, exclusion, rate):
+        times = [] # (start, end, pnode, vnodes)
 
-    # TODO: There is a LOT of common code between __schedule_resumption and 
-    # __schedule_suspension. This has to be factored out.
-    # Also, we need to "consolidate" RRs when doing local exclusion.
+        if exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
+            # Global exclusion (which represents, e.g., reading/writing the memory image files
+            # from a global file system) meaning no two suspensions/resumptions can happen at 
+            # the same time in the entire resource pool.
+            
+            t = time
+            t_prev = None
+                
+            for (vnode,pnode) in vmrr.nodes.items():
+                mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                op_time = self.__compute_suspend_resume_time(mem, rate)
+                t_prev = t
+                
+                if direction == constants.DIRECTION_FORWARD:
+                    t += op_time
+                    times.append((t_prev, t, pnode, [vnode]))
+                elif direction == constants.DIRECTION_BACKWARD:
+                    t -= op_time
+                    times.append((t, t_prev, pnode, [vnode]))
+
+        elif exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
+            # Local exclusion (which represents, e.g., reading the memory image files
+            # from a local file system) means no two resumptions can happen at the same
+            # time in the same physical node.
+            vnodes_in_pnode = {}
+            for (vnode,pnode) in vmrr.nodes.items():
+                vnodes_in_pnode.setdefault(pnode, []).append(vnode)
+            for pnode in vnodes_in_pnode:
+                t = time
+                t_prev = None
+                for vnode in vnodes_in_pnode[pnode]:
+                    mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                    op_time = self.__compute_suspend_resume_time(mem, rate)
+                    t_prev = t
+                    
+                    if direction == constants.DIRECTION_FORWARD:
+                        t += op_time
+                        times.append((t_prev, t, pnode, [vnode]))
+                    elif direction == constants.DIRECTION_BACKWARD:
+                        t -= op_time
+                        times.append((t, t_prev, pnode, [vnode]))
+            # TODO: "consolidate" times (i.e., figure out what operations can be grouped
+            # into a single RR. This will not be an issue when running with real hardware,
+            # but might impact simulation performance.
+        
+        return times
+
 
     def __schedule_resumption(self, vmrr, resume_at):
         from haizea.resourcemanager.rm import ResourceManager
@@ -797,53 +844,19 @@ class Scheduler(object):
         if resume_at < vmrr.start or resume_at > vmrr.end:
             raise SchedException, "Tried to schedule a resumption at %s, which is outside the VMRR's duration (%s-%s)" % (resume_at, vmrr.start, vmrr.end)
 
+        times = self.__compute_susprem_times(vmrr, resume_at, constants.DIRECTION_FORWARD, resm_exclusion, rate)
         resume_rrs = []
-        if resm_exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
-            # Global exclusion (which represents, e.g., reading the memory image files
-            # from a global file system) meaning no two suspensions can happen at the same
-            # time in the entire resource pool.
-            start = resume_at
-            for (vnode,pnode) in vmrr.nodes.items():
-                mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
-                single_resm_time = self.__compute_suspend_resume_time(mem, rate)
-                end = start + single_resm_time
-
-                r = ds.ResourceTuple.create_empty()
-                r.set_by_type(constants.RES_MEM, mem)
-                r.set_by_type(constants.RES_DISK, mem)
-                resmres = {pnode: r}
-                vnodes = [vnode]
-                resmrr = ds.ResumptionResourceReservation(vmrr.lease, start, end, resmres, vnodes, vmrr)
-                resmrr.state = ResourceReservation.STATE_SCHEDULED
-                resume_rrs.append(resmrr)
+        for (start, end, pnode, vnodes) in times:
+            r = ds.ResourceTuple.create_empty()
+            mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+            r.set_by_type(constants.RES_MEM, mem)
+            r.set_by_type(constants.RES_DISK, mem)
+            resmres = {pnode: r}
+            resmrr = ds.ResumptionResourceReservation(vmrr.lease, start, end, resmres, vnodes, vmrr)
+            resmrr.state = ResourceReservation.STATE_SCHEDULED
+            resume_rrs.append(resmrr)
                 
-                start = end
-        elif resm_exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
-            # Local exclusion (which represents, e.g., reading the memory image files
-            # from a local file system) means no two resumptions can happen at the same
-            # time in the same physical node.
-            vnodes_in_pnode = {}
-            for (vnode,pnode) in vmrr.nodes.items():
-                vnodes_in_pnode.setdefault(pnode, []).append(vnode)
-            for pnode in vnodes_in_pnode:
-                start = resume_at
-                for vnode in vnodes_in_pnode[pnode]:
-                    mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
-                    single_resm_time = self.__compute_suspend_resume_time(mem, rate)
-                    end = start + single_resm_time
-    
-                    r = ds.ResourceTuple.create_empty()
-                    r.set_by_type(constants.RES_MEM, mem)
-                    r.set_by_type(constants.RES_DISK, mem)
-                    resmres = {pnode: r}
-                    vnodes = [vnode]
-                    resmrr = ds.ResumptionResourceReservation(vmrr.lease, start, end, resmres, vnodes, vmrr)
-                    resmrr.state = ResourceReservation.STATE_SCHEDULED
-                    resume_rrs.append(resmrr)
-                
-                    start = end
-                
-            resume_rrs.sort(key=attrgetter("start"))
+        resume_rrs.sort(key=attrgetter("start"))
             
         resm_end = resume_rrs[-1].end
         if resm_end > vmrr.end:
@@ -863,55 +876,19 @@ class Scheduler(object):
         if suspend_by < vmrr.start or suspend_by > vmrr.end:
             raise SchedException, "Tried to schedule a suspension by %s, which is outside the VMRR's duration (%s-%s)" % (suspend_by, vmrr.start, vmrr.end)
 
+        times = self.__compute_susprem_times(vmrr, suspend_by, constants.DIRECTION_BACKWARD, susp_exclusion, rate)
         suspend_rrs = []
-        if susp_exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
-            # Global exclusion (which represents, e.g., saving the memory image files
-            # to a global file system) means no two suspensions can happen at the same
-            # time in the entire resource pool.
-            end = suspend_by
-            for (vnode,pnode) in vmrr.nodes.items():
-                mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
-                single_susp_time = self.__compute_suspend_resume_time(mem, rate)
-                start = end - single_susp_time
-
-                r = ds.ResourceTuple.create_empty()
-                r.set_by_type(constants.RES_MEM, mem)
-                r.set_by_type(constants.RES_DISK, mem)
-                suspres = {pnode: r}
-                vnodes = [vnode]
-                susprr = ds.SuspensionResourceReservation(vmrr.lease, start, end, suspres, vnodes, vmrr)
-                susprr.state = ResourceReservation.STATE_SCHEDULED
-                suspend_rrs.append(susprr)
+        for (start, end, pnode, vnodes) in times:
+            r = ds.ResourceTuple.create_empty()
+            mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+            r.set_by_type(constants.RES_MEM, mem)
+            r.set_by_type(constants.RES_DISK, mem)
+            suspres = {pnode: r}
+            susprr = ds.SuspensionResourceReservation(vmrr.lease, start, end, suspres, vnodes, vmrr)
+            susprr.state = ResourceReservation.STATE_SCHEDULED
+            suspend_rrs.append(susprr)
                 
-                end = start
-                
-            suspend_rrs.reverse()
-        elif susp_exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
-            # Local exclusion (which represents, e.g., saving the memory image files
-            # to a local file system) means no two suspensions can happen at the same
-            # time in the same physical node.
-            vnodes_in_pnode = {}
-            for (vnode,pnode) in vmrr.nodes.items():
-                vnodes_in_pnode.setdefault(pnode, []).append(vnode)
-            for pnode in vnodes_in_pnode:
-                end = suspend_by
-                for vnode in vnodes_in_pnode[pnode]:
-                    mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
-                    single_susp_time = self.__compute_suspend_resume_time(mem, rate)
-                    start = end - single_susp_time
-    
-                    r = ds.ResourceTuple.create_empty()
-                    r.set_by_type(constants.RES_MEM, mem)
-                    r.set_by_type(constants.RES_DISK, mem)
-                    suspres = {pnode: r}
-                    vnodes = [vnode]
-                    susprr = ds.SuspensionResourceReservation(vmrr.lease, start, end, suspres, vnodes, vmrr)
-                    susprr.state = ResourceReservation.STATE_SCHEDULED
-                    suspend_rrs.append(susprr)
-                    
-                    end = start
-                
-            suspend_rrs.sort(key=attrgetter("start"))
+        suspend_rrs.sort(key=attrgetter("start"))
             
         susp_start = suspend_rrs[0].start
         if susp_start < vmrr.start:
