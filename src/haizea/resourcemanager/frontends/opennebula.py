@@ -19,7 +19,7 @@
 import haizea.common.constants as constants
 from haizea.resourcemanager.frontends import RequestFrontend
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease, ResourceTuple
-from haizea.common.utils import UNIX2DateTime, round_datetime
+from haizea.common.utils import UNIX2DateTime, round_datetime, get_config, get_clock
 
 from pysqlite2 import dbapi2 as sqlite
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO
@@ -71,8 +71,7 @@ class OpenNebulaVM(object):
         elif start[0] == "+":
             # Relative time
             # The following is just for testing:
-            from haizea.resourcemanager.rm import ResourceManager
-            now = ResourceManager.get_singleton().clock.get_time()
+            now = get_clock().get_time()
             start = round_datetime(now + ISO.ParseTime(start[1:]))
             # Should be:
             #start = round_datetime(self.get_submit_time() + ISO.ParseTime(start[1:]))
@@ -129,7 +128,7 @@ class OpenNebulaFrontend(RequestFrontend):
         self.rm = rm
         self.processed = []
         self.logger = logging.getLogger("ONEREQ")
-        config = self.rm.config
+        config = get_config()
 
         self.conn = sqlite.connect(config.get("one.db"))
         self.conn.row_factory = sqlite.Row

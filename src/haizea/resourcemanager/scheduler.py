@@ -18,25 +18,28 @@
 
 
 """This module provides the main classes for Haizea's scheduler, particularly
-the Scheduler class. Note that this class includes high-level scheduling
-constructs, and that most of the magic happens in the slottable module. The
-deployment scheduling code (everything that has to be done to prepare a lease)
-happens in the modules inside the haizea.resourcemanager.deployment package.
+the Scheduler class. The deployment scheduling code (everything that has to be 
+done to prepare a lease) happens in the modules inside the 
+haizea.resourcemanager.deployment package.
 
 This module provides the following classes:
 
 * SchedException: A scheduling exception
 * ReservationEventHandler: A simple wrapper class
 * Scheduler: Do I really need to spell this one out for you?
+
+TODO: The Scheduler class is in need of some serious refactoring. The likely outcome is
+that it will be divided into two classes: LeaseScheduler, which handles top-level
+lease constructs and doesn't interact with the slot table, and VMScheduler, which
+actually schedules the VMs. The slot table would be contained in VMScheduler and 
+in the lease preparation scheduler. In turn, these two would be contained in
+LeaseScheduler.
 """
 
 import haizea.resourcemanager.datastruct as ds
 import haizea.common.constants as constants
-from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time
+from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, get_config, get_accounting, get_clock
 from haizea.resourcemanager.slottable import SlotTable, SlotFittingException
-from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeployment
-from haizea.resourcemanager.deployment.predeployed import PredeployedImagesDeployment
-from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeployment
 from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ImmediateLease, ResourceReservation, VMResourceReservation 
 from haizea.resourcemanager.resourcepool import ResourcePool, ResourcePoolWithReusableImages
 from operator import attrgetter, itemgetter
@@ -47,6 +50,25 @@ import logging
 class SchedException(Exception):
     """A simple exception class used for scheduling exceptions"""
     pass
+
+class NotSchedulableException(Exception):
+    """A simple exception class used when a lease cannot be scheduled
+    
+    This exception must be raised when a lease cannot be scheduled
+    (this is not necessarily an error condition, but the scheduler will
+    have to react to it)
+    """
+    pass
+
+class CriticalSchedException(Exception):
+    """A simple exception class used for critical scheduling exceptions
+    
+    This exception must be raised when a non-recoverable error happens
+    (e.g., when there are unexplained inconsistencies in the schedule,
+    typically resulting from a code error)
+    """
+    pass
+
 
 class ReservationEventHandler(object):
     """A wrapper for reservation event handlers.
@@ -78,21 +100,19 @@ class Scheduler(object):
     _handle_* -- Reservation event handlers
     
     """
-    def __init__(self, rm):
-        self.rm = rm
+    def __init__(self, slottable, resourcepool, deployment_scheduler):
+        self.slottable = slottable
+        self.resourcepool = resourcepool
+        self.deployment_scheduler = deployment_scheduler
         self.logger = logging.getLogger("SCHED")
-        if self.rm.config.get("diskimage-reuse") == constants.REUSE_IMAGECACHES:
-            self.resourcepool = ResourcePoolWithReusableImages(self)
-        else:
-            self.resourcepool = ResourcePool(self)
-        self.slottable = SlotTable(self)
+
         self.queue = ds.Queue(self)
         self.leases = ds.LeaseTable(self)
         self.completedleases = ds.LeaseTable(self)
-            
+        
         for n in self.resourcepool.get_nodes() + self.resourcepool.get_aux_nodes():
             self.slottable.add_node(n)
-            
+
         self.handlers = {}
         
         self.register_handler(type     = ds.VMResourceReservation, 
@@ -106,16 +126,11 @@ class Scheduler(object):
         self.register_handler(type     = ds.ResumptionResourceReservation, 
                               on_start = Scheduler._handle_start_resume,
                               on_end   = Scheduler._handle_end_resume)
-            
-        deploy_type = self.rm.config.get("lease-preparation")
-        if deploy_type == constants.DEPLOYMENT_UNMANAGED:
-            self.deployment = UnmanagedDeployment(self)
-        elif deploy_type == constants.DEPLOYMENT_PREDEPLOY:
-            self.deployment = PredeployedImagesDeployment(self)
-        elif deploy_type == constants.DEPLOYMENT_TRANSFER:
-            self.deployment = ImageTransferDeployment(self)
+        
+        for (type, handler) in self.deployment_scheduler.handlers.items():
+            self.handlers[type] = handler
 
-        backfilling = self.rm.config.get("backfilling")
+        backfilling = get_config().get("backfilling")
         if backfilling == constants.BACKFILLING_OFF:
             self.maxres = 0
         elif backfilling == constants.BACKFILLING_AGGRESSIVE:
@@ -123,10 +138,10 @@ class Scheduler(object):
         elif backfilling == constants.BACKFILLING_CONSERVATIVE:
             self.maxres = 1000000 # Arbitrarily large
         elif backfilling == constants.BACKFILLING_INTERMEDIATE:
-            self.maxres = self.rm.config.get("backfilling-reservations")
+            self.maxres = get_config().get("backfilling-reservations")
 
         self.numbesteffortres = 0
-    
+        
     def schedule(self, nexttime):      
         pending_leases = self.leases.get_leases_by_state(Lease.STATE_PENDING)  
         ar_leases = [req for req in pending_leases if isinstance(req, ARLease)]
@@ -160,7 +175,7 @@ class Scheduler(object):
             self.handlers[type(rr)].on_start(self, rr.lease, rr)
 
         util = self.slottable.getUtilization(nowtime)
-        self.rm.accounting.append_stat(constants.COUNTER_CPUUTILIZATION, util)        
+        get_accounting().append_stat(constants.COUNTER_CPUUTILIZATION, util)        
         
     def register_handler(self, type, on_start, on_end):
         handler = ReservationEventHandler(on_start=on_start, on_end=on_end)
@@ -168,7 +183,7 @@ class Scheduler(object):
     
     def enqueue(self, lease_req):
         """Queues a best-effort lease request"""
-        self.rm.accounting.incr_counter(constants.COUNTER_QUEUESIZE, lease_req.id)
+        get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease_req.id)
         lease_req.state = Lease.STATE_QUEUED
         self.queue.enqueue(lease_req)
         self.logger.info("Received (and queueing) best-effort lease request #%i, %i nodes for %s." % (lease_req.id, lease_req.numnodes, lease_req.duration.requested))
@@ -198,7 +213,7 @@ class Scheduler(object):
         Arguments:
         lease_id -- ID of lease to cancel
         """
-        time = self.rm.clock.get_time()
+        time = get_clock().get_time()
         
         self.logger.info("Cancelling lease %i..." % lease_id)
         if self.leases.has_lease(lease_id):
@@ -241,12 +256,10 @@ class Scheduler(object):
             self.cancel_lease(lease_id)
         except Exception, msg:
             # Exit if something goes horribly wrong
-            self.logger.error("Exception when failing lease %i. Dumping state..." % lease_id)
-            self.rm.print_stats(logging.getLevelName("ERROR"), verbose=True)
-            raise          
+            raise CriticalSchedException()      
     
     def notify_event(self, lease_id, event):
-        time = self.rm.clock.get_time()
+        time = get_clock().get_time()
         if event == constants.EVENT_END_VM:
             lease = self.leases.get_lease(lease_id)
             rr = lease.get_active_reservations(time)[0]
@@ -263,7 +276,7 @@ class Scheduler(object):
         try:
             self.__schedule_ar_lease(lease_req, avoidpreempt=True, nexttime=nexttime)
             self.leases.add(lease_req)
-            self.rm.accounting.incr_counter(constants.COUNTER_ARACCEPTED, lease_req.id)
+            get_accounting().incr_counter(constants.COUNTER_ARACCEPTED, lease_req.id)
             accepted = True
         except SchedException, msg:
             # Our first try avoided preemption, try again
@@ -274,10 +287,10 @@ class Scheduler(object):
                 self.logger.debug("LEASE-%i Trying again without avoiding preemption" % lease_req.id)
                 self.__schedule_ar_lease(lease_req, nexttime, avoidpreempt=False)
                 self.leases.add(lease_req)
-                self.rm.accounting.incr_counter(constants.COUNTER_ARACCEPTED, lease_req.id)
+                get_accounting().incr_counter(constants.COUNTER_ARACCEPTED, lease_req.id)
                 accepted = True
             except SchedException, msg:
-                self.rm.accounting.incr_counter(constants.COUNTER_ARREJECTED, lease_req.id)
+                get_accounting().incr_counter(constants.COUNTER_ARREJECTED, lease_req.id)
                 self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg))
 
         if accepted:
@@ -301,7 +314,7 @@ class Scheduler(object):
                     self.logger.debug("  ResReq  : %s" % lease_req.requested_resources)
                     self.__schedule_besteffort_lease(lease_req, nexttime)
                     self.leases.add(lease_req)
-                    self.rm.accounting.decr_counter(constants.COUNTER_QUEUESIZE, lease_req.id)
+                    get_accounting().decr_counter(constants.COUNTER_QUEUESIZE, lease_req.id)
                 except SchedException, msg:
                     # Put back on queue
                     newqueue.enqueue(lease_req)
@@ -324,10 +337,10 @@ class Scheduler(object):
         try:
             self.__schedule_immediate_lease(lease_req, nexttime=nexttime)
             self.leases.add(lease_req)
-            self.rm.accounting.incr_counter(constants.COUNTER_IMACCEPTED, lease_req.id)
+            get_accounting().incr_counter(constants.COUNTER_IMACCEPTED, lease_req.id)
             self.logger.info("Immediate lease request #%i has been accepted." % lease_req.id)
         except SchedException, msg:
-            self.rm.accounting.incr_counter(constants.COUNTER_IMREJECTED, lease_req.id)
+            get_accounting().incr_counter(constants.COUNTER_IMREJECTED, lease_req.id)
             self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease_req.id, msg))
     
     
@@ -348,7 +361,7 @@ class Scheduler(object):
             vmrr.state = ResourceReservation.STATE_SCHEDULED
 
             # Schedule deployment overhead
-            self.deployment.schedule(lease_req, vmrr, nexttime)
+            self.deployment_scheduler.schedule(lease_req, vmrr, nexttime)
             
             # Commit reservation to slot table
             # (we don't do this until the very end because the deployment overhead
@@ -367,7 +380,7 @@ class Scheduler(object):
             
             # Schedule deployment
             if lease.state != Lease.STATE_SUSPENDED:
-                self.deployment.schedule(lease, vmrr, nexttime)
+                self.deployment_scheduler.schedule(lease, vmrr, nexttime)
             else:
                 # TODO: schedule migrations
                 pass
@@ -413,7 +426,7 @@ class Scheduler(object):
         try:
             (resmrr, vmrr, susprr, reservation) = self.__fit_asap(req, nexttime, allow_reservation_in_future=False)
             # Schedule deployment
-            self.deployment.schedule(req, vmrr, nexttime)
+            self.deployment_scheduler.schedule(req, vmrr, nexttime)
                         
             req.append_rr(vmrr)
             self.slottable.addReservation(vmrr)
@@ -556,7 +569,7 @@ class Scheduler(object):
         requested_resources = lease.requested_resources
         preemptible = lease.preemptible
         mustresume = (lease.state == Lease.STATE_SUSPENDED)
-        susptype = self.rm.config.get("suspension")
+        susptype = get_config().get("suspension")
         if susptype == constants.SUSPENSION_NONE or (susptype == constants.SUSPENSION_SERIAL and lease.numnodes == 1):
             suspendable = False
         else:
@@ -566,14 +579,14 @@ class Scheduler(object):
         if lease.state == Lease.STATE_QUEUED:
             # Figure out earliest start times based on
             # image schedule and reusable images
-            earliest = self.deployment.find_earliest_starting_times(lease, nexttime)
+            earliest = self.deployment_scheduler.find_earliest_starting_times(lease, nexttime)
         elif lease.state == Lease.STATE_SUSPENDED:
             # No need to transfer images from repository
             # (only intra-node transfer)
             earliest = dict([(node+1, [nexttime, constants.REQTRANSFER_NO, None]) for node in range(lease.numnodes)])
 
 
-        canmigrate = self.rm.config.get("migration")
+        canmigrate = get_config().get("migration")
 
         #
         # STEP 1: FIGURE OUT THE MINIMUM DURATION
@@ -611,7 +624,7 @@ class Scheduler(object):
                 # If we have to resume this lease, make sure that
                 # we have enough time to transfer the images.
                 migratetime = self.__estimate_migration_time(lease)
-                earliesttransfer = self.rm.clock.get_time() + migratetime
+                earliesttransfer = get_clock().get_time() + migratetime
     
                 for n in earliest:
                     earliest[n][0] = max(earliest[n][0], earliesttransfer)
@@ -981,9 +994,9 @@ class Scheduler(object):
         # TODO: The deployment module should just provide a list of nodes
         # it prefers
         nodeswithimg=[]
-        #self.lease_deployment_type = self.rm.config.get("lease-preparation")
+        #self.lease_deployment_type = get_config().get("lease-preparation")
         #if self.lease_deployment_type == constants.DEPLOYMENT_TRANSFER:
-        #    reusealg = self.rm.config.get("diskimage-reuse")
+        #    reusealg = get_config().get("diskimage-reuse")
         #    if reusealg==constants.REUSE_IMAGECACHES:
         #        nodeswithimg = self.resourcepool.getNodesWithImgInPool(diskImageID, start)
 
@@ -1166,17 +1179,17 @@ class Scheduler(object):
            #     self.slottable.removeReservation(susprr)
             for vnode, pnode in lease.vmimagemap.items():
                 self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
-            self.deployment.cancel_deployment(lease)
+            self.deployment_scheduler.cancel_deployment(lease)
             lease.vmimagemap = {}
             # TODO: Change state back to queued
             self.queue.enqueue_in_order(lease)
-            self.rm.accounting.incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
+            get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
         else:
-            susptype = self.rm.config.get("suspension")
+            susptype = get_config().get("suspension")
             timebeforesuspend = preemption_time - vmrr.start
             # TODO: Determine if it is in fact the initial VMRR or not. Right now
             # we conservatively overestimate
-            canmigrate = self.rm.config.get("migration")
+            canmigrate = get_config().get("migration")
             suspendthreshold = lease.get_suspend_threshold(initial=False, suspendrate=suspendresumerate, migrating=canmigrate)
             # We can't suspend if we're under the suspend threshold
             suspendable = timebeforesuspend >= suspendthreshold
@@ -1200,11 +1213,11 @@ class Scheduler(object):
                     self.slottable.removeReservation(resmrr)
                 for vnode, pnode in lease.vmimagemap.items():
                     self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
-                self.deployment.cancel_deployment(lease)
+                self.deployment_scheduler.cancel_deployment(lease)
                 lease.vmimagemap = {}
                 # TODO: Change state back to queued
                 self.queue.enqueue_in_order(lease)
-                self.rm.accounting.incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
+                get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
         self.logger.vdebug("Lease after preemption:")
         lease.print_contents()
         
@@ -1293,11 +1306,11 @@ class Scheduler(object):
         if l.state == Lease.STATE_READY:
             l.state = Lease.STATE_ACTIVE
             rr.state = ResourceReservation.STATE_ACTIVE
-            now_time = self.rm.clock.get_time()
+            now_time = get_clock().get_time()
             l.start.actual = now_time
             
             try:
-                self.deployment.check(l, rr)
+                self.deployment_scheduler.check(l, rr)
                 self.resourcepool.start_vms(l, rr)
                 # The next two lines have to be moved somewhere more
                 # appropriate inside the resourcepool module
@@ -1322,7 +1335,7 @@ class Scheduler(object):
         self.logger.debug("LEASE-%i Start of handleEndVM" % l.id)
         self.logger.vdebug("LEASE-%i Before:" % l.id)
         l.print_contents()
-        now_time = round_datetime(self.rm.clock.get_time())
+        now_time = round_datetime(get_clock().get_time())
         diff = now_time - rr.start
         l.duration.accumulate_duration(diff)
         rr.state = ResourceReservation.STATE_DONE
@@ -1333,9 +1346,8 @@ class Scheduler(object):
             l.end = now_time
             self.completedleases.add(l)
             self.leases.remove(l)
-            self.deployment.cleanup(l, rr)
             if isinstance(l, ds.BestEffortLease):
-                self.rm.accounting.incr_counter(constants.COUNTER_BESTEFFORTCOMPLETED, l.id)
+                get_accounting().incr_counter(constants.COUNTER_BESTEFFORTCOMPLETED, l.id)
        
         if isinstance(l, ds.BestEffortLease):
             if rr.backfill_reservation == True:
@@ -1353,9 +1365,9 @@ class Scheduler(object):
             for r in rrs:
                 l.remove_rr(r)
                 self.slottable.removeReservation(r)
-        rr.end = self.rm.clock.get_time()
+        rr.end = get_clock().get_time()
         self._handle_end_vm(l, rr, enact=enact)
-        nexttime = self.rm.clock.get_next_schedulable_time()
+        nexttime = get_clock().get_next_schedulable_time()
         if self.is_backfilling():
             # We need to reevaluate the schedule to see if there are any future
             # reservations that we can slide back.
@@ -1449,7 +1461,7 @@ class Scheduler(object):
         self.slottable.removeReservation(rr)
 
     def __enqueue_in_order(self, lease):
-        self.rm.accounting.incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
+        get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
         self.queue.enqueue_in_order(lease)
         
     def __can_reserve_besteffort_in_future(self):

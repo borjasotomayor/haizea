@@ -114,4 +114,15 @@ class Singleton(object):
          else:
              return cls._singleton
 
-     
+ 
+def get_config():
+    from haizea.resourcemanager.rm import ResourceManager
+    return ResourceManager.get_singleton().config
+
+def get_accounting():
+    from haizea.resourcemanager.rm import ResourceManager
+    return ResourceManager.get_singleton().accounting
+
+def get_clock():
+    from haizea.resourcemanager.rm import ResourceManager
+    return ResourceManager.get_singleton().clock

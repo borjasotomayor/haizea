@@ -17,12 +17,12 @@
 # -------------------------------------------------------------------------- #
 
 from haizea.resourcemanager.datastruct import Lease
-from haizea.resourcemanager.deployment.base import DeploymentBase
+from haizea.resourcemanager.deployment import DeploymentScheduler
 import haizea.common.constants as constants
 
-class UnmanagedDeployment(DeploymentBase):
-    def __init__(self, scheduler):
-        DeploymentBase.__init__(self, scheduler)
+class UnmanagedDeploymentScheduler(DeploymentScheduler):
+    def __init__(self, slottable, resourcepool, deployment_enact):
+        DeploymentScheduler.__init__(self, slottable, resourcepool, deployment_enact)
     
     # Add dummy disk images
     def schedule(self, lease, vmrr, nexttime):

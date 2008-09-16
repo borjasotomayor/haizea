@@ -20,7 +20,7 @@ import os
 import os.path
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
-from haizea.common.utils import pickle
+from haizea.common.utils import pickle, get_config, get_clock
 from errno import EEXIST
 
 class AccountingData(object):
@@ -59,9 +59,9 @@ class AccountingDataCollection(object):
         self.datafile = datafile   
         self.starttime = None
         
-        attrs = self.rm.config.get_attrs()
+        attrs = get_config().get_attrs()
         for attr in attrs:
-            self.data.attrs[attr] = self.rm.config.get_attr(attr)
+            self.data.attrs[attr] = get_config().get_attr(attr)
 
     def create_counter(self, counter_id, avgtype, initial=0):
         self.data.counters[counter_id] = initial
@@ -69,16 +69,16 @@ class AccountingDataCollection(object):
         self.data.counter_avg_type[counter_id] = avgtype
 
     def incr_counter(self, counter_id, lease_id = None):
-        time = self.rm.clock.get_time()
+        time = get_clock().get_time()
         self.append_stat(counter_id, self.data.counters[counter_id] + 1, lease_id, time)
 
     def decr_counter(self, counter_id, lease_id = None):
-        time = self.rm.clock.get_time()
+        time = get_clock().get_time()
         self.append_stat(counter_id, self.data.counters[counter_id] - 1, lease_id, time)
         
     def append_stat(self, counter_id, value, lease_id = None, time = None):
         if time == None:
-            time = self.rm.clock.get_time()
+            time = get_clock().get_time()
         if len(self.data.counter_lists[counter_id]) > 0:
             prevtime = self.data.counter_lists[counter_id][-1][0]
         else:
@@ -100,7 +100,7 @@ class AccountingDataCollection(object):
 
         
     def stop(self):
-        time = self.rm.clock.get_time()
+        time = get_clock().get_time()
 
         # Stop the counters
         for counter_id in self.data.counters:

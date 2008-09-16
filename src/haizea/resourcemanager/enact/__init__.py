@@ -16,3 +16,37 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+from haizea.common.utils import abstract
+import haizea.resourcemanager.datastruct as ds
+
+class ResourcePoolInfo(object):
+    def __init__(self):
+        # Initialize the resource types in the ResourceTuple class
+        # TODO: Do this in a less kludgy way
+        resourcetypes = self.get_resource_types()
+        ds.ResourceTuple.set_resource_types(resourcetypes)
+
+
+    def get_nodes(self): 
+        """ Returns the nodes in the resource pool. """
+        abstract()
+        
+    def get_resource_types(self):
+        abstract()
+        
+class VMEnactment(object):
+    def __init__(self):
+        pass
+        
+    def start(self, vms): abstract()
+    
+    def stop(self, vms): abstract()
+    
+    def suspend(self, vms): abstract()
+    
+    def resume(self, vms): abstract()
+    
+class DeploymentEnactment(object):
+    def __init__(self):
+        pass
+    

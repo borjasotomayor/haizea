@@ -16,37 +16,26 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.common.utils import vnodemapstr
+from haizea.common.utils import vnodemapstr, get_accounting
 import haizea.common.constants as constants
 import haizea.resourcemanager.enact.actions as actions
 import logging 
 
+class FailedEnactmentException(Exception):
+    pass
+
 class ResourcePool(object):
-    def __init__(self, scheduler):
-        self.scheduler = scheduler
-        self.rm = scheduler.rm
+    def __init__(self, info_enact, vm_enact, deploy_enact):
         self.logger = logging.getLogger("RPOOL")
                 
-        self.info = None
-        self.vm = None
-        self.deployment = None
-
-        self.load_enactment_modules()
+        self.info = info_enact
+        self.vm = vm_enact
+        # TODO: Ideally, deployment enactment shouldn't be here, specially since
+        # it already "hangs" below the deployment modules. For now,
+        # it does no harm, though.
+        self.deployment = deploy_enact
         
         self.nodes = self.info.get_nodes()
-        
-            
-    def load_enactment_modules(self):
-        mode = self.rm.config.get("mode")
-        try:
-            exec "import %s.%s as enact" % (constants.ENACT_PACKAGE, mode)
-            self.info = enact.info(self) #IGNORE:E0602
-            self.vm = enact.vm(self) #IGNORE:E0602
-            self.deployment = enact.deployment(self) #IGNORE:E0602
-        except Exception, msg:
-            self.logger.error("Unable to load enactment modules for mode '%s'" % mode)
-            raise                
-        
         
     def start_vms(self, lease, rr):
         start_action = actions.VMEnactmentStartAction()
@@ -63,7 +52,7 @@ class ResourcePool(object):
             self.vm.start(start_action)
         except Exception, msg:
             self.logger.error("Enactment of start VM failed: %s" % msg)
-            self.scheduler.fail_lease(lease.id)
+            raise FailedEnactmentException()
         
     def stop_vms(self, lease, rr):
         stop_action = actions.VMEnactmentStopAction()
@@ -72,7 +61,7 @@ class ResourcePool(object):
             self.vm.stop(stop_action)
         except Exception, msg:
             self.logger.error("Enactment of end VM failed: %s" % msg)
-            self.rm.fail_lease(lease)
+            raise FailedEnactmentException()
          
     def suspend_vms(self, lease, rr):
         # Add memory image files
@@ -87,7 +76,7 @@ class ResourcePool(object):
             self.vm.suspend(suspend_action)
         except Exception, msg:
             self.logger.error("Enactment of suspend VM failed: %s" % msg)
-            self.rm.fail_lease(lease)
+            raise FailedEnactmentException()
     
     def verify_suspend(self, lease, rr):
         verify_suspend_action = actions.VMEnactmentConfirmSuspendAction()
@@ -107,7 +96,7 @@ class ResourcePool(object):
             self.vm.resume(resume_action)
         except Exception, msg:
             self.logger.error("Enactment of resume VM failed: %s" % msg)
-            self.rm.fail_lease(lease)
+            raise FailedEnactmentException()
     
     def verify_resume(self, lease, rr):
         verify_resume_action = actions.VMEnactmentConfirmResumeAction()
@@ -144,7 +133,7 @@ class ResourcePool(object):
         self.logger.vdebug("Files AFTER:")
         self.get_node(pnode).print_files()
         
-        self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
+        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
         return img
             
     def remove_diskimage(self, pnode, lease, vnode):
@@ -156,7 +145,7 @@ class ResourcePool(object):
 
         node.print_files()
         
-        self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())    
+        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())    
         
     def add_ramfile(self, pnode, lease_id, vnode, size):
         node = self.get_node(pnode)
@@ -165,7 +154,7 @@ class ResourcePool(object):
         f = RAMImageFile("RAM_L%iV%i" % (lease_id, vnode), size, lease_id, vnode)
         node.add_file(f)        
         node.print_files()
-        self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
+        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
 
     def remove_ramfile(self, pnode, lease_id, vnode):
         node = self.get_node(pnode)
@@ -173,15 +162,14 @@ class ResourcePool(object):
         node.print_files()
         node.remove_ramfile(lease_id, vnode)
         node.print_files()
-        self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
+        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
         
     def get_max_disk_usage(self):
         return max([n.get_disk_usage() for n in self.nodes])
     
 class Node(object):
-    def __init__(self, resourcepool, nod_id, hostname, capacity):
+    def __init__(self, nod_id, hostname, capacity):
         self.logger = logging.getLogger("RESOURCEPOOL")
-        self.resourcepool = resourcepool
         self.nod_id = nod_id
         self.hostname = hostname
         self.capacity = capacity
@@ -296,7 +284,7 @@ class ResourcePoolWithReusableImages(ResourcePool):
         self.logger.vdebug("Files AFTER:")
         self.get_node(pnode).print_files()
         
-        self.rm.accounting.append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
+        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
         return img
     
     def add_mapping_to_existing_reusable_image(self, pnode_id, diskimage_id, lease_id, vnode, timeout):
@@ -322,13 +310,13 @@ class ResourcePoolWithReusableImages(ResourcePool):
     
     
 class NodeWithReusableImages(Node):
-    def __init__(self, resourcepool, nod_id, hostname, capacity):
-        Node.__init__(self, resourcepool, nod_id, hostname, capacity)
+    def __init__(self, nod_id, hostname, capacity):
+        Node.__init__(self, nod_id, hostname, capacity)
         self.reusable_images = []
 
     @classmethod
     def from_node(cls, n):
-        node = cls(n.resourcepool, n.nod_id, n.hostname, n.capacity)
+        node = cls(n.nod_id, n.hostname, n.capacity)
         node.enactment_info = n.enactment_info
         return node
     

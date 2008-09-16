@@ -16,21 +16,18 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.enact.base import DeploymentEnactmentBase
+from haizea.resourcemanager.enact import DeploymentEnactment
 from haizea.resourcemanager.resourcepool import Node
 import haizea.resourcemanager.datastruct as ds
 import haizea.common.constants as constants
+from haizea.common.utils import get_config
 import logging
 
-baseCachePath="/vm/cache"
-baseWorkingPath="/vm/working"
-stagingPath="/vm/staging"
-
-class DeploymentEnactment(DeploymentEnactmentBase):
-    def __init__(self, resourcepool):
-        DeploymentEnactmentBase.__init__(self, resourcepool)
+class SimulatedDeploymentEnactment(DeploymentEnactment):    
+    def __init__(self):
+        DeploymentEnactment.__init__(self)
         self.logger = logging.getLogger("ENACT.SIMUL.INFO")
-        config = self.resourcepool.rm.config
+        config = get_config()
                 
         self.bandwidth = config.get("imagetransfer-bandwidth")
                 
@@ -40,8 +37,8 @@ class DeploymentEnactment(DeploymentEnactmentBase):
         imgcapacity = ds.ResourceTuple.create_empty()
         imgcapacity.set_by_type(constants.RES_NETOUT, self.bandwidth)
 
-        self.fifo_node = Node(self.resourcepool, numnodes+1, "FIFOnode", imgcapacity)
-        self.edf_node = Node(self.resourcepool, numnodes+2, "EDFnode", imgcapacity)
+        self.fifo_node = Node(numnodes+1, "FIFOnode", imgcapacity)
+        self.edf_node = Node(numnodes+2, "EDFnode", imgcapacity)
         
     def get_edf_node(self):
         return self.edf_node
@@ -56,4 +53,4 @@ class DeploymentEnactment(DeploymentEnactmentBase):
         return self.bandwidth
         
     def resolve_to_file(self, lease_id, vnode, diskimage_id):
-        return "%s/%s-L%iV%i" % (baseWorkingPath, diskimage_id, lease_id, vnode)
+        return "/var/haizea/images/%s-L%iV%i" % (diskimage_id, lease_id, vnode)

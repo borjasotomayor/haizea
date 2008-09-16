@@ -33,11 +33,21 @@ This module provides the following classes:
 
 import haizea.resourcemanager.accounting as accounting
 import haizea.common.constants as constants
+import haizea.resourcemanager.enact as enact
+from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeploymentScheduler
+from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeploymentScheduler
+from haizea.resourcemanager.enact.opennebula.info import OpenNebulaResourcePoolInfo
+from haizea.resourcemanager.enact.opennebula.vm import OpenNebulaVMEnactment
+from haizea.resourcemanager.enact.simulated.info import SimulatedResourcePoolInfo
+from haizea.resourcemanager.enact.simulated.vm import SimulatedVMEnactment
+from haizea.resourcemanager.enact.simulated.deployment import SimulatedDeploymentEnactment
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.frontends.rpc import RPCFrontend
-from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ImmediateLease 
+from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ImmediateLease, ResourceTuple
 from haizea.resourcemanager.scheduler import Scheduler
+from haizea.resourcemanager.slottable import SlotTable
+from haizea.resourcemanager.resourcepool import ResourcePool, ResourcePoolWithReusableImages
 from haizea.resourcemanager.rpcserver import RPCServer
 from haizea.common.utils import abstract, round_datetime, Singleton
 
@@ -78,49 +88,125 @@ class ResourceManager(Singleton):
         mode = config.get("mode")
         clock = config.get("clock")
         
-        if mode == "simulated" and clock == constants.CLOCK_SIMULATED:
-            # Simulations always run in the foreground
-            self.daemon = False
-            
-            self.init_logging()
+        self.daemon = daemon
+        self.pidfile = pidfile
 
-            # The clock
-            starttime = config.get("starttime")
-            self.clock = SimulatedClock(self, starttime)
-            self.rpc_server = None
-        elif mode == "opennebula" or (mode == "simulated" and clock == constants.CLOCK_REAL):
-            self.daemon = daemon
-            self.pidfile = pidfile
-
-            self.init_logging()
-
-            # The clock
-            wakeup_interval = config.get("wakeup-interval")
-            non_sched = config.get("non-schedulable-interval")
-            self.clock = RealClock(self, wakeup_interval, non_sched)
-            
-            # RPC server
-            self.rpc_server = RPCServer(self)
-    
-        # Scheduler
-        self.scheduler = Scheduler(self)
-    
-        # Lease request frontends
-        if mode == "simulated" and clock == constants.CLOCK_SIMULATED:
-            # In pure simulation, we can only use the tracefile frontend
-            self.frontends = [TracefileFrontend(self, self.clock.get_start_time())]
-        elif mode == "simulated" and clock == constants.CLOCK_REAL:
-            # In simulation with a real clock, only the RPC frontend can be used
-            self.frontends = [RPCFrontend(self)]
+        if mode == "simulated":
+            self.init_simulated_mode()
         elif mode == "opennebula":
-            self.frontends = [OpenNebulaFrontend(self)]
+            self.init_opennebula_mode()
             
         # Statistics collection 
         self.accounting = accounting.AccountingDataCollection(self, self.config.get("datafile"))
         
         self.logger = logging.getLogger("RM")
 
-    def init_logging(self):       
+    def init_simulated_mode(self):
+        """Initializes the resource manager in simulated mode
+        
+        """
+
+        # Simulations always run in the foreground
+        self.daemon = False
+        
+        self.init_logging()
+
+        # The clock
+        if self.clock == constants.CLOCK_SIMULATED:
+            starttime = self.config.get("starttime")
+            self.clock = SimulatedClock(self, starttime)
+            self.rpc_server = None
+        elif self.clock == constants.CLOCK_REAL:
+            wakeup_interval = self.config.get("wakeup-interval")
+            non_sched = self.config.get("non-schedulable-interval")
+            self.clock = RealClock(self, wakeup_interval, non_sched)
+            self.rpc_server = RPCServer(self)
+                    
+        # Enactment modules
+        info_enact = SimulatedResourcePoolInfo()
+        vm_enact = SimulatedVMEnactment()
+        deploy_enact = SimulatedDeploymentEnactment()
+                
+        # Resource pool
+        if self.config.get("diskimage-reuse") == constants.REUSE_IMAGECACHES:
+            resourcepool = ResourcePoolWithReusableImages(info_enact, vm_enact, deploy_enact)
+        else:
+            resourcepool = ResourcePool(info_enact, vm_enact, deploy_enact)
+    
+        # Slot table
+        slottable = SlotTable()
+        
+        # Deployment scheduler
+        deploy_type = self.config.get("lease-preparation")
+        if deploy_type == constants.DEPLOYMENT_UNMANAGED:
+            deployment_scheduler = UnmanagedDeploymentScheduler(slottable, resourcepool, deploy_enact)
+        elif deploy_type == constants.DEPLOYMENT_TRANSFER:
+            deployment_scheduler = ImageTransferDeploymentScheduler(slottable, resourcepool, deploy_enact)    
+    
+        # Scheduler
+        self.scheduler = Scheduler(self, slottable, resourcepool, deployment_scheduler)
+        
+        # TODO: Having the slot table contained in the deployment scheduler, and also
+        # in the "main" scheduler (which itself contains the same slot table) is far
+        # from ideal, although this is mostly a consequence of the Scheduler class
+        # being in need of some serious refactoring. This will be fixed (see Scheduler
+        # class comments for more details)
+        
+        # Lease request frontends
+        if self.clock == constants.CLOCK_SIMULATED:
+            # In pure simulation, we can only use the tracefile frontend
+            self.frontends = [TracefileFrontend(self, self.clock.get_start_time())]
+        elif self.clock == constants.CLOCK_REAL:
+            # In simulation with a real clock, only the RPC frontend can be used
+            self.frontends = [RPCFrontend(self)] 
+        
+    def init_opennebula_mode(self):
+        """Initializes the resource manager in OpenNebula mode
+        
+        """
+        self.init_logging()
+
+        # The clock
+        wakeup_interval = self.config.get("wakeup-interval")
+        non_sched = self.config.get("non-schedulable-interval")
+        self.clock = RealClock(self, wakeup_interval, non_sched, True)
+        
+        # RPC server
+        self.rpc_server = None
+        
+        # Enactment modules
+        info_enact = OpenNebulaResourcePoolInfo()
+        vm_enact = OpenNebulaVMEnactment()
+        # No deployment in OpenNebula. Using simulated one for now.
+        deploy_enact = SimulatedDeploymentEnactment()
+            
+        # Slot table
+        slottable = SlotTable()
+
+        # Resource pool
+        resourcepool = ResourcePool(info_enact, vm_enact, deploy_enact)
+
+        # Deployment module
+        deployment = UnmanagedDeploymentScheduler(slottable, resourcepool, deploy_enact)
+
+        # Scheduler
+        self.scheduler = Scheduler(slottable, resourcepool, deployment)
+
+        # TODO: Having the slot table contained in the deployment scheduler, and also
+        # in the "main" scheduler (which itself contains the same slot table) is far
+        # from ideal, although this is mostly a consequence of the Scheduler class
+        # being in need of some serious refactoring. This will be fixed (see Scheduler
+        # class comments for more details)
+
+        # Lease request frontends
+        self.frontends = [OpenNebulaFrontend(self)]        
+        
+        
+    def init_logging(self):
+        """Initializes logging
+        
+        """
+
         from haizea.resourcemanager.log import HaizeaLogger
         logger = logging.getLogger("")
         if self.daemon:
@@ -133,8 +219,6 @@ class ResourceManager(Singleton):
         level = logging.getLevelName(self.config.get("loglevel"))
         logger.setLevel(level)
         logging.setLoggerClass(HaizeaLogger)
-        #if self.daemon:
-        #    logger.info("Logging to file %s" % self.config.get("logfile"))
 
         
     def daemonize(self):

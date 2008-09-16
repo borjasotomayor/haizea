@@ -16,10 +16,3 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.enact.simulated.info import ResourcePoolInfo
-from haizea.resourcemanager.enact.simulated.vm import VMEnactment
-from haizea.resourcemanager.enact.simulated.deployment import DeploymentEnactment
-
-info=ResourcePoolInfo
-deployment=DeploymentEnactment
-vm=VMEnactment

@@ -17,6 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 import haizea.common.constants as constants
+from haizea.common.utils import get_clock
 from haizea.resourcemanager.frontends import RequestFrontend
 import haizea.traces.readers as tracereaders
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
@@ -78,7 +79,7 @@ class TracefileFrontend(RequestFrontend):
         # "accumulated requests". Rather, we just take whatever
         # requests are in the trace up to the current time
         # reported by the resource manager
-        time = self.rm.clock.get_time()
+        time = get_clock().get_time()
         nowreq = [r for r in self.requests if r.submit_time <= time]
         self.requests = [r for r in self.requests if r.submit_time > time]   
         return nowreq              

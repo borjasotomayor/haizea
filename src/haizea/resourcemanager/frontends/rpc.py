@@ -18,7 +18,7 @@
 import haizea.common.constants as constants
 from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease, ResourceTuple
 from haizea.resourcemanager.frontends import RequestFrontend
-from haizea.common.utils import round_datetime
+from haizea.common.utils import round_datetime, get_config, get_clock
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO
 import logging
 
@@ -31,7 +31,7 @@ class RPCFrontend(RequestFrontend):
         self.rm = rm
         self.logger = logging.getLogger("RPCREQ")
         self.accumulated = []
-        config = self.rm.config
+        config = get_config()
         self.rm.rpc_server.register_rpc(self.create_lease)
 
     def get_accumulated_requests(self):
@@ -43,20 +43,20 @@ class RPCFrontend(RequestFrontend):
         return True
             
     def create_lease(self, start, duration, preemptible, numnodes, cpu, mem, vmimage, vmimagesize):
-        tSubmit = round_datetime(self.rm.clock.get_time())
+        tSubmit = round_datetime(get_clock().get_time())
         resreq = ResourceTuple.create_empty()
         resreq.set_by_type(constants.RES_CPU, float(cpu))
         resreq.set_by_type(constants.RES_MEM, int(mem))        
-        if duration == HAIZEA_DURATION_UNLIMITED:
+        if duration == RPCFrontend.HAIZEA_DURATION_UNLIMITED:
             # This is an interim solution (make it run for a century).
             # TODO: Integrate concept of unlimited duration in the lease datastruct
             duration = DateTimeDelta(36500)
         else:
             duration = ISO.ParseTimeDelta(duration)
 
-        if start == HAIZEA_START_NOW:
+        if start == RPCFrontend.HAIZEA_START_NOW:
             leasereq = ImmediateLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
-        elif start  == HAIZEA_START_BESTEFFORT:
+        elif start  == RPCFrontend.HAIZEA_START_BESTEFFORT:
             leasereq = BestEffortLease(tSubmit, duration, vmimage, vmimagesize, numnodes, resreq, preemptible)
         else:
             if start[0] == "+":

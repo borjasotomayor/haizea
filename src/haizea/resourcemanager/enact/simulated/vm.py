@@ -16,13 +16,13 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.enact.base import VMEnactmentBase
+from haizea.resourcemanager.enact import VMEnactment
 import haizea.common.constants as constants
 import logging
 
-class VMEnactment(VMEnactmentBase):
-    def __init__(self, resourcepool):
-        VMEnactmentBase.__init__(self, resourcepool)
+class SimulatedVMEnactment(VMEnactment):
+    def __init__(self):
+        VMEnactment.__init__(self)
         self.logger = logging.getLogger("ENACT.SIMUL.VM")
         
     def start(self, action):

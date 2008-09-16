@@ -16,20 +16,21 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.enact.base import VMEnactmentBase
+from haizea.resourcemanager.enact import VMEnactment
+from haizea.common.utils import get_config
 import haizea.common.constants as constants
 import commands
 import logging
 from pysqlite2 import dbapi2 as sqlite
 
-class VMEnactment(VMEnactmentBase):
-    def __init__(self, resourcepool):
-        VMEnactmentBase.__init__(self, resourcepool)
+class OpenNebulaVMEnactment(VMEnactment):
+    def __init__(self):
+        VMEnactment.__init__(self)
         self.logger = logging.getLogger("ENACT.ONE.VM")
 
-        self.onevm = self.resourcepool.rm.config.get("onevm")
+        self.onevm = get_config().get("onevm")
         
-        self.conn = sqlite.connect(self.resourcepool.rm.config.get("one.db"))
+        self.conn = sqlite.connect(get_config().get("one.db"))
         self.conn.row_factory = sqlite.Row
 
         

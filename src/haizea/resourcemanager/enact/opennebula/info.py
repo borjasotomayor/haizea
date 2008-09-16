@@ -17,19 +17,20 @@
 # -------------------------------------------------------------------------- #
 
 from haizea.resourcemanager.resourcepool import Node
-from haizea.resourcemanager.enact.base import ResourcePoolInfoBase
+from haizea.resourcemanager.enact import ResourcePoolInfo
+from haizea.common.utils import get_config
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
 from pysqlite2 import dbapi2 as sqlite
 import logging
 
-oneattr2haizea = { "TOTALCPU": constants.RES_CPU,
+class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
+    ONEATTR2HAIZEA = { "TOTALCPU": constants.RES_CPU,
                    "TOTALMEMORY": constants.RES_MEM }
-
-class ResourcePoolInfo(ResourcePoolInfoBase):
-    def __init__(self, resourcepool):
-        ResourcePoolInfoBase.__init__(self, resourcepool)
-        config = self.resourcepool.rm.config
+    
+    def __init__(self):
+        ResourcePoolInfo.__init__(self)
+        config = get_config()
         self.logger = logging.getLogger("ENACT.ONE.INFO")
         self.suspendresumerate = config.get("one.suspendresume-rate-estimate")
 
@@ -53,11 +54,11 @@ class ResourcePoolInfo(ResourcePoolInfoBase):
             attrs = cur.fetchall()
             for attr in attrs:
                 name = attr["name"]
-                if oneattr2haizea.has_key(name):
-                    capacity.set_by_type(oneattr2haizea[name], int(attr["value"]))
+                if OpenNebulaResourcePoolInfo.ONEATTR2HAIZEA.has_key(name):
+                    capacity.set_by_type(OpenNebulaResourcePoolInfo.ONEATTR2HAIZEA[name], int(attr["value"]))
             capacity.set_by_type(constants.RES_CPU, capacity.get_by_type(constants.RES_CPU) / 100.0)
             capacity.set_by_type(constants.RES_MEM, capacity.get_by_type(constants.RES_MEM) / 1024.0)
-            node = Node(self.resourcepool, nod_id, hostname, capacity)
+            node = Node(nod_id, hostname, capacity)
             node.enactment_info = int(enactID)
             self.nodes.append(node)
             

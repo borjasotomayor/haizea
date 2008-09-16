@@ -78,10 +78,7 @@ class KeyValueWrapper(object):
         return cmp(self.key, other.key)
 
 class SlotTable(object):
-    def __init__(self, scheduler):
-        self.scheduler = scheduler
-        self.rm = scheduler.rm
-        self.resourcepool = scheduler.resourcepool
+    def __init__(self):
         self.logger = logging.getLogger("SLOT")
         self.nodes = NodeList()
         self.reservations = []

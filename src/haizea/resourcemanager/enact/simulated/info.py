@@ -17,23 +17,24 @@
 # -------------------------------------------------------------------------- #
 
 from haizea.resourcemanager.resourcepool import Node
-from haizea.resourcemanager.enact.base import ResourcePoolInfoBase
+from haizea.resourcemanager.enact import ResourcePoolInfo
 import haizea.common.constants as constants
+from haizea.common.utils import get_config
 import haizea.resourcemanager.datastruct as ds
 import logging
 
-class ResourcePoolInfo(ResourcePoolInfoBase):
-    def __init__(self, resourcepool):
-        ResourcePoolInfoBase.__init__(self, resourcepool)
+class SimulatedResourcePoolInfo(ResourcePoolInfo):
+    def __init__(self):
+        ResourcePoolInfo.__init__(self)
         self.logger = logging.getLogger("ENACT.SIMUL.INFO")
-        config = self.resourcepool.rm.config
+        config = get_config()
         self.suspendresumerate = config.get("simul.suspendresume-rate")
                 
         numnodes = config.get("simul.nodes")
 
         capacity = self.parse_resources_string(config.get("simul.resources"))
         
-        self.nodes = [Node(self.resourcepool, i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
+        self.nodes = [Node(i+1, "simul-%i" % (i+1), capacity) for i in range(numnodes)]
         for n in self.nodes:
             n.enactment_info = n.nod_id
         

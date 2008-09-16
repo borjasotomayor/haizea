@@ -18,38 +18,40 @@
 
 import haizea.common.constants as constants
 import haizea.resourcemanager.datastruct as ds
-from haizea.resourcemanager.deployment.base import DeploymentBase, DeploymentSchedException
+from haizea.resourcemanager.deployment import DeploymentScheduler, DeploymentSchedException
 from haizea.resourcemanager.datastruct import ResourceReservation, Lease, ARLease, BestEffortLease
-from haizea.common.utils import estimate_transfer_time
+from haizea.resourcemanager.scheduler import ReservationEventHandler
+from haizea.common.utils import estimate_transfer_time, get_config
 
 import copy
 
-class ImageTransferDeployment(DeploymentBase):
-    def __init__(self, scheduler):
-        DeploymentBase.__init__(self, scheduler)
+class ImageTransferDeploymentScheduler(DeploymentScheduler):
+    def __init__(self, slottable, resourcepool, deployment_enact):
+        DeploymentScheduler.__init__(self, slottable, resourcepool, deployment_enact)
         
         # TODO: The following two should be merged into
         # something like this:
-        #    self.imageNode = self.info.getImageNode()
-        self.fifo_node = self.resourcepool.deployment.get_fifo_node()
-        self.edf_node = self.resourcepool.deployment.get_edf_node()
+        #    self.image_node = self.deployment_enact.get_image_node()
+        self.fifo_node = self.deployment_enact.get_fifo_node()
+        self.edf_node = self.deployment_enact.get_edf_node()
         
         self.transfers_edf = []
         self.transfers_fifo = []
         self.completed_transfers = []
 
-        config = self.scheduler.rm.config
+        config = get_config()
         self.reusealg = config.get("diskimage-reuse")
         if self.reusealg == constants.REUSE_IMAGECACHES:
             self.maxcachesize = config.get("diskimage-cache-size")
         else:
             self.maxcachesize = None
         
-        self.imagenode_bandwidth = self.resourcepool.deployment.get_bandwidth()
+        self.imagenode_bandwidth = self.deployment_enact.get_bandwidth()
         
-        self.scheduler.register_handler(type     = FileTransferResourceReservation, 
-                                        on_start = ImageTransferDeployment.handle_start_filetransfer,
-                                        on_end   = ImageTransferDeployment.handle_end_filetransfer)
+        self.handlers ={}
+        self.handlers[FileTransferResourceReservation] = ReservationEventHandler(
+                                        on_start = ImageTransferDeploymentScheduler.handle_start_filetransfer,
+                                        on_end   = ImageTransferDeploymentScheduler.handle_end_filetransfer)
 
     def schedule(self, lease, vmrr, nexttime):
         if isinstance(lease, ARLease):
@@ -62,7 +64,7 @@ class ImageTransferDeployment(DeploymentBase):
             self.__remove_from_fifo_transfers(lease.id)
         
     def schedule_for_ar(self, lease, vmrr, nexttime):
-        config = self.scheduler.rm.config
+        config = get_config()
         mechanism = config.get("transfer-mechanism")
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
@@ -120,7 +122,7 @@ class ImageTransferDeployment(DeploymentBase):
                 self.resourcepool.add_mapping_to_existing_reusable_image(pnode, lease.diskimage_id, lease.id, vnode, start)
 
     def schedule_for_besteffort(self, lease, vmrr, nexttime):
-        config = self.scheduler.rm.config
+        config = get_config()
         mechanism = config.get("transfer-mechanism")
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
@@ -167,7 +169,7 @@ class ImageTransferDeployment(DeploymentBase):
 
     def find_earliest_starting_times(self, lease_req, nexttime):
         nodIDs = [n.nod_id for n in self.resourcepool.get_nodes()]  
-        config = self.scheduler.rm.config
+        config = get_config()
         mechanism = config.get("transfer-mechanism")
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
@@ -219,7 +221,7 @@ class ImageTransferDeployment(DeploymentBase):
 
     def schedule_imagetransfer_edf(self, req, vnodes, nexttime):
         # Estimate image transfer time 
-        bandwidth = self.resourcepool.deployment.get_bandwidth()
+        bandwidth = self.deployment_enact.get_bandwidth()
         imgTransferTime=self.estimate_image_transfer_time(req, bandwidth)
 
         # Determine start time
@@ -318,7 +320,7 @@ class ImageTransferDeployment(DeploymentBase):
         # Estimate image transfer time 
         bandwidth = self.imagenode_bandwidth
         imgTransferTime=self.estimate_image_transfer_time(req, bandwidth)
-        config = self.scheduler.rm.config
+        config = get_config()
         mechanism = config.get("transfer-mechanism")
         startTime = self.get_next_fifo_transfer_time(nexttime)
         
