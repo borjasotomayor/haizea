@@ -36,11 +36,8 @@ import haizea.common.constants as constants
 import haizea.resourcemanager.enact as enact
 from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeploymentScheduler
 from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeploymentScheduler
-from haizea.resourcemanager.enact.opennebula.info import OpenNebulaResourcePoolInfo
-from haizea.resourcemanager.enact.opennebula.vm import OpenNebulaVMEnactment
-from haizea.resourcemanager.enact.simulated.info import SimulatedResourcePoolInfo
-from haizea.resourcemanager.enact.simulated.vm import SimulatedVMEnactment
-from haizea.resourcemanager.enact.simulated.deployment import SimulatedDeploymentEnactment
+from haizea.resourcemanager.enact.opennebula import OpenNebulaResourcePoolInfo, OpenNebulaVMEnactment
+from haizea.resourcemanager.enact.simulated import SimulatedResourcePoolInfo, SimulatedVMEnactment, SimulatedDeploymentEnactment
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.frontends.rpc import RPCFrontend
@@ -169,10 +166,16 @@ class ResourceManager(Singleton):
         # The clock
         wakeup_interval = self.config.get("wakeup-interval")
         non_sched = self.config.get("non-schedulable-interval")
-        self.clock = RealClock(self, wakeup_interval, non_sched, True)
+        dry_run = self.config.get("dry-run")
+        fastforward = dry_run
+        self.clock = RealClock(self, wakeup_interval, non_sched, fastforward)
         
         # RPC server
-        self.rpc_server = None
+        if dry_run:
+            # No need for an RPC server when doing a dry run
+            self.rpc_server = None
+        else:
+            self.rpc_server = RPCServer(self)
         
         # Enactment modules
         info_enact = OpenNebulaResourcePoolInfo()

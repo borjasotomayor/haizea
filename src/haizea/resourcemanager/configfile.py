@@ -591,6 +591,25 @@ class HaizeaConfig(Config):
             For now, this only makes sense if you're seeding Haizea with requests from
             the start (otherwise, it will start and immediately stop).
             """),            
+
+     Option(name        = "dry-run",
+            getter      = "dry-run",
+            type        = OPTTYPE_BOOLEAN,
+            required    = False,
+            default     = False,
+            doc         = """
+            This option is useful for testing.
+            If set to True, Haizea will fast-forward through time (note that this is
+            different that using the simulated clock, which has to be used with a tracefile;
+            with an Haizea/OpenNebula dry run, you will have to see OpenNebula with requests
+            before starting Haizea). You will generally want to set stop-when-no-more-leases
+            when doing a dry-run.
+            
+            IMPORTANT: Haizea will still send out enactment commands to OpenNebula. Make
+            sure you replace onevm with a dummy command that does nothing (or that reacts
+            in some way you want to test; e.g., by emulating a deployment failure, etc.)
+            """),            
+
     ]
     sections.append(opennebula)
     
