@@ -23,6 +23,7 @@ import haizea.common.constants as constants
 class UnmanagedDeploymentScheduler(DeploymentScheduler):
     def __init__(self, slottable, resourcepool, deployment_enact):
         DeploymentScheduler.__init__(self, slottable, resourcepool, deployment_enact)
+        self.handlers = {}
     
     # Add dummy disk images
     def schedule(self, lease, vmrr, nexttime):
