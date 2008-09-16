@@ -17,7 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 from haizea.resourcemanager.resourcepool import Node
-from haizea.resourcemanager.enact import ResourcePoolInfo
+from haizea.resourcemanager.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
 import haizea.common.constants as constants
 from haizea.common.utils import get_config
 import haizea.resourcemanager.datastruct as ds
@@ -63,3 +63,72 @@ class SimulatedResourcePoolInfo(ResourcePoolInfo):
     
     def get_migration_bandwidth(self):
         return 100 # TODO: Get from config file
+
+class SimulatedVMEnactment(VMEnactment):
+    def __init__(self):
+        VMEnactment.__init__(self)
+        self.logger = logging.getLogger("ENACT.SIMUL.VM")
+        
+    def start(self, action):
+        for vnode in action.vnodes:
+            # Unpack action
+            pnode = action.vnodes[vnode].pnode
+            image = action.vnodes[vnode].diskimage
+            cpu = action.vnodes[vnode].resources.get_by_type(constants.RES_CPU)
+            memory = action.vnodes[vnode].resources.get_by_type(constants.RES_MEM)
+            print (action.lease_haizea_id, vnode, pnode, image, cpu, memory)
+            self.logger.debug("Received request to start VM for L%iV%i on host %i, image=%s, cpu=%i, mem=%i"
+                         % (action.lease_haizea_id, vnode, pnode, image, cpu, memory))
+    
+    def stop(self, action):
+        for vnode in action.vnodes:
+            self.logger.debug("Received request to stop VM for L%iV%i"
+                         % (action.lease_haizea_id, vnode))
+
+    def suspend(self, action):
+        for vnode in action.vnodes:
+            self.logger.debug("Received request to suspend VM for L%iV%i"
+                         % (action.lease_haizea_id, vnode))
+
+    def resume(self, action):
+        for vnode in action.vnodes:
+            self.logger.debug("Received request to resume VM for L%iV%i"
+                         % (action.lease_haizea_id, vnode))
+
+    def verify_suspend(self, action):
+        return 0
+    
+    def verify_resume(self, action):
+        return 0
+    
+class SimulatedDeploymentEnactment(DeploymentEnactment):    
+    def __init__(self):
+        DeploymentEnactment.__init__(self)
+        self.logger = logging.getLogger("ENACT.SIMUL.INFO")
+        config = get_config()
+                
+        self.bandwidth = config.get("imagetransfer-bandwidth")
+                
+        # Image repository nodes
+        numnodes = config.get("simul.nodes")
+        
+        imgcapacity = ds.ResourceTuple.create_empty()
+        imgcapacity.set_by_type(constants.RES_NETOUT, self.bandwidth)
+
+        self.fifo_node = Node(numnodes+1, "FIFOnode", imgcapacity)
+        self.edf_node = Node(numnodes+2, "EDFnode", imgcapacity)
+        
+    def get_edf_node(self):
+        return self.edf_node
+    
+    def get_fifo_node(self):
+        return self.fifo_node       
+    
+    def get_aux_nodes(self):
+        return [self.edf_node, self.fifo_node] 
+    
+    def get_bandwidth(self):
+        return self.bandwidth
+        
+    def resolve_to_file(self, lease_id, vnode, diskimage_id):
+        return "/var/haizea/images/%s-L%iV%i" % (diskimage_id, lease_id, vnode)
