@@ -262,8 +262,8 @@ class Scheduler(object):
         time = get_clock().get_time()
         if event == constants.EVENT_END_VM:
             lease = self.leases.get_lease(lease_id)
-            rr = lease.get_active_reservations(time)[0]
-            self._handle_unscheduled_end_vm(lease, rr, enact=False)
+            vmrr = lease.get_last_vmrr()
+            self._handle_unscheduled_end_vm(lease, vmrr, enact=False)
 
     
     def __process_ar_request(self, lease_req, nexttime):
@@ -1160,72 +1160,66 @@ class Scheduler(object):
         return leases
         
     def __preempt(self, lease, preemption_time):
+        
         self.logger.info("Preempting lease #%i..." % (lease.id))
         self.logger.vdebug("Lease before preemption:")
         lease.print_contents()
         vmrr = lease.get_last_vmrr()
-        suspendresumerate = self.resourcepool.info.get_suspendresume_rate()
         
         if vmrr.state == ResourceReservation.STATE_SCHEDULED and vmrr.start >= preemption_time:
-            self.logger.info("... lease #%i has been cancelled and requeued." % lease.id)
             self.logger.debug("Lease was set to start in the middle of the preempting lease.")
-            lease.state = Lease.STATE_PENDING
+            must_cancel_and_requeue = True
+        else:
+            susptype = get_config().get("suspension")
+            time_until_suspend = preemption_time - vmrr.start
+            min_duration = self.__compute_scheduling_threshold(lease)
+            can_suspend = time_until_suspend >= min_duration        
+            if not can_suspend:
+                self.logger.debug("Suspending the lease does not meet scheduling threshold.")
+                must_cancel_and_requeue = True
+            else:
+                if lease.numnodes > 1 and susptype == constants.SUSPENSION_SERIAL:
+                    self.logger.debug("Can't suspend lease because only suspension of single-node leases is allowed.")
+                    must_cancel_and_requeue = True
+                else:
+                    self.logger.debug("Lease can be suspended")
+                    must_cancel_and_requeue = False
+                    
+        if must_cancel_and_requeue:
+            self.logger.info("... lease #%i has been cancelled and requeued." % lease.id)
             if vmrr.backfill_reservation == True:
                 self.numbesteffortres -= 1
-            lease.remove_rr(vmrr)
+            if vmrr.is_suspending():
+                for susprr in vmrr.susp_rrs:
+                    self.slottable.removeReservation(susprr)
+            lease.remove_vmrr(vmrr)
             self.slottable.removeReservation(vmrr)
-           # if susprr != None:
-           #     lease.remove_rr(susprr)
-           #     self.slottable.removeReservation(susprr)
             for vnode, pnode in lease.vmimagemap.items():
                 self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
             self.deployment_scheduler.cancel_deployment(lease)
             lease.vmimagemap = {}
-            # TODO: Change state back to queued
-            self.queue.enqueue_in_order(lease)
+            lease.state = Lease.STATE_QUEUED
+            self.__enqueue_in_order(lease)
             get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
         else:
-            susptype = get_config().get("suspension")
-            timebeforesuspend = preemption_time - vmrr.start
-            # TODO: Determine if it is in fact the initial VMRR or not. Right now
-            # we conservatively overestimate
-            canmigrate = get_config().get("migration")
-            suspendthreshold = lease.get_suspend_threshold(initial=False, suspendrate=suspendresumerate, migrating=canmigrate)
-            # We can't suspend if we're under the suspend threshold
-            suspendable = timebeforesuspend >= suspendthreshold
-            if suspendable and (susptype == constants.SUSPENSION_ALL or (lease.numnodes == 1 and susptype == constants.SUSPENSION_SERIAL)):
-                self.logger.info("... lease #%i will be suspended at %s." % (lease.id, preemption_time))
-                # Careful: VMRR update,etc. will have to be done here
-                self.__schedule_suspension(lease, preemption_time)
-            else:
-                self.logger.info("... lease #%i has been cancelled and requeued (cannot be suspended)" % lease.id)
-                lease.state = Lease.STATE_PENDING
-                if vmrr.backfill_reservation == True:
-                    self.numbesteffortres -= 1
-                lease.remove_rr(vmrr)
-                self.slottable.removeReservation(vmrr)
-                #if susprr != None:
-                #    lease.remove_rr(susprr)
-                #    self.slottable.removeReservation(susprr)
-                if lease.state == Lease.STATE_SUSPENDED:
-                    resmrr = lease.prev_rr(vmrr)
-                    lease.remove_rr(resmrr)
-                    self.slottable.removeReservation(resmrr)
-                for vnode, pnode in lease.vmimagemap.items():
-                    self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
-                self.deployment_scheduler.cancel_deployment(lease)
-                lease.vmimagemap = {}
-                # TODO: Change state back to queued
-                self.queue.enqueue_in_order(lease)
-                get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
+            self.logger.info("... lease #%i will be suspended at %s." % (lease.id, preemption_time))
+            # Save original start and end time of the vmrr
+            old_start = vmrr.start
+            old_end = vmrr.end
+            self.__schedule_suspension(vmrr, preemption_time)
+            self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
+            for susprr in vmrr.susp_rrs:
+                self.slottable.addReservation(susprr)
+            
+            
         self.logger.vdebug("Lease after preemption:")
         lease.print_contents()
         
     def __reevaluate_schedule(self, endinglease, nodes, nexttime, checkedleases):
         self.logger.debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes, nexttime)) 
         leases = []
-        # TODO: "getNextLeasesScheduledInNodes" has to be moved to the slot table
-        #leases = self.scheduledleases.getNextLeasesScheduledInNodes(nexttime, nodes)
+        vmrrs = self.slottable.get_next_reservations_in_nodes(nexttime, nodes, rr_type=VMResourceReservation, immediately_next=True)
+        leases = set([rr.lease for rr in vmrrs])
         leases = [l for l in leases if isinstance(l, ds.BestEffortLease) and not l in checkedleases]
         for lease in leases:
             self.logger.debug("Found lease %i" % l.id)
