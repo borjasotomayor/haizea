@@ -1194,10 +1194,10 @@ class Scheduler(object):
                     self.slottable.removeReservation(susprr)
             lease.remove_vmrr(vmrr)
             self.slottable.removeReservation(vmrr)
-            for vnode, pnode in lease.vmimagemap.items():
+            for vnode, pnode in lease.diskimagemap.items():
                 self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
             self.deployment_scheduler.cancel_deployment(lease)
-            lease.vmimagemap = {}
+            lease.diskimagemap = {}
             lease.state = Lease.STATE_QUEUED
             self.__enqueue_in_order(lease)
             get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)

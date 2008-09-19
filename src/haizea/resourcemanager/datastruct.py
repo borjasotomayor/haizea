@@ -137,8 +137,14 @@ class Lease(object):
         self.logger.log(loglevel, "Mem image map  : %s" % pretty_nodemap(self.memimagemap))
 
     def print_rrs(self, loglevel=LOGLEVEL_VDEBUG):
-        self.logger.log(loglevel, "RESOURCE RESERVATIONS")
-        self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~")
+        if len(self.deployment_rrs) > 0:
+            self.logger.log(loglevel, "DEPLOYMENT RESOURCE RESERVATIONS")
+            self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+            for r in self.deployment_rrs:
+                r.print_contents(loglevel)
+                self.logger.log(loglevel, "##")
+        self.logger.log(loglevel, "VM RESOURCE RESERVATIONS")
+        self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~~~~")
         for r in self.vm_rrs:
             r.print_contents(loglevel)
             self.logger.log(loglevel, "##")
@@ -149,6 +155,9 @@ class Lease(object):
 
     def append_vmrr(self, vmrr):
         self.vm_rrs.append(vmrr)
+        
+    def append_deployrr(self, vmrr):
+        self.deployment_rrs.append(vmrr)
 
     def get_last_vmrr(self):
         return self.vm_rrs[-1]

@@ -113,7 +113,7 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
                         lease.appendRR(filetransfer)
             elif mechanism == constants.TRANSFER_MULTICAST:
                 filetransfer = self.schedule_imagetransfer_edf(lease, musttransfer, nexttime)
-                lease.append_rr(filetransfer)
+                lease.append_deployrr(filetransfer)
  
         # No chance of scheduling exception at this point. It's safe
         # to add entries to the pools
@@ -164,7 +164,7 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
             lease.state = Lease.STATE_READY
             lease.imagesavail = nexttime
         for rr in transferRRs:
-            lease.append_rr(rr)
+            lease.append_deployrr(rr)
         
 
     def find_earliest_starting_times(self, lease_req, nexttime):
@@ -394,7 +394,7 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
 
     @staticmethod
     def handle_start_filetransfer(sched, lease, rr):
-        sched.rm.logger.debug("LEASE-%i Start of handleStartFileTransfer" % lease.id)
+        sched.logger.debug("LEASE-%i Start of handleStartFileTransfer" % lease.id)
         lease.print_contents()
         if lease.state == Lease.STATE_SCHEDULED or lease.state == Lease.STATE_READY:
             lease.state = Lease.STATE_PREPARING
@@ -406,7 +406,7 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
 
     @staticmethod
     def handle_end_filetransfer(sched, lease, rr):
-        sched.rm.logger.debug("LEASE-%i Start of handleEndFileTransfer" % lease.id)
+        sched.logger.debug("LEASE-%i Start of handleEndFileTransfer" % lease.id)
         lease.print_contents()
         if lease.state == Lease.STATE_PREPARING:
             lease.state = Lease.STATE_READY
@@ -416,24 +416,24 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
                 
                 # Update VM Image maps
                 for lease_id, v in vnodes:
-                    lease = sched.scheduledleases.get_lease(lease_id)
-                    lease.vmimagemap[v] = physnode
+                    lease = sched.leases.get_lease(lease_id)
+                    lease.diskimagemap[v] = physnode
                     
                 # Find out timeout of image. It will be the latest end time of all the
                 # leases being used by that image.
                 leases = [l for (l, v) in vnodes]
                 maxend=None
                 for lease_id in leases:
-                    l = sched.scheduledleases.get_lease(lease_id)
+                    l = sched.leases.get_lease(lease_id)
                     end = lease.get_endtime()
                     if maxend==None or end>maxend:
                         maxend=end
                 # TODO: ENACTMENT: Verify the image was transferred correctly
-                sched.deployment.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
+                sched.deployment_scheduler.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
 
         lease.print_contents()
-        sched.rm.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id)
-        sched.rm.logger.info("Completed image transfer for lease %i" % (lease.id))
+        sched.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id)
+        sched.logger.info("Completed image transfer for lease %i" % (lease.id))
         
     def add_diskimages(self, pnode_id, diskimage_id, diskimage_size, vnodes, timeout):
         self.logger.debug("Adding image for leases=%s in nod_id=%i" % (vnodes, pnode_id))
@@ -517,7 +517,7 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
                     # self.storage.createCopyFromCache(pnode, lease.diskImageSize)
 
     def cleanup(self, lease, vmrr):
-        for vnode, pnode in lease.vmimagemap.items():
+        for vnode, pnode in lease.diskimagemap.items():
             self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
 
 class FileTransferResourceReservation(ResourceReservation):
