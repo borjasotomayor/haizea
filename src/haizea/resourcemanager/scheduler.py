@@ -1234,57 +1234,55 @@ class Scheduler(object):
         #    self.reevaluateSchedule(l, vmrr.nodes.values(), vmrr.end, checkedleases)
           
     def __slideback(self, lease, earliest):
-        pass
-#        (vmrr, susprr) = lease.get_last_vmrr()
-#        vmrrnew = copy.copy(vmrr)
-#        nodes = vmrrnew.nodes.values()
-#        if lease.state == Lease.LEASE_STATE_SUSPENDED:
-#            resmrr = lease.prev_rr(vmrr)
-#            originalstart = resmrr.start
-#        else:
-#            resmrr = None
-#            originalstart = vmrrnew.start
-#        cp = self.findChangePointsAfter(after=earliest, until=originalstart, nodes=nodes)
-#        cp = [earliest] + cp
-#        newstart = None
-#        for p in cp:
-#            self.availabilitywindow.initWindow(p, lease.requested_resources, canpreempt=False)
-#            self.availabilitywindow.printContents()
-#            if self.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
-#                (end, canfit) = self.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
-#                if end == originalstart and set(nodes) <= set(canfit.keys()):
-#                    self.logger.debug("Can slide back to %s" % p)
-#                    newstart = p
-#                    break
-#        if newstart == None:
-#            # Can't slide back. Leave as is.
-#            pass
-#        else:
-#            diff = originalstart - newstart
-#            if resmrr != None:
-#                resmrrnew = copy.copy(resmrr)
-#                resmrrnew.start -= diff
-#                resmrrnew.end -= diff
-#                self.updateReservationWithKeyChange(resmrr, resmrrnew)
-#            vmrrnew.start -= diff
-#            
-#            # If the lease was going to be suspended, check to see if
-#            # we don't need to suspend any more.
-#            remdur = lease.duration.get_remaining_duration()
-#            if susprr != None and vmrrnew.end - newstart >= remdur: 
-#                vmrrnew.end = vmrrnew.start + remdur
-#                #vmrrnew.oncomplete = constants.ONCOMPLETE_ENDLEASE
-#                lease.remove_rr(susprr)
-#                self.removeReservation(susprr)
-#            else:
-#                vmrrnew.end -= diff
-#            # ONLY for simulation
-#            if vmrrnew.prematureend != None:
-#                vmrrnew.prematureend -= diff
-#            self.updateReservationWithKeyChange(vmrr, vmrrnew)
-#            self.dirty()
-#            self.logger.vdebug("New lease descriptor (after slideback):")
-#            lease.print_contents()
+        vmrr = lease.get_last_vmrr()
+        # Save original start and end time of the vmrr
+        old_start = vmrr.start
+        old_end = vmrr.end
+        nodes = vmrr.nodes.values()
+        if lease.state == Lease.STATE_SUSPENDED:
+            originalstart = vmrr.resm_rrs[0].start
+        else:
+            originalstart = vmrr.start
+        cp = self.slottable.findChangePointsAfter(after=earliest, until=originalstart, nodes=nodes)
+        cp = [earliest] + cp
+        newstart = None
+        for p in cp:
+            self.slottable.availabilitywindow.initWindow(p, lease.requested_resources, canpreempt=False)
+            self.slottable.availabilitywindow.printContents()
+            if self.slottable.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
+                (end, canfit) = self.slottable.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
+                if end == originalstart and set(nodes) <= set(canfit.keys()):
+                    self.logger.debug("Can slide back to %s" % p)
+                    newstart = p
+                    break
+        if newstart == None:
+            # Can't slide back. Leave as is.
+            pass
+        else:
+            diff = originalstart - newstart
+            if lease.state == Lease.STATE_SUSPENDED:
+                for resmrr in vmrr.resm_rrs:
+                    resmrr_old_start = resmrr.start
+                    resmrr_old_end = resmrr.end
+                    resmrr.start -= diff
+                    resmrr.end -= diff
+                    self.slottable.update_reservation_with_key_change(resmrr, resmrr_old_start, resmrr_old_end)
+            vmrr.update_start(vmrr.start - diff)
+            
+            # If the lease was going to be suspended, check to see if
+            # we don't need to suspend any more.
+            remdur = lease.duration.get_remaining_duration()
+            if vmrr.is_suspending() and vmrr.end - newstart >= remdur: 
+                vmrr.update_end(vmrr.start + remdur)
+                for susprr in vmrr.susp_rrs:
+                    self.slottable.removeReservation(susprr)
+                vmrr.susp_rrs = []
+            else:
+                vmrr.update_end(vmrr.end - diff)
+
+            self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
+            self.logger.vdebug("New lease descriptor (after slideback):")
+            lease.print_contents()
     
           
 
