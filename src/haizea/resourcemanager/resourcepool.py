@@ -263,8 +263,8 @@ class RAMImageFile(File):
         return "(RAM L%iv%i %s)" % (self.lease_id, self.vnode, self.filename)
     
 class ResourcePoolWithReusableImages(ResourcePool):
-    def __init__(self, scheduler):
-        ResourcePool.__init__(self, scheduler)
+    def __init__(self, info_enact, vm_enact, deploy_enact):
+        ResourcePool.__init__(self, info_enact, vm_enact, deploy_enact)
         
         self.nodes = [NodeWithReusableImages.from_node(n) for n in self.nodes]
     

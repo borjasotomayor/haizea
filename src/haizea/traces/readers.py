@@ -17,7 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 from mx.DateTime import TimeDelta
-from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ResourceTuple
+from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ResourceTuple
 import haizea.common.constants as constants
 import haizea.traces.formats as formats
 
@@ -58,7 +58,7 @@ def SWF(tracefile, config):
                     realdur = maxdur
                 preemptible = True
                 req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, preemptible, realdur)
-                req.state = constants.LEASE_STATE_PENDING
+                req.state = Lease.STATE_NEW
                 requests.append(req)
     return requests
 
@@ -101,6 +101,6 @@ def LWF(tracefile, inittime):
         else:
             preemptible = False
             req = ARLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq, preemptible, realduration)
-        req.state = constants.LEASE_STATE_PENDING
+        req.state = Lease.STATE_NEW
         requests.append(req)
     return requests

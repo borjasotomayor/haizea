@@ -83,7 +83,6 @@ class ResourceManager(Singleton):
         # Create the RM components
         
         mode = config.get("mode")
-        clock = config.get("clock")
         
         self.daemon = daemon
         self.pidfile = pidfile
@@ -107,13 +106,14 @@ class ResourceManager(Singleton):
         self.daemon = False
         
         self.init_logging()
-
+        clock = self.config.get("clock")
+        
         # The clock
-        if self.clock == constants.CLOCK_SIMULATED:
+        if clock == constants.CLOCK_SIMULATED:
             starttime = self.config.get("starttime")
             self.clock = SimulatedClock(self, starttime)
             self.rpc_server = None
-        elif self.clock == constants.CLOCK_REAL:
+        elif clock == constants.CLOCK_REAL:
             wakeup_interval = self.config.get("wakeup-interval")
             non_sched = self.config.get("non-schedulable-interval")
             self.clock = RealClock(self, wakeup_interval, non_sched)
@@ -125,8 +125,12 @@ class ResourceManager(Singleton):
         deploy_enact = SimulatedDeploymentEnactment()
                 
         # Resource pool
-        if self.config.get("diskimage-reuse") == constants.REUSE_IMAGECACHES:
-            resourcepool = ResourcePoolWithReusableImages(info_enact, vm_enact, deploy_enact)
+        deploy_type = self.config.get("lease-preparation")
+        if deploy_type == constants.DEPLOYMENT_TRANSFER:
+            if self.config.get("diskimage-reuse") == constants.REUSE_IMAGECACHES:
+                resourcepool = ResourcePoolWithReusableImages(info_enact, vm_enact, deploy_enact)
+            else:
+                resourcepool = ResourcePool(info_enact, vm_enact, deploy_enact)
         else:
             resourcepool = ResourcePool(info_enact, vm_enact, deploy_enact)
     
@@ -134,14 +138,14 @@ class ResourceManager(Singleton):
         slottable = SlotTable()
         
         # Deployment scheduler
-        deploy_type = self.config.get("lease-preparation")
+        
         if deploy_type == constants.DEPLOYMENT_UNMANAGED:
             deployment_scheduler = UnmanagedDeploymentScheduler(slottable, resourcepool, deploy_enact)
         elif deploy_type == constants.DEPLOYMENT_TRANSFER:
             deployment_scheduler = ImageTransferDeploymentScheduler(slottable, resourcepool, deploy_enact)    
     
         # Scheduler
-        self.scheduler = Scheduler(self, slottable, resourcepool, deployment_scheduler)
+        self.scheduler = Scheduler(slottable, resourcepool, deployment_scheduler)
         
         # TODO: Having the slot table contained in the deployment scheduler, and also
         # in the "main" scheduler (which itself contains the same slot table) is far
@@ -150,10 +154,10 @@ class ResourceManager(Singleton):
         # class comments for more details)
         
         # Lease request frontends
-        if self.clock == constants.CLOCK_SIMULATED:
+        if clock == constants.CLOCK_SIMULATED:
             # In pure simulation, we can only use the tracefile frontend
             self.frontends = [TracefileFrontend(self, self.clock.get_start_time())]
-        elif self.clock == constants.CLOCK_REAL:
+        elif clock == constants.CLOCK_REAL:
             # In simulation with a real clock, only the RPC frontend can be used
             self.frontends = [RPCFrontend(self)] 
         
@@ -790,7 +794,7 @@ class RealClock(Clock):
 if __name__ == "__main__":
     from haizea.resourcemanager.configfile import HaizeaConfig
     from haizea.common.config import ConfigException
-    CONFIGFILE = "../../../etc/suspendresume.conf"
+    CONFIGFILE = "../../../etc/sample_trace.conf"
     try:
         CONFIG = HaizeaConfig.from_file(CONFIGFILE)
     except ConfigException, msg:
