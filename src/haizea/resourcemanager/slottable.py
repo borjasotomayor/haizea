@@ -161,6 +161,12 @@ class SlotTable(object):
         res = [x.value for x in self.reservationsByStart[startpos:endpos]]
         return res
 
+    def get_reservations_starting_after(self, start):
+        startitem = KeyValueWrapper(start, None)
+        startpos = bisect.bisect_left(self.reservationsByStart, startitem)
+        res = [x.value for x in self.reservationsByStart[startpos:]]
+        return res
+
     def get_reservations_ending_between(self, start, end):
         startitem = KeyValueWrapper(start, None)
         enditem = KeyValueWrapper(end, None)
@@ -216,13 +222,12 @@ class SlotTable(object):
         self.dirty()
 
     # If the slot table keys are modified (start and/or end time)
-    # provide the old reservation (so we can remove it using
-    # the original keys) and also the new reservation
-    def updateReservationWithKeyChange(self, rrold, rrnew):
+    # provide the old keys (so we can remove it using
+    # the m) and updated reservation
+    def update_reservation_with_key_change(self, rr, old_start, old_end):
         # TODO: Might be more efficient to resort lists
-        self.removeReservation(rrold)
-        self.addReservation(rrnew)
-        rrold.lease.replace_rr(rrold, rrnew)
+        self.removeReservation(rr, old_start, old_end)
+        self.addReservation(rr)
         self.dirty()
 
 
@@ -286,7 +291,39 @@ class SlotTable(object):
         avail = sum([node.capacity.get_by_type(constants.RES_CPU) for node in nodes.values()])
         return (avail == 0)
     
-
+    def get_next_reservations_in_nodes(self, time, nodes, rr_type=None, immediately_next = False):
+        nodes = set(nodes)
+        rrs_in_nodes = []
+        earliest_end_time = {}
+        rrs = self.get_reservations_starting_after(time)
+        if rr_type != None:
+            rrs = [rr for rr in rrs if isinstance(rr, rr_type)]
+            
+        # Filter the RRs by nodes
+        for r in rrs:
+            rr_nodes = set(rr.resources_in_pnode.keys())
+            if len(nodes & rr_nodes) > 0:
+                rrs_in_nodes.append(rr)
+                end = rr.end
+                for n in rr_nodes:
+                    if not earliest_end_time.has_key(n):
+                        earliest_end_time[n] = end
+                    else:
+                        if end < earliest_end_time[n]:
+                            earliest_end_time[n] = end
+                            
+        if immediately_next:
+            # We only want to include the ones that are immediately
+            # next. 
+            rr_nodes_excl = set()
+            for n in nodes:
+                if earliest_end_time.has_key(n):
+                    end = earliest_end_time[n]
+                    rrs = [rr for rr in rrs_in_nodes if n in rr.resources_in_pnode.keys() and rr.start < end]
+                    rr_nodes_excl.update(rrs)
+            rrs_in_nodes = list(rr_nodes_excl)
+        
+        return rrs_in_nodes
 
 class AvailEntry(object):
     def __init__(self, time, avail, availpreempt, resreq):
