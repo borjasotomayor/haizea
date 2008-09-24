@@ -36,7 +36,7 @@ import haizea.common.constants as constants
 import haizea.resourcemanager.enact as enact
 from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeploymentScheduler
 from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeploymentScheduler
-from haizea.resourcemanager.enact.opennebula import OpenNebulaResourcePoolInfo, OpenNebulaVMEnactment
+from haizea.resourcemanager.enact.opennebula import OpenNebulaResourcePoolInfo, OpenNebulaVMEnactment, OpenNebulaDummyDeploymentEnactment
 from haizea.resourcemanager.enact.simulated import SimulatedResourcePoolInfo, SimulatedVMEnactment, SimulatedDeploymentEnactment
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
@@ -184,8 +184,8 @@ class ResourceManager(Singleton):
         # Enactment modules
         info_enact = OpenNebulaResourcePoolInfo()
         vm_enact = OpenNebulaVMEnactment()
-        # No deployment in OpenNebula. Using simulated one for now.
-        deploy_enact = SimulatedDeploymentEnactment()
+        # No deployment in OpenNebula. Using dummy one for now.
+        deploy_enact = OpenNebulaDummyDeploymentEnactment()
             
         # Slot table
         slottable = SlotTable()
@@ -318,6 +318,10 @@ class ResourceManager(Singleton):
             
         # Write all collected data to disk
         self.accounting.save_to_disk()
+        
+        # Stop RPC server
+        if self.rpc_server != None:
+            self.rpc_server.stop()
         
     def process_requests(self, nexttime):
         """Process any new requests in the request frontend

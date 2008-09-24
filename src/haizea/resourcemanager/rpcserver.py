@@ -22,12 +22,23 @@ from SimpleXMLRPCServer import SimpleXMLRPCServer
 
 DEFAULT_HAIZEA_PORT = 42493
 
+class StoppableSimpleXMLRPCServer(SimpleXMLRPCServer):
+    allow_reuse_address = True
+
+    def serve_forever(self):
+        self.run = True
+        while not self.run:
+            self.handle_request()
+
+    def stop(self):
+        self.run = False
+
 class RPCServer(object):
     def __init__(self, rm):
         self.rm = rm
         self.logger = logging.getLogger("RPCSERVER")
         self.port = DEFAULT_HAIZEA_PORT
-        self.server = SimpleXMLRPCServer(("localhost", self.port), allow_none=True)
+        self.server = StoppableSimpleXMLRPCServer(("localhost", self.port), allow_none=True)
         self.register_rpc(self.test_func)
         self.register_rpc(self.cancel_lease)
         self.register_rpc(self.get_leases)
@@ -40,6 +51,9 @@ class RPCServer(object):
         # Start the XML-RPC server
         server_thread = threading.Thread( target = self.serve )
         server_thread.start()
+        
+    def stop(self):
+        self.server.stop()
         
     def register_rpc(self, func):
         self.server.register_function(func)
