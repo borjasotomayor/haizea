@@ -166,7 +166,9 @@ class Scheduler(object):
     
     def process_reservations(self, nowtime):
         starting = self.slottable.get_reservations_starting_at(nowtime)
+        starting = [res for res in starting if res.state == ResourceReservation.STATE_SCHEDULED]
         ending = self.slottable.get_reservations_ending_at(nowtime)
+        ending = [res for res in ending if res.state == ResourceReservation.STATE_ACTIVE]
         for rr in ending:
             self._handle_end_rr(rr.lease, rr)
             self.handlers[type(rr)].on_end(self, rr.lease, rr)
@@ -368,7 +370,7 @@ class Scheduler(object):
             # scheduling could still throw an exception)
             lease_req.append_vmrr(vmrr)
             self.slottable.addReservation(vmrr)
-        except SlotFittingException, msg:
+        except Exception, msg:
             raise SchedException, "The requested AR lease is infeasible. Reason: %s" % msg
 
 
@@ -1171,19 +1173,22 @@ class Scheduler(object):
             must_cancel_and_requeue = True
         else:
             susptype = get_config().get("suspension")
-            time_until_suspend = preemption_time - vmrr.start
-            min_duration = self.__compute_scheduling_threshold(lease)
-            can_suspend = time_until_suspend >= min_duration        
-            if not can_suspend:
-                self.logger.debug("Suspending the lease does not meet scheduling threshold.")
+            if susptype == constants.SUSPENSION_NONE:
                 must_cancel_and_requeue = True
             else:
-                if lease.numnodes > 1 and susptype == constants.SUSPENSION_SERIAL:
-                    self.logger.debug("Can't suspend lease because only suspension of single-node leases is allowed.")
+                time_until_suspend = preemption_time - vmrr.start
+                min_duration = self.__compute_scheduling_threshold(lease)
+                can_suspend = time_until_suspend >= min_duration        
+                if not can_suspend:
+                    self.logger.debug("Suspending the lease does not meet scheduling threshold.")
                     must_cancel_and_requeue = True
                 else:
-                    self.logger.debug("Lease can be suspended")
-                    must_cancel_and_requeue = False
+                    if lease.numnodes > 1 and susptype == constants.SUSPENSION_SERIAL:
+                        self.logger.debug("Can't suspend lease because only suspension of single-node leases is allowed.")
+                        must_cancel_and_requeue = True
+                    else:
+                        self.logger.debug("Lease can be suspended")
+                        must_cancel_and_requeue = False
                     
         if must_cancel_and_requeue:
             self.logger.info("... lease #%i has been cancelled and requeued." % lease.id)

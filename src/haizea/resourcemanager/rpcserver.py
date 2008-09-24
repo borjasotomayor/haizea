@@ -27,7 +27,7 @@ class StoppableSimpleXMLRPCServer(SimpleXMLRPCServer):
 
     def serve_forever(self):
         self.run = True
-        while not self.run:
+        while self.run:
             self.handle_request()
 
     def stop(self):
@@ -71,7 +71,7 @@ class RPCServer(object):
         return 0
 
     def get_leases(self):
-        return [l.xmlrpc_marshall() for l in self.rm.scheduler.scheduledleases.get_leases()]
+        return [l.xmlrpc_marshall() for l in self.rm.scheduler.leases.get_leases()]
 
     def get_lease(self, lease_id):
         return 0

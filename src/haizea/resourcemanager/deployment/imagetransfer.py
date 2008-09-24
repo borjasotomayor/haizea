@@ -112,8 +112,11 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
                         transferRRs[pnode] = filetransfer
                         lease.appendRR(filetransfer)
             elif mechanism == constants.TRANSFER_MULTICAST:
-                filetransfer = self.schedule_imagetransfer_edf(lease, musttransfer, nexttime)
-                lease.append_deployrr(filetransfer)
+                try:
+                    filetransfer = self.schedule_imagetransfer_edf(lease, musttransfer, nexttime)
+                    lease.append_deployrr(filetransfer)
+                except DeploymentSchedException, msg:
+                    raise
  
         # No chance of scheduling exception at this point. It's safe
         # to add entries to the pools
@@ -287,7 +290,7 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
             startTime = t.end
              
         if not fits:
-             raise DeploymentSchedException, "Adding this VW results in an unfeasible image transfer schedule."
+             raise DeploymentSchedException, "Adding this lease results in an unfeasible image transfer schedule."
 
         # Push image transfers as close as possible to their deadlines. 
         feasibleEndTime=newtransfers[-1].deadline

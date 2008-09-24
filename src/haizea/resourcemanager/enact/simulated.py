@@ -76,7 +76,6 @@ class SimulatedVMEnactment(VMEnactment):
             image = action.vnodes[vnode].diskimage
             cpu = action.vnodes[vnode].resources.get_by_type(constants.RES_CPU)
             memory = action.vnodes[vnode].resources.get_by_type(constants.RES_MEM)
-            print (action.lease_haizea_id, vnode, pnode, image, cpu, memory)
             self.logger.debug("Received request to start VM for L%iV%i on host %i, image=%s, cpu=%i, mem=%i"
                          % (action.lease_haizea_id, vnode, pnode, image, cpu, memory))
     

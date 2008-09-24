@@ -102,13 +102,13 @@ class ResourceManager(Singleton):
         
         """
 
-        # Simulations always run in the foreground
-        self.daemon = False
+        # Simulated-time simulations always run in the foreground
+        clock = self.config.get("clock")
+        if clock == constants.CLOCK_SIMULATED:
+            self.daemon = False
         
         self.init_logging()
-        clock = self.config.get("clock")
-        
-        # The clock
+                
         if clock == constants.CLOCK_SIMULATED:
             starttime = self.config.get("starttime")
             self.clock = SimulatedClock(self, starttime)
@@ -764,9 +764,15 @@ class RealClock(Clock):
             
             # The only exit condition from the real clock is if the stop_when_no_more_leases
             # is set to True, and there's no more work left to do.
-            stop_when_no_more_leases = self.rm.config.get("stop-when-no-more-leases")
-            if stop_when_no_more_leases and not self.rm.exists_leases_in_rm():
-                done = True
+            # TODO: This first if is a kludge. Other options should only interact with
+            # options through the configfile's get method. The "stop-when-no-more-leases"
+            # option is currently OpenNebula-specific (while the real clock isn't; it can
+            # be used by both the simulator and the OpenNebula mode). This has to be
+            # fixed.            
+            if self.rm.config._options.has_key("stop-when-no-more-leases"):
+                stop_when_no_more_leases = self.rm.config.get("stop-when-no-more-leases")
+                if stop_when_no_more_leases and not self.rm.exists_leases_in_rm():
+                    done = True
             
             # Sleep
             if not done:
