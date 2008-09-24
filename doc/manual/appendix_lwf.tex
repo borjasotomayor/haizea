@@ -1,0 +1,22 @@
+The LWF (Lease Workload Format) is used to specify lease workloads in Haizea.  In an LWF file, time is measured in seconds and starts at second 0. Each line is a lease request and includes ten fields. Each field is separated by whitespace 
+The meaning of the fields are:
+
+\begin{center}
+% use packages: array
+\begin{tabular}{|c|l|p{6cm}|}
+\hline
+\sffamily\bfseries \# & \sffamily\bfseries Name & \sffamily\bfseries Description \\ \hline\hline
+  0 & Request time  & The time at which the lease is requested \\ \hline
+  1 & Start time    & The time at which the lease must start. -1 denotes that no start time is requested (i.e., best-effort start time) \\ \hline
+  2 & Duration      & Requested duration \\ \hline
+  3 & Real duration & Real duration. This field is used to simulate leases that end prematurely \\ \hline
+  4 & \# of nodes   & Number of nodes in the lease \\ \hline
+  5 & CPU           & Number of CPUs, per node. \\ \hline
+  6 & Memory        & Memory per node, in MB. \\ \hline
+  7 & Disk          & Additional disk space (not counting the VM image) in MB, per node \\ \hline
+  8 & Disk Image    & Disk image identifier \\ \hline
+  9 & Image size    & Size of disk image \\ \hline
+\end{tabular}
+\end{center}
+
+This format is specific to Haizea and, as you can see, very ad-hoc. We're looking to replace it with a more flexible format in future versions of Haizea.
