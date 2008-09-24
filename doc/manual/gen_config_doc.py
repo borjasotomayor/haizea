@@ -36,13 +36,13 @@ for s in HaizeaConfig.sections:
                 print "An integer number"
             elif opt.type == OPTTYPE_FLOAT:
                 print "A real number"
-            elif OPTTYPE_STRING:
+            elif opt.type == OPTTYPE_STRING:
                 print "Any string"
-            elif OPTTYPE_BOOLEAN:
+            elif opt.type == OPTTYPE_BOOLEAN:
                 print "\texttt{True} or \texttt{False}"
-            elif OPTTYPE_DATETIME:
+            elif opt.type == OPTTYPE_DATETIME:
                 print "An ISO timestamp: i.e., \\texttt{YYYY-MM-DD HH:MM:SS}"
-            elif OPTTYPE_TIMEDELTA:
+            elif opt.type == OPTTYPE_TIMEDELTA:
                 print "A duration in the format \\texttt{HH:MM:SS}"
 
         print "\\item[Required:]"
