@@ -6,9 +6,9 @@ Log        = haizea.log
 Output     = haizea.$(Process).out
 Error      = haizea.$(Process).error
 
-% for profile, trace, conf in configs:
+% for configname, configfile in configs:
 remote_initialdir=${etcdir}
-Arguments  = haizea -c ${conf}
+Arguments  = haizea -c ${configfile}
 Queue
 
 % endfor
