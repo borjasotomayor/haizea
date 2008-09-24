@@ -6,6 +6,7 @@
 \usepackage{fullpage}
 
 \include{utils}
+\setcounter{tocdepth}{1}
 
 \begin{document}
 \frontmatter
@@ -19,7 +20,6 @@
 \maketitle
 \end{htmlonly}
 
-
 \tableofcontents
 
 \chapter{Preface}
@@ -30,23 +30,22 @@
 \part{Fundamental Concepts}
 
 \chapter{What is Haizea?}
+\label{chap:whatis}
 
 \input{whatis}
 
 \chapter{Resource leases}
-
+\label{chap:leases}
 \input{leases}
 
 \part{Using Haizea}
-
-Foobar foobaz 
 
 \chapter{Installing Haizea}
 
 \input{install}
 
 \chapter{Quickstart guide}
-
+\label{chap:quickstart}
 \input{quickstart}
 
 \chapter{Running scheduling simulations}
@@ -54,11 +53,11 @@ Foobar foobaz
 \input{simulation}
 
 \chapter{Haizea and OpenNebula}
-
+\label{chap:opennebula}
 \input{opennebula}
 
 \chapter{Analysing scheduling data}
-
+\label{chap:analysing}
 \input{analysing}
 
 
@@ -76,14 +75,15 @@ Foobar foobaz
 \appendix
 
 \chapter{Command-line interface reference}
-
+\label{app:cli}
 \input{appendix_cli}
 
 \chapter{Configuration file reference}
-
+\label{app:conffile}
 \input{appendix_conf}
 
 \chapter{LWF file format}
-
+\label{app:lwf}
+\input{appendix_lwf}
 
 \end{document}

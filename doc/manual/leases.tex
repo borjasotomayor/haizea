@@ -1,3 +1,37 @@
+
+Let's say you need computational resources...
+
+Maybe you're a scientist who needs to run some simulations. You have specific hardware requirements, but you're not particularly picky about when the simulations run, and probably won't even notice if they are interrupted at some point, as long as they finish running (correctly) at some point, maybe before a given deadline. A job scheduler, and a compute cluster, would probably be a good fit for you.
+
+You could also be a software developer who wants to test his or her code on a pristine machine, which you would only need for a relatively short period of time. Plus, every time you use this machine, you'd like it to start up with the exact same pristine software environment. Oh, and you want your machine now. As in right now. One option could be to install a virtual machine (VM) manager (such as Xen, VMWare, etc.) to start up these pristine machines as VMs on your own machine. Even better, you could go to a cloud (like Amazon EC2 or the Science Clouds) and have those VMs appear automagically somewhere else, so you don't have to worry about setting up the VM manager or having a machine powerful enough to run those VMs.
+
+Or perhaps you're a run-of-the-mill geek who wants his or her own web/mail/DNS/etc server. This server will presumably be running for months or even years with high availability: your server has to be running all the time, with no interruptions. There's a whole slew of hosting providers who can give you a dedicated server or a virtual private server. The latter are typically managed with VM-based datacenter managers.
+
+As you can see, there are a lot of resource provisioning scenarios in nature. However, the solutions that have emerged tend to be specific to a particular scenario, to the exclusion of other ones. For example, while job-based systems are exceptionally good at managing complex batch workloads, they're not too good at provisioning resources at specific times (some job-based systems do offer advance reservations, but they have well-known utilization problems) or at giving users unfettered access to provisioned resources (forcing them, instead, to interact with the resources through the job abstraction).
+
+A lease is a general resource provisioning abstraction that could be used to satisfy a variety of use cases, such as the ones described above. In our work, we've defined a lease as "a negotiated and renegotiable agreement between a resource provider and a resource consumer, where the former agrees to make a set of resource available to the latter, based on a set of lease terms presented by the resource consumer". In our view, the lease terms must include the following dimensions:
+
+\begin{description}
+ \item[Hardware] The hardware resources (CPU, memory, etc.) required by the resource consumer.
+ \item[Software] The software environment that must be installed in those resources.
+ \item[Availability] The period during which the hardware and software resources must be available. It is important to note that the availability period can be specified in a variety of ways, like "just get this to me as soon as you can", "I need this from 2pm to 4pm on Mondays, Wednesdays, and Fridays (and, if I don't get exactly this, I will be a very unhappy resource consumer)", or even "I need four hours sometime before 5pm tomorrow, although if you get the resources to me right now I'll settle for just two hours". A lease-based system must be able to efficiently combine all these different types of availability.
+\end{description}
+
+Furthermore, if you don't get any of these dimensions, then you're being shortchanged by your resource lessor. For example, Amazon EC2 is very good at providing exactly the software environment you want, and reasonably good at providing the hardware you want (although you're limited to a few hardware configurations), but not so good at supporting a variety of availability periods.
+
+So, Haizea aims to support resource leasing along these three dimension. For now, Haizea supports three types of availability:
+
+\begin{description}
+\item[Best-effort lease] Resources are provisioned as soon as they are available.
+\item[Advance reservation-style leases (or "AR leases")] Resources are provisioned during a strictly defined time period (e.g., from 2pm to 4pm).
+\item[Immediate leases] Resources must be provisioned right now, or not at all.
+\end{description}
+
+Although there are many systems (particularly job-based systems) that support these two types availability, Haizea differs in that it efficiently schedules heterogeneous workloads (combining best-effort and AR leases), overcoming the utilization problems typically resulting from using ARs. Haizea does this by using virtual machines to implement leases. Virtual machines also enable Haizea to provide exactly the hardware and software requested by the user. Additionally, Haizea also manages the overhead of preparing a lease, to make sure that any deployment operations (such as transferring a VM disk image) are taken care of before the start of a lease, instead of being deducted from the lessee's allocation.
+
+In the future, Haizea will support additional lease types, such as urgent leases, periodic leases, deadline-driven leases, etc.
+
+
 Haizea supports a variety of resource leases. There's a more detailed description of what a lease is in the What is Haizea? page, and this page just describes the supported types of leases. Throughout this page, let's assume you have a 4-node cluster, and that you want to lease parts of that cluster over time. We'll represent the four nodes over time like this:
 
 \section{"Advance Reservation" lease}
