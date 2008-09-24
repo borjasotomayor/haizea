@@ -98,12 +98,6 @@ class HaizeaConfig(Config):
                is no deployment overhead, or that some
                other entity is taking care of it (e.g., one
                of the enactment backends)
-             - predeployed-images: The scheduler can assume that
-               all required disk images are predeployed on the
-               physical nodes. This is different from "unmanaged"
-               because the scheduler may still have to handle
-               making local copies of the predeployed images before
-               a lease can start.
              - imagetransfer: A disk image has to be transferred
                from a repository node before the lease can start.
             """),
@@ -207,7 +201,16 @@ class HaizeaConfig(Config):
             valid       = [constants.SUSPRES_EXCLUSION_LOCAL,
                            constants.SUSPRES_EXCLUSION_GLOBAL],
             doc         = """
-            Documentation            
+            When suspending or resuming a VM, the VM's memory is dumped to a
+            file on disk. To correctly estimate the time required to suspend
+            a lease with multiple VMs, Haizea makes sure that no two 
+            suspensions/resumptions happen at the same time (e.g., if eight
+            memory files were being saved at the same time to disk, the disk's
+            performance would be reduced in a way that is not as easy to estimate
+            as if only one file were being saved at a time).
+            
+            Depending on whether the files are being saved to/read from a global
+            or local filesystem, this exclusion can be either global or local.                        
             """),
 
      Option(name        = "scheduling-threshold-factor",
@@ -216,7 +219,23 @@ class HaizeaConfig(Config):
             required    = False,
             default     = 1,
             doc         = """
-            Documentation                
+            To avoid thrashing, Haizea will not schedule a lease unless all overheads
+            can be correctly scheduled (which includes image transfers, suspensions, etc.).
+            However, this can still result in situations where a lease is prepared,
+            and then immediately suspended because of a blocking lease in the future.
+            The scheduling threshold factor can be used to specify that a lease must
+            not be scheduled unless it is guaranteed to run for a minimum amount of
+            time (the rationale behind this is that you ideally don't want leases
+            to be scheduled if they're not going to be active for at least as much time
+            as was spent in overheads).
+            
+            The default value is 1, meaning that the lease will be active for at least
+            as much time T as was spent on overheads (e.g., if preparing the lease requires
+            60 seconds, and we know that it will have to be suspended, requiring 30 seconds,
+            Haizea won't schedule the lease unless it can run for at least 90 minutes).
+            In other words, a scheduling factor of F required a minimum duration of 
+            F*T. A value of 0 could lead to thrashing, since Haizea could end up with
+            situations where a lease starts and immediately gets suspended.               
             """),
 
      Option(name        = "force-scheduling-threshold",
@@ -224,7 +243,8 @@ class HaizeaConfig(Config):
             type        = OPTTYPE_TIMEDELTA,
             required    = False,
             doc         = """
-            Documentation                
+            This option can be used to force a specific scheduling threshold time
+            to be used, instead of calculating one based on overheads.                
             """),
 
      Option(name        = "migration",
@@ -293,10 +313,10 @@ class HaizeaConfig(Config):
             doc         = """
             Type of clock to use in simulation:
             
-             - "simulated": A simulated clock that fastforwards through
-                time. Can only use the tracefile request
-                frontend
-             - "real": A real clock is used, but simulated resources and
+             - simulated: A simulated clock that fastforwards through
+               time. Can only use the tracefile request
+               frontend
+             - real: A real clock is used, but simulated resources and
                enactment actions are used. Can only use the RPC
                request frontend.                
             """),
@@ -504,6 +524,15 @@ class HaizeaConfig(Config):
             doc         = """
             Path to file with leases to "inject" into the tracefile.                
             """),      
+               
+     Option(name        = "runtime-slowdown-overhead",
+            getter      = "runtime-slowdown-overhead",
+            type        = OPTTYPE_FLOAT,
+            required    = False,
+            default     = 0,
+            doc         = """
+            Adds a runtime overhead (in %) to the lease duration.                
+            """),
 
      Option(name        = "add-overhead",
             getter      = "add-overhead",
@@ -514,8 +543,12 @@ class HaizeaConfig(Config):
                            constants.RUNTIMEOVERHEAD_ALL,
                            constants.RUNTIMEOVERHEAD_BE],
             doc         = """
-            Documentation                
-            """),   
+            Specifies what leases will have a runtime overhead added:
+            
+             - none: No runtime overhead must be added.
+             - besteffort: Add only to best-effort leases
+             - all: Add runtime overhead to all leases                
+            """),
 
      Option(name        = "bootshutdown-overhead",
             getter      = "bootshutdown-overhead",
@@ -525,15 +558,6 @@ class HaizeaConfig(Config):
             doc         = """
             Specifies how many seconds will be alloted to
             boot and shutdown of the lease.                
-            """),      
-
-     Option(name        = "runtime-slowdown-overhead",
-            getter      = "runtime-slowdown-overhead",
-            type        = OPTTYPE_FLOAT,
-            required    = False,
-            default     = 0,
-            doc         = """
-            Adds a runtime overhead (in %) to the lease duration.                
             """)
                   
     ]
@@ -586,7 +610,7 @@ class HaizeaConfig(Config):
             doc         = """
             This option is useful for testing and running experiments.
             If set to True, Haizea will stop when there are no more leases
-            to process (which allows you to tun Haizea+OpenNebula unattended,
+            to process (which allows you to tun Haizea and OpenNebula unattended,
             and count on it stopping when there are no more leases to process).
             For now, this only makes sense if you're seeding Haizea with requests from
             the start (otherwise, it will start and immediately stop).
@@ -601,7 +625,7 @@ class HaizeaConfig(Config):
             This option is useful for testing.
             If set to True, Haizea will fast-forward through time (note that this is
             different that using the simulated clock, which has to be used with a tracefile;
-            with an Haizea/OpenNebula dry run, you will have to see OpenNebula with requests
+            with an Haizea/OpenNebula dry run, you will have to seed OpenNebula with requests
             before starting Haizea). You will generally want to set stop-when-no-more-leases
             when doing a dry-run.
             
