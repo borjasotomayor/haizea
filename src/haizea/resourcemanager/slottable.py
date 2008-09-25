@@ -172,7 +172,7 @@ class SlotTable(object):
         enditem = KeyValueWrapper(end, None)
         startpos = bisect.bisect_left(self.reservationsByEnd, startitem)
         endpos = bisect.bisect_right(self.reservationsByEnd, enditem)
-        res = [x.value for x in self.reservationsByStart[startpos:endpos]]
+        res = [x.value for x in self.reservationsByEnd[startpos:endpos]]
         return res
     
     def get_reservations_starting_at(self, time):
