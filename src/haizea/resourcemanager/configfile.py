@@ -88,7 +88,6 @@ class HaizeaConfig(Config):
             required    = False,
             default     = constants.DEPLOYMENT_UNMANAGED,
             valid       = [constants.DEPLOYMENT_UNMANAGED,
-                           constants.DEPLOYMENT_PREDEPLOY,
                            constants.DEPLOYMENT_TRANSFER],
             doc         = """
             Sets how the scheduler will handle the
@@ -455,7 +454,8 @@ class HaizeaConfig(Config):
             type        = OPTTYPE_TIMEDELTA,
             required    = False,
             doc         = """
-            Documentation                
+            Forces the image transfer time to a specific amount.
+            This options is intended for testing purposes.                
             """),
             
      Option(name        = "diskimage-reuse",
@@ -716,11 +716,8 @@ class HaizeaMultiConfig(Config):
                     profileconfig.set("tracefile", "tracefile", tracefile)
                     
                     # Add injected file option
-                    if injectfile == None:
-                        inj = "None"
-                    else:
-                        inj = injectfile
-                    profileconfig.set("tracefile", "injectionfile", inj)
+                    if injectfile != None:
+                        profileconfig.set("tracefile", "injectionfile", injectfile)
 
                     # Add datafile option
                     datadir = self.config.get(self.MULTI_SEC, self.DATADIR_OPT)
