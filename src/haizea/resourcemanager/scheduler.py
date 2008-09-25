@@ -910,6 +910,13 @@ class Scheduler(object):
             raise SchedException, "Determined suspension should start at %s, before the VMRR's start (%s) -- Suspend time not being properly estimated?" % (susp_start, vmrr.start)
         
         vmrr.update_end(susp_start)
+        
+        # If we're already suspending, remove previous susprrs
+        if vmrr.is_suspending():
+            for susprr in vmrr.susp_rrs:
+                self.slottable.removeReservation(susprr)
+            vmrr.susp_rrs = []
+
         for susprr in suspend_rrs:
             vmrr.susp_rrs.append(susprr)        
 
@@ -1354,21 +1361,19 @@ class Scheduler(object):
         self.logger.debug("LEASE-%i End of handleEndVM" % l.id)
         self.logger.info("Stopped VMs for lease %i on nodes %s" % (l.id, rr.nodes.values()))
 
-    def _handle_unscheduled_end_vm(self, l, rr, enact=False):
+    def _handle_unscheduled_end_vm(self, l, vmrr, enact=False):
         self.logger.info("LEASE-%i The VM has ended prematurely." % l.id)
-        self._handle_end_rr(l, rr)
-        if rr.is_suspending():
-            rrs = l.next_rrs(rr)
-            for r in rrs:
-                l.remove_rr(r)
-                self.slottable.removeReservation(r)
-        rr.end = get_clock().get_time()
-        self._handle_end_vm(l, rr, enact=enact)
+        self._handle_end_rr(l, vmrr)
+        if vmrr.is_suspending():
+            for susprr in vmrr.susp_rrs:
+                self.slottable.removeReservation(susprr)
+        vmrr.end = get_clock().get_time()
+        self._handle_end_vm(l, vmrr, enact=enact)
         nexttime = get_clock().get_next_schedulable_time()
         if self.is_backfilling():
             # We need to reevaluate the schedule to see if there are any future
             # reservations that we can slide back.
-            self.__reevaluate_schedule(l, rr.nodes.values(), nexttime, [])
+            self.__reevaluate_schedule(l, vmrr.nodes.values(), nexttime, [])
 
     def _handle_start_suspend(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleStartSuspend" % l.id)
