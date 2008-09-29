@@ -11,7 +11,7 @@ datafile: /var/tmp/haizea.dat
 ...
 \end{wideshellverbatim}
 
-Haizea currently includes no tools to easily convert this datafile into an easily readable format (like a graph) although these will eventually be added to Haizea. For now, if you want to access the data collected by Haizea, you will have to do so programatically. The data file contains a pickled \texttt{AccountingData} object (see module \texttt{haizea.resourcemanager.accounting}) with all the information collected during a simulation experiment. An example of how this file is unpickled, and some of its information accessed, can be found in function \texttt{haizea\_convert\_data} in module \texttt{haizea.cli.commands}.
+Haizea currently includes no tools to easily convert this datafile into an easily readable format (like a graph) although these will eventually be added to Haizea. For now, if you want to access the data collected by Haizea, you will have to do so programmatically. The data file contains a pickled \texttt{AccountingData} object (see module \texttt{haizea.resourcemanager.accounting}) with all the information collected during a simulation experiment. An example of how this file is unpickled, and some of its information accessed, can be found in function \texttt{haizea\_convert\_data} in module \texttt{haizea.cli.commands}.
 
 The \texttt{StatsData} object contains the following information:
 

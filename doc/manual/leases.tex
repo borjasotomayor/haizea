@@ -1,6 +1,6 @@
-Let's say you need computational resources...
+Let's say you need computational resources\ldots
 
-Maybe you're a scientist who needs to run some simulations. You have specific hardware requirements, but you're not particularly picky about when the simulations run, and probably won't even notice if they are interrupted at some point, as long as they finish running (correctly) at some point, maybe before a given deadline. A job scheduler, and a compute cluster, would probably be a good fit for you.
+Maybe you're a scientist who needs to run some simulations. You have specific hardware requirements, but you're not particularly picky about when the simulations run, and probably won't even notice if they are interrupted at some point, as long as they finish running (correctly) at some point, maybe before a given deadline. A cluster managed by a job scheduler would probably be a good fit for you.
 
 You could also be a software developer who wants to test his or her code on a pristine machine, which you would only need for a relatively short period of time. Plus, every time you use this machine, you'd like it to start up with the exact same pristine software environment. Oh, and you want your machine now. As in \emph{right now}. One option could be to install a virtual machine (VM) manager (such as Xen, VMWare, etc.) to start up these pristine machines as VMs on your own machine. Even better, you could go to a cloud (like Amazon EC2, \url{http://www.amazon.com/ec2/}, or the Science Clouds, \url{http://workspace.globus.org/clouds/}) and have those VMs appear automagically somewhere else, so you don't have to worry about setting up the VM manager or having a machine powerful enough to run those VMs.
 
@@ -63,7 +63,7 @@ When you request a best-effort lease, your request gets placed in a queue, which
 \includegraphics{images/lease_be2.png}
 \end{center}
 
-Furthermore, your lease may be running a program unattended which can be safely paused for a while (since no one is interactively using the lease resources). By requesting a preemptible lease, you allow your resources to be preempted by higher-priority leases, like advance reservations:
+Furthermore, your lease may be running an unattended program which can be safely paused for a while (since no one is interactively using the lease resources). By requesting a preemptible lease, you allow your resources to be preempted by higher-priority leases, like advance reservations:
 
 \begin{center}
 \includegraphics{images/lease_be3.png}

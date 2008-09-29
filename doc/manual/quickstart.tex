@@ -1,4 +1,4 @@
-This chapter provides a quick hands-on introduction to using Haizea in simulation mode. Even if you intend to use Haizea in combination with another system, such as OpenNebula, you may still find this guide useful to familiarize yourself with the Haizea configuration file and command-line interface. This chapter assumes that Haizea is installed on your system. If you have arrived at this chapter directly, you may want to read Chapter~\ref{chap:whatis} (``What is Haizea?'') first, although you should still be able to follow the instructions in this chapter without reading Chapter~\ref{chap:whatis} first.
+This chapter provides a quick hands-on introduction to using Haizea in simulation mode. Even if you intend to use Haizea in combination with another system, such as OpenNebula, you may still find this guide useful to familiarise yourself with the Haizea configuration file and command-line interface. This chapter assumes that Haizea is installed on your system. If you have arrived at this chapter directly, you may want to read Chapter~\ref{chap:whatis} (``What is Haizea?'') first, although you should still be able to follow the instructions in this chapter without reading Chapter~\ref{chap:whatis} first.
 
 \section{The \texttt{haizea} command}
 
@@ -177,7 +177,7 @@ Uncomment the AR lease request, and run Haizea again. You should now see the fol
 Notice how the above corresponds to the previous figure. In particular, notice the following:
 
 \begin{itemize}
- \item  When the AR lease request is received, Haizea looks at the schedule and determines that the only way to schedule the AR lease is to preempt the best-effort lease. However, instead of canceling that lease, it will just reschedule it so it is suspended right before the AR lease start. Note that Haizea will always try to minimize the number of preemption (in this case, we're forcing the situation for demonstration purposes) by assigning the AR lease to resources that are available without preempting other leases.
+ \item  When the AR lease request is received, Haizea looks at the schedule and determines that the only way to schedule the AR lease is to preempt the best-effort lease. However, instead of cancelling that lease, it will just reschedule it so it is suspended right before the AR lease start. Note that Haizea will always try to minimise the number of preemption (in this case, we're forcing the situation for demonstration purposes) by assigning the AR lease to resources that are available without preempting other leases.
  \item Shortly before the AR lease starts, the best-effort lease is suspended (the time required to do this is estimated by Haizea based on an option in the configuration file). When the AR lease ends at 14:00, Haizea begins resuming the suspended best-effort lease.
 \end{itemize}
 
@@ -194,7 +194,7 @@ suspension: none
 ...
 \end{wideshellverbatim}
 
-Rerun Haizea. Now, when the AR lease arrives at 13:15, the scheduler will realize it has to preempt the best-effort lease to make room for the AR lease, but will no longer be able to suspend it. The only option is to cancel the best-effort lease and resubmit it to the queue:
+Rerun Haizea. Now, when the AR lease arrives at 13:15, the scheduler will realise it has to preempt the best-effort lease to make room for the AR lease, but will no longer be able to suspend it. The only option is to cancel the best-effort lease and resubmit it to the queue:
 
 \begin{wideshellverbatim}
 [2006-11-25 13:15:00.00] SCHED   Preempting lease #1...
@@ -215,7 +215,7 @@ So, the schedule would end up looking like this:
 \includegraphics{images/quickstart_leasegraph4.png}
 \end{center}
 
-Notice how, although suspending a lease is a disruptive activity which can delay the completion time of a best-effort request, it is still much better than completely canceling a request and waiting for enough resources to accommodate the entire (uninterrupted) duration of the lease.
+Notice how, although suspending a lease is a disruptive activity which can delay the completion time of a best-effort request, it is still much better than completely cancelling a request and waiting for enough resources to accommodate the entire (uninterrupted) duration of the lease.
 
 Another scheduling option you can modify is whether Haizea should transfer the VM's disk image from an image repository before the lease can start. You can do this by modifying the \texttt{lease-deployment} option:
 
@@ -328,7 +328,8 @@ And then to the ``Active'' state:
 Now let's request a best-effort lease:
 
 \begin{wideshellverbatim}
-haizea-request-lease -t best_effort -d 00:10:00 -n 4 --non-preemptible -c 1 -m 512 -i foobar.img -z 600
+haizea-request-lease -t best_effort -d 00:10:00 -n 4 --non-preemptible \
+                     -c 1 -m 512 -i foobar.img -z 600
 \end{wideshellverbatim}
 
 The list of leases will now look like this:

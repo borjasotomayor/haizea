@@ -58,7 +58,7 @@ resources: CPU,1;Mem,1024;Net (in),100;Net (out),100;Disk,20000
 ...
 \end{wideshellverbatim}
 
-Haizea currently only allows homogeneous resources to be specified. In other words, Haizea will manage a number of simulated physical machines, all with the same resources. The \texttt{resources} specifies the per-node resources using a semicolon-delimited list. Each entry in the list contains a pair: a resource name and its maximum capacity. Haizea currently recognizes the following:
+Haizea currently only allows homogeneous resources to be specified. In other words, Haizea will manage a number of simulated physical machines, all with the same resources. The \texttt{resources} specifies the per-node resources using a semicolon-delimited list. Each entry in the list contains a pair: a resource name and its maximum capacity. Haizea currently recognises the following:
 
 \begin{itemize}
 \item \texttt{CPU}: Number of processors per node.
@@ -68,7 +68,7 @@ Haizea currently only allows homogeneous resources to be specified. In other wor
 \item \texttt{Disk}: Disk space in MB (not counting space for disk image cache).
 \end{itemize}
 
-These five resources must always be specified, since Haize depends on them for fundamental resource reservations (running VMs, suspension of VMs, etc.) which involve these five types of resources. Additional resource types can be specified, but Haizea's scheduling code would have to be modified for them to be taken into account when scheduling leases. In the future, Haizea it will be possible to specify additional resources in the simulated nodes and in the lease requests with less effort.
+These five resources must always be specified, since Haizea depends on them for fundamental resource reservations (running VMs, suspension of VMs, etc.) which involve these five types of resources. Additional resource types can be specified, but Haizea's scheduling code would have to be modified for them to be taken into account when scheduling leases. In the future, Haizea it will be possible to specify additional resources in the simulated nodes and in the lease requests with less effort.
 
 \section{Scheduling options}
 
@@ -148,7 +148,7 @@ what-to-migrate: nothing | mem | mem+disk
 ...
 \end{wideshellverbatim}
 
-Setting \texttt{what-to-migrate} to \texttt{nothing} means that migration \emph{is} allowed, but does not involve tranferring any files from one node to another.
+Setting \texttt{what-to-migrate} to \texttt{nothing} means that migration \emph{is} allowed, but does not involve transferring any files from one node to another.
 
 
 \subsection{Lease preparation scheduling}
@@ -162,7 +162,7 @@ lease-preparation: unmanaged
 ...
 \end{wideshellverbatim}
 
-When disk images are located in a disk image repository, Haizea can schedule the file transfers from the repository to the physical nodes to make sure that images arrive on time (when a lease has to start at a specific time) and to minimize the number of transfers (by reusing images on the physical nodes). To do this, \texttt{lease-preparation} option must be set to \texttt{imagetransfer}, we need to specify the network bandwidth of the image repository (in Mbits per second), and specify several options in the \texttt{[deploy-imagetransfer]} section:
+When disk images are located in a disk image repository, Haizea can schedule the file transfers from the repository to the physical nodes to make sure that images arrive on time (when a lease has to start at a specific time) and to minimise the number of transfers (by reusing images on the physical nodes). To do this, \texttt{lease-preparation} option must be set to \texttt{imagetransfer}, we need to specify the network bandwidth of the image repository (in Mbits per second), and specify several options in the \texttt{[deploy-imagetransfer]} section:
 
 \begin{wideshellverbatim}
 [general]
@@ -183,7 +183,7 @@ imagetransfer-bandwidth: 100
 
 \subsubsection{Transfer mechanisms}
 
-The transfer mechanism specifies how the images will be transferred from the repository to the physical nodes. tHaizea currently only supports a multicast transfer mechanism:
+The transfer mechanism specifies how the images will be transferred from the repository to the physical nodes. haizea currently only supports a multicast transfer mechanism:
 
 \begin{wideshellverbatim}
 [deploy-imagetransfer]
@@ -225,7 +225,7 @@ diskimage-cache-size: 20000
 
 \subsection{The scheduling threshold}
 
-To avoid thrashing, Haizea will not schedule a lease unless all ovrheads
+To avoid thrashing, Haizea will not schedule a lease unless all overheads
 can be correctly scheduled (which includes image transfers, suspensions, etc.).
 However, this can still result in situations where a lease is prepared,
 and then immediately suspended because of a blocking lease in the future.
