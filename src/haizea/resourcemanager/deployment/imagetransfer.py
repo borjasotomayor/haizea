@@ -213,7 +213,7 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
                 # We can only piggyback on transfers that haven't started yet
                 transfers = [t for t in self.transfers_fifo if t.state == ResourceReservation.STATE_SCHEDULED]
                 for t in transfers:
-                    if t.file == lease_req.diskImageID:
+                    if t.file == lease_req.diskimage_id:
                         startTime = t.end
                         if startTime > nexttime:
                             for n in earliest:
@@ -234,6 +234,7 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
         else:
             startTime = nexttime
         
+        # TODO: Only save a copy of start/end times, not the whole RR
         transfermap = dict([(copy.copy(t), t) for t in self.transfers_edf if t.state == ResourceReservation.STATE_SCHEDULED])
         newtransfers = transfermap.keys()
         
@@ -307,15 +308,17 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
             feasibleEndTime=newStartTime
         
         # Make changes   
-        for t in newtransfers:
-            if t == newtransfer:
-                self.slottable.addReservation(t)
-                self.transfers_edf.append(t)
+        for new_t in newtransfers:
+            if new_t == newtransfer:
+                self.slottable.addReservation(new_t)
+                self.transfers_edf.append(new_t)
             else:
-                tOld = transfermap[t]
-                self.transfers_edf.remove(tOld)
-                self.transfers_edf.append(t)
-                self.slottable.updateReservationWithKeyChange(tOld, t)
+                t_original = transfermap[new_t]
+                old_start = t_original.start
+                old_end = t_original.end
+                t_original.start = new_t.start
+                t_original.end = new_t.end
+                self.slottable.update_reservation_with_key_change(t_original, old_start, old_end)
         
         return newtransfer
     
