@@ -37,13 +37,13 @@ python setup.py install
 If you do not have root access, or want to install Haizea in your home directory, run the following:
 
 \begin{shellverbatim}
-python setup.py install --home=\$HOME
+python setup.py install --home=$HOME
 \end{shellverbatim}
 
 Note: If you have never installed a Python package in your home directory before, make sure you set the environment variable \texttt{PYTHONPATH} appropriately so Python will be aware of the Haizea modules.
 
 \begin{shellverbatim}
-export PYTHONPATH=\$HOME/lib/python
+export PYTHONPATH=$HOME/lib/python
 \end{shellverbatim}
 
 After running the setup script, you should see a long list of installation and build messages, ending with the following:
@@ -87,7 +87,7 @@ Ok, not terribly exciting, but if you see this then the basic machinery is worki
 Note: If you installed Haizea in your home directory, you will have to run the following:
 
 \begin{shellverbatim}
-haizea -c \$HOME/share/haizea/etc/sample.conf
+haizea -c $HOME/share/haizea/etc/sample_trace.conf
 \end{shellverbatim}
 
 Additionally, you will have to modify the tracefile option in the sample configuration so it will point to the sample tracefile located in \texttt{\$HOME/share/haizea/traces/sample.lwf} (instead of under the \texttt{/usr} directory).
