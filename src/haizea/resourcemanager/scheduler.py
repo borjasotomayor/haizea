@@ -402,16 +402,16 @@ class Scheduler(object):
             
             # TODO: migrations
             
-            # Resumptions (if any)
-            for resmrr in vmrr.resm_rrs:
-                self.slottable.addReservation(resmrr)
+            # Post-VM RRs (if any)
+            for rr in vmrr.pre_rrs:
+                self.slottable.addReservation(rr)
                 
             # VM
             self.slottable.addReservation(vmrr)
             
-            # Suspensions (if any)
-            for susprr in vmrr.susp_rrs:
-                self.slottable.addReservation(susprr)
+            # Post-VM RRs (if any)
+            for rr in vmrr.post_rrs:
+                self.slottable.addReservation(rr)
            
             if in_future:
                 self.numbesteffortres += 1
@@ -879,7 +879,7 @@ class Scheduler(object):
         
         vmrr.update_start(resm_end)
         for resmrr in resume_rrs:
-            vmrr.resm_rrs.append(resmrr)        
+            vmrr.pre_rrs.append(resmrr)        
            
     
     def __schedule_suspension(self, vmrr, suspend_by):
@@ -913,12 +913,12 @@ class Scheduler(object):
         
         # If we're already suspending, remove previous susprrs
         if vmrr.is_suspending():
-            for susprr in vmrr.susp_rrs:
+            for susprr in vmrr.post_rrs:
                 self.slottable.removeReservation(susprr)
-            vmrr.susp_rrs = []
+            vmrr.post_rrs = []
 
         for susprr in suspend_rrs:
-            vmrr.susp_rrs.append(susprr)        
+            vmrr.post_rrs.append(susprr)        
 
     def __compute_suspend_resume_time(self, mem, rate):
         time = float(mem) / rate
@@ -1202,7 +1202,7 @@ class Scheduler(object):
             if vmrr.backfill_reservation == True:
                 self.numbesteffortres -= 1
             if vmrr.is_suspending():
-                for susprr in vmrr.susp_rrs:
+                for susprr in vmrr.post_rrs:
                     self.slottable.removeReservation(susprr)
             lease.remove_vmrr(vmrr)
             self.slottable.removeReservation(vmrr)
@@ -1220,7 +1220,7 @@ class Scheduler(object):
             old_end = vmrr.end
             self.__schedule_suspension(vmrr, preemption_time)
             self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
-            for susprr in vmrr.susp_rrs:
+            for susprr in vmrr.post_rrs:
                 self.slottable.addReservation(susprr)
             
             
@@ -1252,7 +1252,7 @@ class Scheduler(object):
         old_end = vmrr.end
         nodes = vmrr.nodes.values()
         if lease.state == Lease.STATE_SUSPENDED:
-            originalstart = vmrr.resm_rrs[0].start
+            originalstart = vmrr.pre_rrs[0].start
         else:
             originalstart = vmrr.start
         cp = self.slottable.findChangePointsAfter(after=earliest, until=originalstart, nodes=nodes)
@@ -1273,7 +1273,7 @@ class Scheduler(object):
         else:
             diff = originalstart - newstart
             if lease.state == Lease.STATE_SUSPENDED:
-                for resmrr in vmrr.resm_rrs:
+                for resmrr in vmrr.pre_rrs:
                     resmrr_old_start = resmrr.start
                     resmrr_old_end = resmrr.end
                     resmrr.start -= diff
@@ -1286,9 +1286,9 @@ class Scheduler(object):
             remdur = lease.duration.get_remaining_duration()
             if vmrr.is_suspending() and vmrr.end - newstart >= remdur: 
                 vmrr.update_end(vmrr.start + remdur)
-                for susprr in vmrr.susp_rrs:
+                for susprr in vmrr.post_rrs:
                     self.slottable.removeReservation(susprr)
-                vmrr.susp_rrs = []
+                vmrr.post_rrs = []
             else:
                 vmrr.update_end(vmrr.end - diff)
 
@@ -1365,7 +1365,7 @@ class Scheduler(object):
         self.logger.info("LEASE-%i The VM has ended prematurely." % l.id)
         self._handle_end_rr(l, vmrr)
         if vmrr.is_suspending():
-            for susprr in vmrr.susp_rrs:
+            for susprr in vmrr.post_rrs:
                 self.slottable.removeReservation(susprr)
         vmrr.end = get_clock().get_time()
         self._handle_end_vm(l, vmrr, enact=enact)

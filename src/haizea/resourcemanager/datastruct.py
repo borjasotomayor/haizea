@@ -337,8 +337,8 @@ class VMResourceReservation(ResourceReservation):
         ResourceReservation.__init__(self, lease, start, end, res)
         self.nodes = nodes
         self.backfill_reservation = backfill_reservation
-        self.resm_rrs = []
-        self.susp_rrs = []
+        self.pre_rrs = []
+        self.post_rrs = []
 
         # ONLY for simulation
         self.__update_prematureend()
@@ -366,10 +366,10 @@ class VMResourceReservation(ResourceReservation):
             self.prematureend = None 
 
     def is_suspending(self):
-        return len(self.susp_rrs) > 0
+        return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], SuspensionResourceReservation)
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
-        for resmrr in self.resm_rrs:
+        for resmrr in self.pre_rrs:
             resmrr.print_contents(loglevel)
             self.logger.log(loglevel, "--")
         self.logger.log(loglevel, "Type           : VM")
@@ -377,7 +377,7 @@ class VMResourceReservation(ResourceReservation):
         if self.prematureend != None:
             self.logger.log(loglevel, "Premature end  : %s" % self.prematureend)
         ResourceReservation.print_contents(self, loglevel)
-        for susprr in self.susp_rrs:
+        for susprr in self.post_rrs:
             self.logger.log(loglevel, "--")
             susprr.print_contents(loglevel)
         
@@ -402,10 +402,10 @@ class SuspensionResourceReservation(ResourceReservation):
         ResourceReservation.print_contents(self, loglevel)
         
     def is_first(self):
-        return (self == self.vmrr.susp_rrs[0])
+        return (self == self.vmrr.post_rrs[0])
 
     def is_last(self):
-        return (self == self.vmrr.susp_rrs[-1])
+        return (self == self.vmrr.post_rrs[-1])
         
     # TODO: Suspension RRs should be preemptible, but preempting a suspension RR
     # has wider implications (with a non-trivial handling). For now, we leave them 
@@ -429,10 +429,10 @@ class ResumptionResourceReservation(ResourceReservation):
         self.logger.log(loglevel, "Type           : RESUME")
 
     def is_first(self):
-        return (self == self.vmrr.resm_rrs[0])
+        return (self == self.vmrr.pre_rrs[0])
 
     def is_last(self):
-        return (self == self.vmrr.resm_rrs[-1])
+        return (self == self.vmrr.pre_rrs[-1])
 
     # TODO: Resumption RRs should be preemptible, but preempting a resumption RR
     # has wider implications (with a non-trivial handling). For now, we leave them 
