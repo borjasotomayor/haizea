@@ -286,6 +286,42 @@ class HaizeaConfig(Config):
             The default should be good for most configurations, but
             may need to be increased if you're dealing with exceptionally
             high loads.                
+            """),
+
+     Option(name        = "shutdown-time",
+            getter      = "shutdown-time",
+            type        = OPTTYPE_TIMEDELTA,
+            required    = False,
+            default     = TimeDelta(seconds=0),
+            doc         = """
+            The amount of time that will be allocated for a VM to shutdown.
+            When running in OpenNebula mode, it is advisable to set this to
+            a few seconds, so no operation gets scheduled right when a
+            VM is shutting down. The most common scenario is that a VM
+            will start resuming right when another VM shuts down. However,
+            since both these activities involve I/O, it can delay the resume
+            operation and affect Haizea's estimation of how long the resume
+            will take.
+            """),
+
+     Option(name        = "enactment-overhead",
+            getter      = "enactment-overhead",
+            type        = OPTTYPE_TIMEDELTA,
+            required    = False,
+            default     = TimeDelta(seconds=0),
+            doc         = """
+            The amount of time that is required to send
+            an enactment command. This value will affect suspend/resume
+            estimations and, in OpenNebula mode, will force a pause
+            of this much time between suspend/resume enactment
+            commands. When suspending/resuming many VMs at the same time
+            (which is likely to happen if suspendresume-exclusion is set
+            to "local"), it will take OpenNebula 1-2 seconds to process
+            each command (this is a small amount of time, but if 32 VMs
+            are being suspended at the same time, on in each physical node,
+            this time can compound up to 32-64 seconds, which has to be
+            taken into account when estimating when to start a suspend
+            operation that must be completed before another lease starts).
             """)
 
     ]

@@ -119,6 +119,10 @@ class Scheduler(object):
                               on_start = Scheduler._handle_start_vm,
                               on_end   = Scheduler._handle_end_vm)
 
+        self.register_handler(type     = ds.ShutdownResourceReservation, 
+                              on_start = Scheduler._handle_start_shutdown,
+                              on_end   = Scheduler._handle_end_shutdown)
+
         self.register_handler(type     = ds.SuspensionResourceReservation, 
                               on_start = Scheduler._handle_start_suspend,
                               on_end   = Scheduler._handle_end_suspend)
@@ -299,6 +303,9 @@ class Scheduler(object):
             self.logger.info("AR lease request #%i has been accepted." % lease_req.id)
         else:
             self.logger.info("AR lease request #%i has been rejected." % lease_req.id)
+            lease_req.state = Lease.STATE_REJECTED
+            self.completedleases.add(lease_req)
+            self.leases.remove(lease_req)
         
         
     def __process_queue(self, nexttime):
@@ -347,20 +354,14 @@ class Scheduler(object):
     
     
     def __schedule_ar_lease(self, lease_req, nexttime, avoidpreempt=True):
-        start = lease_req.start.requested
-        end = lease_req.start.requested + lease_req.duration.requested
         try:
-            (nodeassignment, res, preemptions) = self.__fit_exact(lease_req, preemptible=False, canpreempt=True, avoidpreempt=avoidpreempt)
+            (vmrr, preemptions) = self.__fit_exact(lease_req, preemptible=False, canpreempt=True, avoidpreempt=avoidpreempt)
             
             if len(preemptions) > 0:
-                leases = self.__find_preemptable_leases(preemptions, start, end)
+                leases = self.__find_preemptable_leases(preemptions, vmrr.start, vmrr.end)
                 self.logger.info("Must preempt leases %s to make room for AR lease #%i" % ([l.id for l in leases], lease_req.id))
                 for lease in leases:
-                    self.__preempt(lease, preemption_time=start)
-
-            # Create VM resource reservations
-            vmrr = ds.VMResourceReservation(lease_req, start, end, nodeassignment, res, False)
-            vmrr.state = ResourceReservation.STATE_SCHEDULED
+                    self.__preempt(lease, preemption_time=vmrr.start)
 
             # Schedule deployment overhead
             self.deployment_scheduler.schedule(lease_req, vmrr, nexttime)
@@ -370,6 +371,10 @@ class Scheduler(object):
             # scheduling could still throw an exception)
             lease_req.append_vmrr(vmrr)
             self.slottable.addReservation(vmrr)
+            
+            # Post-VM RRs (if any)
+            for rr in vmrr.post_rrs:
+                self.slottable.addReservation(rr)
         except Exception, msg:
             raise SchedException, "The requested AR lease is infeasible. Reason: %s" % msg
 
@@ -402,7 +407,7 @@ class Scheduler(object):
             
             # TODO: migrations
             
-            # Post-VM RRs (if any)
+            # Pre-VM RRs (if any)
             for rr in vmrr.pre_rrs:
                 self.slottable.addReservation(rr)
                 
@@ -426,12 +431,16 @@ class Scheduler(object):
         
     def __schedule_immediate_lease(self, req, nexttime):
         try:
-            (resmrr, vmrr, susprr, reservation) = self.__fit_asap(req, nexttime, allow_reservation_in_future=False)
+            (vmrr, in_future) = self.__fit_asap(req, nexttime, allow_reservation_in_future=False)
             # Schedule deployment
             self.deployment_scheduler.schedule(req, vmrr, nexttime)
                         
             req.append_rr(vmrr)
             self.slottable.addReservation(vmrr)
+            
+            # Post-VM RRs (if any)
+            for rr in vmrr.post_rrs:
+                self.slottable.addReservation(rr)
                     
             req.print_contents()
         except SlotFittingException, msg:
@@ -440,7 +449,7 @@ class Scheduler(object):
     def __fit_exact(self, leasereq, preemptible=False, canpreempt=True, avoidpreempt=True):
         lease_id = leasereq.id
         start = leasereq.start.requested
-        end = leasereq.start.requested + leasereq.duration.requested
+        end = leasereq.start.requested + leasereq.duration.requested + self.__estimate_shutdown_time(leasereq)
         diskImageID = leasereq.diskimage_id
         numnodes = leasereq.numnodes
         resreq = leasereq.requested_resources
@@ -560,9 +569,15 @@ class Scheduler(object):
                     break
 
         if vnode <= numnodes:
-            raise SchedException, "Availability window indicated that request but feasible, but could not fit it"
+            raise SchedException, "Availability window indicated that request is feasible, but could not fit it"
 
-        return nodeassignment, res, preemptions
+        # Create VM resource reservations
+        vmrr = ds.VMResourceReservation(leasereq, start, end, nodeassignment, res, False)
+        vmrr.state = ResourceReservation.STATE_SCHEDULED
+
+        self.__schedule_shutdown(vmrr)
+
+        return vmrr, preemptions
 
     def __fit_asap(self, lease, nexttime, allow_reservation_in_future = False):
         lease_id = lease.id
@@ -571,6 +586,7 @@ class Scheduler(object):
         requested_resources = lease.requested_resources
         preemptible = lease.preemptible
         mustresume = (lease.state == Lease.STATE_SUSPENDED)
+        shutdown_time = self.__estimate_shutdown_time(lease)
         susptype = get_config().get("suspension")
         if susptype == constants.SUSPENSION_NONE or (susptype == constants.SUSPENSION_SERIAL and lease.numnodes == 1):
             suspendable = False
@@ -657,6 +673,7 @@ class Scheduler(object):
         else:
             duration = remaining_duration
 
+        duration += shutdown_time
 
         # First, assuming we can't make reservations in the future
         start, end, canfit = self.__find_fit_at_points(
@@ -745,10 +762,13 @@ class Scheduler(object):
         mustsuspend = (vmrr.end - vmrr.start) < remaining_duration
         if mustsuspend:
             self.__schedule_suspension(vmrr, end)
+        else:
+            # Compensate for any overestimation
+            if (vmrr.end - vmrr.start) > remaining_duration + shutdown_time:
+                vmrr.end = vmrr.start + remaining_duration + shutdown_time
+            self.__schedule_shutdown(vmrr)
         
-        # Compensate for any overestimation
-        if (vmrr.end - vmrr.start) > remaining_duration:
-            vmrr.end = vmrr.start + remaining_duration
+
         
         susp_str = res_str = ""
         if mustresume:
@@ -849,7 +869,62 @@ class Scheduler(object):
         
         return times
 
+    def __schedule_shutdown(self, vmrr):
+        config = get_config()
+        shutdown_time = config.get("shutdown-time")
 
+        start = vmrr.end - shutdown_time
+        end = vmrr.end
+        
+        shutdown_rr = ds.ShutdownResourceReservation(vmrr.lease, start, end, vmrr.resources_in_pnode, vmrr.nodes, vmrr)
+        shutdown_rr.state = ResourceReservation.STATE_SCHEDULED
+                
+        vmrr.update_end(start)
+        
+        # If there are any post RRs, remove them
+        for rr in vmrr.post_rrs:
+            self.slottable.removeReservation(rr)
+        vmrr.post_rrs = []
+
+        vmrr.post_rrs.append(shutdown_rr)
+
+    def __schedule_suspension(self, vmrr, suspend_by):
+        from haizea.resourcemanager.rm import ResourceManager
+        config = ResourceManager.get_singleton().config
+        susp_exclusion = config.get("suspendresume-exclusion")        
+        rate = self.resourcepool.info.get_suspendresume_rate()
+
+        if suspend_by < vmrr.start or suspend_by > vmrr.end:
+            raise SchedException, "Tried to schedule a suspension by %s, which is outside the VMRR's duration (%s-%s)" % (suspend_by, vmrr.start, vmrr.end)
+
+        times = self.__compute_susprem_times(vmrr, suspend_by, constants.DIRECTION_BACKWARD, susp_exclusion, rate)
+        suspend_rrs = []
+        for (start, end, pnode, vnodes) in times:
+            r = ds.ResourceTuple.create_empty()
+            mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+            r.set_by_type(constants.RES_MEM, mem)
+            r.set_by_type(constants.RES_DISK, mem)
+            suspres = {pnode: r}
+            susprr = ds.SuspensionResourceReservation(vmrr.lease, start, end, suspres, vnodes, vmrr)
+            susprr.state = ResourceReservation.STATE_SCHEDULED
+            suspend_rrs.append(susprr)
+                
+        suspend_rrs.sort(key=attrgetter("start"))
+            
+        susp_start = suspend_rrs[0].start
+        if susp_start < vmrr.start:
+            raise SchedException, "Determined suspension should start at %s, before the VMRR's start (%s) -- Suspend time not being properly estimated?" % (susp_start, vmrr.start)
+        
+        vmrr.update_end(susp_start)
+        
+        # If there are any post RRs, remove them
+        for rr in vmrr.post_rrs:
+            self.slottable.removeReservation(rr)
+        vmrr.post_rrs = []
+
+        for susprr in suspend_rrs:
+            vmrr.post_rrs.append(susprr)       
+            
     def __schedule_resumption(self, vmrr, resume_at):
         from haizea.resourcemanager.rm import ResourceManager
         config = ResourceManager.get_singleton().config
@@ -882,43 +957,7 @@ class Scheduler(object):
             vmrr.pre_rrs.append(resmrr)        
            
     
-    def __schedule_suspension(self, vmrr, suspend_by):
-        from haizea.resourcemanager.rm import ResourceManager
-        config = ResourceManager.get_singleton().config
-        susp_exclusion = config.get("suspendresume-exclusion")        
-        rate = self.resourcepool.info.get_suspendresume_rate()
-
-        if suspend_by < vmrr.start or suspend_by > vmrr.end:
-            raise SchedException, "Tried to schedule a suspension by %s, which is outside the VMRR's duration (%s-%s)" % (suspend_by, vmrr.start, vmrr.end)
-
-        times = self.__compute_susprem_times(vmrr, suspend_by, constants.DIRECTION_BACKWARD, susp_exclusion, rate)
-        suspend_rrs = []
-        for (start, end, pnode, vnodes) in times:
-            r = ds.ResourceTuple.create_empty()
-            mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
-            r.set_by_type(constants.RES_MEM, mem)
-            r.set_by_type(constants.RES_DISK, mem)
-            suspres = {pnode: r}
-            susprr = ds.SuspensionResourceReservation(vmrr.lease, start, end, suspres, vnodes, vmrr)
-            susprr.state = ResourceReservation.STATE_SCHEDULED
-            suspend_rrs.append(susprr)
-                
-        suspend_rrs.sort(key=attrgetter("start"))
-            
-        susp_start = suspend_rrs[0].start
-        if susp_start < vmrr.start:
-            raise SchedException, "Determined suspension should start at %s, before the VMRR's start (%s) -- Suspend time not being properly estimated?" % (susp_start, vmrr.start)
-        
-        vmrr.update_end(susp_start)
-        
-        # If we're already suspending, remove previous susprrs
-        if vmrr.is_suspending():
-            for susprr in vmrr.post_rrs:
-                self.slottable.removeReservation(susprr)
-            vmrr.post_rrs = []
-
-        for susprr in suspend_rrs:
-            vmrr.post_rrs.append(susprr)        
+ 
 
     def __compute_suspend_resume_time(self, mem, rate):
         time = float(mem) / rate
@@ -926,9 +965,7 @@ class Scheduler(object):
         return time
     
     def __estimate_suspend_resume_time(self, lease):
-        from haizea.resourcemanager.rm import ResourceManager
-        config = ResourceManager.get_singleton().config
-        susp_exclusion = config.get("suspendresume-exclusion")        
+        susp_exclusion = get_config().get("suspendresume-exclusion")        
         rate = self.resourcepool.info.get_suspendresume_rate()
         mem = lease.requested_resources.get_by_type(constants.RES_MEM)
         if susp_exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
@@ -936,6 +973,10 @@ class Scheduler(object):
         elif susp_exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
             # Overestimating
             return lease.numnodes * self.__compute_suspend_resume_time(mem, rate)
+
+    def __estimate_shutdown_time(self, lease):
+        # Always uses fixed value in configuration file
+        return get_config().get("shutdown-time")
 
     def __estimate_suspend_time(self, lease):
         return self.__estimate_suspend_resume_time(lease)
@@ -1201,9 +1242,9 @@ class Scheduler(object):
             self.logger.info("... lease #%i has been cancelled and requeued." % lease.id)
             if vmrr.backfill_reservation == True:
                 self.numbesteffortres -= 1
-            if vmrr.is_suspending():
-                for susprr in vmrr.post_rrs:
-                    self.slottable.removeReservation(susprr)
+            # If there are any post RRs, remove them
+            for rr in vmrr.post_rrs:
+                self.slottable.removeReservation(rr)
             lease.remove_vmrr(vmrr)
             self.slottable.removeReservation(vmrr)
             for vnode, pnode in lease.diskimagemap.items():
@@ -1291,6 +1332,15 @@ class Scheduler(object):
                 vmrr.post_rrs = []
             else:
                 vmrr.update_end(vmrr.end - diff)
+                
+            if not vmrr.is_suspending():
+                # If the VM was set to shutdown, we need to slideback the shutdown RRs
+                for rr in vmrr.post_rrs:
+                    rr_old_start = rr.start
+                    rr_old_end = rr.end
+                    rr.start -= diff
+                    rr.end -= diff
+                    self.slottable.update_reservation_with_key_change(rr, rr_old_start, rr_old_end)
 
             self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
             self.logger.vdebug("New lease descriptor (after slideback):")
@@ -1332,10 +1382,8 @@ class Scheduler(object):
         self.logger.debug("LEASE-%i End of handleStartVM" % l.id)
         self.logger.info("Started VMs for lease %i on nodes %s" % (l.id, rr.nodes.values()))
 
-    # TODO: Replace enact with a saner way of handling leases that have failed or
-    #       ended prematurely.
-    #       Possibly factor out the "clean up" code to a separate function
-    def _handle_end_vm(self, l, rr, enact=True):
+
+    def _handle_end_vm(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleEndVM" % l.id)
         self.logger.vdebug("LEASE-%i Before:" % l.id)
         l.print_contents()
@@ -1343,19 +1391,11 @@ class Scheduler(object):
         diff = now_time - rr.start
         l.duration.accumulate_duration(diff)
         rr.state = ResourceReservation.STATE_DONE
-        if not rr.is_suspending():
-            self.resourcepool.stop_vms(l, rr)
-            l.state = Lease.STATE_DONE
-            l.duration.actual = l.duration.accumulated
-            l.end = now_time
-            self.completedleases.add(l)
-            self.leases.remove(l)
-            if isinstance(l, ds.BestEffortLease):
-                get_accounting().incr_counter(constants.COUNTER_BESTEFFORTCOMPLETED, l.id)
        
         if isinstance(l, ds.BestEffortLease):
             if rr.backfill_reservation == True:
                 self.numbesteffortres -= 1
+                
         self.logger.vdebug("LEASE-%i After:" % l.id)
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleEndVM" % l.id)
@@ -1364,16 +1404,45 @@ class Scheduler(object):
     def _handle_unscheduled_end_vm(self, l, vmrr, enact=False):
         self.logger.info("LEASE-%i The VM has ended prematurely." % l.id)
         self._handle_end_rr(l, vmrr)
-        if vmrr.is_suspending():
-            for susprr in vmrr.post_rrs:
-                self.slottable.removeReservation(susprr)
+        for rr in vmrr.post_rrs:
+            self.slottable.removeReservation(rr)
+        vmrr.post_rrs = []
+        # TODO: slideback shutdown RRs
         vmrr.end = get_clock().get_time()
-        self._handle_end_vm(l, vmrr, enact=enact)
+        self._handle_end_vm(l, vmrr)
+        self._handle_end_lease(l)
         nexttime = get_clock().get_next_schedulable_time()
         if self.is_backfilling():
             # We need to reevaluate the schedule to see if there are any future
             # reservations that we can slide back.
             self.__reevaluate_schedule(l, vmrr.nodes.values(), nexttime, [])
+
+    def _handle_start_shutdown(self, l, rr):
+        self.logger.debug("LEASE-%i Start of handleStartShutdown" % l.id)
+        l.print_contents()
+        rr.state = ResourceReservation.STATE_ACTIVE
+        self.resourcepool.stop_vms(l, rr)
+        l.print_contents()
+        self.logger.debug("LEASE-%i End of handleStartShutdown" % l.id)
+
+    def _handle_end_shutdown(self, l, rr):
+        self.logger.debug("LEASE-%i Start of handleEndShutdown" % l.id)
+        l.print_contents()
+        rr.state = ResourceReservation.STATE_DONE
+        self._handle_end_lease(l)
+        l.print_contents()
+        self.logger.debug("LEASE-%i End of handleEndShutdown" % l.id)
+        self.logger.info("Lease %i shutdown." % (l.id))
+
+    def _handle_end_lease(self, l):
+        l.state = Lease.STATE_DONE
+        l.duration.actual = l.duration.accumulated
+        l.end = round_datetime(get_clock().get_time())
+        self.completedleases.add(l)
+        self.leases.remove(l)
+        if isinstance(l, ds.BestEffortLease):
+            get_accounting().incr_counter(constants.COUNTER_BESTEFFORTCOMPLETED, l.id)
+
 
     def _handle_start_suspend(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleStartSuspend" % l.id)

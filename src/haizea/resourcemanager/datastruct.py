@@ -211,7 +211,8 @@ class ARLease(Lease):
                  realdur = None):
         start = Timestamp(start)
         duration = Duration(duration)
-        duration.known = realdur # ONLY for simulation
+        if realdur != duration.requested:
+            duration.known = realdur # ONLY for simulation
         Lease.__init__(self, submit_time, start, duration, diskimage_id,
                            diskimage_size, numnodes, resreq, preemptible)
         
@@ -236,7 +237,8 @@ class BestEffortLease(Lease):
                  realdur = None):
         start = Timestamp(None) # i.e., start on a best-effort basis
         duration = Duration(duration)
-        duration.known = realdur # ONLY for simulation
+        if realdur != duration.requested:
+            duration.known = realdur # ONLY for simulation
         # When the images will be available
         self.imagesavail = None        
         Lease.__init__(self, submit_time, start, duration, diskimage_id,
@@ -368,6 +370,9 @@ class VMResourceReservation(ResourceReservation):
     def is_suspending(self):
         return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], SuspensionResourceReservation)
 
+    def is_shutting_down(self):
+        return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], ShutdownResourceReservation)
+
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         for resmrr in self.pre_rrs:
             resmrr.print_contents(loglevel)
@@ -443,6 +448,24 @@ class ResumptionResourceReservation(ResourceReservation):
     def xmlrpc_marshall(self):
         rr = ResourceReservation.xmlrpc_marshall(self)
         rr["type"] = "RESM"
+        return rr
+    
+class ShutdownResourceReservation(ResourceReservation):
+    def __init__(self, lease, start, end, res, vnodes, vmrr):
+        ResourceReservation.__init__(self, lease, start, end, res)
+        self.vmrr = vmrr
+        self.vnodes = vnodes
+
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
+        self.logger.log(loglevel, "Type           : SHUTDOWN")
+        ResourceReservation.print_contents(self, loglevel)
+        
+    def is_preemptible(self):
+        return True        
+        
+    def xmlrpc_marshall(self):
+        rr = ResourceReservation.xmlrpc_marshall(self)
+        rr["type"] = "SHTD"
         return rr
 
 class MigrationResourceReservation(ResourceReservation):
