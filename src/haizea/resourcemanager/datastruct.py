@@ -404,6 +404,7 @@ class SuspensionResourceReservation(ResourceReservation):
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "Type           : SUSPEND")
+        self.logger.log(loglevel, "Vnodes         : %s" % self.vnodes)
         ResourceReservation.print_contents(self, loglevel)
         
     def is_first(self):
@@ -430,8 +431,9 @@ class ResumptionResourceReservation(ResourceReservation):
         self.vnodes = vnodes
 
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
-        ResourceReservation.print_contents(self, loglevel)
         self.logger.log(loglevel, "Type           : RESUME")
+        self.logger.log(loglevel, "Vnodes         : %s" % self.vnodes)
+        ResourceReservation.print_contents(self, loglevel)
 
     def is_first(self):
         return (self == self.vmrr.pre_rrs[0])
