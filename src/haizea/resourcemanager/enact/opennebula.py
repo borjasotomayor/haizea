@@ -24,6 +24,7 @@ import haizea.resourcemanager.datastruct as ds
 from pysqlite2 import dbapi2 as sqlite
 import logging
 import commands
+from time import sleep
 
 class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
     ONEATTR2HAIZEA = { "TOTALCPU": constants.RES_CPU,
@@ -140,6 +141,12 @@ class OpenNebulaVMEnactment(VMEnactment):
                 self.logger.debug("Command returned succesfully.")
             else:
                 raise Exception, "Error when running onevm suspend (status=%i, output='%s')" % (status, output)
+            # Space out commands to avoid OpenNebula from getting saturated
+            # TODO: We should spawn out a thread to do this
+            # TODO: We should spawn out a thread to do this, so Haizea isn't
+            # blocking until all these commands end
+            interval = get_config().get("enactment-overhead").seconds
+            sleep(interval)
         
     def resume(self, action):
         for vnode in action.vnodes:
@@ -151,6 +158,11 @@ class OpenNebulaVMEnactment(VMEnactment):
                 self.logger.debug("Command returned succesfully.")
             else:
                 raise Exception, "Error when running onevm resume (status=%i, output='%s')" % (status, output)
+            # Space out commands to avoid OpenNebula from getting saturated
+            # TODO: We should spawn out a thread to do this, so Haizea isn't
+            # blocking until all these commands end
+            interval = get_config().get("enactment-overhead").seconds
+            sleep(interval)
 
     def verify_suspend(self, action):
         # TODO: Do a single query
