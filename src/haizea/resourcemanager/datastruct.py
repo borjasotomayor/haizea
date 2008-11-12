@@ -337,7 +337,7 @@ class ResourceReservation(object):
 class VMResourceReservation(ResourceReservation):
     def __init__(self, lease, start, end, nodes, res, backfill_reservation):
         ResourceReservation.__init__(self, lease, start, end, res)
-        self.nodes = nodes
+        self.nodes = nodes # { vnode -> pnode }
         self.backfill_reservation = backfill_reservation
         self.pre_rrs = []
         self.post_rrs = []
@@ -471,9 +471,18 @@ class ShutdownResourceReservation(ResourceReservation):
         return rr
 
 class MigrationResourceReservation(ResourceReservation):
-    def __init__(self, lease, start, end, res, vmrr):
+    def __init__(self, lease, start, end, res, vmrr, transfers):
         ResourceReservation.__init__(self, lease, start, end, res)
         self.vmrr = vmrr
+        self.transfers = transfers
+        
+    def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
+        self.logger.log(loglevel, "Type           : MIGRATE")
+        self.logger.log(loglevel, "Transfers      : %s" % self.transfers)
+        ResourceReservation.print_contents(self, loglevel)        
+
+    def is_preemptible(self):
+        return False        
 
 #-------------------------------------------------------------------#
 #                                                                   #
