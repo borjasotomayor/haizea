@@ -184,8 +184,13 @@ class Scheduler(object):
         for rr in starting:
             self.handlers[type(rr)].on_start(self, rr.lease, rr)
 
-        util = self.slottable.getUtilization(nowtime)
-        get_accounting().append_stat(constants.COUNTER_CPUUTILIZATION, util)        
+        util = self.slottable.get_utilization(nowtime)
+        if not util.has_key(VMResourceReservation):
+            cpuutil = 0.0
+        else:
+            cpuutil = util[VMResourceReservation]
+        get_accounting().append_stat(constants.COUNTER_CPUUTILIZATION, cpuutil)        
+        get_accounting().append_stat(constants.COUNTER_UTILIZATION, util)        
         
     def register_handler(self, type, on_start, on_end):
         handler = ReservationEventHandler(on_start=on_start, on_end=on_end)
@@ -655,7 +660,8 @@ class Scheduler(object):
         # (otherwise, we only allow the VMs to start "now", accounting
         #  for the fact that vm images will have to be deployed)
         if allow_reservation_in_future:
-            futurecp = self.slottable.findChangePointsAfter(changepoints[-1][0])
+            res = self.slottable.get_reservations_ending_after(changepoints[-1][0])
+            futurecp = [r.get_final_end() for r in res if isinstance(r, VMResourceReservation)]
             futurecp = [(p,None) for p in futurecp]
         else:
             futurecp = []
@@ -838,10 +844,10 @@ class Scheduler(object):
                 
                 if direction == constants.DIRECTION_FORWARD:
                     t += op_time
-                    times.append((t_prev, t, {pnode:vnode}))
+                    times.append((t_prev, t, {pnode:[vnode]}))
                 elif direction == constants.DIRECTION_BACKWARD:
                     t -= op_time
-                    times.append((t, t_prev, {pnode:vnode}))
+                    times.append((t, t_prev, {pnode:[vnode]}))
 
         elif exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
             # Local exclusion (which represents, e.g., reading the memory image files
@@ -1253,11 +1259,11 @@ class Scheduler(object):
         nodes = set(mustpreempt.keys())
         
         reservationsAtStart = self.slottable.getReservationsAt(startTime)
-        reservationsAtStart = [r for r in reservationsAtStart if r.is_preemptible()
+        reservationsAtStart = [r for r in reservationsAtStart if isinstance(r, VMResourceReservation) and r.is_preemptible()
                         and len(set(r.resources_in_pnode.keys()) & nodes)>0]
         
         reservationsAtMiddle = self.slottable.get_reservations_starting_between(startTime, endTime)
-        reservationsAtMiddle = [r for r in reservationsAtMiddle if r.is_preemptible()
+        reservationsAtMiddle = [r for r in reservationsAtMiddle if isinstance(r, VMResourceReservation) and r.is_preemptible()
                         and len(set(r.resources_in_pnode.keys()) & nodes)>0]
         
         reservationsAtStart.sort(comparepreemptability)

@@ -34,7 +34,10 @@ class CriticalSlotFittingException(Exception):
 class Node(object):
     def __init__(self, capacity, capacitywithpreemption, resourcepoolnode):
         self.capacity = ds.ResourceTuple.copy(capacity)
-        self.capacitywithpreemption = ds.ResourceTuple.copy(capacitywithpreemption)
+        if capacitywithpreemption == None:
+            self.capacitywithpreemption = None
+        else:
+            self.capacitywithpreemption = ds.ResourceTuple.copy(capacitywithpreemption)
         self.resourcepoolnode = resourcepoolnode
         
     @classmethod
@@ -57,14 +60,7 @@ class NodeList(object):
         for n in self.nodelist:
             nodelist.add(Node(n.capacity, n.capacitywithpreemption, n.resourcepoolnode))
         return nodelist
-
-    def toPairList(self, onlynodes=None):
-        nodelist = []
-        for i, n in enumerate(self.nodelist):
-            if onlynodes == None or (onlynodes != None and i+1 in onlynodes):
-                nodelist.append((i+1,Node(n.capacity, n.capacitywithpreemption, n.resourcepoolnode)))
-        return nodelist
-    
+   
     def toDict(self):
         nodelist = self.copy()
         return dict([(i+1, v) for i, v in enumerate(nodelist)])
@@ -102,47 +98,76 @@ class SlotTable(object):
         self.changepointcache = None
         
     def getAvailabilityCacheMiss(self, time):
-        nodes = self.nodes.copy()
+        allnodes = set([i+1 for i in range(len(self.nodes.nodelist))])
+        onlynodes = None       
+        nodes = {} 
         reservations = self.getReservationsAt(time)
         # Find how much resources are available on each node
+        canpreempt = True
         for r in reservations:
             for node in r.resources_in_pnode:
-                nodes[node].capacity.decr(r.resources_in_pnode[node])
-                if not r.is_preemptible():
-                    nodes[node].capacitywithpreemption.decr(r.resources_in_pnode[node])                        
+                if onlynodes == None or (onlynodes != None and node in onlynodes):
+                    if not nodes.has_key(node):
+                        n = self.nodes[node]
+                        if canpreempt:
+                            nodes[node] = Node(n.capacity, n.capacitywithpreemption, n.resourcepoolnode)
+                        else:
+                            nodes[node] = Node(n.capacity, None, n.resourcepoolnode)
+                    nodes[node].capacity.decr(r.resources_in_pnode[node])
+                    if canpreempt and not r.is_preemptible:
+                        nodes[node].capacitywithpreemption.decr(r.resources_in_pnode[node])
+
+        # For the remaining nodes, use a reference to the original node, not a copy
+        if onlynodes == None:
+            missing = allnodes - set(nodes.keys())
+        else:
+            missing = onlynodes - set(nodes.keys())
+            
+        for node in missing:
+            nodes[node] = self.nodes[node]                    
             
         self.availabilitycache[time] = nodes
 
-    def getAvailability(self, time, resreq=None, onlynodes=None):
+    def getAvailability(self, time, resreq=None, onlynodes=None, canpreempt=False):
         if not self.availabilitycache.has_key(time):
             self.getAvailabilityCacheMiss(time)
             # Cache miss
             
+        nodes = self.availabilitycache[time]
+
         if onlynodes != None:
             onlynodes = set(onlynodes)
-            
-        nodes = self.availabilitycache[time].toPairList(onlynodes)
-        #nodes = {}
-        #for n in self.availabilitycache[time]:
-        #    nodes[n] = Node(self.availabilitycache[time][n].capacity.res, self.availabilitycache[time][n].capacitywithpreemption.res)
+            nodes = dict([(n,node) for n,node in nodes.items() if n in onlynodes])
 
         # Keep only those nodes with enough resources
         if resreq != None:
-            newnodes = []
-            for i, node in nodes:
-                if not resreq.fits_in(node.capacity) and not resreq.fits_in(node.capacitywithpreemption):
+            newnodes = {}
+            for n, node in nodes.items():
+                if not resreq.fits_in(node.capacity) or (canpreempt and not resreq.fits_in(node.capacitywithpreemption)):
                     pass
                 else:
-                    newnodes.append((i, node))
+                    newnodes[n]=node
             nodes = newnodes
-        
-        return dict(nodes)
+
+        return nodes
     
-    def getUtilization(self, time, restype=constants.RES_CPU):
-        nodes = self.getAvailability(time)
-        total = sum([n.capacity.get_by_type(restype) for n in self.nodes.nodelist])
-        avail = sum([n.capacity.get_by_type(restype) for n in nodes.values()])
-        return 1.0 - (float(avail)/total)
+    def get_utilization(self, time):
+        total = sum([n.capacity.get_by_type(constants.RES_CPU) for n in self.nodes.nodelist])
+        util = {}
+        reservations = self.getReservationsAt(time)
+        for r in reservations:
+            for node in r.resources_in_pnode:
+                if isinstance(r, ds.VMResourceReservation):
+                    use = r.resources_in_pnode[node].get_by_type(constants.RES_CPU)
+                    util[type(r)] = use + util.setdefault(type(r),0.0)
+                elif isinstance(r, ds.SuspensionResourceReservation) or isinstance(r, ds.ResumptionResourceReservation) or isinstance(r, ds.ShutdownResourceReservation):
+                    use = r.vmrr.resources_in_pnode[node].get_by_type(constants.RES_CPU)
+                    util[type(r)] = use + util.setdefault(type(r),0.0)
+        util[None] = total - sum(util.values())
+        for k in util:
+            util[k] /= total
+            
+        return util
 
     def getReservationsAt(self, time):
         item = KeyValueWrapper(time, None)
@@ -165,6 +190,12 @@ class SlotTable(object):
         startitem = KeyValueWrapper(start, None)
         startpos = bisect.bisect_left(self.reservationsByStart, startitem)
         res = [x.value for x in self.reservationsByStart[startpos:]]
+        return res
+
+    def get_reservations_ending_after(self, end):
+        startitem = KeyValueWrapper(end, None)
+        startpos = bisect.bisect_left(self.reservationsByEnd, startitem)
+        res = [x.value for x in self.reservationsByEnd[startpos:]]
         return res
 
     def get_reservations_ending_between(self, start, end):
@@ -362,12 +393,10 @@ class AvailabilityWindow(object):
         self.time = time
         self.resreq = resreq
         self.onlynodes = onlynodes
-
         self.avail = {}
 
         # Availability at initial time
-        availatstart = self.slottable.getAvailability(self.time, self.resreq, self.onlynodes)
-
+        availatstart = self.slottable.getAvailability(self.time, self.resreq, self.onlynodes, canpreempt)
         for node in availatstart:
             capacity = availatstart[node].capacity
             if canpreempt:
@@ -380,7 +409,7 @@ class AvailabilityWindow(object):
         nodes = set(availatstart.keys())
         changepoints = self.slottable.findChangePointsAfter(self.time, nodes=self.avail.keys())
         for p in changepoints:
-            availatpoint = self.slottable.getAvailability(p, self.resreq, nodes)
+            availatpoint = self.slottable.getAvailability(p, self.resreq, nodes, canpreempt)
             newnodes = set(availatpoint.keys())
             
             # Add entries for nodes that have no resources available

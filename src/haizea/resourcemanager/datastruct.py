@@ -367,6 +367,12 @@ class VMResourceReservation(ResourceReservation):
         else:
             self.prematureend = None 
 
+    def get_final_end(self):
+        if len(self.post_rrs) == 0:
+            return self.end
+        else:
+            return self.post_rrs[-1].end
+
     def is_suspending(self):
         return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], SuspensionResourceReservation)
 

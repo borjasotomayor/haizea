@@ -289,6 +289,7 @@ class ResourceManager(Singleton):
         self.accounting.create_counter(constants.COUNTER_QUEUESIZE, constants.AVERAGE_TIMEWEIGHTED)
         self.accounting.create_counter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
         self.accounting.create_counter(constants.COUNTER_CPUUTILIZATION, constants.AVERAGE_TIMEWEIGHTED)
+        self.accounting.create_counter(constants.COUNTER_UTILIZATION, constants.AVERAGE_NONE)
         
         if self.daemon:
             self.daemonize()
@@ -304,7 +305,7 @@ class ResourceManager(Singleton):
         
         # Stop collecting data (this finalizes counters)
         self.accounting.stop()
-
+        
         # TODO: When gracefully stopping mid-scheduling, we need to figure out what to
         #       do with leases that are still running.
 
@@ -630,7 +631,7 @@ class SimulatedClock(Clock):
         besteffort = self.rm.scheduler.leases.get_leases(type = BestEffortLease)
         pendingbesteffort = [r for r in tracefrontend.requests if isinstance(r, BestEffortLease)]
         if stopwhen == constants.STOPWHEN_BEDONE:
-            if self.rm.scheduler.isQueueEmpty() and len(besteffort) + len(pendingbesteffort) == 0:
+            if self.rm.scheduler.is_queue_empty() and len(besteffort) + len(pendingbesteffort) == 0:
                 done = True
         elif stopwhen == constants.STOPWHEN_BESUBMITTED:
             if len(pendingbesteffort) == 0:
