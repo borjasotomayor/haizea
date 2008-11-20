@@ -594,8 +594,16 @@ class HaizeaConfig(Config):
             doc         = """
             Specifies how many seconds will be alloted to
             boot and shutdown of the lease.                
-            """)
+            """),
                   
+     Option(name        = "override-memory",
+            getter      = "override-memory",
+            type        = OPTTYPE_INT,
+            required    = False,
+            default     = constants.NO_MEMORY_OVERRIDE,
+            doc         = """
+            Overrides memory requirements specified in tracefile.
+            """),
     ]
     sections.append(tracefile)
     
@@ -679,7 +687,7 @@ class HaizeaConfig(Config):
         self.attrs = {}
         if self._options["attributes"] != None:
             self.attrs = {}
-            attrs = self._options["attributes"].split(";")
+            attrs = self._options["attributes"].split(",")
             for attr in attrs:
                 (k,v) = attr.split("=")
                 self.attrs[k] = v
@@ -762,9 +770,11 @@ class HaizeaMultiConfig(Config):
                     profileconfig.set("general", "datafile", datafile)
                     
                     # Set "attributes" option (only used internally)
-                    attrs = {"profile":profile}
+                    attrs = {"profile":profile,"tracefile":tracefile,"injectfile":injectfile}
                     # TODO: Load additional attributes from trace/injfiles
                     attrs_str = ",".join(["%s=%s" % (k,v) for (k,v) in attrs.items()])
+                    if profileconfig.has_option("general", "attributes"):
+                        attrs_str += ",%s" % profileconfig.get("general", "attributes")
                     profileconfig.set("general", "attributes", attrs_str)
                     
                     try:
