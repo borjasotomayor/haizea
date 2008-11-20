@@ -55,7 +55,7 @@ class TracefileFrontend(RequestFrontend):
             for r, i in zip(self.requests, images):
                 r.vmimage = i
                 r.vmimagesize = imagesizes[i]
-                r.resreq.setByType(constants.RES_DISK, imagesizes[i] + r.resreq.getByType(constants.RES_MEM))
+                r.requested_resources.set_by_type(constants.RES_DISK, imagesizes[i] + r.resreq.getByType(constants.RES_MEM))
         
         # Add runtime overhead, if necessary
         add_overhead = config.get("add-overhead")
@@ -68,6 +68,12 @@ class TracefileFrontend(RequestFrontend):
                    if slowdown_overhead != 0:
                        r.add_runtime_overhead(slowdown_overhead)
                    r.add_boot_overhead(boot_overhead)
+
+        # Override requested memory, if necessary
+        memory = config.get("override-memory")
+        if memory != constants.NO_MEMORY_OVERRIDE:
+            for r in self.requests:
+                r.requested_resources.set_by_type(constants.RES_MEM, memory)            
             
         num_besteffort = len([x for x in self.requests if isinstance(x,BestEffortLease)])
         num_ar = len([x for x in self.requests if isinstance(x,ARLease)])
