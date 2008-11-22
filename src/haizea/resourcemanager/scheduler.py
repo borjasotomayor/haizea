@@ -1385,7 +1385,7 @@ class Scheduler(object):
         leases = []
         vmrrs = self.slottable.get_next_reservations_in_nodes(nexttime, nodes, rr_type=VMResourceReservation, immediately_next=True)
         leases = set([rr.lease for rr in vmrrs])
-        leases = [l for l in leases if isinstance(l, ds.BestEffortLease) and not l in checkedleases]
+        leases = [l for l in leases if isinstance(l, ds.BestEffortLease) and l.state in (Lease.STATE_SUSPENDED,Lease.STATE_READY) and not l in checkedleases]
         for lease in leases:
             self.logger.debug("Found lease %i" % l.id)
             l.print_contents()
@@ -1426,7 +1426,8 @@ class Scheduler(object):
         else:
             diff = originalstart - newstart
             if lease.state == Lease.STATE_SUSPENDED:
-                for resmrr in vmrr.pre_rrs:
+                resmrrs = [r for r in vmrr.pre_rrs if isinstance(r, ds.ResumptionResourceReservation)]
+                for resmrr in resmrrs:
                     resmrr_old_start = resmrr.start
                     resmrr_old_end = resmrr.end
                     resmrr.start -= diff

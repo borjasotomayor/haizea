@@ -47,13 +47,11 @@ def SWF(tracefile, config):
                 maxdur = TimeDelta(seconds=reqtime)
                 if runtime < 0 and status==5:
                     # This is a job that got cancelled while waiting in the queue
-                    realdur = maxdur
-                    maxqueuetime = tSubmit + TimeDelta(seconds=waittime)
+                    continue
                 else:
                     if runtime == 0:
                         runtime = 1 # Runtime of 0 is <0.5 rounded down.
                     realdur = TimeDelta(seconds=runtime) # 3: RunTime
-                    maxqueuetime = None
                 if realdur > maxdur:
                     realdur = maxdur
                 preemptible = True

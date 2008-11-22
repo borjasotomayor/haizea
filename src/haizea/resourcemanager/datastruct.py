@@ -442,10 +442,12 @@ class ResumptionResourceReservation(ResourceReservation):
         ResourceReservation.print_contents(self, loglevel)
 
     def is_first(self):
-        return (self == self.vmrr.pre_rrs[0])
+        resm_rrs = [r for r in self.vmrr.pre_rrs if isinstance(r, ResumptionResourceReservation)]
+        return (self == resm_rrs[0])
 
     def is_last(self):
-        return (self == self.vmrr.pre_rrs[-1])
+        resm_rrs = [r for r in self.vmrr.pre_rrs if isinstance(r, ResumptionResourceReservation)]
+        return (self == resm_rrs[-1])
 
     # TODO: Resumption RRs should be preemptible, but preempting a resumption RR
     # has wider implications (with a non-trivial handling). For now, we leave them 

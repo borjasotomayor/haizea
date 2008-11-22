@@ -36,6 +36,8 @@ class AccountingData(object):
         # Attributes
         self.attrs = {}
         
+        self.starttime = None
+        
     def get_waiting_times(self):
         waiting_times = {}
         for lease_id in self.leases:
@@ -51,13 +53,15 @@ class AccountingData(object):
             if isinstance(lease, ds.BestEffortLease):
                 slowdowns[lease_id] = lease.get_slowdown()
         return slowdowns
+    
+    def get_besteffort_end(self):
+        return max([l.end for l in self.leases.values() if isinstance(l, ds.BestEffortLease)])
 
 class AccountingDataCollection(object):
     def __init__(self, rm, datafile):
         self.data = AccountingData()
         self.rm = rm
-        self.datafile = datafile   
-        self.starttime = None
+        self.datafile = datafile
         
         attrs = get_config().get_attrs()
         for attr in attrs:
@@ -91,7 +95,7 @@ class AccountingDataCollection(object):
 
         
     def start(self, time):
-        self.starttime = time
+        self.data.starttime = time
         
         # Start the counters
         for counter_id in self.data.counters:
@@ -118,7 +122,7 @@ class AccountingDataCollection(object):
                 self.data.counter_lists[counter_id] = self.add_timeweighted_average(l)
             
     def normalize_times(self, data):
-        return [((v[0] - self.starttime).seconds, v[1], v[2]) for v in data]
+        return [((v[0] - self.data.starttime).seconds, v[1], v[2]) for v in data]
         
     def add_no_average(self, data):
         return [(v[0], v[1], v[2], None) for v in data]
