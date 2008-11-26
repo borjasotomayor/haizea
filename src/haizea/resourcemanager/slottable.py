@@ -228,7 +228,7 @@ class SlotTable(object):
         return [i.value for i in self.reservationsByEnd if isinstance(i.value, ds.VMResourceReservation) and i.value.prematureend == t]
 
     
-    def getReservationsWithChangePointsAfter(self, after):
+    def get_reservations_starting_or_ending_after(self, after):
         item = KeyValueWrapper(after, None)
         startpos = bisect.bisect_right(self.reservationsByStart, item)
         bystart = set([x.value for x in self.reservationsByStart[:startpos]])
@@ -287,7 +287,7 @@ class SlotTable(object):
     
     def findChangePointsAfter(self, after, until=None, nodes=None):
         changepoints = set()
-        res = self.getReservationsWithChangePointsAfter(after)
+        res = self.get_reservations_starting_or_ending_after(after)
         for rr in res:
             if nodes == None or (nodes != None and len(set(rr.resources_in_pnode.keys()) & set(nodes)) > 0):
                 if rr.start > after:
@@ -407,7 +407,13 @@ class AvailabilityWindow(object):
         
         # Determine the availability at the subsequent change points
         nodes = set(availatstart.keys())
-        changepoints = self.slottable.findChangePointsAfter(self.time, nodes=self.avail.keys())
+        res = self.slottable.get_reservations_starting_after(self.time)
+        changepoints = set()
+        for rr in res:
+            if nodes == None or (nodes != None and len(set(rr.resources_in_pnode.keys()) & set(nodes)) > 0):
+                changepoints.add(rr.start)
+        changepoints = list(changepoints)
+        changepoints.sort()
         for p in changepoints:
             availatpoint = self.slottable.getAvailability(p, self.resreq, nodes, canpreempt)
             newnodes = set(availatpoint.keys())
