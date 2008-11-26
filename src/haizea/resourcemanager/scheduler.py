@@ -40,7 +40,7 @@ import haizea.resourcemanager.datastruct as ds
 import haizea.common.constants as constants
 from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, get_config, get_accounting, get_clock
 from haizea.resourcemanager.slottable import SlotTable, SlotFittingException
-from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ImmediateLease, ResourceReservation, VMResourceReservation, MigrationResourceReservation
+from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ImmediateLease, ResourceReservation, VMResourceReservation, MigrationResourceReservation, ShutdownResourceReservation
 from haizea.resourcemanager.resourcepool import ResourcePool, ResourcePoolWithReusableImages
 from operator import attrgetter, itemgetter
 from mx.DateTime import TimeDelta
@@ -662,6 +662,9 @@ class Scheduler(object):
         if allow_reservation_in_future:
             res = self.slottable.get_reservations_ending_after(changepoints[-1][0])
             futurecp = [r.get_final_end() for r in res if isinstance(r, VMResourceReservation)]
+            # Corner case: Sometimes we're right in the middle of a ShutdownReservation, so it won't be
+            # included in futurecp.
+            futurecp += [r.end for r in res if isinstance(r, ShutdownResourceReservation) and not r.vmrr in res]
             futurecp = [(p,None) for p in futurecp]
         else:
             futurecp = []
