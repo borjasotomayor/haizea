@@ -192,6 +192,24 @@ class HaizeaConfig(Config):
              - all: any lease can be suspended                
             """),
 
+     Option(name        = "suspend-rate",
+            getter      = "suspend-rate",
+            type        = OPTTYPE_FLOAT,
+            required    = True,
+            doc         = """
+            Rate at which VMs are assumed to suspend (in MB of
+            memory per second)                
+            """),
+
+     Option(name        = "resume-rate",
+            getter      = "resume-rate",
+            type        = OPTTYPE_FLOAT,
+            required    = True,
+            doc         = """
+            Rate at which VMs are assumed to resume (in MB of
+            memory per second)                
+            """),
+
      Option(name        = "suspendresume-exclusion",
             getter      = "suspendresume-exclusion",
             type        = OPTTYPE_STRING,
@@ -235,6 +253,26 @@ class HaizeaConfig(Config):
             In other words, a scheduling factor of F required a minimum duration of 
             F*T. A value of 0 could lead to thrashing, since Haizea could end up with
             situations where a lease starts and immediately gets suspended.               
+            """),
+
+     Option(name        = "override-suspend-time",
+            getter      = "override-suspend-time",
+            type        = OPTTYPE_INT,
+            required    = False,
+            default     = None,
+            doc         = """
+            Overrides the time it takes to suspend a VM to a fixed value
+            (i.e., not computed based on amount of memory, enactment overhead, etc.)
+            """),
+
+     Option(name        = "override-resume-time",
+            getter      = "override-resume-time",
+            type        = OPTTYPE_INT,
+            required    = False,
+            default     = None,
+            doc         = """
+            Overrides the time it takes to suspend a VM to a fixed value
+            (i.e., not computed based on amount of memory, enactment overhead, etc.)
             """),
 
      Option(name        = "force-scheduling-threshold",
@@ -396,15 +434,6 @@ class HaizeaConfig(Config):
             Bandwidth (in Mbps) available for image transfers.
             This would correspond to the outbound network bandwidth of the
             node where the images are stored.                
-            """),
-
-     Option(name        = "suspendresume-rate",
-            getter      = "simul.suspendresume-rate",
-            type        = OPTTYPE_FLOAT,
-            required    = True,
-            doc         = """
-            Rate at which VMs are assumed to suspend (in MB of
-            memory per second)                
             """),
 
      Option(name        = "stop-when",
@@ -634,16 +663,6 @@ class HaizeaConfig(Config):
             required    = True,
             doc         = """
             Location of OpenNebula "onevm" command.                
-            """),
-
-     Option(name        = "suspendresume-rate-estimate",
-            getter      = "one.suspendresume-rate-estimate",
-            type        = OPTTYPE_FLOAT,
-            required    = False,
-            default     = 32,
-            doc         = """
-            Rate at which VMs are estimated to suspend (in MB of
-            memory per second)                
             """),
             
      Option(name        = "stop-when-no-more-leases",

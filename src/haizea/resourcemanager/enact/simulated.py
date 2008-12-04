@@ -28,7 +28,6 @@ class SimulatedResourcePoolInfo(ResourcePoolInfo):
         ResourcePoolInfo.__init__(self)
         self.logger = logging.getLogger("ENACT.SIMUL.INFO")
         config = get_config()
-        self.suspendresumerate = config.get("simul.suspendresume-rate")
                 
         numnodes = config.get("simul.nodes")
 
@@ -57,9 +56,6 @@ class SimulatedResourcePoolInfo(ResourcePoolInfo):
             resourcecapacity = r.split(",")[1]
             capacity.set_by_type(desc2type[resourcename], int(resourcecapacity))
         return capacity
-
-    def get_suspendresume_rate(self):
-        return self.suspendresumerate
     
     def get_migration_bandwidth(self):
         return 100 # TODO: Get from config file

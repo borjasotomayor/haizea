@@ -34,7 +34,6 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
         ResourcePoolInfo.__init__(self)
         config = get_config()
         self.logger = logging.getLogger("ENACT.ONE.INFO")
-        self.suspendresumerate = config.get("one.suspendresume-rate-estimate")
 
         # Get information about nodes from DB
         conn = sqlite.connect(config.get("one.db"))
@@ -77,9 +76,6 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
                 (constants.RES_DISK, constants.RESTYPE_INT, "Disk"),
                 (constants.RES_NETIN, constants.RESTYPE_INT, "Net (in)"),
                 (constants.RES_NETOUT, constants.RESTYPE_INT, "Net (out)")]
-        
-    def get_suspendresume_rate(self):
-        return self.suspendresumerate
 
     def get_bandwidth(self):
         return 0
@@ -130,6 +126,10 @@ class OpenNebulaVMEnactment(VMEnactment):
                 self.logger.debug("Command returned succesfully.")
             else:
                 raise Exception, "Error when running onevm shutdown (status=%i, output='%s')" % (status, output)
+            # TODO: We should spawn out a thread to do this, so Haizea isn't
+            # blocking until all these commands end
+            interval = get_config().get("enactment-overhead").seconds
+            sleep(interval)
 
     def suspend(self, action):
         for vnode in action.vnodes:

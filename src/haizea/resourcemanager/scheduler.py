@@ -922,10 +922,10 @@ class Scheduler(object):
                 prev_end = t[1]
         
         return times
-
+    
     def __schedule_shutdown(self, vmrr):
         config = get_config()
-        shutdown_time = config.get("shutdown-time")
+        shutdown_time = self.__estimate_shutdown_time(vmrr.lease)
 
         start = vmrr.end - shutdown_time
         end = vmrr.end
@@ -946,7 +946,7 @@ class Scheduler(object):
         from haizea.resourcemanager.rm import ResourceManager
         config = ResourceManager.get_singleton().config
         susp_exclusion = config.get("suspendresume-exclusion")        
-        rate = self.resourcepool.info.get_suspendresume_rate()
+        rate = config.get("suspend-rate") 
 
         if suspend_by < vmrr.start or suspend_by > vmrr.end:
             raise SchedException, "Tried to schedule a suspension by %s, which is outside the VMRR's duration (%s-%s)" % (suspend_by, vmrr.start, vmrr.end)
@@ -988,7 +988,7 @@ class Scheduler(object):
         from haizea.resourcemanager.rm import ResourceManager
         config = ResourceManager.get_singleton().config
         resm_exclusion = config.get("suspendresume-exclusion")        
-        rate = self.resourcepool.info.get_suspendresume_rate()
+        rate = config.get("resume-rate") 
 
         if resume_at < vmrr.start or resume_at > vmrr.end:
             raise SchedException, "Tried to schedule a resumption at %s, which is outside the VMRR's duration (%s-%s)" % (resume_at, vmrr.start, vmrr.end)
@@ -1076,14 +1076,14 @@ class Scheduler(object):
             vmrr.pre_rrs.insert(0, migr_rr)
 
     def __compute_suspend_resume_time(self, mem, rate):
+        force = get_config().get("suspendresume-exclusion")
         time = float(mem) / rate
         time = round_datetime_delta(TimeDelta(seconds = time))
         return time
     
-    def __estimate_suspend_resume_time(self, lease):
+    def __estimate_suspend_resume_time(self, lease, rate):
         susp_exclusion = get_config().get("suspendresume-exclusion")        
         enactment_overhead = get_config().get("enactment-overhead") 
-        rate = self.resourcepool.info.get_suspendresume_rate()
         mem = lease.requested_resources.get_by_type(constants.RES_MEM)
         if susp_exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
             return lease.numnodes * (self.__compute_suspend_resume_time(mem, rate) + enactment_overhead)
@@ -1092,14 +1092,24 @@ class Scheduler(object):
             return lease.numnodes * (self.__compute_suspend_resume_time(mem, rate) + enactment_overhead)
 
     def __estimate_shutdown_time(self, lease):
-        # Always uses fixed value in configuration file
-        return get_config().get("shutdown-time")
+        enactment_overhead = get_config().get("enactment-overhead").seconds
+        return get_config().get("shutdown-time") + (enactment_overhead * lease.numnodes)
 
     def __estimate_suspend_time(self, lease):
-        return self.__estimate_suspend_resume_time(lease)
+        rate = get_config().get("suspend-rate")
+        override = get_config().get("override-suspend-time")
+        if override != None:
+            return override
+        else:
+            return self.__estimate_suspend_resume_time(lease, rate)
 
     def __estimate_resume_time(self, lease):
-        return self.__estimate_suspend_resume_time(lease)
+        rate = get_config().get("resume-rate") 
+        override = get_config().get("override-resume-time")
+        if override != None:
+            return override
+        else:
+            return self.__estimate_suspend_resume_time(lease, rate)
 
 
     def __estimate_migration_time(self, lease):
