@@ -827,10 +827,10 @@ class Scheduler(object):
                 
         return start, end, canfit
     
-    def __compute_susprem_times(self, vmrr, time, direction, exclusion, rate):
+    def __compute_susprem_times(self, vmrr, time, direction, exclusion, rate, override = None):
         times = [] # (start, end, {pnode -> vnodes})
         enactment_overhead = get_config().get("enactment-overhead") 
-        
+
         if exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
             # Global exclusion (which represents, e.g., reading/writing the memory image files
             # from a global file system) meaning no two suspensions/resumptions can happen at 
@@ -840,9 +840,14 @@ class Scheduler(object):
             t_prev = None
                 
             for (vnode,pnode) in vmrr.nodes.items():
-                mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
-                op_time = self.__compute_suspend_resume_time(mem, rate)
+                if override == None:
+                    mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                    op_time = self.__compute_suspend_resume_time(mem, rate)
+                else:
+                    op_time = override
+
                 op_time += enactment_overhead
+                    
                 t_prev = t
                 
                 if direction == constants.DIRECTION_FORWARD:
@@ -864,8 +869,11 @@ class Scheduler(object):
                 t = time
                 t_prev = None
                 for vnode in vnodes_in_pnode[pnode]:
-                    mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
-                    op_time = self.__compute_suspend_resume_time(mem, rate)
+                    if override == None:
+                        mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                        op_time = self.__compute_suspend_resume_time(mem, rate)
+                    else:
+                        op_time = override                    
                     
                     t_prev = t
                     
@@ -945,13 +953,14 @@ class Scheduler(object):
     def __schedule_suspension(self, vmrr, suspend_by):
         from haizea.resourcemanager.rm import ResourceManager
         config = ResourceManager.get_singleton().config
-        susp_exclusion = config.get("suspendresume-exclusion")        
+        susp_exclusion = config.get("suspendresume-exclusion")
+        override = get_config().get("override-suspend-time")
         rate = config.get("suspend-rate") 
 
         if suspend_by < vmrr.start or suspend_by > vmrr.end:
             raise SchedException, "Tried to schedule a suspension by %s, which is outside the VMRR's duration (%s-%s)" % (suspend_by, vmrr.start, vmrr.end)
 
-        times = self.__compute_susprem_times(vmrr, suspend_by, constants.DIRECTION_BACKWARD, susp_exclusion, rate)
+        times = self.__compute_susprem_times(vmrr, suspend_by, constants.DIRECTION_BACKWARD, susp_exclusion, rate, override)
         suspend_rrs = []
         for (start, end, node_mappings) in times:
             suspres = {}
@@ -988,12 +997,13 @@ class Scheduler(object):
         from haizea.resourcemanager.rm import ResourceManager
         config = ResourceManager.get_singleton().config
         resm_exclusion = config.get("suspendresume-exclusion")        
+        override = get_config().get("override-resume-time")
         rate = config.get("resume-rate") 
 
         if resume_at < vmrr.start or resume_at > vmrr.end:
             raise SchedException, "Tried to schedule a resumption at %s, which is outside the VMRR's duration (%s-%s)" % (resume_at, vmrr.start, vmrr.end)
 
-        times = self.__compute_susprem_times(vmrr, resume_at, constants.DIRECTION_FORWARD, resm_exclusion, rate)
+        times = self.__compute_susprem_times(vmrr, resume_at, constants.DIRECTION_FORWARD, resm_exclusion, rate, override)
         resume_rrs = []
         for (start, end, node_mappings) in times:
             resmres = {}
@@ -1076,7 +1086,6 @@ class Scheduler(object):
             vmrr.pre_rrs.insert(0, migr_rr)
 
     def __compute_suspend_resume_time(self, mem, rate):
-        force = get_config().get("suspendresume-exclusion")
         time = float(mem) / rate
         time = round_datetime_delta(TimeDelta(seconds = time))
         return time
