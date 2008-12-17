@@ -244,7 +244,7 @@ class haizea_generate_scripts(Command):
 
 class haizea_convert_data(Command):
     """
-    Converts an Haizea datafile into another (easier to process) format.
+    Converts Haizea datafiles into another (easier to process) format.
     
     This command is still not fully implemented."""
     
@@ -253,36 +253,49 @@ class haizea_convert_data(Command):
     def __init__(self, argv):
         Command.__init__(self, argv)
         
-        self.optparser.add_option(Option("-d", "--datafiles", action="store", type="string", dest="datafiles", required=True,
+        self.optparser.add_option(Option("-t", "--type", action="store",  dest="type",
+                                         choices = ["per-experiment", "per-lease"],
                                          help = """
-                                         Datafiles to convert.
+                                         Type of data to produce
                                          """))
-        #self.optparser.add_option(Option("-s", "--summary", action="store_true",  dest="summary",
-        #                                 help = """
-        #                                 Only print out a summary, instead of data for all the leases.
-        #                                 """))
-        #self.optparser.add_option(Option("-l", "--lease-stats", action="store", type="string", dest="lease",
-        #                                 help = """
-        #                                 Option documentation goes here
-        #                                 """))
-        #self.optparser.add_option(Option("-f", "--format", action="store", type="string", dest="format",
-        #                                 help = """
-        #                                 Output format. Currently supported: csv
-        #                                 """))
+        self.optparser.add_option(Option("-f", "--format", action="store", type="string", dest="format",
+                                         help = """
+                                         Output format. Currently supported: csv
+                                         """))
                 
     def run(self):            
         self.parse_options()
 
-        datafile=self.opt.datafiles
+        datafiles=self.args[1:]
+        if len(datafiles) == 0:
+            print "Please specify at least one datafile to convert"
+            exit(1)
         
-        stats = unpickle(datafile)
+        attr_names = unpickle(datafiles[0]).attrs.keys()
+
+        if len(attr_names) == 0:
+            header = ""
+        else:
+            header = ",".join(attr_names) + ","
         
-        # Barebones for now. Just prints out lease id, waiting time, and
-        # slowdown (only best-effort leases)
-        waitingtimes = stats.get_waiting_times()
-        slowdowns = stats.get_slowdowns()
-        print "lease_id waiting_time slowdown"
-        for lease_id in waitingtimes:
-            print lease_id, waitingtimes[lease_id].seconds, slowdowns[lease_id]
+        if self.opt.type == "per-experiment":
+            header += "all-best-effort"
+        elif self.opt.type == "per-lease":
+            header += "lease_id,waiting_time,slowdown"
+            
+        print header
+        
+        for datafile in datafiles:
+            stats = unpickle(datafile)
+        
+            attrs = ",".join([stats.attrs[attr_name] for attr_name in attr_names])
+            
+            if self.opt.type == "per-experiment":
+                print attrs + "," + `(stats.get_besteffort_end() - stats.starttime).seconds`
+            elif self.opt.type == "per-lease":
+                waitingtimes = stats.get_waiting_times()
+                slowdowns = stats.get_slowdowns()
+                for lease_id in waitingtimes:
+                    print ",".join(attrs + [`lease_id`, `waitingtimes[lease_id].seconds`, `slowdowns[lease_id]`])
 
 

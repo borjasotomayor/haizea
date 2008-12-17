@@ -9,4 +9,5 @@ class Command(object):
     def parse_options(self):
         opt, args = self.optparser.parse_args(self.argv)
         self.opt = opt
+        self.args = args
         
