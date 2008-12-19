@@ -40,7 +40,7 @@ of structures:
 """
 
 from haizea.common.constants import RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMDISK, LOGLEVEL_VDEBUG
-from haizea.common.utils import round_datetime_delta, get_lease_id, pretty_nodemap, estimate_transfer_time, xmlrpc_marshall_singlevalue
+from haizea.common.utils import StateMachine, round_datetime_delta, get_lease_id, pretty_nodemap, estimate_transfer_time, xmlrpc_marshall_singlevalue
 
 from operator import attrgetter
 from mx.DateTime import TimeDelta
@@ -203,6 +203,58 @@ class Lease(object):
                 
         return l
         
+class LeaseStateMachine(StateMachine):
+    initial_state = Lease.STATE_NEW
+    transitions = {Lease.STATE_NEW:           [(Lease.STATE_PENDING,    "")],
+                   Lease.STATE_PENDING:       [(Lease.STATE_SCHEDULED,  ""),
+                                               (Lease.STATE_QUEUED,     ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_REJECTED,   "")],
+                   Lease.STATE_SCHEDULED:     [(Lease.STATE_PREPARING,  ""),
+                                               (Lease.STATE_READY,      ""),
+                                               (Lease.STATE_MIGRATING,  ""),
+                                               (Lease.STATE_RESUMING,   ""),
+                                               (Lease.STATE_CANCELLED,  "")],
+                   Lease.STATE_QUEUED:        [(Lease.STATE_SCHEDULED,  ""),
+                                               (Lease.STATE_SUSPENDED,  ""),
+                                               (Lease.STATE_CANCELLED,  "")],
+                   Lease.STATE_PREPARING:     [(Lease.STATE_READY,      ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_FAIL,       "")],
+                   Lease.STATE_READY:         [(Lease.STATE_ACTIVE,     ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_FAIL,       "")],
+                   Lease.STATE_ACTIVE:        [(Lease.STATE_SUSPENDING, ""),
+                                               (Lease.STATE_DONE,       ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_FAIL,       "")],
+                   Lease.STATE_SUSPENDING:    [(Lease.STATE_SUSPENDED,  ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_FAIL,       "")],
+                   Lease.STATE_SUSPENDED:     [(Lease.STATE_QUEUED,     ""),
+                                               (Lease.STATE_MIGRATING,  ""),
+                                               (Lease.STATE_RESUMING,   ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_FAIL,       "")],
+                   Lease.STATE_MIGRATING:     [(Lease.STATE_SUSPENDED,  ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_FAIL,       "")],
+                   Lease.STATE_RESUMING:      [(Lease.STATE_RESUMED_READY, ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_FAIL,       "")],
+                   Lease.STATE_RESUMED_READY: [(Lease.STATE_ACTIVE,     ""),
+                                               (Lease.STATE_CANCELLED,  ""),
+                                               (Lease.STATE_FAIL,       "")],
+                   
+                   # Final states
+                   Lease.STATE_DONE:          [],
+                   Lease.STATE_CANCELLED:     [],
+                   Lease.STATE_FAIL:          [],
+                   Lease.STATE_REJECTED:      [],
+                   }
+    
+    def __init__(self):
+        StateMachine.__init__(initial_state, transitions)
         
 class ARLease(Lease):
     def __init__(self, submit_time, start, duration, diskimage_id, 

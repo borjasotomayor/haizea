@@ -126,3 +126,6 @@ def get_accounting():
 def get_clock():
     from haizea.resourcemanager.rm import ResourceManager
     return ResourceManager.get_singleton().clock
+
+class StateMachine(object):
+    pass
