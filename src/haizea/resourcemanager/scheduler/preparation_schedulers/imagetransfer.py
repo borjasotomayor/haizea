@@ -17,15 +17,15 @@
 # -------------------------------------------------------------------------- #
 
 import haizea.common.constants as constants
-import haizea.resourcemanager.datastruct as ds
-from haizea.resourcemanager.deployment import DeploymentScheduler, DeploymentSchedException
-from haizea.resourcemanager.datastruct import ResourceReservation, Lease, ARLease, BestEffortLease
+from haizea.resourcemanager.scheduler.preparation_schedulers import PreparationScheduler, PreparationSchedException
+from haizea.resourcemanager.scheduler.slottable import ResourceReservation
+from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease
 from haizea.resourcemanager.scheduler import ReservationEventHandler
 from haizea.common.utils import estimate_transfer_time, get_config
 
 import copy
 
-class ImageTransferDeploymentScheduler(DeploymentScheduler):
+class ImageTransferPreparationScheduler(PreparationScheduler):
     def __init__(self, slottable, resourcepool, deployment_enact):
         DeploymentScheduler.__init__(self, slottable, resourcepool, deployment_enact)
         
@@ -50,8 +50,9 @@ class ImageTransferDeploymentScheduler(DeploymentScheduler):
         
         self.handlers ={}
         self.handlers[FileTransferResourceReservation] = ReservationEventHandler(
-                                        on_start = ImageTransferDeploymentScheduler.handle_start_filetransfer,
-                                        on_end   = ImageTransferDeploymentScheduler.handle_end_filetransfer)
+                                sched    = self,
+                                on_start = ImageTransferDeploymentScheduler.handle_start_filetransfer,
+                                on_end   = ImageTransferDeploymentScheduler.handle_end_filetransfer)
 
     def schedule(self, lease, vmrr, nexttime):
         if isinstance(lease, ARLease):

@@ -19,7 +19,6 @@
 import os
 import os.path
 import haizea.common.constants as constants
-import haizea.resourcemanager.datastruct as ds
 from haizea.common.utils import pickle, get_config, get_clock
 from errno import EEXIST
 

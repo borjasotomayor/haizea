@@ -17,14 +17,14 @@
 # -------------------------------------------------------------------------- #
 
 from haizea.common.utils import abstract
-import haizea.resourcemanager.datastruct as ds
+from haizea.resourcemanager.scheduler.slottable import ResourceTuple
 
 class ResourcePoolInfo(object):
     def __init__(self):
         # Initialize the resource types in the ResourceTuple class
         # TODO: Do this in a less kludgy way
         resourcetypes = self.get_resource_types()
-        ds.ResourceTuple.set_resource_types(resourcetypes)
+        ResourceTuple.set_resource_types(resourcetypes)
 
 
     def get_nodes(self): 

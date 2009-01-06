@@ -16,11 +16,11 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.resourcepool import Node
+from haizea.resourcemanager.scheduler.resourcepool import Node
+from haizea.resourcemanager.scheduler.slottable import ResourceTuple
 from haizea.resourcemanager.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
 import haizea.common.constants as constants
 from haizea.common.utils import get_config
-import haizea.resourcemanager.datastruct as ds
 import logging
 
 class SimulatedResourcePoolInfo(ResourcePoolInfo):
@@ -50,7 +50,7 @@ class SimulatedResourcePoolInfo(ResourcePoolInfo):
     def parse_resources_string(self, resources):
         resources = resources.split(";")
         desc2type = dict([(x[2], x[0]) for x in self.get_resource_types()])
-        capacity=ds.ResourceTuple.create_empty()
+        capacity = ResourceTuple.create_empty()
         for r in resources:
             resourcename = r.split(",")[0]
             resourcecapacity = r.split(",")[1]
@@ -107,7 +107,7 @@ class SimulatedDeploymentEnactment(DeploymentEnactment):
         # Image repository nodes
         numnodes = config.get("simul.nodes")
         
-        imgcapacity = ds.ResourceTuple.create_empty()
+        imgcapacity = ResourceTuple.create_empty()
         imgcapacity.set_by_type(constants.RES_NETOUT, self.bandwidth)
 
         self.fifo_node = Node(numnodes+1, "FIFOnode", imgcapacity)

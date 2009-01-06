@@ -65,9 +65,9 @@ RUNTIMEOVERHEAD_NONE="none"
 RUNTIMEOVERHEAD_ALL="all"
 RUNTIMEOVERHEAD_BE="besteffort"
 
-DEPLOYMENT_UNMANAGED = "unmanaged"
-DEPLOYMENT_PREDEPLOY = "predeployed-images"
-DEPLOYMENT_TRANSFER = "imagetransfer"
+PREPARATION_UNMANAGED = "unmanaged"
+PREPARATION_PREDEPLOY = "predeployed-images"
+PREPARATION_TRANSFER = "imagetransfer"
 
 CLOCK_SIMULATED = "simulated"
 CLOCK_REAL = "real"

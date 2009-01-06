@@ -86,9 +86,9 @@ class HaizeaConfig(Config):
             getter      = "lease-preparation",
             type        = OPTTYPE_STRING,
             required    = False,
-            default     = constants.DEPLOYMENT_UNMANAGED,
-            valid       = [constants.DEPLOYMENT_UNMANAGED,
-                           constants.DEPLOYMENT_TRANSFER],
+            default     = constants.PREPARATION_UNMANAGED,
+            valid       = [constants.PREPARATION_UNMANAGED,
+                           constants.PREPARATION_TRANSFER],
             doc         = """
             Sets how the scheduler will handle the
             preparation overhead of leases. Valid values are:

@@ -16,7 +16,8 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 import haizea.common.constants as constants
-from haizea.resourcemanager.datastruct import ARLease, BestEffortLease, ImmediateLease, ResourceTuple
+from haizea.resourcemanager.leases import ARLease, BestEffortLease, ImmediateLease
+from haizea.resourcemanager.scheduler.slottable import ResourceTuple
 from haizea.resourcemanager.frontends import RequestFrontend
 from haizea.common.utils import round_datetime, get_config, get_clock
 from mx.DateTime import DateTimeDelta, TimeDelta, ISO

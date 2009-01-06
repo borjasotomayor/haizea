@@ -19,7 +19,7 @@
 from mx.DateTime import ISO, TimeDelta
 from operator import attrgetter, itemgetter
 import haizea.common.constants as constants
-import haizea.resourcemanager.datastruct as ds
+from math import ceil, floor
 import bisect
 import copy
 import logging
@@ -33,11 +33,11 @@ class CriticalSlotFittingException(Exception):
 
 class Node(object):
     def __init__(self, capacity, capacitywithpreemption, resourcepoolnode):
-        self.capacity = ds.ResourceTuple.copy(capacity)
+        self.capacity = ResourceTuple.copy(capacity)
         if capacitywithpreemption == None:
             self.capacitywithpreemption = None
         else:
-            self.capacitywithpreemption = ds.ResourceTuple.copy(capacitywithpreemption)
+            self.capacitywithpreemption = ResourceTuple.copy(capacitywithpreemption)
         self.resourcepoolnode = resourcepoolnode
         
     @classmethod
@@ -72,6 +72,102 @@ class KeyValueWrapper(object):
         
     def __cmp__(self, other):
         return cmp(self.key, other.key)
+
+class ResourceReservation(object):
+    
+    # Resource reservation states
+    STATE_SCHEDULED = 0
+    STATE_ACTIVE = 1
+    STATE_DONE = 2
+
+    state_str = {STATE_SCHEDULED : "Scheduled",
+                 STATE_ACTIVE : "Active",
+                 STATE_DONE : "Done"}
+    
+    def __init__(self, lease, start, end, res):
+        self.lease = lease
+        self.start = start
+        self.end = end
+        self.state = None
+        self.resources_in_pnode = res
+        self.logger = logging.getLogger("LEASES")
+                        
+    def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
+        self.logger.log(loglevel, "Start          : %s" % self.start)
+        self.logger.log(loglevel, "End            : %s" % self.end)
+        self.logger.log(loglevel, "State          : %s" % ResourceReservation.state_str[self.state])
+        self.logger.log(loglevel, "Resources      : \n                         %s" % "\n                         ".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()])) 
+                
+    def xmlrpc_marshall(self):
+        # Convert to something we can send through XMLRPC
+        rr = {}                
+        rr["start"] = xmlrpc_marshall_singlevalue(self.start)
+        rr["end"] = xmlrpc_marshall_singlevalue(self.end)
+        rr["state"] = self.state
+        return rr
+
+class ResourceTuple(object):
+    def __init__(self, res):
+        self._res = res
+        
+    @classmethod
+    def from_list(cls, l):
+        return cls(l[:])
+
+    @classmethod
+    def copy(cls, rt):
+        return cls(rt._res[:])
+    
+    @classmethod
+    def set_resource_types(cls, resourcetypes):
+        cls.type2pos = dict([(x[0], i) for i, x in enumerate(resourcetypes)])
+        cls.descriptions = dict([(i, x[2]) for i, x in enumerate(resourcetypes)])
+        cls.tuplelength = len(resourcetypes)
+
+    @classmethod
+    def create_empty(cls):
+        return cls([0 for x in range(cls.tuplelength)])
+        
+    def fits_in(self, res2):
+        fits = True
+        for i in xrange(len(self._res)):
+            if self._res[i] > res2._res[i]:
+                fits = False
+                break
+        return fits
+    
+    def get_num_fits_in(self, res2):
+        canfit = 10000 # Arbitrarily large
+        for i in xrange(len(self._res)):
+            if self._res[i] != 0:
+                f = res2._res[i] / self._res[i]
+                if f < canfit:
+                    canfit = f
+        return int(floor(canfit))
+    
+    def decr(self, res2):
+        for slottype in xrange(len(self._res)):
+            self._res[slottype] -= res2._res[slottype]
+
+    def incr(self, res2):
+        for slottype in xrange(len(self._res)):
+            self._res[slottype] += res2._res[slottype]
+        
+    def get_by_type(self, resourcetype):
+        return self._res[self.type2pos[resourcetype]]
+
+    def set_by_type(self, resourcetype, value):
+        self._res[self.type2pos[resourcetype]] = value        
+        
+    def is_zero_or_less(self):
+        return sum([v for v in self._res]) <= 0
+    
+    def __repr__(self):
+        r=""
+        for i, x in enumerate(self._res):
+            r += "%s:%.2f " % (self.descriptions[i], x)
+        return r
+
 
 class SlotTable(object):
     def __init__(self):
@@ -151,23 +247,8 @@ class SlotTable(object):
 
         return nodes
     
-    def get_utilization(self, time):
-        total = sum([n.capacity.get_by_type(constants.RES_CPU) for n in self.nodes.nodelist])
-        util = {}
-        reservations = self.getReservationsAt(time)
-        for r in reservations:
-            for node in r.resources_in_pnode:
-                if isinstance(r, ds.VMResourceReservation):
-                    use = r.resources_in_pnode[node].get_by_type(constants.RES_CPU)
-                    util[type(r)] = use + util.setdefault(type(r),0.0)
-                elif isinstance(r, ds.SuspensionResourceReservation) or isinstance(r, ds.ResumptionResourceReservation) or isinstance(r, ds.ShutdownResourceReservation):
-                    use = r.vmrr.resources_in_pnode[node].get_by_type(constants.RES_CPU)
-                    util[type(r)] = use + util.setdefault(type(r),0.0)
-        util[None] = total - sum(util.values())
-        for k in util:
-            util[k] /= total
-            
-        return util
+    def get_total_capacity(self, restype = constants.RES_CPU):
+        return sum([n.capacity.get_by_type(restype) for n in self.nodes.nodelist])        
 
     def getReservationsAt(self, time):
         item = KeyValueWrapper(time, None)
@@ -214,8 +295,9 @@ class SlotTable(object):
     
     # ONLY for simulation
     def getNextPrematureEnd(self, after):
+        from haizea.resourcemanager.scheduler.vm_scheduler import VMResourceReservation
         # Inefficient, but ok since this query seldom happens
-        res = [i.value for i in self.reservationsByEnd if isinstance(i.value, ds.VMResourceReservation) and i.value.prematureend > after]
+        res = [i.value for i in self.reservationsByEnd if isinstance(i.value, VMResourceReservation) and i.value.prematureend > after]
         if len(res) > 0:
             prematureends = [r.prematureend for r in res]
             prematureends.sort()
@@ -225,7 +307,8 @@ class SlotTable(object):
     
     # ONLY for simulation
     def getPrematurelyEndingRes(self, t):
-        return [i.value for i in self.reservationsByEnd if isinstance(i.value, ds.VMResourceReservation) and i.value.prematureend == t]
+        from haizea.resourcemanager.scheduler.vm_scheduler import VMResourceReservation
+        return [i.value for i in self.reservationsByEnd if isinstance(i.value, VMResourceReservation) and i.value.prematureend == t]
 
     
     def get_reservations_starting_or_ending_after(self, after):

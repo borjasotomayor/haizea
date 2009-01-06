@@ -16,13 +16,13 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.datastruct import Lease
-from haizea.resourcemanager.deployment import DeploymentScheduler
+from haizea.resourcemanager.leases import Lease
+from haizea.resourcemanager.scheduler.preparation_schedulers import PreparationScheduler
 import haizea.common.constants as constants
 
-class UnmanagedDeploymentScheduler(DeploymentScheduler):
+class UnmanagedPreparationScheduler(PreparationScheduler):
     def __init__(self, slottable, resourcepool, deployment_enact):
-        DeploymentScheduler.__init__(self, slottable, resourcepool, deployment_enact)
+        PreparationScheduler.__init__(self, slottable, resourcepool, deployment_enact)
         self.handlers = {}
     
     # Add dummy disk images

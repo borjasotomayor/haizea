@@ -16,11 +16,10 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.resourcepool import Node
+from haizea.resourcemanager.scheduler.resourcepool import Node
 from haizea.resourcemanager.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
 from haizea.common.utils import get_config
 import haizea.common.constants as constants
-import haizea.resourcemanager.datastruct as ds
 from pysqlite2 import dbapi2 as sqlite
 import logging
 import commands

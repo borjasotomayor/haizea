@@ -34,17 +34,18 @@ This module provides the following classes:
 import haizea.resourcemanager.accounting as accounting
 import haizea.common.constants as constants
 import haizea.resourcemanager.enact as enact
-from haizea.resourcemanager.deployment.unmanaged import UnmanagedDeploymentScheduler
-from haizea.resourcemanager.deployment.imagetransfer import ImageTransferDeploymentScheduler
+from haizea.resourcemanager.scheduler.preparation_schedulers.unmanaged import UnmanagedPreparationScheduler
+from haizea.resourcemanager.scheduler.preparation_schedulers.imagetransfer import ImageTransferPreparationScheduler
 from haizea.resourcemanager.enact.opennebula import OpenNebulaResourcePoolInfo, OpenNebulaVMEnactment, OpenNebulaDummyDeploymentEnactment
 from haizea.resourcemanager.enact.simulated import SimulatedResourcePoolInfo, SimulatedVMEnactment, SimulatedDeploymentEnactment
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.frontends.rpc import RPCFrontend
-from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ImmediateLease, ResourceTuple
-from haizea.resourcemanager.scheduler import Scheduler
-from haizea.resourcemanager.slottable import SlotTable
-from haizea.resourcemanager.resourcepool import ResourcePool, ResourcePoolWithReusableImages
+from haizea.resourcemanager.leases import ARLease, BestEffortLease, ImmediateLease
+from haizea.resourcemanager.scheduler.lease_scheduler import LeaseScheduler
+from haizea.resourcemanager.scheduler.vm_scheduler import VMScheduler
+from haizea.resourcemanager.scheduler.slottable import SlotTable
+from haizea.resourcemanager.scheduler.resourcepool import ResourcePool, ResourcePoolWithReusableImages
 from haizea.resourcemanager.rpcserver import RPCServer
 from haizea.common.utils import abstract, round_datetime, Singleton
 
@@ -125,8 +126,8 @@ class ResourceManager(Singleton):
         deploy_enact = SimulatedDeploymentEnactment()
                 
         # Resource pool
-        deploy_type = self.config.get("lease-preparation")
-        if deploy_type == constants.DEPLOYMENT_TRANSFER:
+        preparation_type = self.config.get("lease-preparation")
+        if preparation_type == constants.PREPARATION_TRANSFER:
             if self.config.get("diskimage-reuse") == constants.REUSE_IMAGECACHES:
                 resourcepool = ResourcePoolWithReusableImages(info_enact, vm_enact, deploy_enact)
             else:
@@ -136,22 +137,20 @@ class ResourceManager(Singleton):
     
         # Slot table
         slottable = SlotTable()
+        for n in resourcepool.get_nodes() + resourcepool.get_aux_nodes():
+            slottable.add_node(n)
         
-        # Deployment scheduler
-        
-        if deploy_type == constants.DEPLOYMENT_UNMANAGED:
-            deployment_scheduler = UnmanagedDeploymentScheduler(slottable, resourcepool, deploy_enact)
-        elif deploy_type == constants.DEPLOYMENT_TRANSFER:
-            deployment_scheduler = ImageTransferDeploymentScheduler(slottable, resourcepool, deploy_enact)    
+        # Preparation scheduler
+        if preparation_type == constants.PREPARATION_UNMANAGED:
+            preparation_scheduler = UnmanagedPreparationScheduler(slottable, resourcepool, deploy_enact)
+        elif deploy_type == constants.PREPARATION_TRANSFER:
+            preparation_scheduler = ImageTransferPreparationScheduler(slottable, resourcepool, deploy_enact)    
     
-        # Scheduler
-        self.scheduler = Scheduler(slottable, resourcepool, deployment_scheduler)
-        
-        # TODO: Having the slot table contained in the deployment scheduler, and also
-        # in the "main" scheduler (which itself contains the same slot table) is far
-        # from ideal, although this is mostly a consequence of the Scheduler class
-        # being in need of some serious refactoring. This will be fixed (see Scheduler
-        # class comments for more details)
+        # VM Scheduler
+        vm_scheduler = VMScheduler(slottable, resourcepool)
+    
+        # Lease Scheduler
+        self.scheduler = LeaseScheduler(vm_scheduler, preparation_scheduler, slottable)
         
         # Lease request frontends
         if clock == constants.CLOCK_SIMULATED:

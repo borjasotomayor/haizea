@@ -18,7 +18,7 @@
 
 import logging
 
-class DeploymentScheduler(object):
+class PreparationScheduler(object):
     def __init__(self, slottable, resourcepool, deployment_enact):
         self.slottable = slottable
         self.resourcepool = resourcepool
@@ -26,5 +26,5 @@ class DeploymentScheduler(object):
         self.logger = logging.getLogger("DEPLOY")
 
         
-class DeploymentSchedException(Exception):
+class PreparationSchedException(Exception):
     pass

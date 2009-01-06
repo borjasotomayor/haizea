@@ -20,7 +20,7 @@ import haizea.common.constants as constants
 from haizea.common.utils import get_clock
 from haizea.resourcemanager.frontends import RequestFrontend
 import haizea.traces.readers as tracereaders
-from haizea.resourcemanager.datastruct import ARLease, BestEffortLease 
+from haizea.resourcemanager.leases import ARLease, BestEffortLease 
 import operator
 import logging
 

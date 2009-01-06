@@ -17,7 +17,8 @@
 # -------------------------------------------------------------------------- #
 
 from mx.DateTime import TimeDelta
-from haizea.resourcemanager.datastruct import Lease, ARLease, BestEffortLease, ResourceTuple
+from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease
+from haizea.resourcemanager.scheduler.slottable import ResourceTuple
 import haizea.common.constants as constants
 import haizea.traces.formats as formats
 
