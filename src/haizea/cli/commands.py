@@ -296,6 +296,6 @@ class haizea_convert_data(Command):
                 waitingtimes = stats.get_waiting_times()
                 slowdowns = stats.get_slowdowns()
                 for lease_id in waitingtimes:
-                    print ",".join(attrs + [`lease_id`, `waitingtimes[lease_id].seconds`, `slowdowns[lease_id]`])
+                    print ",".join([attrs, `lease_id`, `waitingtimes[lease_id].seconds`, `slowdowns[lease_id]`])
 
 
