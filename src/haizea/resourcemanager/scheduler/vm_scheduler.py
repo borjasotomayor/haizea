@@ -457,6 +457,24 @@ class VMScheduler(object):
         for migr_rr in migr_rrs:
             vmrr.pre_rrs.insert(0, migr_rr)
 
+    def preempt(self, vmrr, t):
+        # Save original start and end time of the vmrr
+        old_start = vmrr.start
+        old_end = vmrr.end
+        self.__schedule_suspension(vmrr, t)
+        self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
+        for susprr in vmrr.post_rrs:
+            self.slottable.addReservation(susprr)
+        
+        
+        
+    def can_suspend_at(self, lease, t):
+        # TODO: Make more general, should determine vmrr based on current time
+        vmrr = lease.get_last_vmrr()
+        time_until_suspend = t - vmrr.start
+        min_duration = self.__compute_scheduling_threshold(lease)
+        can_suspend = time_until_suspend >= min_duration        
+        return can_suspend
 
 
     def can_reserve_besteffort_in_future(self):

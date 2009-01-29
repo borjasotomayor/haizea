@@ -430,9 +430,7 @@ class LeaseScheduler(object):
             if susptype == constants.SUSPENSION_NONE:
                 must_cancel_and_requeue = True
             else:
-                time_until_suspend = preemption_time - vmrr.start
-                min_duration = self.__compute_scheduling_threshold(lease)
-                can_suspend = time_until_suspend >= min_duration        
+                can_suspend = self.vm_scheduler.can_suspend_at(lease, preemption_time)
                 if not can_suspend:
                     self.logger.debug("Suspending the lease does not meet scheduling threshold.")
                     must_cancel_and_requeue = True
@@ -462,14 +460,7 @@ class LeaseScheduler(object):
             get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
         else:
             self.logger.info("... lease #%i will be suspended at %s." % (lease.id, preemption_time))
-            # Save original start and end time of the vmrr
-            old_start = vmrr.start
-            old_end = vmrr.end
-            self.__schedule_suspension(vmrr, preemption_time)
-            self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
-            for susprr in vmrr.post_rrs:
-                self.slottable.addReservation(susprr)
-            
+            self.vm_scheduler.preempt(vmrr, preemption_time)            
             
         self.logger.vdebug("Lease after preemption:")
         lease.print_contents()
