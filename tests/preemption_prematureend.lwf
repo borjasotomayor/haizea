@@ -1,0 +1,5 @@
+# Name: PREEMPT-PREMATUREEND
+# Description: Same as PREEMPT, but with 
+# premature end time for the best-effort lease.
+0   -1   3600 2700 1 1 1024 0 foobar.img 1024
+900 1800 900  900  4 1 1024 0 foobar.img 1024
