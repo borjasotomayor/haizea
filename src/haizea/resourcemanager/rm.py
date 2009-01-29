@@ -186,23 +186,23 @@ class ResourceManager(Singleton):
         # No deployment in OpenNebula. Using dummy one for now.
         deploy_enact = OpenNebulaDummyDeploymentEnactment()
             
-        # Slot table
-        slottable = SlotTable()
-
         # Resource pool
         resourcepool = ResourcePool(info_enact, vm_enact, deploy_enact)
 
+        # Slot table
+        slottable = SlotTable()
+        for n in resourcepool.get_nodes() + resourcepool.get_aux_nodes():
+            slottable.add_node(n)
+
+
         # Deployment module
-        deployment = UnmanagedDeploymentScheduler(slottable, resourcepool, deploy_enact)
+        preparation_scheduler = UnmanagedPreparationScheduler(slottable, resourcepool, deploy_enact)
 
-        # Scheduler
-        self.scheduler = Scheduler(slottable, resourcepool, deployment)
-
-        # TODO: Having the slot table contained in the deployment scheduler, and also
-        # in the "main" scheduler (which itself contains the same slot table) is far
-        # from ideal, although this is mostly a consequence of the Scheduler class
-        # being in need of some serious refactoring. This will be fixed (see Scheduler
-        # class comments for more details)
+        # VM Scheduler
+        vm_scheduler = VMScheduler(slottable, resourcepool)
+    
+        # Lease Scheduler
+        self.scheduler = LeaseScheduler(vm_scheduler, preparation_scheduler, slottable)
 
         # Lease request frontends
         self.frontends = [OpenNebulaFrontend(self)]        

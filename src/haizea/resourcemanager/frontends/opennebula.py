@@ -47,16 +47,20 @@ class OpenNebulaVM(object):
     
     def __init__(self, db_entry, attrs):
         self.db_entry = db_entry
-        self.attrs = attrs
+        
+        self.attrs = dict(attrs)
+        
+        # In OpenNebula 1.2, there can be more than one disk attribute
+        self.attrs[OpenNebulaVM.ONE_DISK] = [value for name, value in attrs if name == OpenNebulaVM.ONE_DISK]
         
         # If there is no HAIZEA parameter, the default is to treat the
         # request as an immediate request with unlimited duration
-        if not attrs.has_key(OpenNebulaVM.HAIZEA_PARAM):
+        if not self.attrs.has_key(OpenNebulaVM.HAIZEA_PARAM):
             self.haizea_param = {OpenNebulaVM.HAIZEA_START: OpenNebulaVM.HAIZEA_START_NOW,
                             OpenNebulaVM.HAIZEA_DURATION: OpenNebulaVM.HAIZEA_DURATION_UNLIMITED,
                             OpenNebulaVM.HAIZEA_PREEMPTIBLE: OpenNebulaVM.HAIZEA_PREEMPTIBLE_NO}
         else:
-            self.haizea_param = self.__get_vector_value(attrs[OpenNebulaVM.HAIZEA_PARAM])
+            self.haizea_param = self.__get_vector_value(self.attrs[OpenNebulaVM.HAIZEA_PARAM])
 
         
     def is_grouped(self):
@@ -103,7 +107,7 @@ class OpenNebulaVM(object):
         return UNIX2DateTime(self.db_entry["stime"])
     
     def get_diskimage(self):
-        disk = self.__get_vector_value(self.attrs[OpenNebulaVM.ONE_DISK])
+        disk = self.__get_vector_value(self.attrs[OpenNebulaVM.ONE_DISK][0])
         diskimage = disk[OpenNebulaVM.ONE_DISK_SOURCE]
         return diskimage
     
@@ -120,7 +124,7 @@ class OpenNebulaVM(object):
         return int(self.db_entry["oid"])
 
     def __get_vector_value(self, value):
-        return dict([n.split("=") for n in value.split(",")])
+        return dict([n.split("=") for n in value.split("@^_^@")])
         
     
 class OpenNebulaFrontend(RequestFrontend):    
@@ -137,15 +141,15 @@ class OpenNebulaFrontend(RequestFrontend):
     def get_accumulated_requests(self):
         cur = self.conn.cursor()
         processed = ",".join([`p` for p in self.processed])
-        cur.execute("select * from vmpool where state=1 and oid not in (%s)" % processed)
+        cur.execute("select * from vm_pool where state=1 and oid not in (%s)" % processed)
         db_opennebula_vms = cur.fetchall()
         
         # Extract the pending OpenNebula VMs
         opennebula_vms = [] # (ONE VM, ONE VM template attributes, ONE Haizea parameter)
         for vm in db_opennebula_vms:
-            cur.execute("select * from vm_template where id=%i" % vm["oid"])
+            cur.execute("select * from vm_attributes where id=%i" % vm["oid"])
             template = cur.fetchall()
-            attrs = dict([(r["name"], r["value"]) for r in template])
+            attrs = [(r["name"], r["value"]) for r in template]
             self.processed.append(vm["oid"])
             
             opennebula_vms.append(OpenNebulaVM(vm, attrs))

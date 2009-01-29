@@ -17,6 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 from haizea.resourcemanager.scheduler.resourcepool import Node
+from haizea.resourcemanager.scheduler.slottable import ResourceTuple
 from haizea.resourcemanager.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
 from haizea.common.utils import get_config
 import haizea.common.constants as constants
@@ -40,13 +41,13 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
         
         self.nodes = []
         cur = conn.cursor()
-        cur.execute("select hid, host_name from hostpool where state != 4")
+        cur.execute("select oid, host_name from host_pool where state != 4")
         hosts = cur.fetchall()
         for (i, host) in enumerate(hosts):
             nod_id = i+1
-            enactID = int(host["hid"])
+            enactID = int(host["oid"])
             hostname = host["host_name"]
-            capacity = ds.ResourceTuple.create_empty()
+            capacity = ResourceTuple.create_empty()
             capacity.set_by_type(constants.RES_DISK, 80000) # OpenNebula currently doesn't provide this
             capacity.set_by_type(constants.RES_NETIN, 100) # OpenNebula currently doesn't provide this
             capacity.set_by_type(constants.RES_NETOUT, 100) # OpenNebula currently doesn't provide this
@@ -170,7 +171,7 @@ class OpenNebulaVMEnactment(VMEnactment):
             # Unpack action
             vmid = action.vnodes[vnode].enactment_info
             cur = self.conn.cursor()
-            cur.execute("select state from vmpool where oid = %i" % vmid)
+            cur.execute("select state from vm_pool where oid = %i" % vmid)
             onevm = cur.fetchone()        
             state = onevm["state"]
             if state == 5:
@@ -187,7 +188,7 @@ class OpenNebulaVMEnactment(VMEnactment):
             # Unpack action
             vmid = action.vnodes[vnode].enactment_info
             cur = self.conn.cursor()
-            cur.execute("select state from vmpool where oid = %i" % vmid)
+            cur.execute("select state from vm_pool where oid = %i" % vmid)
             onevm = cur.fetchone()        
             state = onevm["state"]
             if state == 3:
