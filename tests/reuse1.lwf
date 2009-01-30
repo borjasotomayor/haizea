@@ -1,0 +1,7 @@
+# Name: REUSE-1
+# Description: Two lease requests, both requiring the same
+#   disk image. The second (best-effort) should be able to avoid 
+#   doing an image transfer by reusing the cached image from the 
+#   first (AR) request.
+0     900  900  900 1 1 1024 0 foobar.img 1024
+2700   -1  900  900 1 1 1024 0 foobar.img 1024

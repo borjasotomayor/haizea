@@ -1,0 +1,10 @@
+# Name: REUSE-2
+# Description: The first two lease requests are AR leases happening
+#   at the same time, but with different images. The third one is
+#   a best-effort one, using the image from the second AR request
+#   (which should be scheduled on nodes P3, P4). The scheduler should
+#   prefer scheduling the best-effort lease on P3, P4 since it
+#   avoids an image transfer.
+0     900  900  900 2 1 1024 0 foobar1.img 1024
+0     900  900  900 2 1 1024 0 foobar2.img 1024
+2700   -1  900  900 1 1 1024 0 foobar2.img 1024

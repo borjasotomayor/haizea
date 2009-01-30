@@ -1,0 +1,11 @@
+# Name: WAIT
+# Description: All best-effort requests, all of which (except the first)
+# will have to wait in the queue before starting.
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
+#0    -1   900  900  4 1 1024 0 foobar.img 1024
