@@ -143,7 +143,7 @@ class ResourceManager(Singleton):
         # Preparation scheduler
         if preparation_type == constants.PREPARATION_UNMANAGED:
             preparation_scheduler = UnmanagedPreparationScheduler(slottable, resourcepool, deploy_enact)
-        elif deploy_type == constants.PREPARATION_TRANSFER:
+        elif preparation_type == constants.PREPARATION_TRANSFER:
             preparation_scheduler = ImageTransferPreparationScheduler(slottable, resourcepool, deploy_enact)    
     
         # VM Scheduler

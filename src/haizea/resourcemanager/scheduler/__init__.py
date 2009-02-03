@@ -21,7 +21,7 @@ class SchedException(Exception):
     """A simple exception class used for scheduling exceptions"""
     pass
 
-class NotSchedulableException(Exception):
+class NotSchedulableException(SchedException):
     """A simple exception class used when a lease cannot be scheduled
     
     This exception must be raised when a lease cannot be scheduled
@@ -30,7 +30,7 @@ class NotSchedulableException(Exception):
     """
     pass
 
-class CriticalSchedException(Exception):
+class CriticalSchedException(SchedException):
     """A simple exception class used for critical scheduling exceptions
     
     This exception must be raised when a non-recoverable error happens
@@ -39,13 +39,16 @@ class CriticalSchedException(Exception):
     """
     pass
 
-class RescheduleLeaseException(Exception):
+class PreparationSchedException(SchedException):
     pass
 
 class CancelLeaseException(Exception):
     pass
 
 class NormalEndLeaseException(Exception):
+    pass
+
+class RescheduleLeaseException(SchedException):
     pass
 
 

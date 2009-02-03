@@ -22,7 +22,7 @@ from haizea.resourcemanager.scheduler.slottable import SlotTable, SlotFittingExc
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease, ImmediateLease
 from haizea.resourcemanager.scheduler.slottable import ResourceReservation, ResourceTuple
 from haizea.resourcemanager.scheduler.resourcepool import ResourcePool, ResourcePoolWithReusableImages
-from haizea.resourcemanager.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException
+from haizea.resourcemanager.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, CriticalSchedException
 from operator import attrgetter, itemgetter
 from mx.DateTime import TimeDelta
 
@@ -216,7 +216,7 @@ class VMScheduler(object):
         numnodes = lease.numnodes
         requested_resources = lease.requested_resources
         preemptible = lease.preemptible
-        mustresume = (lease.state == Lease.STATE_SUSPENDED)
+        mustresume = (lease.get_state() == Lease.STATE_SUSPENDED_QUEUED)
         shutdown_time = self.__estimate_shutdown_time(lease)
         susptype = get_config().get("suspension")
         if susptype == constants.SUSPENSION_NONE or (susptype == constants.SUSPENSION_SERIAL and lease.numnodes == 1):
@@ -788,7 +788,7 @@ class VMScheduler(object):
             susp_overhead = self.__estimate_suspend_time(lease)
             safe_duration = susp_overhead
             
-            if lease.state == Lease.STATE_SUSPENDED:
+            if lease.get_state() == Lease.STATE_SUSPENDED_QUEUED:
                 resm_overhead = self.__estimate_resume_time(lease)
                 safe_duration += resm_overhead
             
@@ -991,7 +991,7 @@ class VMScheduler(object):
         leases = []
         vmrrs = self.slottable.get_next_reservations_in_nodes(nexttime, nodes, rr_type=VMResourceReservation, immediately_next=True)
         leases = set([rr.lease for rr in vmrrs])
-        leases = [l for l in leases if isinstance(l, BestEffortLease) and l.state in (Lease.STATE_SUSPENDED,Lease.STATE_READY) and not l in checkedleases]
+        leases = [l for l in leases if isinstance(l, BestEffortLease) and l.get_state() in (Lease.STATE_SUSPENDED_SCHEDULED, Lease.STATE_READY) and not l in checkedleases]
         for lease in leases:
             self.logger.debug("Found lease %i" % l.id)
             l.print_contents()
@@ -1010,7 +1010,7 @@ class VMScheduler(object):
         old_start = vmrr.start
         old_end = vmrr.end
         nodes = vmrr.nodes.values()
-        if lease.state == Lease.STATE_SUSPENDED:
+        if lease.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
             originalstart = vmrr.pre_rrs[0].start
         else:
             originalstart = vmrr.start
@@ -1031,7 +1031,7 @@ class VMScheduler(object):
             pass
         else:
             diff = originalstart - newstart
-            if lease.state == Lease.STATE_SUSPENDED:
+            if lease.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
                 resmrrs = [r for r in vmrr.pre_rrs if isinstance(r, ResumptionResourceReservation)]
                 for resmrr in resmrrs:
                     resmrr_old_start = resmrr.start
@@ -1076,8 +1076,9 @@ class VMScheduler(object):
     def _handle_start_vm(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleStartVM" % l.id)
         l.print_contents()
-        if l.state == Lease.STATE_READY:
-            l.state = Lease.STATE_ACTIVE
+        lease_state = l.get_state()
+        if lease_state == Lease.STATE_READY:
+            l.set_state(Lease.STATE_ACTIVE)
             rr.state = ResourceReservation.STATE_ACTIVE
             now_time = get_clock().get_time()
             l.start.actual = now_time
@@ -1091,11 +1092,14 @@ class VMScheduler(object):
             except Exception, e:
                 self.logger.error("ERROR when starting VMs.")
                 raise
-        elif l.state == Lease.STATE_RESUMED_READY:
-            l.state = Lease.STATE_ACTIVE
+        elif lease_state == Lease.STATE_RESUMED_READY:
+            l.set_state(Lease.STATE_ACTIVE)
             rr.state = ResourceReservation.STATE_ACTIVE
             # No enactment to do here, since all the suspend/resume actions are
             # handled during the suspend/resume RRs
+        else:
+            raise CriticalSchedException, "Lease is an inconsistent state (tried to start VM when state is %s)" % Lease.state_str[lease_state]
+        
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleStartVM" % l.id)
         self.logger.info("Started VMs for lease %i on nodes %s" % (l.id, rr.nodes.values()))
@@ -1156,7 +1160,7 @@ class VMScheduler(object):
             pnode = rr.vmrr.nodes[vnode]
             l.memimagemap[vnode] = pnode
         if rr.is_first():
-            l.state = Lease.STATE_SUSPENDING
+            l.set_state(Lease.STATE_SUSPENDING)
             l.print_contents()
             self.logger.info("Suspending lease %i..." % (l.id))
         self.logger.debug("LEASE-%i End of handleStartSuspend" % l.id)
@@ -1168,12 +1172,12 @@ class VMScheduler(object):
         self.resourcepool.verify_suspend(l, rr)
         rr.state = ResourceReservation.STATE_DONE
         if rr.is_last():
-            l.state = Lease.STATE_SUSPENDED
+            l.set_state(Lease.STATE_SUSPENDED_PENDING)
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleEndSuspend" % l.id)
         self.logger.info("Lease %i suspended." % (l.id))
         
-        if l.state == Lease.STATE_SUSPENDED:
+        if l.get_state() == Lease.STATE_SUSPENDED_PENDING:
             raise RescheduleLeaseException
 
     def _handle_start_resume(self, l, rr):
@@ -1182,7 +1186,7 @@ class VMScheduler(object):
         self.resourcepool.resume_vms(l, rr)
         rr.state = ResourceReservation.STATE_ACTIVE
         if rr.is_first():
-            l.state = Lease.STATE_RESUMING
+            l.set_state(Lease.STATE_RESUMING)
             l.print_contents()
             self.logger.info("Resuming lease %i..." % (l.id))
         self.logger.debug("LEASE-%i End of handleStartResume" % l.id)
@@ -1194,7 +1198,7 @@ class VMScheduler(object):
         self.resourcepool.verify_resume(l, rr)
         rr.state = ResourceReservation.STATE_DONE
         if rr.is_last():
-            l.state = Lease.STATE_RESUMED_READY
+            l.set_state(Lease.STATE_RESUMED_READY)
             self.logger.info("Resumed lease %i" % (l.id))
         for vnode, pnode in rr.vmrr.nodes.items():
             self.resourcepool.remove_ramfile(pnode, l.id, vnode)

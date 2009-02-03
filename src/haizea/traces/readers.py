@@ -57,7 +57,6 @@ def SWF(tracefile, config):
                     realdur = maxdur
                 preemptible = True
                 req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, preemptible, realdur)
-                req.state = Lease.STATE_NEW
                 requests.append(req)
     return requests
 
@@ -100,6 +99,5 @@ def LWF(tracefile, inittime):
         else:
             preemptible = False
             req = ARLease(tSubmit, tStart, duration, vmimage, vmimagesize, numnodes, resreq, preemptible, realduration)
-        req.state = Lease.STATE_NEW
         requests.append(req)
     return requests

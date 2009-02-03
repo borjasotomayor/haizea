@@ -17,6 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 import logging
+from haizea.common.utils import abstract
 
 class PreparationScheduler(object):
     def __init__(self, slottable, resourcepool, deployment_enact):
@@ -25,6 +26,8 @@ class PreparationScheduler(object):
         self.deployment_enact = deployment_enact
         self.logger = logging.getLogger("DEPLOY")
 
+    def is_ready(self, lease):
+        abstract()
         
 class PreparationSchedException(Exception):
     pass

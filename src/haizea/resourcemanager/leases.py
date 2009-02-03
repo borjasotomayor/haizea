@@ -58,12 +58,14 @@ class Lease(object):
     STATE_READY = 7
     STATE_ACTIVE = 8
     STATE_SUSPENDING = 9
-    STATE_SUSPENDED = 10
-    STATE_MIGRATING = 11
-    STATE_RESUMING = 12
-    STATE_RESUMED_READY = 13
-    STATE_DONE = 14
-    STATE_FAIL = 15
+    STATE_SUSPENDED_PENDING = 10
+    STATE_SUSPENDED_QUEUED = 11
+    STATE_SUSPENDED_SCHEDULED = 12
+    STATE_MIGRATING = 13
+    STATE_RESUMING = 14
+    STATE_RESUMED_READY = 15
+    STATE_DONE = 16
+    STATE_FAIL = 17
     
     state_str = {STATE_NEW : "New",
                  STATE_PENDING : "Pending",
@@ -75,7 +77,9 @@ class Lease(object):
                  STATE_READY : "Ready",
                  STATE_ACTIVE : "Active",
                  STATE_SUSPENDING : "Suspending",
-                 STATE_SUSPENDED : "Suspended",
+                 STATE_SUSPENDED_PENDING : "Suspended-Pending",
+                 STATE_SUSPENDED_QUEUED : "Suspended-Queued",
+                 STATE_SUSPENDED_SCHEDULED : "Suspended-Scheduled",
                  STATE_MIGRATING : "Migrating",
                  STATE_RESUMING : "Resuming",
                  STATE_RESUMED_READY: "Resumed-Ready",
@@ -102,7 +106,7 @@ class Lease(object):
 
         # Bookkeeping attributes
         # (keep track of the lease's state, resource reservations, etc.)
-        self.state = Lease.STATE_NEW
+        self.state = LeaseStateMachine()
         self.diskimagemap = {}
         self.memimagemap = {}
         self.deployment_rrs = []
@@ -114,11 +118,17 @@ class Lease(object):
         
         self.logger = logging.getLogger("LEASES")
         
+    def get_state(self):
+        return self.state.get_state()
+    
+    def set_state(self, state):
+        self.state.change_state(state)
+        
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         self.logger.log(loglevel, "Lease ID       : %i" % self.id)
         self.logger.log(loglevel, "Submission time: %s" % self.submit_time)
         self.logger.log(loglevel, "Duration       : %s" % self.duration)
-        self.logger.log(loglevel, "State          : %s" % Lease.state_str[self.state])
+        self.logger.log(loglevel, "State          : %s" % Lease.state_str[self.get_state()])
         self.logger.log(loglevel, "Disk image     : %s" % self.diskimage_id)
         self.logger.log(loglevel, "Disk image size: %s" % self.diskimage_size)
         self.logger.log(loglevel, "Num nodes      : %s" % self.numnodes)
@@ -188,53 +198,70 @@ class Lease(object):
         l["numnodes"] = self.numnodes
         l["resources"] = `self.requested_resources`
         l["preemptible"] = self.preemptible
-        l["state"] = self.state
+        l["state"] = self.get_state()
         l["vm_rrs"] = [vmrr.xmlrpc_marshall() for vmrr in self.vm_rrs]
                 
         return l
         
 class LeaseStateMachine(StateMachine):
     initial_state = Lease.STATE_NEW
-    transitions = {Lease.STATE_NEW:           [(Lease.STATE_PENDING,    "")],
-                   Lease.STATE_PENDING:       [(Lease.STATE_SCHEDULED,  ""),
-                                               (Lease.STATE_QUEUED,     ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_REJECTED,   "")],
-                   Lease.STATE_SCHEDULED:     [(Lease.STATE_PREPARING,  ""),
-                                               (Lease.STATE_READY,      ""),
-                                               (Lease.STATE_MIGRATING,  ""),
-                                               (Lease.STATE_RESUMING,   ""),
-                                               (Lease.STATE_CANCELLED,  "")],
-                   Lease.STATE_QUEUED:        [(Lease.STATE_SCHEDULED,  ""),
-                                               (Lease.STATE_SUSPENDED,  ""),
-                                               (Lease.STATE_CANCELLED,  "")],
-                   Lease.STATE_PREPARING:     [(Lease.STATE_READY,      ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_FAIL,       "")],
-                   Lease.STATE_READY:         [(Lease.STATE_ACTIVE,     ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_FAIL,       "")],
-                   Lease.STATE_ACTIVE:        [(Lease.STATE_SUSPENDING, ""),
-                                               (Lease.STATE_DONE,       ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_FAIL,       "")],
-                   Lease.STATE_SUSPENDING:    [(Lease.STATE_SUSPENDED,  ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_FAIL,       "")],
-                   Lease.STATE_SUSPENDED:     [(Lease.STATE_QUEUED,     ""),
-                                               (Lease.STATE_MIGRATING,  ""),
-                                               (Lease.STATE_RESUMING,   ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_FAIL,       "")],
-                   Lease.STATE_MIGRATING:     [(Lease.STATE_SUSPENDED,  ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_FAIL,       "")],
-                   Lease.STATE_RESUMING:      [(Lease.STATE_RESUMED_READY, ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_FAIL,       "")],
-                   Lease.STATE_RESUMED_READY: [(Lease.STATE_ACTIVE,     ""),
-                                               (Lease.STATE_CANCELLED,  ""),
-                                               (Lease.STATE_FAIL,       "")],
+    transitions = {Lease.STATE_NEW:                 [(Lease.STATE_PENDING,    "")],
+                   
+                   Lease.STATE_PENDING:             [(Lease.STATE_SCHEDULED,  ""),
+                                                     (Lease.STATE_QUEUED,     ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_REJECTED,   "")],
+                                                     
+                   Lease.STATE_SCHEDULED:           [(Lease.STATE_PREPARING,  ""),
+                                                     (Lease.STATE_READY,      ""),
+                                                     (Lease.STATE_CANCELLED,  "")],
+                                                     
+                   Lease.STATE_QUEUED:              [(Lease.STATE_SCHEDULED,  ""),
+                                                     (Lease.STATE_CANCELLED,  "")],
+                                                     
+                   Lease.STATE_PREPARING:           [(Lease.STATE_READY,      ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_READY:               [(Lease.STATE_ACTIVE,     ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_ACTIVE:              [(Lease.STATE_SUSPENDING, ""),
+                                                     (Lease.STATE_DONE,       ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_SUSPENDING:          [(Lease.STATE_SUSPENDED_PENDING,  ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_SUSPENDED_PENDING:   [(Lease.STATE_SUSPENDED_QUEUED,     ""),
+                                                     (Lease.STATE_SUSPENDED_SCHEDULED,  ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_SUSPENDED_QUEUED:    [(Lease.STATE_SUSPENDED_QUEUED,     ""),
+                                                     (Lease.STATE_SUSPENDED_SCHEDULED,  ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_SUSPENDED_SCHEDULED: [(Lease.STATE_MIGRATING,  ""),
+                                                     (Lease.STATE_RESUMING,   ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_MIGRATING:           [(Lease.STATE_SUSPENDED_SCHEDULED,  ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_RESUMING:            [(Lease.STATE_RESUMED_READY, ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
+                                                     
+                   Lease.STATE_RESUMED_READY:       [(Lease.STATE_ACTIVE,     ""),
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
                    
                    # Final states
                    Lease.STATE_DONE:          [],
@@ -244,7 +271,7 @@ class LeaseStateMachine(StateMachine):
                    }
     
     def __init__(self):
-        StateMachine.__init__(initial_state, transitions)
+        StateMachine.__init__(self, LeaseStateMachine.initial_state, LeaseStateMachine.transitions, Lease.state_str)
         
 class ARLease(Lease):
     def __init__(self, submit_time, start, duration, diskimage_id, 

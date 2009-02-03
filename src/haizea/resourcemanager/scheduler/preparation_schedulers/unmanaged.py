@@ -27,11 +27,13 @@ class UnmanagedPreparationScheduler(PreparationScheduler):
     
     # Add dummy disk images
     def schedule(self, lease, vmrr, nexttime):
-        lease.state = Lease.STATE_READY
         for (vnode, pnode) in vmrr.nodes.items():
             self.resourcepool.add_diskimage(pnode, lease.diskimage_id, lease.diskimage_size, lease.id, vnode)
             
-    def find_earliest_starting_times(self, lease_req, nexttime):
+    def is_ready(self, lease):
+        return True
+    
+    def find_earliest_starting_times(self, lease, nexttime):
         nod_ids = [n.nod_id for n in self.resourcepool.get_nodes()]
         earliest = dict([(node, [nexttime, constants.REQTRANSFER_NO, None]) for node in nod_ids])
         return earliest

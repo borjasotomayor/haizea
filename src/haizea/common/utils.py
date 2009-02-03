@@ -127,5 +127,28 @@ def get_clock():
     from haizea.resourcemanager.rm import ResourceManager
     return ResourceManager.get_singleton().clock
 
-class StateMachine(object):
+class InvalidStateMachineTransition(Exception):
     pass
+
+class StateMachine(object):
+    def __init__(self, initial_state, transitions, state_str = None):
+        self.state = initial_state
+        self.transitions = transitions
+        self.state_str = state_str
+
+    def change_state(self, new_state):
+        valid_next_states = [x[0] for x in self.transitions[self.state]]
+        if new_state in valid_next_states:
+            self.state = new_state
+        else:
+            raise InvalidStateMachineTransition, "Invalid transition. State is %s, wanted to change to %s, can only change to %s" % (self.get_state_str(self.state), self.get_state_str(new_state), [self.get_state_str(x) for x in valid_next_states])
+        
+    def get_state(self):
+        return self.state
+    
+    def get_state_str(self, state):
+        if self.state_str == None:
+            return "%s" % state
+        else:
+            return self.state_str[state]
+                                             

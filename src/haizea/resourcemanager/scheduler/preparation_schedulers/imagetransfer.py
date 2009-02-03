@@ -22,12 +22,15 @@ from haizea.resourcemanager.scheduler.slottable import ResourceReservation
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease
 from haizea.resourcemanager.scheduler import ReservationEventHandler
 from haizea.common.utils import estimate_transfer_time, get_config
+from haizea.resourcemanager.scheduler.slottable import ResourceTuple
+from haizea.resourcemanager.scheduler import ReservationEventHandler, PreparationSchedException
+
 
 import copy
 
 class ImageTransferPreparationScheduler(PreparationScheduler):
     def __init__(self, slottable, resourcepool, deployment_enact):
-        DeploymentScheduler.__init__(self, slottable, resourcepool, deployment_enact)
+        PreparationScheduler.__init__(self, slottable, resourcepool, deployment_enact)
         
         # TODO: The following two should be merged into
         # something like this:
@@ -51,8 +54,8 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         self.handlers ={}
         self.handlers[FileTransferResourceReservation] = ReservationEventHandler(
                                 sched    = self,
-                                on_start = ImageTransferDeploymentScheduler.handle_start_filetransfer,
-                                on_end   = ImageTransferDeploymentScheduler.handle_end_filetransfer)
+                                on_start = ImageTransferPreparationScheduler.handle_start_filetransfer,
+                                on_end   = ImageTransferPreparationScheduler.handle_end_filetransfer)
 
     def schedule(self, lease, vmrr, nexttime):
         if isinstance(lease, ARLease):
@@ -64,13 +67,14 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         if isinstance(lease, BestEffortLease):
             self.__remove_from_fifo_transfers(lease.id)
         
+    def is_ready(self, lease):
+        return False        
+        
     def schedule_for_ar(self, lease, vmrr, nexttime):
         config = get_config()
         mechanism = config.get("transfer-mechanism")
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
-        
-        lease.state = Lease.STATE_SCHEDULED
         
         if avoidredundant:
             pass # TODO
@@ -96,7 +100,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
                 musttransfer[vnode] = pnode
 
         if len(musttransfer) == 0:
-            lease.state = Lease.STATE_READY
+            lease.set_state(Lease.STATE_READY)
         else:
             if mechanism == constants.TRANSFER_UNICAST:
                 # Dictionary of transfer RRs. Key is the physical node where
@@ -116,7 +120,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
                 try:
                     filetransfer = self.schedule_imagetransfer_edf(lease, musttransfer, nexttime)
                     lease.append_deployrr(filetransfer)
-                except DeploymentSchedException, msg:
+                except PreparationSchedException, msg:
                     raise
  
         # No chance of scheduling exception at this point. It's safe
@@ -131,7 +135,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
         earliest = self.find_earliest_starting_times(lease, nexttime)
-        lease.state = Lease.STATE_SCHEDULED
+
         transferRRs = []
         musttransfer = {}
         piggybacking = []
@@ -158,20 +162,20 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         else:
             # TODO: Not strictly correct. Should mark the lease
             # as deployed when piggybacked transfers have concluded
-            lease.state = Lease.STATE_READY
+            lease.set_state(Lease.STATE_READY)
         if len(piggybacking) > 0: 
             endtimes = [t.end for t in piggybacking]
             if len(musttransfer) > 0:
                 endtimes.append(endtransfer)
             lease.imagesavail = max(endtimes)
         if len(musttransfer)==0 and len(piggybacking)==0:
-            lease.state = Lease.STATE_READY
+            lease.set_state(Lease.STATE_READY)
             lease.imagesavail = nexttime
         for rr in transferRRs:
             lease.append_deployrr(rr)
         
 
-    def find_earliest_starting_times(self, lease_req, nexttime):
+    def find_earliest_starting_times(self, lease, nexttime):
         nodIDs = [n.nod_id for n in self.resourcepool.get_nodes()]  
         config = get_config()
         mechanism = config.get("transfer-mechanism")
@@ -181,10 +185,10 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         # Figure out starting time assuming we have to transfer the image
         nextfifo = self.get_next_fifo_transfer_time(nexttime)
         
-        imgTransferTime=self.estimate_image_transfer_time(lease_req, self.imagenode_bandwidth)
+        imgTransferTime=self.estimate_image_transfer_time(lease, self.imagenode_bandwidth)
         
         # Find worst-case earliest start time
-        if lease_req.numnodes == 1:
+        if lease.numnodes == 1:
             startTime = nextfifo + imgTransferTime
             earliest = dict([(node, [startTime, constants.REQTRANSFER_YES]) for node in nodIDs])                
         else:
@@ -200,7 +204,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         
         # Check if we can reuse images
         if reusealg==constants.REUSE_IMAGECACHES:
-            nodeswithimg = self.resourcepool.get_nodes_with_reusable_image(lease_req.diskimage_id)
+            nodeswithimg = self.resourcepool.get_nodes_with_reusable_image(lease.diskimage_id)
             for node in nodeswithimg:
                 earliest[node] = [nexttime, constants.REQTRANSFER_COWPOOL]
         
@@ -214,7 +218,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
                 # We can only piggyback on transfers that haven't started yet
                 transfers = [t for t in self.transfers_fifo if t.state == ResourceReservation.STATE_SCHEDULED]
                 for t in transfers:
-                    if t.file == lease_req.diskimage_id:
+                    if t.file == lease.diskimage_id:
                         startTime = t.end
                         if startTime > nexttime:
                             for n in earliest:
@@ -240,9 +244,9 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         newtransfers = transfermap.keys()
         
         res = {}
-        resimgnode = ds.ResourceTuple.create_empty()
+        resimgnode = ResourceTuple.create_empty()
         resimgnode.set_by_type(constants.RES_NETOUT, bandwidth)
-        resnode = ds.ResourceTuple.create_empty()
+        resnode = ResourceTuple.create_empty()
         resnode.set_by_type(constants.RES_NETIN, bandwidth)
         res[self.edf_node.nod_id] = resimgnode
         for n in vnodes.values():
@@ -292,7 +296,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             startTime = t.end
              
         if not fits:
-             raise DeploymentSchedException, "Adding this lease results in an unfeasible image transfer schedule."
+             raise PreparationSchedException, "Adding this lease results in an unfeasible image transfer schedule."
 
         # Push image transfers as close as possible to their deadlines. 
         feasibleEndTime=newtransfers[-1].deadline
@@ -341,9 +345,9 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             # Time to transfer is imagesize / bandwidth, regardless of 
             # number of nodes
             res = {}
-            resimgnode = ds.ResourceTuple.create_empty()
+            resimgnode = ResourceTuple.create_empty()
             resimgnode.set_by_type(constants.RES_NETOUT, bandwidth)
-            resnode = ds.ResourceTuple.create_empty()
+            resnode = ResourceTuple.create_empty()
             resnode.set_by_type(constants.RES_NETIN, bandwidth)
             res[self.fifo_node.nod_id] = resimgnode
             for n in reqtransfers.values():
@@ -403,10 +407,14 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
     def handle_start_filetransfer(sched, lease, rr):
         sched.logger.debug("LEASE-%i Start of handleStartFileTransfer" % lease.id)
         lease.print_contents()
-        if lease.state == Lease.STATE_SCHEDULED or lease.state == Lease.STATE_READY:
-            lease.state = Lease.STATE_PREPARING
+        lease_state = lease.get_state()
+        if lease_state == Lease.STATE_SCHEDULED or lease_state == Lease.STATE_READY:
+            lease.set_state(Lease.STATE_PREPARING)
             rr.state = ResourceReservation.STATE_ACTIVE
             # TODO: Enactment
+        else:
+            raise CriticalSchedException, "Lease is an inconsistent state (tried to start file transfer when state is %s)" % lease_state
+            
         lease.print_contents()
         sched.logger.debug("LEASE-%i End of handleStartFileTransfer" % lease.id)
         sched.logger.info("Starting image transfer for lease %i" % (lease.id))
@@ -415,28 +423,32 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
     def handle_end_filetransfer(sched, lease, rr):
         sched.logger.debug("LEASE-%i Start of handleEndFileTransfer" % lease.id)
         lease.print_contents()
-        if lease.state == Lease.STATE_PREPARING:
-            lease.state = Lease.STATE_READY
+        lease_state = lease.get_state()
+        if lease_state == Lease.STATE_PREPARING:
+            lease.set_state(Lease.STATE_READY)
             rr.state = ResourceReservation.STATE_DONE
             for physnode in rr.transfers:
                 vnodes = rr.transfers[physnode]
                 
-                # Update VM Image maps
-                for lease_id, v in vnodes:
-                    lease = sched.leases.get_lease(lease_id)
-                    lease.diskimagemap[v] = physnode
-                    
-                # Find out timeout of image. It will be the latest end time of all the
-                # leases being used by that image.
-                leases = [l for (l, v) in vnodes]
-                maxend=None
-                for lease_id in leases:
-                    l = sched.leases.get_lease(lease_id)
-                    end = lease.get_endtime()
-                    if maxend==None or end>maxend:
-                        maxend=end
+#                # Update VM Image maps
+#                for lease_id, v in vnodes:
+#                    lease = sched.leases.get_lease(lease_id)
+#                    lease.diskimagemap[v] = physnode
+#                    
+#                # Find out timeout of image. It will be the latest end time of all the
+#                # leases being used by that image.
+#                leases = [l for (l, v) in vnodes]
+#                maxend=None
+#                for lease_id in leases:
+#                    l = sched.leases.get_lease(lease_id)
+#                    end = lease.get_endtime()
+#                    if maxend==None or end>maxend:
+#                        maxend=end
+                maxend = None
                 # TODO: ENACTMENT: Verify the image was transferred correctly
-                sched.deployment_scheduler.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
+                sched.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
+        else:
+            raise CriticalSchedException, "Lease is an inconsistent state (tried to start file transfer when state is %s)" % lease_state
 
         lease.print_contents()
         sched.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id)
