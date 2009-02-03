@@ -268,7 +268,6 @@ class LeaseScheduler(object):
                 get_accounting().incr_counter(constants.COUNTER_ARACCEPTED, lease.id)
                 accepted = True
             except SchedException, msg:
-                raise
                 get_accounting().incr_counter(constants.COUNTER_ARREJECTED, lease.id)
                 self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease.id, msg))
 
@@ -337,11 +336,17 @@ class LeaseScheduler(object):
                     self.__preempt(l, preemption_time=vmrr.start)
 
             # Schedule deployment overhead
-            self.preparation_scheduler.schedule(lease, vmrr, nexttime)
+            deploy_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, nexttime)
             
             # Commit reservation to slot table
             # (we don't do this until the very end because the deployment overhead
             # scheduling could still throw an exception)
+            for rr in deploy_rrs:
+                lease.append_deployrr(rr)
+                
+            for rr in deploy_rrs:
+                self.slottable.addReservation(rr)
+                
             lease.append_vmrr(vmrr)
             self.slottable.addReservation(vmrr)
             
@@ -351,7 +356,7 @@ class LeaseScheduler(object):
                 
             lease.set_state(Lease.STATE_SCHEDULED)
 
-            if self.preparation_scheduler.is_ready(lease):
+            if is_ready:
                 lease.set_state(Lease.STATE_READY)
         except SchedException, msg:
             raise SchedException, "The requested AR lease is infeasible. Reason: %s" % msg
@@ -381,13 +386,19 @@ class LeaseScheduler(object):
             (vmrr, in_future) = self.vm_scheduler.fit_asap(lease, nexttime, earliest, allow_reservation_in_future = canreserve)
             
             # Schedule deployment
+            is_ready = False
+            deploy_rrs = []
             if lease_state == Lease.STATE_SUSPENDED_QUEUED:
                 self.vm_scheduler.schedule_migration(lease, vmrr, nexttime)
             else:
-                self.preparation_scheduler.schedule(lease, vmrr, nexttime)
+                deploy_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, nexttime)
 
             # At this point, the lease is feasible.
             # Commit changes by adding RRs to lease and to slot table
+            
+            # Add deployment RRs (if any) to lease
+            for rr in deploy_rrs:
+                lease.append_deployrr(rr)
             
             # Add VMRR to lease
             lease.append_vmrr(vmrr)
@@ -395,7 +406,9 @@ class LeaseScheduler(object):
 
             # Add resource reservations to slottable
             
-            # TODO: deployment RRs should be added here, not in the preparation scheduler
+            # Deployment RRs (if any)
+            for rr in deploy_rrs:
+                self.slottable.addReservation(rr)
             
             # Pre-VM RRs (if any)
             for rr in vmrr.pre_rrs:
@@ -413,7 +426,7 @@ class LeaseScheduler(object):
                 
             if lease_state == Lease.STATE_QUEUED:
                 lease.set_state(Lease.STATE_SCHEDULED)
-                if self.preparation_scheduler.is_ready(lease):
+                if is_ready:
                     lease.set_state(Lease.STATE_READY)
             elif lease_state == Lease.STATE_SUSPENDED_QUEUED:
                 lease.set_state(Lease.STATE_SUSPENDED_SCHEDULED)
@@ -524,6 +537,7 @@ class LeaseScheduler(object):
         l.set_state(Lease.STATE_DONE)
         l.duration.actual = l.duration.accumulated
         l.end = round_datetime(get_clock().get_time())
+        self.preparation_scheduler.cleanup(l)
         self.completedleases.add(l)
         self.leases.remove(l)
         if isinstance(l, BestEffortLease):

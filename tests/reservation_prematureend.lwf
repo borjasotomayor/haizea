@@ -4,5 +4,5 @@
 # expected. The scheduler should reschedule the second lease
 # (for which a reservation was made in the future)
 # since it can now start earlier
-0   -1   3600 1800 1 1 1024 0 foobar.img 1024
-900 -1   900  900  4 1 1024 0 foobar.img 1024
+0   -1   3600 1800 1 1 1024 0 foobar1.img 1024
+900 -1   900  900  4 1 1024 0 foobar2.img 1024

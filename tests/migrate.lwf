@@ -4,6 +4,6 @@
 #   one) to cold-migrate from nodes P3, P4 to nodes P1, P2
 #   (which become available earlier than expected due to the
 #   early end of the first AR lease)
-0    1800 3600 900  2 1 1024 0 foobar.img 1024
-0    0    3600 3600 2 1 1024 0 foobar.img 1024
-0    -1   3600 3600 2 1 1024 0 foobar.img 1024
+0    1800 3600 900  2 1 1024 0 foobar1.img 1024
+0    90   3600 3600 2 1 1024 0 foobar2.img 1024
+0    -1   3600 3600 2 1 1024 0 foobar3.img 1024

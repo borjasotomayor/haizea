@@ -25,8 +25,8 @@ class PreparationScheduler(object):
         self.resourcepool = resourcepool
         self.deployment_enact = deployment_enact
         self.logger = logging.getLogger("DEPLOY")
-
-    def is_ready(self, lease):
+        
+    def cleanup(self, lease):
         abstract()
         
 class PreparationSchedException(Exception):

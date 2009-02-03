@@ -3,5 +3,5 @@
 # single-node lease, while the second one is a short wide lease
 # using up all the nodes. With backfilling, the scheduler
 # should make a future reservation for the second lease.
-0   -1   3600 3600 1 1 1024 0 foobar.img 1024
-900 -1   900  900  4 1 1024 0 foobar.img 1024
+0   -1   3600 3600 1 1 1024 0 foobar1.img 1024
+900 -1   900  900  4 1 1024 0 foobar2.img 1024
