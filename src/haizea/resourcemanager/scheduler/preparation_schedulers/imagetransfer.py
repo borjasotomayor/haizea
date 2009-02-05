@@ -17,13 +17,13 @@
 # -------------------------------------------------------------------------- #
 
 import haizea.common.constants as constants
-from haizea.resourcemanager.scheduler.preparation_schedulers import PreparationScheduler, PreparationSchedException
+from haizea.resourcemanager.scheduler.preparation_schedulers import PreparationScheduler
 from haizea.resourcemanager.scheduler.slottable import ResourceReservation
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease
 from haizea.resourcemanager.scheduler import ReservationEventHandler
 from haizea.common.utils import estimate_transfer_time, get_config
 from haizea.resourcemanager.scheduler.slottable import ResourceTuple
-from haizea.resourcemanager.scheduler import ReservationEventHandler, PreparationSchedException, CriticalSchedException
+from haizea.resourcemanager.scheduler import ReservationEventHandler
 
 
 import copy
@@ -109,7 +109,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             elif mechanism == constants.TRANSFER_MULTICAST:
                 try:
                     filetransfer = self.schedule_imagetransfer_edf(lease, musttransfer, nexttime)
-                except PreparationSchedException, msg:
+                except NotSchedulableException, exc:
                     raise
  
         # No chance of scheduling exception at this point. It's safe
@@ -288,7 +288,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             startTime = t.end
              
         if not fits:
-             raise PreparationSchedException, "Adding this lease results in an unfeasible image transfer schedule."
+             raise NotSchedulableException, "Adding this lease results in an unfeasible image transfer schedule."
 
         # Push image transfers as close as possible to their deadlines. 
         feasibleEndTime=newtransfers[-1].deadline
@@ -403,7 +403,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             rr.state = ResourceReservation.STATE_ACTIVE
             # TODO: Enactment
         else:
-            raise CriticalSchedException, "Lease is an inconsistent state (tried to start file transfer when state is %s)" % Lease.state_str[lease_state]
+            raise InconsistentLeaseStateError(l, doing = "starting a file transfer")
             
         lease.print_contents()
         sched.logger.debug("LEASE-%i End of handleStartFileTransfer" % lease.id)
@@ -438,7 +438,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
                 # TODO: ENACTMENT: Verify the image was transferred correctly
                 sched.add_diskimages(physnode, rr.file, lease.diskimage_size, vnodes, timeout=maxend)
         else:
-            raise CriticalSchedException, "Lease is an inconsistent state (tried to start file transfer when state is %s)" % lease_state
+            raise InconsistentLeaseStateError(l, doing = "ending a file transfer")
 
         lease.print_contents()
         sched.logger.debug("LEASE-%i End of handleEndFileTransfer" % lease.id)

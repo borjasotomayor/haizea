@@ -42,6 +42,7 @@ from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.frontends.rpc import RPCFrontend
 from haizea.resourcemanager.leases import ARLease, BestEffortLease, ImmediateLease
+from haizea.resourcemanager.scheduler import UnrecoverableError
 from haizea.resourcemanager.scheduler.lease_scheduler import LeaseScheduler
 from haizea.resourcemanager.scheduler.vm_scheduler import VMScheduler
 from haizea.resourcemanager.scheduler.slottable import SlotTable
@@ -53,6 +54,7 @@ import operator
 import logging
 import signal
 import sys, os
+import traceback
 from time import sleep
 from math import ceil
 from mx.DateTime import now, TimeDelta
@@ -352,11 +354,18 @@ class ResourceManager(Singleton):
         # Run the scheduling function.
         try:
             self.scheduler.schedule(nexttime)
-        except Exception, msg:
-            # Exit if something goes horribly wrong
-            self.logger.error("Exception in scheduling function. Dumping state..." )
-            self.print_stats(logging.getLevelName("ERROR"), verbose=True)
-            raise      
+        except UnrecoverableError, exc:
+            self.logger.error("Unrecoverable error has happened in scheduling function.")
+            self.logger.error("Original exception:")
+            self.print_exception(exc.exc, exc.get_traceback())
+            self.logger.error("Unrecoverable error traceback:")
+            self.print_exception(exc, sys.exc_traceback)
+            self.panic()
+        except Exception, exc:
+            self.logger.error("Unexpected exception has happened in scheduling function.")
+            self.print_exception(exc, sys.exc_traceback)
+            self.panic()
+
 
     def process_reservations(self, time):
         """Process reservations starting/stopping at specified time"""
@@ -364,12 +373,28 @@ class ResourceManager(Singleton):
         # The scheduler takes care of this.
         try:
             self.scheduler.process_reservations(time)
-        except Exception, msg:
-            # Exit if something goes horribly wrong
-            self.logger.error("Exception when processing reservations. Dumping state..." )
-            self.print_stats(logging.getLevelName("ERROR"), verbose=True)
-            raise      
-
+        except UnrecoverableError, exc:
+            self.logger.error("Unrecoverable error has happened when processing reservations.")
+            self.logger.error("Original exception:")
+            self.print_exception(exc.exc, exc.get_traceback())
+            self.logger.error("Unrecoverable error traceback:")
+            self.print_exception(exc, sys.exc_traceback)
+            self.panic()
+        except Exception, exc:
+            self.logger.error("Unexpected exception has happened when processing reservations.")
+            self.print_exception(exc, sys.exc_traceback)
+            self.panic()
+            
+    def print_exception(self, exc, exc_traceback):
+        tb = traceback.format_tb(exc_traceback)
+        for line in tb:
+            self.logger.error(line)
+        self.logger.error("Message: %s" % exc)
+    
+    def panic(self):
+        #self.print_stats(logging.getLevelName("ERROR"), verbose=True)
+        exit(1)
+        
         
     def print_stats(self, loglevel, verbose=False):
         """Print some basic statistics in the log

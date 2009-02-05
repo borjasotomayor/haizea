@@ -16,40 +16,53 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+import sys
 
 class SchedException(Exception):
-    """A simple exception class used for scheduling exceptions"""
+    """The base class for scheduling exceptions"""
     pass
 
 class NotSchedulableException(SchedException):
     """A simple exception class used when a lease cannot be scheduled
     
     This exception must be raised when a lease cannot be scheduled
-    (this is not necessarily an error condition, but the scheduler will
-    have to react to it)
     """
     pass
 
-class CriticalSchedException(SchedException):
-    """A simple exception class used for critical scheduling exceptions
-    
-    This exception must be raised when a non-recoverable error happens
-    (e.g., when there are unexplained inconsistencies in the schedule,
-    typically resulting from a code error)
-    """
+class CancelLeaseException(SchedException):
     pass
 
-class PreparationSchedException(SchedException):
-    pass
-
-class CancelLeaseException(Exception):
-    pass
-
-class NormalEndLeaseException(Exception):
+class NormalEndLeaseException(SchedException):
     pass
 
 class RescheduleLeaseException(SchedException):
     pass
+
+
+class SchedulingError(Exception):
+    """The base class for scheduling errors"""
+    pass
+
+class InconsistentScheduleError(SchedulingError):
+    pass
+
+class InconsistentLeaseStateError(SchedulingError):
+    def __init__(self, lease, doing):
+        self.lease = lease
+        self.doing = doing
+        
+        self.message = "Lease %i is in an inconsistent state (%i) when %s" % (lease.id, lease.get_state(), doing)
+
+class EnactmentError(SchedulingError):
+    pass
+
+class UnrecoverableError(SchedulingError):
+    def __init__(self, exc):
+        self.exc = exc
+        self.exc_info = sys.exc_info()
+        
+    def get_traceback(self):
+        return self.exc_info[2]
 
 
 class ReservationEventHandler(object):

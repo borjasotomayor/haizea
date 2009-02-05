@@ -18,11 +18,11 @@
 
 import haizea.common.constants as constants
 from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_accounting, get_clock
-from haizea.resourcemanager.scheduler.slottable import SlotTable, SlotFittingException
+from haizea.resourcemanager.scheduler.slottable import SlotTable
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease, ImmediateLease
 from haizea.resourcemanager.scheduler.slottable import ResourceReservation, ResourceTuple
 from haizea.resourcemanager.scheduler.resourcepool import ResourcePool, ResourcePoolWithReusableImages
-from haizea.resourcemanager.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, CriticalSchedException
+from haizea.resourcemanager.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, EnactmentError
 from operator import attrgetter, itemgetter
 from mx.DateTime import TimeDelta
 
@@ -97,14 +97,14 @@ class VMScheduler(object):
         fitatstart = availabilitywindow.fitAtStart(canpreempt = False)
         if fitatstart < numnodes:
             if not canpreempt:
-                raise SlotFittingException, "Not enough resources in specified interval"
+                raise NotSchedulableException, "Not enough resources in specified interval"
             else:
                 unfeasiblewithoutpreemption = True
         feasibleend, canfitnopreempt = availabilitywindow.findPhysNodesForVMs(numnodes, end, strictend=True, canpreempt = False)
         fitatend = sum([n for n in canfitnopreempt.values()])
         if fitatend < numnodes:
             if not canpreempt:
-                raise SlotFittingException, "Not enough resources in specified interval"
+                raise NotSchedulableException, "Not enough resources in specified interval"
             else:
                 unfeasiblewithoutpreemption = True
 
@@ -112,11 +112,11 @@ class VMScheduler(object):
         if canpreempt:
             fitatstart = availabilitywindow.fitAtStart(canpreempt = True)
             if fitatstart < numnodes:
-                raise SlotFittingException, "Not enough resources in specified interval"
+                raise NotSchedulableException, "Not enough resources in specified interval"
             feasibleendpreempt, canfitpreempt = availabilitywindow.findPhysNodesForVMs(numnodes, end, strictend=True, canpreempt = True)
             fitatend = sum([n for n in canfitpreempt.values()])
             if fitatend < numnodes:
-                raise SlotFittingException, "Not enough resources in specified interval"
+                raise NotSchedulableException, "Not enough resources in specified interval"
             else:
                 if unfeasiblewithoutpreemption:
                     mustpreempt = True
@@ -200,7 +200,7 @@ class VMScheduler(object):
                     break
 
         if vnode <= numnodes:
-            raise SchedException, "Availability window indicated that request is feasible, but could not fit it"
+            raise InconsistentScheduleError, "Availability window indicated that request is feasible, but could not fit it"
 
         # Create VM resource reservations
         vmrr = VMResourceReservation(leasereq, start, end, nodeassignment, res, False)
@@ -312,12 +312,12 @@ class VMScheduler(object):
             if not allow_reservation_in_future:
                 # We did not find a suitable starting time. This can happen
                 # if we're unable to make future reservations
-                raise SchedException, "Could not find enough resources for this request"
+                raise NotSchedulableException, "Could not find enough resources for this request"
         else:
             mustsuspend = (end - start) < duration
             if mustsuspend and not suspendable:
                 if not allow_reservation_in_future:
-                    raise SchedException, "Scheduling this lease would require preempting it, which is not allowed"
+                    raise NotSchedulableException, "Scheduling this lease would require preempting it, which is not allowed"
                 else:
                     start = None # No satisfactory start time
             
@@ -466,7 +466,150 @@ class VMScheduler(object):
         for susprr in vmrr.post_rrs:
             self.slottable.addReservation(susprr)
         
+    def find_preemptable_leases(self, mustpreempt, startTime, endTime):
+        def comparepreemptability(rrX, rrY):
+            if rrX.lease.submit_time > rrY.lease.submit_time:
+                return constants.BETTER
+            elif rrX.lease.submit_time < rrY.lease.submit_time:
+                return constants.WORSE
+            else:
+                return constants.EQUAL        
+            
+        def preemptedEnough(amountToPreempt):
+            for node in amountToPreempt:
+                if not amountToPreempt[node].is_zero_or_less():
+                    return False
+            return True
         
+        # Get allocations at the specified time
+        atstart = set()
+        atmiddle = set()
+        nodes = set(mustpreempt.keys())
+        
+        reservationsAtStart = self.slottable.getReservationsAt(startTime)
+        reservationsAtStart = [r for r in reservationsAtStart if isinstance(r, VMResourceReservation) and r.is_preemptible()
+                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
+        
+        reservationsAtMiddle = self.slottable.get_reservations_starting_between(startTime, endTime)
+        reservationsAtMiddle = [r for r in reservationsAtMiddle if isinstance(r, VMResourceReservation) and r.is_preemptible()
+                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
+        
+        reservationsAtStart.sort(comparepreemptability)
+        reservationsAtMiddle.sort(comparepreemptability)
+        
+        amountToPreempt = {}
+        for n in mustpreempt:
+            amountToPreempt[n] = ResourceTuple.copy(mustpreempt[n])
+
+        # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
+        for r in reservationsAtStart:
+            # The following will really only come into play when we have
+            # multiple VMs per node
+            mustpreemptres = False
+            for n in r.resources_in_pnode.keys():
+                # Don't need to preempt if we've already preempted all
+                # the needed resources in node n
+                if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
+                    amountToPreempt[n].decr(r.resources_in_pnode[n])
+                    mustpreemptres = True
+            if mustpreemptres:
+                atstart.add(r)
+            if preemptedEnough(amountToPreempt):
+                break
+        
+        # Second step: CHOOSE RESOURCES TO PREEMPT DURING RESERVATION
+        if len(reservationsAtMiddle)>0:
+            changepoints = set()
+            for r in reservationsAtMiddle:
+                changepoints.add(r.start)
+            changepoints = list(changepoints)
+            changepoints.sort()        
+            
+            for cp in changepoints:
+                amountToPreempt = {}
+                for n in mustpreempt:
+                    amountToPreempt[n] = ResourceTuple.copy(mustpreempt[n])
+                reservations = [r for r in reservationsAtMiddle 
+                                if r.start <= cp and cp < r.end]
+                for r in reservations:
+                    mustpreemptres = False
+                    for n in r.resources_in_pnode.keys():
+                        if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
+                            amountToPreempt[n].decr(r.resources_in_pnode[n])
+                            mustpreemptres = True
+                    if mustpreemptres:
+                        atmiddle.add(r)
+                    if preemptedEnough(amountToPreempt):
+                        break
+            
+        self.logger.debug("Preempting leases (at start of reservation): %s" % [r.lease.id for r in atstart])
+        self.logger.debug("Preempting leases (in middle of reservation): %s" % [r.lease.id for r in atmiddle])
+        
+        leases = [r.lease for r in atstart|atmiddle]
+        
+        return leases
+        
+        
+    def slideback(self, lease, earliest):
+        vmrr = lease.get_last_vmrr()
+        # Save original start and end time of the vmrr
+        old_start = vmrr.start
+        old_end = vmrr.end
+        nodes = vmrr.nodes.values()
+        if lease.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
+            originalstart = vmrr.pre_rrs[0].start
+        else:
+            originalstart = vmrr.start
+        cp = self.slottable.findChangePointsAfter(after=earliest, until=originalstart, nodes=nodes)
+        cp = [earliest] + cp
+        newstart = None
+        for p in cp:
+            self.slottable.availabilitywindow.initWindow(p, lease.requested_resources, canpreempt=False)
+            self.slottable.availabilitywindow.printContents()
+            if self.slottable.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
+                (end, canfit) = self.slottable.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
+                if end == originalstart and set(nodes) <= set(canfit.keys()):
+                    self.logger.debug("Can slide back to %s" % p)
+                    newstart = p
+                    break
+        if newstart == None:
+            # Can't slide back. Leave as is.
+            pass
+        else:
+            diff = originalstart - newstart
+            if lease.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
+                resmrrs = [r for r in vmrr.pre_rrs if isinstance(r, ResumptionResourceReservation)]
+                for resmrr in resmrrs:
+                    resmrr_old_start = resmrr.start
+                    resmrr_old_end = resmrr.end
+                    resmrr.start -= diff
+                    resmrr.end -= diff
+                    self.slottable.update_reservation_with_key_change(resmrr, resmrr_old_start, resmrr_old_end)
+            vmrr.update_start(vmrr.start - diff)
+            
+            # If the lease was going to be suspended, check to see if
+            # we don't need to suspend any more.
+            remdur = lease.duration.get_remaining_duration()
+            if vmrr.is_suspending() and vmrr.end - newstart >= remdur: 
+                vmrr.update_end(vmrr.start + remdur)
+                for susprr in vmrr.post_rrs:
+                    self.slottable.removeReservation(susprr)
+                vmrr.post_rrs = []
+            else:
+                vmrr.update_end(vmrr.end - diff)
+                
+            if not vmrr.is_suspending():
+                # If the VM was set to shutdown, we need to slideback the shutdown RRs
+                for rr in vmrr.post_rrs:
+                    rr_old_start = rr.start
+                    rr_old_end = rr.end
+                    rr.start -= diff
+                    rr.end -= diff
+                    self.slottable.update_reservation_with_key_change(rr, rr_old_start, rr_old_end)
+
+            self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
+            self.logger.vdebug("New lease descriptor (after slideback):")
+            lease.print_contents()        
         
     def can_suspend_at(self, lease, t):
         # TODO: Make more general, should determine vmrr based on current time
@@ -655,7 +798,7 @@ class VMScheduler(object):
         rate = config.get("suspend-rate") 
 
         if suspend_by < vmrr.start or suspend_by > vmrr.end:
-            raise SchedException, "Tried to schedule a suspension by %s, which is outside the VMRR's duration (%s-%s)" % (suspend_by, vmrr.start, vmrr.end)
+            raise InconsistentScheduleError, "Tried to schedule a suspension by %s, which is outside the VMRR's duration (%s-%s)" % (suspend_by, vmrr.start, vmrr.end)
 
         times = self.__compute_susprem_times(vmrr, suspend_by, constants.DIRECTION_BACKWARD, susp_exclusion, rate, override)
         suspend_rrs = []
@@ -678,7 +821,7 @@ class VMScheduler(object):
             
         susp_start = suspend_rrs[0].start
         if susp_start < vmrr.start:
-            raise SchedException, "Determined suspension should start at %s, before the VMRR's start (%s) -- Suspend time not being properly estimated?" % (susp_start, vmrr.start)
+            raise InconsistentScheduleError, "Determined suspension should start at %s, before the VMRR's start (%s) -- Suspend time not being properly estimated?" % (susp_start, vmrr.start)
         
         vmrr.update_end(susp_start)
         
@@ -698,7 +841,7 @@ class VMScheduler(object):
         rate = config.get("resume-rate") 
 
         if resume_at < vmrr.start or resume_at > vmrr.end:
-            raise SchedException, "Tried to schedule a resumption at %s, which is outside the VMRR's duration (%s-%s)" % (resume_at, vmrr.start, vmrr.end)
+            raise InconsistentScheduleError, "Tried to schedule a resumption at %s, which is outside the VMRR's duration (%s-%s)" % (resume_at, vmrr.start, vmrr.end)
 
         times = self.__compute_susprem_times(vmrr, resume_at, constants.DIRECTION_FORWARD, resm_exclusion, rate, override)
         resume_rrs = []
@@ -721,7 +864,7 @@ class VMScheduler(object):
             
         resm_end = resume_rrs[-1].end
         if resm_end > vmrr.end:
-            raise SchedException, "Determined resumption would end at %s, after the VMRR's end (%s) -- Resume time not being properly estimated?" % (resm_end, vmrr.end)
+            raise InconsistentScheduleError, "Determined resumption would end at %s, after the VMRR's end (%s) -- Resume time not being properly estimated?" % (resm_end, vmrr.end)
         
         vmrr.update_start(resm_end)
         for resmrr in resume_rrs:
@@ -902,171 +1045,6 @@ class VMScheduler(object):
         nodes.sort(comparenodes)
         return nodes        
 
-    def find_preemptable_leases(self, mustpreempt, startTime, endTime):
-        def comparepreemptability(rrX, rrY):
-            if rrX.lease.submit_time > rrY.lease.submit_time:
-                return constants.BETTER
-            elif rrX.lease.submit_time < rrY.lease.submit_time:
-                return constants.WORSE
-            else:
-                return constants.EQUAL        
-            
-        def preemptedEnough(amountToPreempt):
-            for node in amountToPreempt:
-                if not amountToPreempt[node].is_zero_or_less():
-                    return False
-            return True
-        
-        # Get allocations at the specified time
-        atstart = set()
-        atmiddle = set()
-        nodes = set(mustpreempt.keys())
-        
-        reservationsAtStart = self.slottable.getReservationsAt(startTime)
-        reservationsAtStart = [r for r in reservationsAtStart if isinstance(r, VMResourceReservation) and r.is_preemptible()
-                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
-        
-        reservationsAtMiddle = self.slottable.get_reservations_starting_between(startTime, endTime)
-        reservationsAtMiddle = [r for r in reservationsAtMiddle if isinstance(r, VMResourceReservation) and r.is_preemptible()
-                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
-        
-        reservationsAtStart.sort(comparepreemptability)
-        reservationsAtMiddle.sort(comparepreemptability)
-        
-        amountToPreempt = {}
-        for n in mustpreempt:
-            amountToPreempt[n] = ResourceTuple.copy(mustpreempt[n])
-
-        # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
-        for r in reservationsAtStart:
-            # The following will really only come into play when we have
-            # multiple VMs per node
-            mustpreemptres = False
-            for n in r.resources_in_pnode.keys():
-                # Don't need to preempt if we've already preempted all
-                # the needed resources in node n
-                if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
-                    amountToPreempt[n].decr(r.resources_in_pnode[n])
-                    mustpreemptres = True
-            if mustpreemptres:
-                atstart.add(r)
-            if preemptedEnough(amountToPreempt):
-                break
-        
-        # Second step: CHOOSE RESOURCES TO PREEMPT DURING RESERVATION
-        if len(reservationsAtMiddle)>0:
-            changepoints = set()
-            for r in reservationsAtMiddle:
-                changepoints.add(r.start)
-            changepoints = list(changepoints)
-            changepoints.sort()        
-            
-            for cp in changepoints:
-                amountToPreempt = {}
-                for n in mustpreempt:
-                    amountToPreempt[n] = ResourceTuple.copy(mustpreempt[n])
-                reservations = [r for r in reservationsAtMiddle 
-                                if r.start <= cp and cp < r.end]
-                for r in reservations:
-                    mustpreemptres = False
-                    for n in r.resources_in_pnode.keys():
-                        if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
-                            amountToPreempt[n].decr(r.resources_in_pnode[n])
-                            mustpreemptres = True
-                    if mustpreemptres:
-                        atmiddle.add(r)
-                    if preemptedEnough(amountToPreempt):
-                        break
-            
-        self.logger.debug("Preempting leases (at start of reservation): %s" % [r.lease.id for r in atstart])
-        self.logger.debug("Preempting leases (in middle of reservation): %s" % [r.lease.id for r in atmiddle])
-        
-        leases = [r.lease for r in atstart|atmiddle]
-        
-        return leases
-                
-    # TODO: Should be moved to LeaseScheduler
-    def reevaluate_schedule(self, endinglease, nodes, nexttime, checkedleases):
-        self.logger.debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes, nexttime)) 
-        leases = []
-        vmrrs = self.slottable.get_next_reservations_in_nodes(nexttime, nodes, rr_type=VMResourceReservation, immediately_next=True)
-        leases = set([rr.lease for rr in vmrrs])
-        leases = [l for l in leases if isinstance(l, BestEffortLease) and l.get_state() in (Lease.STATE_SUSPENDED_SCHEDULED, Lease.STATE_READY) and not l in checkedleases]
-        for lease in leases:
-            self.logger.debug("Found lease %i" % l.id)
-            l.print_contents()
-            # Earliest time can't be earlier than time when images will be
-            # available in node
-            earliest = max(nexttime, lease.imagesavail)
-            self.__slideback(lease, earliest)
-            checkedleases.append(l)
-        #for l in leases:
-        #    vmrr, susprr = l.getLastVMRR()
-        #    self.reevaluateSchedule(l, vmrr.nodes.values(), vmrr.end, checkedleases)
-          
-    def __slideback(self, lease, earliest):
-        vmrr = lease.get_last_vmrr()
-        # Save original start and end time of the vmrr
-        old_start = vmrr.start
-        old_end = vmrr.end
-        nodes = vmrr.nodes.values()
-        if lease.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
-            originalstart = vmrr.pre_rrs[0].start
-        else:
-            originalstart = vmrr.start
-        cp = self.slottable.findChangePointsAfter(after=earliest, until=originalstart, nodes=nodes)
-        cp = [earliest] + cp
-        newstart = None
-        for p in cp:
-            self.slottable.availabilitywindow.initWindow(p, lease.requested_resources, canpreempt=False)
-            self.slottable.availabilitywindow.printContents()
-            if self.slottable.availabilitywindow.fitAtStart(nodes=nodes) >= lease.numnodes:
-                (end, canfit) = self.slottable.availabilitywindow.findPhysNodesForVMs(lease.numnodes, originalstart)
-                if end == originalstart and set(nodes) <= set(canfit.keys()):
-                    self.logger.debug("Can slide back to %s" % p)
-                    newstart = p
-                    break
-        if newstart == None:
-            # Can't slide back. Leave as is.
-            pass
-        else:
-            diff = originalstart - newstart
-            if lease.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
-                resmrrs = [r for r in vmrr.pre_rrs if isinstance(r, ResumptionResourceReservation)]
-                for resmrr in resmrrs:
-                    resmrr_old_start = resmrr.start
-                    resmrr_old_end = resmrr.end
-                    resmrr.start -= diff
-                    resmrr.end -= diff
-                    self.slottable.update_reservation_with_key_change(resmrr, resmrr_old_start, resmrr_old_end)
-            vmrr.update_start(vmrr.start - diff)
-            
-            # If the lease was going to be suspended, check to see if
-            # we don't need to suspend any more.
-            remdur = lease.duration.get_remaining_duration()
-            if vmrr.is_suspending() and vmrr.end - newstart >= remdur: 
-                vmrr.update_end(vmrr.start + remdur)
-                for susprr in vmrr.post_rrs:
-                    self.slottable.removeReservation(susprr)
-                vmrr.post_rrs = []
-            else:
-                vmrr.update_end(vmrr.end - diff)
-                
-            if not vmrr.is_suspending():
-                # If the VM was set to shutdown, we need to slideback the shutdown RRs
-                for rr in vmrr.post_rrs:
-                    rr_old_start = rr.start
-                    rr_old_end = rr.end
-                    rr.start -= diff
-                    rr.end -= diff
-                    self.slottable.update_reservation_with_key_change(rr, rr_old_start, rr_old_end)
-
-            self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
-            self.logger.vdebug("New lease descriptor (after slideback):")
-            lease.print_contents()
-    
-          
-
     #-------------------------------------------------------------------#
     #                                                                   #
     #                  SLOT TABLE EVENT HANDLERS                        #
@@ -1089,16 +1067,21 @@ class VMScheduler(object):
                 # appropriate inside the resourcepool module
                 for (vnode, pnode) in rr.nodes.items():
                     l.diskimagemap[vnode] = pnode
-            except Exception, e:
-                self.logger.error("ERROR when starting VMs.")
+            except EnactmentError, exc:
+                self.logger.error("Enactment error when starting VMs.")
+                # Right now, this is a non-recoverable error, so we just
+                # propagate it upwards to the lease scheduler
+                # In the future, it may be possible to react to these
+                # kind of errors.
                 raise
+                
         elif lease_state == Lease.STATE_RESUMED_READY:
             l.set_state(Lease.STATE_ACTIVE)
             rr.state = ResourceReservation.STATE_ACTIVE
             # No enactment to do here, since all the suspend/resume actions are
             # handled during the suspend/resume RRs
         else:
-            raise CriticalSchedException, "Lease is an inconsistent state (tried to start VM when state is %s)" % Lease.state_str[lease_state]
+            raise InconsistentLeaseStateError(l, doing = "starting a VM")
         
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleStartVM" % l.id)
@@ -1136,7 +1119,16 @@ class VMScheduler(object):
         self.logger.debug("LEASE-%i Start of handleStartShutdown" % l.id)
         l.print_contents()
         rr.state = ResourceReservation.STATE_ACTIVE
-        self.resourcepool.stop_vms(l, rr)
+        try:
+            self.resourcepool.stop_vms(l, rr)
+        except EnactmentError, exc:
+            self.logger.error("Enactment error when shutting down VMs.")
+            # Right now, this is a non-recoverable error, so we just
+            # propagate it upwards to the lease scheduler
+            # In the future, it may be possible to react to these
+            # kind of errors.
+            raise
+        
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleStartShutdown" % l.id)
 
@@ -1155,7 +1147,17 @@ class VMScheduler(object):
         self.logger.debug("LEASE-%i Start of handleStartSuspend" % l.id)
         l.print_contents()
         rr.state = ResourceReservation.STATE_ACTIVE
-        self.resourcepool.suspend_vms(l, rr)
+        
+        try:
+            self.resourcepool.suspend_vms(l, rr)
+        except EnactmentError, exc:
+            self.logger.error("Enactment error when suspending VMs.")
+            # Right now, this is a non-recoverable error, so we just
+            # propagate it upwards to the lease scheduler
+            # In the future, it may be possible to react to these
+            # kind of errors.
+            raise            
+        
         for vnode in rr.vnodes:
             pnode = rr.vmrr.nodes[vnode]
             l.memimagemap[vnode] = pnode
@@ -1183,7 +1185,17 @@ class VMScheduler(object):
     def _handle_start_resume(self, l, rr):
         self.logger.debug("LEASE-%i Start of handleStartResume" % l.id)
         l.print_contents()
-        self.resourcepool.resume_vms(l, rr)
+        
+        try:
+            self.resourcepool.resume_vms(l, rr)
+        except EnactmentError, exc:
+            self.logger.error("Enactment error when resuming VMs.")
+            # Right now, this is a non-recoverable error, so we just
+            # propagate it upwards to the lease scheduler
+            # In the future, it may be possible to react to these
+            # kind of errors.
+            raise
+                    
         rr.state = ResourceReservation.STATE_ACTIVE
         if rr.is_first():
             l.set_state(Lease.STATE_RESUMING)

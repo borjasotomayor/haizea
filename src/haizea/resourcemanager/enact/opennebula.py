@@ -16,6 +16,7 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+from haizea.resourcemanager.scheduler import EnactmentError
 from haizea.resourcemanager.scheduler.resourcepool import Node
 from haizea.resourcemanager.scheduler.slottable import ResourceTuple
 from haizea.resourcemanager.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
@@ -25,6 +26,14 @@ from pysqlite2 import dbapi2 as sqlite
 import logging
 import commands
 from time import sleep
+
+class OpenNebulaEnactmentError(EnactmentError):
+    def __init__(self, cmd, status, output):
+        self.cmd = cmd
+        self.status = status
+        self.output = output
+        
+        self.message = "Error when running '%s' (status=%i, output='%s')" % (cmd, status, output)
 
 class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
     ONEATTR2HAIZEA = { "TOTALCPU": constants.RES_CPU,
@@ -114,7 +123,7 @@ class OpenNebulaVMEnactment(VMEnactment):
             if status == 0:
                 self.logger.debug("Command returned succesfully.")
             else:
-                raise Exception, "Error when running onevm deploy (status=%i, output='%s')" % (status, output)
+                raise OpenNebulaEnactmentError("onevm deploy", status, output)
             
     def stop(self, action):
         for vnode in action.vnodes:
@@ -125,7 +134,8 @@ class OpenNebulaVMEnactment(VMEnactment):
             if status == 0:
                 self.logger.debug("Command returned succesfully.")
             else:
-                raise Exception, "Error when running onevm shutdown (status=%i, output='%s')" % (status, output)
+                raise OpenNebulaEnactmentError("onevm shutdown", status, output)
+
             # TODO: We should spawn out a thread to do this, so Haizea isn't
             # blocking until all these commands end
             interval = get_config().get("enactment-overhead").seconds
@@ -140,7 +150,8 @@ class OpenNebulaVMEnactment(VMEnactment):
             if status == 0:
                 self.logger.debug("Command returned succesfully.")
             else:
-                raise Exception, "Error when running onevm suspend (status=%i, output='%s')" % (status, output)
+                raise OpenNebulaEnactmentError("onevm suspend", status, output)
+
             # Space out commands to avoid OpenNebula from getting saturated
             # TODO: We should spawn out a thread to do this
             # TODO: We should spawn out a thread to do this, so Haizea isn't
@@ -157,7 +168,8 @@ class OpenNebulaVMEnactment(VMEnactment):
             if status == 0:
                 self.logger.debug("Command returned succesfully.")
             else:
-                raise Exception, "Error when running onevm resume (status=%i, output='%s')" % (status, output)
+                raise OpenNebulaEnactmentError("onevm resume", status, output)
+
             # Space out commands to avoid OpenNebula from getting saturated
             # TODO: We should spawn out a thread to do this, so Haizea isn't
             # blocking until all these commands end

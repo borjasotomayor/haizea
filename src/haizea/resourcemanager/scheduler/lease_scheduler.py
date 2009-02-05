@@ -22,17 +22,12 @@ the Scheduler class. The deployment scheduling code (everything that has to be
 done to prepare a lease) happens in the modules inside the 
 haizea.resourcemanager.deployment package.
 
-This module provides the following classes:
-
-* SchedException: A scheduling exception
-* ReservationEventHandler: A simple wrapper class
-* Scheduler: Do I really need to spell this one out for you?
 """
 import haizea.common.constants as constants
 from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, get_config, get_accounting, get_clock
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease, ImmediateLease
-from haizea.resourcemanager.scheduler import SchedException, RescheduleLeaseException, NormalEndLeaseException
-from haizea.resourcemanager.scheduler.slottable import SlotTable, SlotFittingException, ResourceReservation
+from haizea.resourcemanager.scheduler import RescheduleLeaseException, NormalEndLeaseException, InconsistentLeaseStateError, EnactmentError, UnrecoverableError, NotSchedulableException
+from haizea.resourcemanager.scheduler.slottable import SlotTable, ResourceReservation
 from haizea.resourcemanager.scheduler.resourcepool import ResourcePool, ResourcePoolWithReusableImages
 from haizea.resourcemanager.scheduler.vm_scheduler import VMResourceReservation, SuspensionResourceReservation, ResumptionResourceReservation, ShutdownResourceReservation
 from operator import attrgetter, itemgetter
@@ -96,7 +91,8 @@ class LeaseScheduler(object):
         
         # Queue best-effort requests
         for lease in be_leases:
-            self.enqueue(lease)
+            self.__enqueue(lease)
+            lease.set_state(Lease.STATE_QUEUED)
         
         # Process immediate requests
         for lease in im_leases:
@@ -127,12 +123,27 @@ class LeaseScheduler(object):
                         self.__enqueue_in_order(lease)
                         lease.set_state(Lease.STATE_SUSPENDED_QUEUED)
                     else:
-                        raise CriticalSchedException, "Lease is an inconsistent state (tried to reschedule best-effort lease when state is %s)" % lease_state
+                        raise InconsistentLeaseStateError(l, doing = "rescheduling best-effort lease")
             except NormalEndLeaseException, msg:
                 self._handle_end_lease(lease)
+            except InconsistentLeaseStateError, exc:
+                self.fail_lease(lease, exc)
+            except EnactmentError, exc:
+                self.fail_lease(lease, exc)
+            # Everything else gets propagated upwards to ResourceManager
+            # and will make Haizea crash and burn
+                
         
         for rr in starting:
-            self.handlers[type(rr)].on_start(rr.lease, rr)
+            lease = rr.lease
+            try:
+                self.handlers[type(rr)].on_start(lease, rr)
+            except InconsistentLeaseStateError, exc:
+                self.fail_lease(lease, exc)
+            except EnactmentError, exc:
+                self.fail_lease(lease, exc)
+            # Everything else gets propagated upwards to ResourceManager
+            # and will make Haizea crash and burn
             
 
         # TODO: Should be in VMScheduler
@@ -143,14 +154,6 @@ class LeaseScheduler(object):
             cpuutil = util[VMResourceReservation]
         get_accounting().append_stat(constants.COUNTER_CPUUTILIZATION, cpuutil)        
         get_accounting().append_stat(constants.COUNTER_UTILIZATION, util)        
-
-    
-    def enqueue(self, lease):
-        """Queues a best-effort lease request"""
-        get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
-        lease.set_state(Lease.STATE_QUEUED)
-        self.queue.enqueue(lease)
-        self.logger.info("Received (and queueing) best-effort lease request #%i, %i nodes for %s." % (lease.id, lease.numnodes, lease.duration.requested))
 
     def request_lease(self, lease):
         """
@@ -203,7 +206,7 @@ class LeaseScheduler(object):
                 self.completedleases.add(lease)
                 self.leases.remove(lease)
             else:
-                raise CriticalSchedException, "Lease is an inconsistent state (tried to cancel lease when state is %s)" % lease_state
+                raise InconsistentLeaseStateError(l, doing = "cancelling the VM")
             
         elif self.queue.has_lease(lease_id):
             # The lease is in the queue, waiting to be scheduled.
@@ -211,21 +214,27 @@ class LeaseScheduler(object):
             self.logger.info("Lease %i is in the queue. Removing..." % lease_id)
             l = self.queue.get_lease(lease_id)
             self.queue.remove_lease(lease)
+            
     
-    def fail_lease(self, lease_id):
+    def fail_lease(self, lease, exc=None):
         """Transitions a lease to a failed state, and does any necessary cleaning up
-        
-        TODO: For now, just use the cancelling algorithm
         
         Arguments:
         lease -- Lease to fail
-        """    
-        try:
-            raise
-            self.cancel_lease(lease_id)
-        except Exception, msg:
-            # Exit if something goes horribly wrong
-            raise CriticalSchedException()      
+        exc -- The exception that made the lease fail
+        """
+        treatment = get_config().get("lease-failure-handling")
+        
+        if treatment == constants.ONFAILURE_CANCEL:
+            rrs = lease.get_scheduled_reservations()
+            for r in rrs:
+                self.slottable.removeReservation(r)
+            lease.set_state(Lease.STATE_FAILED)
+            self.completedleases.add(lease)
+            self.leases.remove(lease)
+        elif treatment == constants.ONFAILURE_EXIT:
+            raise UnrecoverableError(exc)
+            
     
     def notify_event(self, lease_id, event):
         time = get_clock().get_time()
@@ -238,10 +247,7 @@ class LeaseScheduler(object):
             nexttime = get_clock().get_next_schedulable_time()
             # We need to reevaluate the schedule to see if there are any future
             # reservations that we can slide back.
-            self.vm_scheduler.reevaluate_schedule(lease, vmrr.nodes.values(), nexttime, [])
-
-            
-        
+            self.__reevaluate_schedule(lease, vmrr.nodes.values(), nexttime, [])
 
     
     def __process_ar_request(self, lease, nexttime):
@@ -256,20 +262,20 @@ class LeaseScheduler(object):
             self.leases.add(lease)
             get_accounting().incr_counter(constants.COUNTER_ARACCEPTED, lease.id)
             accepted = True
-        except SchedException, msg:
+        except NotSchedulableException, exc:
             # Our first try avoided preemption, try again
             # without avoiding preemption.
             # TODO: Roll this into the exact slot fitting algorithm
             try:
-                self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease.id, msg))
+                self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease.id, exc.message))
                 self.logger.debug("LEASE-%i Trying again without avoiding preemption" % lease.id)
                 self.__schedule_ar_lease(lease, nexttime, avoidpreempt=False)
                 self.leases.add(lease)
                 get_accounting().incr_counter(constants.COUNTER_ARACCEPTED, lease.id)
                 accepted = True
-            except SchedException, msg:
+            except NotSchedulableException, exc:
                 get_accounting().incr_counter(constants.COUNTER_ARREJECTED, lease.id)
-                self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease.id, msg))
+                self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease.id, exc.message))
 
         if accepted:
             self.logger.info("AR lease request #%i has been accepted." % lease.id)
@@ -296,7 +302,7 @@ class LeaseScheduler(object):
                     self.__schedule_besteffort_lease(lease, nexttime)
                     self.leases.add(lease)
                     get_accounting().decr_counter(constants.COUNTER_QUEUESIZE, lease.id)
-                except SchedException, msg:
+                except NotSchedulableException, msg:
                     # Put back on queue
                     newqueue.enqueue(lease)
                     self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease.id, msg))
@@ -320,140 +326,127 @@ class LeaseScheduler(object):
             self.leases.add(lease)
             get_accounting().incr_counter(constants.COUNTER_IMACCEPTED, lease.id)
             self.logger.info("Immediate lease request #%i has been accepted." % lease.id)
-        except SchedException, msg:
+        except NotSchedulableException, msg:
             get_accounting().incr_counter(constants.COUNTER_IMREJECTED, lease.id)
             self.logger.debug("LEASE-%i Scheduling exception: %s" % (lease.id, msg))
     
     
     def __schedule_ar_lease(self, lease, nexttime, avoidpreempt=True):
-        try:
-            (vmrr, preemptions) = self.vm_scheduler.fit_exact(lease, preemptible=False, canpreempt=True, avoidpreempt=avoidpreempt)
-            
-            if len(preemptions) > 0:
-                leases = self.vm_scheduler.find_preemptable_leases(preemptions, vmrr.start, vmrr.end)
-                self.logger.info("Must preempt leases %s to make room for AR lease #%i" % ([l.id for l in leases], lease.id))
-                for l in leases:
-                    self.__preempt(l, preemption_time=vmrr.start)
+        (vmrr, preemptions) = self.vm_scheduler.fit_exact(lease, preemptible=False, canpreempt=True, avoidpreempt=avoidpreempt)
+        
+        if len(preemptions) > 0:
+            leases = self.vm_scheduler.find_preemptable_leases(preemptions, vmrr.start, vmrr.end)
+            self.logger.info("Must preempt leases %s to make room for AR lease #%i" % ([l.id for l in leases], lease.id))
+            for l in leases:
+                self.__preempt(l, preemption_time=vmrr.start)
 
-            # Schedule deployment overhead
-            deploy_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, nexttime)
+        # Schedule deployment overhead
+        deploy_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, nexttime)
+        
+        # Commit reservation to slot table
+        # (we don't do this until the very end because the deployment overhead
+        # scheduling could still throw an exception)
+        for rr in deploy_rrs:
+            lease.append_deployrr(rr)
             
-            # Commit reservation to slot table
-            # (we don't do this until the very end because the deployment overhead
-            # scheduling could still throw an exception)
-            for rr in deploy_rrs:
-                lease.append_deployrr(rr)
-                
-            for rr in deploy_rrs:
-                self.slottable.addReservation(rr)
-                
-            lease.append_vmrr(vmrr)
-            self.slottable.addReservation(vmrr)
+        for rr in deploy_rrs:
+            self.slottable.addReservation(rr)
             
-            # Post-VM RRs (if any)
-            for rr in vmrr.post_rrs:
-                self.slottable.addReservation(rr)
-                
-            lease.set_state(Lease.STATE_SCHEDULED)
+        lease.append_vmrr(vmrr)
+        self.slottable.addReservation(vmrr)
+        
+        # Post-VM RRs (if any)
+        for rr in vmrr.post_rrs:
+            self.slottable.addReservation(rr)
+            
+        lease.set_state(Lease.STATE_SCHEDULED)
 
-            if is_ready:
-                lease.set_state(Lease.STATE_READY)
-        except SchedException, msg:
-            raise SchedException, "The requested AR lease is infeasible. Reason: %s" % msg
-        except Exception, msg:
-            raise
+        if is_ready:
+            lease.set_state(Lease.STATE_READY)
 
 
     def __schedule_besteffort_lease(self, lease, nexttime):            
-        try:
-            # Schedule the VMs
-            canreserve = self.vm_scheduler.can_reserve_besteffort_in_future()
-            
-            lease_state = lease.get_state()
-            
-            # Determine earliest start time in each node
-            if lease_state == Lease.STATE_QUEUED:
-                # Figure out earliest start times based on
-                # image schedule and reusable images
-                earliest = self.preparation_scheduler.find_earliest_starting_times(lease, nexttime)
-            elif lease_state == Lease.STATE_SUSPENDED_QUEUED:
-                # No need to transfer images from repository
-                # (only intra-node transfer)
-                earliest = dict([(node+1, [nexttime, constants.REQTRANSFER_NO, None]) for node in range(lease.numnodes)])
-            else:
-                raise CriticalSchedException, "Lease is an inconsistent state (tried to schedule best-effort lease when state is %s)" % lease_state
-            
-            (vmrr, in_future) = self.vm_scheduler.fit_asap(lease, nexttime, earliest, allow_reservation_in_future = canreserve)
-            
-            # Schedule deployment
-            is_ready = False
-            deploy_rrs = []
-            if lease_state == Lease.STATE_SUSPENDED_QUEUED:
-                self.vm_scheduler.schedule_migration(lease, vmrr, nexttime)
-            else:
-                deploy_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, nexttime)
+        # Schedule the VMs
+        canreserve = self.vm_scheduler.can_reserve_besteffort_in_future()
+        
+        lease_state = lease.get_state()
+        
+        # Determine earliest start time in each node
+        if lease_state == Lease.STATE_QUEUED:
+            # Figure out earliest start times based on
+            # image schedule and reusable images
+            earliest = self.preparation_scheduler.find_earliest_starting_times(lease, nexttime)
+        elif lease_state == Lease.STATE_SUSPENDED_QUEUED:
+            # No need to transfer images from repository
+            # (only intra-node transfer)
+            earliest = dict([(node+1, [nexttime, constants.REQTRANSFER_NO, None]) for node in range(lease.numnodes)])
+        else:
+            raise InconsistentLeaseStateError(l, doing = "scheduling a best-effort lease")
+        
+        (vmrr, in_future) = self.vm_scheduler.fit_asap(lease, nexttime, earliest, allow_reservation_in_future = canreserve)
+        
+        # Schedule deployment
+        is_ready = False
+        deploy_rrs = []
+        if lease_state == Lease.STATE_SUSPENDED_QUEUED:
+            self.vm_scheduler.schedule_migration(lease, vmrr, nexttime)
+        else:
+            deploy_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, nexttime)
 
-            # At this point, the lease is feasible.
-            # Commit changes by adding RRs to lease and to slot table
-            
-            # Add deployment RRs (if any) to lease
-            for rr in deploy_rrs:
-                lease.append_deployrr(rr)
-            
-            # Add VMRR to lease
-            lease.append_vmrr(vmrr)
-            
+        # At this point, the lease is feasible.
+        # Commit changes by adding RRs to lease and to slot table
+        
+        # Add deployment RRs (if any) to lease
+        for rr in deploy_rrs:
+            lease.append_deployrr(rr)
+        
+        # Add VMRR to lease
+        lease.append_vmrr(vmrr)
+        
 
-            # Add resource reservations to slottable
+        # Add resource reservations to slottable
+        
+        # Deployment RRs (if any)
+        for rr in deploy_rrs:
+            self.slottable.addReservation(rr)
+        
+        # Pre-VM RRs (if any)
+        for rr in vmrr.pre_rrs:
+            self.slottable.addReservation(rr)
             
-            # Deployment RRs (if any)
-            for rr in deploy_rrs:
-                self.slottable.addReservation(rr)
+        # VM
+        self.slottable.addReservation(vmrr)
+        
+        # Post-VM RRs (if any)
+        for rr in vmrr.post_rrs:
+            self.slottable.addReservation(rr)
+       
+        if in_future:
+            self.numbesteffortres += 1
             
-            # Pre-VM RRs (if any)
-            for rr in vmrr.pre_rrs:
-                self.slottable.addReservation(rr)
-                
-            # VM
-            self.slottable.addReservation(vmrr)
-            
-            # Post-VM RRs (if any)
-            for rr in vmrr.post_rrs:
-                self.slottable.addReservation(rr)
-           
-            if in_future:
-                self.numbesteffortres += 1
-                
-            if lease_state == Lease.STATE_QUEUED:
-                lease.set_state(Lease.STATE_SCHEDULED)
-                if is_ready:
-                    lease.set_state(Lease.STATE_READY)
-            elif lease_state == Lease.STATE_SUSPENDED_QUEUED:
-                lease.set_state(Lease.STATE_SUSPENDED_SCHEDULED)
+        if lease_state == Lease.STATE_QUEUED:
+            lease.set_state(Lease.STATE_SCHEDULED)
+            if is_ready:
+                lease.set_state(Lease.STATE_READY)
+        elif lease_state == Lease.STATE_SUSPENDED_QUEUED:
+            lease.set_state(Lease.STATE_SUSPENDED_SCHEDULED)
 
-                
-            lease.print_contents()
-
-        except SchedException, msg:
-            raise SchedException, "The requested best-effort lease is infeasible. Reason: %s" % msg
+        lease.print_contents()
 
 
     def __schedule_immediate_lease(self, req, nexttime):
-        try:
-            (vmrr, in_future) = self.__fit_asap(req, nexttime, allow_reservation_in_future=False)
-            # Schedule deployment
-            self.preparation_scheduler.schedule(req, vmrr, nexttime)
-                        
-            req.append_rr(vmrr)
-            self.slottable.addReservation(vmrr)
-            
-            # Post-VM RRs (if any)
-            for rr in vmrr.post_rrs:
-                self.slottable.addReservation(rr)
+        (vmrr, in_future) = self.__fit_asap(req, nexttime, allow_reservation_in_future=False)
+        # Schedule deployment
+        self.preparation_scheduler.schedule(req, vmrr, nexttime)
                     
-            req.print_contents()
-        except SlotFittingException, msg:
-            raise SchedException, "The requested immediate lease is infeasible. Reason: %s" % msg
+        req.append_rr(vmrr)
+        self.slottable.addReservation(vmrr)
+        
+        # Post-VM RRs (if any)
+        for rr in vmrr.post_rrs:
+            self.slottable.addReservation(rr)
+                
+        req.print_contents()
         
         
     def __preempt(self, lease, preemption_time):
@@ -506,6 +499,24 @@ class LeaseScheduler(object):
         self.logger.vdebug("Lease after preemption:")
         lease.print_contents()
         
+    def __reevaluate_schedule(self, endinglease, nodes, nexttime, checkedleases):
+        self.logger.debug("Reevaluating schedule. Checking for leases scheduled in nodes %s after %s" %(nodes, nexttime)) 
+        leases = []
+        vmrrs = self.slottable.get_next_reservations_in_nodes(nexttime, nodes, rr_type=VMResourceReservation, immediately_next=True)
+        leases = set([rr.lease for rr in vmrrs])
+        leases = [l for l in leases if isinstance(l, BestEffortLease) and l.get_state() in (Lease.STATE_SUSPENDED_SCHEDULED, Lease.STATE_READY) and not l in checkedleases]
+        for lease in leases:
+            self.logger.debug("Found lease %i" % l.id)
+            l.print_contents()
+            # Earliest time can't be earlier than time when images will be
+            # available in node
+            earliest = max(nexttime, lease.imagesavail)
+            self.vm_scheduler.slideback(lease, earliest)
+            checkedleases.append(l)
+        #for l in leases:
+        #    vmrr, susprr = l.getLastVMRR()
+        #    self.reevaluateSchedule(l, vmrr.nodes.values(), vmrr.end, checkedleases)        
+        
     # TODO: Should be in VMScheduler
     def __get_utilization(self, time):
         total = self.slottable.get_total_capacity()
@@ -524,6 +535,12 @@ class LeaseScheduler(object):
             util[k] /= total
             
         return util        
+
+    def __enqueue(self, lease):
+        """Queues a best-effort lease request"""
+        get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
+        self.queue.enqueue(lease)
+        self.logger.info("Received (and queueing) best-effort lease request #%i, %i nodes for %s." % (lease.id, lease.numnodes, lease.duration.requested))
 
     def __enqueue_in_order(self, lease):
         get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)

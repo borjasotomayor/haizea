@@ -28,6 +28,3 @@ class PreparationScheduler(object):
         
     def cleanup(self, lease):
         abstract()
-        
-class PreparationSchedException(Exception):
-    pass

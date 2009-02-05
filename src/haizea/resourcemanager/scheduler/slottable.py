@@ -24,13 +24,6 @@ import bisect
 import copy
 import logging
 
-class SlotFittingException(Exception):
-    pass
-
-class CriticalSlotFittingException(Exception):
-    pass
-
-
 class Node(object):
     def __init__(self, capacity, capacitywithpreemption, resourcepoolnode):
         self.capacity = ResourceTuple.copy(capacity)

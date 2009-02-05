@@ -19,10 +19,9 @@
 from haizea.common.utils import vnodemapstr, get_accounting
 import haizea.common.constants as constants
 import haizea.resourcemanager.enact.actions as actions
+from haizea.resourcemanager.scheduler import EnactmentError
 import logging 
 
-class FailedEnactmentException(Exception):
-    pass
 
 class ResourcePool(object):
     def __init__(self, info_enact, vm_enact, deploy_enact):
@@ -50,18 +49,18 @@ class ResourcePool(object):
 
         try:
             self.vm.start(start_action)
-        except Exception, msg:
-            self.logger.error("Enactment of start VM failed: %s" % msg)
-            raise FailedEnactmentException()
+        except EnactmentError, exc:
+            self.logger.error("Enactment of start VM failed: %s" % exc.message)
+            raise
         
     def stop_vms(self, lease, rr):
         stop_action = actions.VMEnactmentStopAction()
         stop_action.from_rr(rr)
         try:
             self.vm.stop(stop_action)
-        except Exception, msg:
-            self.logger.error("Enactment of end VM failed: %s" % msg)
-            raise FailedEnactmentException()
+        except EnactmentError, exc:
+            self.logger.error("Enactment of end VM failed: %s" % exc.message)
+            raise
          
     def suspend_vms(self, lease, rr):
         # Add memory image files
@@ -74,9 +73,9 @@ class ResourcePool(object):
         suspend_action.from_rr(rr)
         try:
             self.vm.suspend(suspend_action)
-        except Exception, msg:
-            self.logger.error("Enactment of suspend VM failed: %s" % msg)
-            raise FailedEnactmentException()
+        except EnactmentError, exc:
+            self.logger.error("Enactment of suspend VM failed: %s" % exc.message)
+            raise
     
     def verify_suspend(self, lease, rr):
         verify_suspend_action = actions.VMEnactmentConfirmSuspendAction()
@@ -94,9 +93,9 @@ class ResourcePool(object):
         resume_action.from_rr(rr)
         try:
             self.vm.resume(resume_action)
-        except Exception, msg:
-            self.logger.error("Enactment of resume VM failed: %s" % msg)
-            raise FailedEnactmentException()
+        except EnactmentError, exc:
+            self.logger.error("Enactment of resume VM failed: %s" % exc.message)
+            raise
     
     def verify_resume(self, lease, rr):
         verify_resume_action = actions.VMEnactmentConfirmResumeAction()

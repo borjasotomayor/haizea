@@ -101,6 +101,26 @@ class HaizeaConfig(Config):
                from a repository node before the lease can start.
             """),
 
+     Option(name        = "lease-failure-handling",
+            getter      = "lease-failure-handling",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            default     = constants.ONFAILURE_CANCEL,
+            valid       = [constants.ONFAILURE_CANCEL,
+                           constants.ONFAILURE_EXIT,
+                           constants.ONFAILURE_EXIT_RAISE],
+            doc         = """
+            Sets how the scheduler will handle a failure in
+            a lease. Valid values are:
+            
+             - cancel: The lease is cancelled and marked as "FAILED"
+             - exit: Haizea will exit cleanly, printing relevant debugging
+               information to its log.
+             - exit-raise: Haizea will exit by raising an exception. This is
+               useful for debugging, as IDEs will recognize this as an exception
+               and will facilitate debugging it.
+            """),
+
      Option(name        = "datafile",
             getter      = "datafile",
             type        = OPTTYPE_STRING,
