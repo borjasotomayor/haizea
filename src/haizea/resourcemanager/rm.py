@@ -289,7 +289,6 @@ class ResourceManager(Singleton):
         self.accounting.create_counter(constants.COUNTER_BESTEFFORTCOMPLETED, constants.AVERAGE_NONE)
         self.accounting.create_counter(constants.COUNTER_QUEUESIZE, constants.AVERAGE_TIMEWEIGHTED)
         self.accounting.create_counter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
-        self.accounting.create_counter(constants.COUNTER_CPUUTILIZATION, constants.AVERAGE_TIMEWEIGHTED)
         self.accounting.create_counter(constants.COUNTER_UTILIZATION, constants.AVERAGE_NONE)
         
         if self.daemon:
@@ -392,8 +391,16 @@ class ResourceManager(Singleton):
         self.logger.error("Message: %s" % exc)
     
     def panic(self):
+        treatment = self.config.get("lease-failure-handling")
+
+        # Stop the resource manager
+        self.stop()
+
         #self.print_stats(logging.getLevelName("ERROR"), verbose=True)
-        exit(1)
+        if treatment == constants.ONFAILURE_EXIT:
+            exit(1)
+        elif treatment == constants.ONFAILURE_EXIT_RAISE:
+            raise
         
         
     def print_stats(self, loglevel, verbose=False):
@@ -440,7 +447,8 @@ class ResourceManager(Singleton):
     # ending VM.
     def notify_event(self, lease_id, event):
         try:
-            self.scheduler.notify_event(lease_id, event)
+            lease = self.scheduler.get_lease_by_id(lease_id)
+            self.scheduler.notify_event(lease, event)
         except Exception, msg:
             # Exit if something goes horribly wrong
             self.logger.error("Exception when notifying an event for lease %i. Dumping state..." % lease_id )
@@ -451,9 +459,10 @@ class ResourceManager(Singleton):
         """Cancels a lease.
         
         Arguments:
-        lease -- Lease to cancel
+        lease_id -- ID of lease to cancel
         """    
         try:
+            lease = self.scheduler.get_lease_by_id(lease_id)
             self.scheduler.cancel_lease(lease_id)
         except Exception, msg:
             # Exit if something goes horribly wrong
@@ -826,16 +835,3 @@ class RealClock(Clock):
         self.rm.stop()
         sys.exit()
 
-if __name__ == "__main__":
-    from haizea.resourcemanager.configfile import HaizeaConfig
-    from haizea.common.config import ConfigException
-    CONFIGFILE = "../../../etc/sample_trace.conf"
-    try:
-        CONFIG = HaizeaConfig.from_file(CONFIGFILE)
-    except ConfigException, msg:
-        print >> sys.stderr, "Error in configuration file:"
-        print >> sys.stderr, msg
-        exit(1)
-    from haizea.resourcemanager.rm import ResourceManager
-    RM = ResourceManager(CONFIG)
-    RM.start()

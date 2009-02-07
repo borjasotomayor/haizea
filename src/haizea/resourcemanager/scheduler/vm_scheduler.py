@@ -207,10 +207,12 @@ class VMScheduler(object):
         vmrr.state = ResourceReservation.STATE_SCHEDULED
 
         self.__schedule_shutdown(vmrr)
+        
+        preemptions = self.__find_preemptable_leases(preemptions, vmrr.start, vmrr.end)
 
         return vmrr, preemptions
 
-    def fit_asap(self, lease, nexttime, earliest, allow_reservation_in_future = False):
+    def fit_asap(self, lease, nexttime, earliest, allow_reservation_in_future = None):
         lease_id = lease.id
         remaining_duration = lease.duration.get_remaining_duration()
         numnodes = lease.numnodes
@@ -223,6 +225,9 @@ class VMScheduler(object):
             suspendable = False
         else:
             suspendable = True
+
+        if allow_reservation_in_future == None:
+            allow_reservation_in_future = self.can_reserve_besteffort_in_future()
 
         canmigrate = get_config().get("migration")
 
@@ -392,6 +397,8 @@ class VMScheduler(object):
                 vmrr.end = vmrr.start + remaining_duration + shutdown_time
             self.__schedule_shutdown(vmrr)
         
+        if reservation:
+            self.numbesteffortres += 1
 
         
         susp_str = res_str = ""
@@ -401,7 +408,7 @@ class VMScheduler(object):
             susp_str = " (suspending)"
         self.logger.info("Lease #%i has been scheduled on nodes %s from %s%s to %s%s" % (lease.id, mappings.values(), start, res_str, end, susp_str))
 
-        return vmrr, reservation
+        return vmrr, []
 
     # TODO: This has to be tied in with the preparation scheduler
     def schedule_migration(self, lease, vmrr, nexttime):
@@ -457,7 +464,24 @@ class VMScheduler(object):
         for migr_rr in migr_rrs:
             vmrr.pre_rrs.insert(0, migr_rr)
 
-    def preempt(self, vmrr, t):
+    def cancel_vm(self, vmrr):
+
+        if vmrr.backfill_reservation == True:
+            self.numbesteffortres -= 1
+
+        # If there are any pre-RRs that are scheduled, remove them
+        for rr in vmrr.pre_rrs:
+            if rr.state == ResourceReservation.STATE_SCHEDULED:
+                self.slottable.removeReservation(rr)
+
+        # If there are any post RRs, remove them
+        for rr in vmrr.post_rrs:
+            self.slottable.removeReservation(rr)
+        
+        self.slottable.removeReservation(vmrr)
+
+    
+    def preempt_vm(self, vmrr, t):
         # Save original start and end time of the vmrr
         old_start = vmrr.start
         old_end = vmrr.end
@@ -465,90 +489,6 @@ class VMScheduler(object):
         self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
         for susprr in vmrr.post_rrs:
             self.slottable.addReservation(susprr)
-        
-    def find_preemptable_leases(self, mustpreempt, startTime, endTime):
-        def comparepreemptability(rrX, rrY):
-            if rrX.lease.submit_time > rrY.lease.submit_time:
-                return constants.BETTER
-            elif rrX.lease.submit_time < rrY.lease.submit_time:
-                return constants.WORSE
-            else:
-                return constants.EQUAL        
-            
-        def preemptedEnough(amountToPreempt):
-            for node in amountToPreempt:
-                if not amountToPreempt[node].is_zero_or_less():
-                    return False
-            return True
-        
-        # Get allocations at the specified time
-        atstart = set()
-        atmiddle = set()
-        nodes = set(mustpreempt.keys())
-        
-        reservationsAtStart = self.slottable.getReservationsAt(startTime)
-        reservationsAtStart = [r for r in reservationsAtStart if isinstance(r, VMResourceReservation) and r.is_preemptible()
-                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
-        
-        reservationsAtMiddle = self.slottable.get_reservations_starting_between(startTime, endTime)
-        reservationsAtMiddle = [r for r in reservationsAtMiddle if isinstance(r, VMResourceReservation) and r.is_preemptible()
-                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
-        
-        reservationsAtStart.sort(comparepreemptability)
-        reservationsAtMiddle.sort(comparepreemptability)
-        
-        amountToPreempt = {}
-        for n in mustpreempt:
-            amountToPreempt[n] = ResourceTuple.copy(mustpreempt[n])
-
-        # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
-        for r in reservationsAtStart:
-            # The following will really only come into play when we have
-            # multiple VMs per node
-            mustpreemptres = False
-            for n in r.resources_in_pnode.keys():
-                # Don't need to preempt if we've already preempted all
-                # the needed resources in node n
-                if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
-                    amountToPreempt[n].decr(r.resources_in_pnode[n])
-                    mustpreemptres = True
-            if mustpreemptres:
-                atstart.add(r)
-            if preemptedEnough(amountToPreempt):
-                break
-        
-        # Second step: CHOOSE RESOURCES TO PREEMPT DURING RESERVATION
-        if len(reservationsAtMiddle)>0:
-            changepoints = set()
-            for r in reservationsAtMiddle:
-                changepoints.add(r.start)
-            changepoints = list(changepoints)
-            changepoints.sort()        
-            
-            for cp in changepoints:
-                amountToPreempt = {}
-                for n in mustpreempt:
-                    amountToPreempt[n] = ResourceTuple.copy(mustpreempt[n])
-                reservations = [r for r in reservationsAtMiddle 
-                                if r.start <= cp and cp < r.end]
-                for r in reservations:
-                    mustpreemptres = False
-                    for n in r.resources_in_pnode.keys():
-                        if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
-                            amountToPreempt[n].decr(r.resources_in_pnode[n])
-                            mustpreemptres = True
-                    if mustpreemptres:
-                        atmiddle.add(r)
-                    if preemptedEnough(amountToPreempt):
-                        break
-            
-        self.logger.debug("Preempting leases (at start of reservation): %s" % [r.lease.id for r in atstart])
-        self.logger.debug("Preempting leases (in middle of reservation): %s" % [r.lease.id for r in atmiddle])
-        
-        leases = [r.lease for r in atstart|atmiddle]
-        
-        return leases
-        
         
     def slideback(self, lease, earliest):
         vmrr = lease.get_last_vmrr()
@@ -610,6 +550,24 @@ class VMScheduler(object):
             self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
             self.logger.vdebug("New lease descriptor (after slideback):")
             lease.print_contents()        
+        
+    def get_utilization(self, time):
+        total = self.slottable.get_total_capacity()
+        util = {}
+        reservations = self.slottable.getReservationsAt(time)
+        for r in reservations:
+            for node in r.resources_in_pnode:
+                if isinstance(r, VMResourceReservation):
+                    use = r.resources_in_pnode[node].get_by_type(constants.RES_CPU)
+                    util[type(r)] = use + util.setdefault(type(r),0.0)
+                elif isinstance(r, SuspensionResourceReservation) or isinstance(r, ResumptionResourceReservation) or isinstance(r, ShutdownResourceReservation):
+                    use = r.vmrr.resources_in_pnode[node].get_by_type(constants.RES_CPU)
+                    util[type(r)] = use + util.setdefault(type(r),0.0)
+        util[None] = total - sum(util.values())
+        for k in util:
+            util[k] /= total
+            
+        return util              
         
     def can_suspend_at(self, lease, t):
         # TODO: Make more general, should determine vmrr based on current time
@@ -949,6 +907,90 @@ class VMScheduler(object):
             # it up
             threshold = safe_duration + (min_duration * factor)
             return threshold
+
+    def __find_preemptable_leases(self, mustpreempt, startTime, endTime):
+        def comparepreemptability(rrX, rrY):
+            if rrX.lease.submit_time > rrY.lease.submit_time:
+                return constants.BETTER
+            elif rrX.lease.submit_time < rrY.lease.submit_time:
+                return constants.WORSE
+            else:
+                return constants.EQUAL        
+            
+        def preemptedEnough(amountToPreempt):
+            for node in amountToPreempt:
+                if not amountToPreempt[node].is_zero_or_less():
+                    return False
+            return True
+        
+        # Get allocations at the specified time
+        atstart = set()
+        atmiddle = set()
+        nodes = set(mustpreempt.keys())
+        
+        reservationsAtStart = self.slottable.getReservationsAt(startTime)
+        reservationsAtStart = [r for r in reservationsAtStart if isinstance(r, VMResourceReservation) and r.is_preemptible()
+                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
+        
+        reservationsAtMiddle = self.slottable.get_reservations_starting_between(startTime, endTime)
+        reservationsAtMiddle = [r for r in reservationsAtMiddle if isinstance(r, VMResourceReservation) and r.is_preemptible()
+                        and len(set(r.resources_in_pnode.keys()) & nodes)>0]
+        
+        reservationsAtStart.sort(comparepreemptability)
+        reservationsAtMiddle.sort(comparepreemptability)
+        
+        amountToPreempt = {}
+        for n in mustpreempt:
+            amountToPreempt[n] = ResourceTuple.copy(mustpreempt[n])
+
+        # First step: CHOOSE RESOURCES TO PREEMPT AT START OF RESERVATION
+        for r in reservationsAtStart:
+            # The following will really only come into play when we have
+            # multiple VMs per node
+            mustpreemptres = False
+            for n in r.resources_in_pnode.keys():
+                # Don't need to preempt if we've already preempted all
+                # the needed resources in node n
+                if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
+                    amountToPreempt[n].decr(r.resources_in_pnode[n])
+                    mustpreemptres = True
+            if mustpreemptres:
+                atstart.add(r)
+            if preemptedEnough(amountToPreempt):
+                break
+        
+        # Second step: CHOOSE RESOURCES TO PREEMPT DURING RESERVATION
+        if len(reservationsAtMiddle)>0:
+            changepoints = set()
+            for r in reservationsAtMiddle:
+                changepoints.add(r.start)
+            changepoints = list(changepoints)
+            changepoints.sort()        
+            
+            for cp in changepoints:
+                amountToPreempt = {}
+                for n in mustpreempt:
+                    amountToPreempt[n] = ResourceTuple.copy(mustpreempt[n])
+                reservations = [r for r in reservationsAtMiddle 
+                                if r.start <= cp and cp < r.end]
+                for r in reservations:
+                    mustpreemptres = False
+                    for n in r.resources_in_pnode.keys():
+                        if amountToPreempt.has_key(n) and not amountToPreempt[n].is_zero_or_less():
+                            amountToPreempt[n].decr(r.resources_in_pnode[n])
+                            mustpreemptres = True
+                    if mustpreemptres:
+                        atmiddle.add(r)
+                    if preemptedEnough(amountToPreempt):
+                        break
+            
+        self.logger.debug("Preempting leases (at start of reservation): %s" % [r.lease.id for r in atstart])
+        self.logger.debug("Preempting leases (in middle of reservation): %s" % [r.lease.id for r in atmiddle])
+        
+        leases = [r.lease for r in atstart|atmiddle]
+        
+        return leases
+
 
     def __choose_nodes(self, canfit, start, canpreempt, avoidpreempt):
         # TODO2: Choose appropriate prioritizing function based on a

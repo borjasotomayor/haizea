@@ -63,9 +63,12 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         elif isinstance(lease, BestEffortLease):
             return self.schedule_for_besteffort(lease, vmrr, nexttime)
             
-    def cancel_deployment(self, lease):
+    def cancel_preparation(self, lease):
         if isinstance(lease, BestEffortLease):
             self.__remove_from_fifo_transfers(lease.id)
+        self.cleanup(lease)
+        lease.diskimagemap = {}
+
         
     def is_ready(self, lease, vmrr):
         return False        

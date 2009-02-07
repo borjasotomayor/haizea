@@ -41,4 +41,4 @@ class UnmanagedPreparationScheduler(PreparationScheduler):
 
     def cleanup(self, lease):
         for vnode, pnode in lease.diskimagemap.items():
-                self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
+            self.resourcepool.remove_diskimage(pnode, lease.id, vnode)
