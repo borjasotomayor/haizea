@@ -1,17 +1,24 @@
 import ConfigParser
+import os
+import shutil
 
 from haizea.resourcemanager.configfile import HaizeaConfig
 from haizea.resourcemanager.rm import ResourceManager
 
-class BaseSimulatorTest(object):
+class BaseTest(object):
     def __init__(self):
         pass
-    
+
     def load_configfile(self, configfile):
         file = open (configfile, "r")
         c = ConfigParser.ConfigParser()
         c.readfp(file)
         return c
+
+
+class BaseSimulatorTest(BaseTest):
+    def __init__(self):
+        pass
 
     def set_tracefile(self, tracefile):
         self.config.set("tracefile", "tracefile", tracefile)
@@ -60,3 +67,15 @@ class BaseSimulatorTest(object):
         self.set_tracefile("wait.lwf")
         rm = ResourceManager(HaizeaConfig(self.config))
         rm.start()
+        
+        
+class BaseOpenNebulaTest(BaseTest):
+    def __init__(self):
+        pass
+
+    def do_test(self, db):
+        shutil.copyfile(db, "one.db")
+        rm = ResourceManager(HaizeaConfig(self.config))
+        rm.start()
+        os.remove("one.db")
+

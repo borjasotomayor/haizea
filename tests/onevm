@@ -1,0 +1,19 @@
+#!/bin/bash
+
+if [ $1 = "deploy" ];
+then
+    echo "Deploying VM"
+elif [ $1 = "shutdown" ];
+then
+    echo "Shutting down VM"
+elif [ $1 = "suspend" ];
+then
+    echo "Suspending VM"
+    vid=$2
+    sqlite3 one.db "UPDATE vm_pool SET state=5 where oid=$vid"
+elif [ $1 = "resume" ];
+then
+    echo "Resuming VM"
+    vid=$2
+    sqlite3 one.db "UPDATE vm_pool SET state=3 where oid=$vid"
+fi
