@@ -1,5 +1,6 @@
 import ConfigParser
 import os
+import threading
 import shutil
 
 from haizea.resourcemanager.configfile import HaizeaConfig
@@ -78,4 +79,17 @@ class BaseOpenNebulaTest(BaseTest):
         rm = ResourceManager(HaizeaConfig(self.config))
         rm.start()
         os.remove("one.db")
+    
 
+class BaseXMLRPCTest(BaseTest):
+    def __init__(self):
+        self.haizea_thread = None
+
+    def start(self):
+        self.rm = ResourceManager(HaizeaConfig(self.config))
+        self.haizea_thread = threading.Thread(target=self.rm.start)
+        self.haizea_thread.start()
+        
+    def stop(self):
+        self.rm.stop()
+        self.haizea_thread.join()
