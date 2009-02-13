@@ -27,6 +27,7 @@ package.
 This module also includes a Queue class and a LeaseTable class, which are used
 by the lease scheduler.
 """
+
 import haizea.common.constants as constants
 from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, get_config, get_accounting, get_clock
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease, ImmediateLease
@@ -41,6 +42,12 @@ import logging
 
 class LeaseScheduler(object):
     """The Haizea Lease Scheduler
+    
+    This is the main scheduling class in Haizea. It handles lease scheduling which,
+    in turn involved VM scheduling, preparation scheduling (such as transferring
+    a VM image), and numerous bookkeeping operations. All these operations are
+    handled by other classes, so this class acts mostly as an orchestrator that
+    coordinates all the different operations involved in scheduling a lease.
     
     Public methods:
     request_lease -- Entry point of leases into the scheduler
@@ -86,7 +93,7 @@ class LeaseScheduler(object):
         # Create other data structures
         self.queue = Queue(self)
         self.leases = LeaseTable(self)
-        self.completedleases = LeaseTable(self)
+        self.completed_leases = LeaseTable(self)
 
         # Handlers are callback functions that get called whenever a type of
         # resource reservation starts or ends. Each scheduler publishes the
@@ -158,7 +165,7 @@ class LeaseScheduler(object):
                 get_accounting().incr_counter(constants.COUNTER_IMREJECTED, lease.id)
                 self.logger.info("Immediate lease request #%i has been rejected: %s" % (lease.id, exc.message))
                 lease.set_state(Lease.STATE_REJECTED)
-                self.completedleases.add(lease)
+                self.completed_leases.add(lease)
                 self.leases.remove(lease)            
 
         # Schedule AR requests
@@ -175,7 +182,7 @@ class LeaseScheduler(object):
                 get_accounting().incr_counter(constants.COUNTER_ARREJECTED, lease.id)
                 self.logger.info("AR lease request #%i has been rejected: %s" % (lease.id, exc.message))
                 lease.set_state(Lease.STATE_REJECTED)
-                self.completedleases.add(lease)
+                self.completed_leases.add(lease)
                 self.leases.remove(lease)            
             
         # Process queue (i.e., traverse queue in search of leases that can be scheduled)
@@ -338,7 +345,7 @@ class LeaseScheduler(object):
             
         # Change state, and remove from lease table
         lease.set_state(Lease.STATE_CANCELLED)
-        self.completedleases.add(lease)
+        self.completed_leases.add(lease)
         self.leases.remove(lease)
 
     
@@ -358,7 +365,7 @@ class LeaseScheduler(object):
             for r in rrs:
                 self.slottable.removeReservation(r)
             lease.set_state(Lease.STATE_FAILED)
-            self.completedleases.add(lease)
+            self.completed_leases.add(lease)
             self.leases.remove(lease)
         elif treatment == constants.ONFAILURE_EXIT or treatment == constants.ONFAILURE_EXIT_RAISE:
             # In this case, a lease failure makes Haizea exit. This is useful when debugging,
@@ -655,13 +662,19 @@ class LeaseScheduler(object):
         l.duration.actual = l.duration.accumulated
         l.end = round_datetime(get_clock().get_time())
         self.preparation_scheduler.cleanup(l)
-        self.completedleases.add(l)
+        self.completed_leases.add(l)
         self.leases.remove(l)
         if isinstance(l, BestEffortLease):
             get_accounting().incr_counter(constants.COUNTER_BESTEFFORTCOMPLETED, l.id)
         
 
 class Queue(object):
+    """A simple queue for leases
+    
+    This class is a simple queue container for leases, with some
+    extra syntactic sugar added for convenience.    
+    """    
+
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.__q = []
@@ -695,6 +708,12 @@ class Queue(object):
         return iter(self.__q)
         
 class LeaseTable(object):
+    """A simple container for leases
+    
+    This class is a simple dictionary-like container for leases, with some
+    extra syntactic sugar added for convenience.    
+    """    
+    
     def __init__(self, scheduler):
         self.scheduler = scheduler
         self.entries = {}

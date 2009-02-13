@@ -171,7 +171,7 @@ class AccountingDataCollection(object):
                 raise e
     
         # Add lease data
-        leases = self.rm.scheduler.completedleases.entries
+        leases = self.rm.scheduler.completed_leases.entries
         # Remove some data that won't be necessary in the reporting tools
         for l in leases.values():
             l.clear_rrs()

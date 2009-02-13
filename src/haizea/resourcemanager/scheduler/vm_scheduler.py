@@ -22,7 +22,7 @@ from haizea.resourcemanager.scheduler.slottable import SlotTable
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease, ImmediateLease
 from haizea.resourcemanager.scheduler.slottable import ResourceReservation, ResourceTuple
 from haizea.resourcemanager.scheduler.resourcepool import ResourcePool, ResourcePoolWithReusableImages
-from haizea.resourcemanager.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, EnactmentError
+from haizea.resourcemanager.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, EnactmentError, NotSchedulableException
 from operator import attrgetter, itemgetter
 from mx.DateTime import TimeDelta
 
