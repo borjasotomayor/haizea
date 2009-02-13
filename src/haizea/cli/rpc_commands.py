@@ -97,8 +97,15 @@ class haizea_request_lease(RPCCommand):
                                 self.opt.cpu, self.opt.mem, self.opt.vmimage, self.opt.vmimagesize)
             print "Lease submitted correctly."
             print "Lease ID: %i" % lease_id
+        except xmlrpclib.Fault, err:
+            print >> sys.stderr, "XMLRPC fault: %s" % err.faultString
+            if self.opt.debug:
+                raise
         except Exception, msg:
             print >> sys.stderr, "Error: %s" % msg
+            if self.opt.debug:
+                raise
+
         
 class haizea_cancel_lease(RPCCommand):
     """
@@ -122,8 +129,15 @@ class haizea_cancel_lease(RPCCommand):
         
         try:
             code = server.cancel_lease(self.opt.lease)
+        except xmlrpclib.Fault, err:
+            print >> sys.stderr, "XMLRPC fault: %s" % err.faultString
+            if self.opt.debug:
+                raise
         except Exception, msg:
             print >> sys.stderr, "Error: %s" % msg
+            if self.opt.debug:
+                raise
+
         
 class haizea_list_leases(RPCCommand):
     """
@@ -150,8 +164,15 @@ class haizea_list_leases(RPCCommand):
         try:
             leases = server.get_leases()
             console_table_printer(fields, leases)
+        except xmlrpclib.Fault, err:
+            print >> sys.stderr, "XMLRPC fault: %s" % err.faultString
+            if self.opt.debug:
+                raise
         except Exception, msg:
             print >> sys.stderr, "Error: %s" % msg
+            if self.opt.debug:
+                raise
+
 
 class haizea_list_hosts(RPCCommand):
     """
@@ -176,8 +197,14 @@ class haizea_list_hosts(RPCCommand):
         try:
             hosts = server.get_hosts()
             console_table_printer(fields, hosts)
+        except xmlrpclib.Fault, err:
+            print >> sys.stderr, "XMLRPC fault: %s" % err.faultString
+            if self.opt.debug:
+                raise
         except Exception, msg:
             print >> sys.stderr, "Error: %s" % msg
+            if self.opt.debug:
+                raise
 
 class haizea_show_queue(RPCCommand):
     """
@@ -207,8 +234,15 @@ class haizea_show_queue(RPCCommand):
                 print "Queue is empty."
             else:
                 console_table_printer(fields, leases)
+        except xmlrpclib.Fault, err:
+            print >> sys.stderr, "XMLRPC fault: %s" % err.faultString
+            if self.opt.debug:
+                raise
         except Exception, msg:
             print >> sys.stderr, "Error: %s" % msg
+            if self.opt.debug:
+                raise
+
 
 def console_table_printer(fields, values):
     print "\33[1m\33[4m",

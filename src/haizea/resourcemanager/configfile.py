@@ -19,7 +19,6 @@
 from haizea.common.config import ConfigException, Section, Option, Config, OPTTYPE_INT, OPTTYPE_FLOAT, OPTTYPE_STRING, OPTTYPE_BOOLEAN, OPTTYPE_DATETIME, OPTTYPE_TIMEDELTA 
 from haizea.common.utils import generate_config_name
 import haizea.common.constants as constants
-import os.path
 import sys
 from mx.DateTime import TimeDelta
 import ConfigParser

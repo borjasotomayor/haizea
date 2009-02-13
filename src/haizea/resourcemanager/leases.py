@@ -29,12 +29,11 @@ data structures.
   * Duration: A wrapper around requested/accumulated/actual durations
 """
 
-from haizea.common.constants import RES_MEM, MIGRATE_NONE, MIGRATE_MEM, MIGRATE_MEMDISK, LOGLEVEL_VDEBUG
-from haizea.common.utils import StateMachine, round_datetime_delta, get_lease_id, pretty_nodemap, estimate_transfer_time, xmlrpc_marshall_singlevalue
+from haizea.common.constants import LOGLEVEL_VDEBUG
+from haizea.common.utils import StateMachine, round_datetime_delta, get_lease_id, pretty_nodemap, xmlrpc_marshall_singlevalue
+from haizea.resourcemanager.scheduler.slottable import ResourceReservation
 
-from operator import attrgetter
 from mx.DateTime import TimeDelta
-from math import floor
 
 import logging
 
@@ -109,7 +108,7 @@ class Lease(object):
         self.state = LeaseStateMachine()
         self.diskimagemap = {}
         self.memimagemap = {}
-        self.deployment_rrs = []
+        self.preparation_rrs = []
         self.vm_rrs = []
 
         # Enactment information. Should only be manipulated by enactment module
@@ -137,10 +136,10 @@ class Lease(object):
         self.logger.log(loglevel, "Mem image map  : %s" % pretty_nodemap(self.memimagemap))
 
     def print_rrs(self, loglevel=LOGLEVEL_VDEBUG):
-        if len(self.deployment_rrs) > 0:
+        if len(self.preparation_rrs) > 0:
             self.logger.log(loglevel, "DEPLOYMENT RESOURCE RESERVATIONS")
             self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-            for r in self.deployment_rrs:
+            for r in self.preparation_rrs:
                 r.print_contents(loglevel)
                 self.logger.log(loglevel, "##")
         self.logger.log(loglevel, "VM RESOURCE RESERVATIONS")
@@ -149,6 +148,12 @@ class Lease(object):
             r.print_contents(loglevel)
             self.logger.log(loglevel, "##")
 
+    def get_active_vmrrs(self, time):
+        return [r for r in self.vm_rrs if r.start <= time and time <= r.end and r.state == ResourceReservation.STATE_ACTIVE]
+
+    def get_scheduled_reservations(self):
+        return [r for r in self.preparation_rrs + self.vm_rrs if r.state == ResourceReservation.STATE_SCHEDULED]
+
     def get_endtime(self):
         vmrr = self.get_last_vmrr()
         return vmrr.end
@@ -156,8 +161,8 @@ class Lease(object):
     def append_vmrr(self, vmrr):
         self.vm_rrs.append(vmrr)
         
-    def append_deployrr(self, vmrr):
-        self.deployment_rrs.append(vmrr)
+    def append_preparationrr(self, vmrr):
+        self.preparation_rrs.append(vmrr)
 
     def get_last_vmrr(self):
         return self.vm_rrs[-1]
@@ -172,7 +177,7 @@ class Lease(object):
             self.vm_rrs.remove(vmrr)
 
     def clear_rrs(self):
-        self.deployment_rrs = []
+        self.preparation_rrs = []
         self.vm_rrs = []
         
     def add_boot_overhead(self, t):

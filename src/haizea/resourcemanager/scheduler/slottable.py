@@ -16,12 +16,10 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from mx.DateTime import ISO, TimeDelta
-from operator import attrgetter, itemgetter
 import haizea.common.constants as constants
-from math import ceil, floor
+from haizea.common.utils import xmlrpc_marshall_singlevalue
+from math import floor
 import bisect
-import copy
 import logging
 
 class Node(object):
@@ -407,7 +405,7 @@ class SlotTable(object):
             rrs = [rr for rr in rrs if isinstance(rr, rr_type)]
             
         # Filter the RRs by nodes
-        for r in rrs:
+        for rr in rrs:
             rr_nodes = set(rr.resources_in_pnode.keys())
             if len(nodes & rr_nodes) > 0:
                 rrs_in_nodes.append(rr)

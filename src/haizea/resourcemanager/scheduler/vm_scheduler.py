@@ -17,12 +17,10 @@
 # -------------------------------------------------------------------------- #
 
 import haizea.common.constants as constants
-from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_accounting, get_clock
-from haizea.resourcemanager.scheduler.slottable import SlotTable
-from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease, ImmediateLease
+from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_clock
+from haizea.resourcemanager.leases import Lease, BestEffortLease
 from haizea.resourcemanager.scheduler.slottable import ResourceReservation, ResourceTuple
-from haizea.resourcemanager.scheduler.resourcepool import ResourcePool, ResourcePoolWithReusableImages
-from haizea.resourcemanager.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, EnactmentError, NotSchedulableException
+from haizea.resourcemanager.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, EnactmentError, NotSchedulableException, InconsistentScheduleError, InconsistentLeaseStateError
 from operator import attrgetter, itemgetter
 from mx.DateTime import TimeDelta
 
@@ -126,9 +124,9 @@ class VMScheduler(object):
         # At this point we know if the lease is feasible, and if
         # will require preemption.
         if not mustpreempt:
-           self.logger.debug("The VM reservations for this lease are feasible without preemption.")
+            self.logger.debug("The VM reservations for this lease are feasible without preemption.")
         else:
-           self.logger.debug("The VM reservations for this lease are feasible but will require preemption.")
+            self.logger.debug("The VM reservations for this lease are feasible but will require preemption.")
 
         # merge canfitnopreempt and canfitpreempt
         canfit = {}
@@ -1148,7 +1146,7 @@ class VMScheduler(object):
         self.logger.debug("LEASE-%i End of handleEndVM" % l.id)
         self.logger.info("Stopped VMs for lease %i on nodes %s" % (l.id, rr.nodes.values()))
 
-    def _handle_unscheduled_end_vm(self, l, vmrr, enact=False):
+    def _handle_unscheduled_end_vm(self, l, vmrr):
         self.logger.info("LEASE-%i The VM has ended prematurely." % l.id)
         for rr in vmrr.post_rrs:
             self.slottable.removeReservation(rr)

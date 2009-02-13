@@ -29,14 +29,12 @@ by the lease scheduler.
 """
 
 import haizea.common.constants as constants
-from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, get_config, get_accounting, get_clock
+from haizea.common.utils import round_datetime, get_config, get_accounting, get_clock
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease, ImmediateLease
 from haizea.resourcemanager.scheduler import RescheduleLeaseException, NormalEndLeaseException, InconsistentLeaseStateError, EnactmentError, UnrecoverableError, NotSchedulableException
-from haizea.resourcemanager.scheduler.slottable import SlotTable, ResourceReservation
-from haizea.resourcemanager.scheduler.resourcepool import ResourcePool, ResourcePoolWithReusableImages
-from haizea.resourcemanager.scheduler.vm_scheduler import VMResourceReservation, SuspensionResourceReservation, ResumptionResourceReservation, ShutdownResourceReservation
-from operator import attrgetter, itemgetter
-from mx.DateTime import TimeDelta
+from haizea.resourcemanager.scheduler.slottable import ResourceReservation
+from haizea.resourcemanager.scheduler.vm_scheduler import VMResourceReservation
+from operator import attrgetter
 
 import logging
 
@@ -215,7 +213,7 @@ class LeaseScheduler(object):
                 self.handlers[type(rr)].on_end(lease, rr)
                 
             # A RescheduleLeaseException indicates that the lease has to be rescheduled
-            except RescheduleLeaseException, msg:
+            except RescheduleLeaseException, exc:
                 # Currently, the only leases that get rescheduled are best-effort leases,
                 # once they've been suspended.
                 if isinstance(rr.lease, BestEffortLease):
@@ -224,7 +222,7 @@ class LeaseScheduler(object):
                         self.__enqueue_in_order(lease)
                         lease.set_state(Lease.STATE_SUSPENDED_QUEUED)
                     else:
-                        raise InconsistentLeaseStateError(l, doing = "rescheduling best-effort lease")
+                        raise InconsistentLeaseStateError(lease, doing = "rescheduling best-effort lease")
                     
             # A NormalEndLeaseException indicates that the end of this reservations marks
             # the normal end of the lease.
@@ -307,7 +305,7 @@ class LeaseScheduler(object):
         """
         time = get_clock().get_time()
         
-        self.logger.info("Cancelling lease %i..." % lease_id)
+        self.logger.info("Cancelling lease %i..." % lease.id)
             
         lease_state = lease.get_state()
         
@@ -319,29 +317,27 @@ class LeaseScheduler(object):
 
         elif lease_state == Lease.STATE_ACTIVE:
             # If a lease is active, that means we have to shut down its VMs to cancel it.
-            self.logger.info("Lease %i is active. Stopping active reservation..." % lease_id)
-            rr = lease.get_active_reservations(time)[0]
-            self.vm_scheduler._handle_unscheduled_end_vm(lease, rr, enact=True)
+            self.logger.info("Lease %i is active. Stopping active reservation..." % lease.id)
+            vmrr = lease.get_active_vmrrs(time)[0]
+            self.vm_scheduler._handle_unscheduled_end_vm(lease, vmrr)
 
         elif lease_state in [Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED, Lease.STATE_READY, Lease.STATE_RESUMED_READY]:
             # If a lease is scheduled or ready, we just need to cancel all future reservations
             # for that lease
-            self.logger.info("Lease %i is scheduled. Cancelling reservations." % lease_id)
+            self.logger.info("Lease %i is scheduled. Cancelling reservations." % lease.id)
             rrs = lease.get_scheduled_reservations()
             for r in rrs:
-                lease.remove_rr(r)
                 self.slottable.removeReservation(r)
             
-        elif lease_state == [Lease.STATE_QUEUED, Lease.STATE_SUSPENDED_QUEUED]:
+        elif lease_state in [Lease.STATE_QUEUED, Lease.STATE_SUSPENDED_QUEUED]:
             # If a lease is in the queue, waiting to be scheduled, cancelling
             # just requires removing it from the queue
             
-            self.logger.info("Lease %i is in the queue. Removing..." % lease_id)
-            l = self.queue.get_lease(lease_id)
+            self.logger.info("Lease %i is in the queue. Removing..." % lease.id)
             self.queue.remove_lease(lease)
         else:
             # Cancelling in any of the other states is currently unsupported
-            raise InconsistentLeaseStateError(l, doing = "cancelling the VM")
+            raise InconsistentLeaseStateError(lease, doing = "cancelling the VM")
             
         # Change state, and remove from lease table
         lease.set_state(Lease.STATE_CANCELLED)
@@ -364,7 +360,7 @@ class LeaseScheduler(object):
             rrs = lease.get_scheduled_reservations()
             for r in rrs:
                 self.slottable.removeReservation(r)
-            lease.set_state(Lease.STATE_FAILED)
+            lease.set_state(Lease.STATE_FAIL)
             self.completed_leases.add(lease)
             self.leases.remove(lease)
         elif treatment == constants.ONFAILURE_EXIT or treatment == constants.ONFAILURE_EXIT_RAISE:
@@ -390,7 +386,7 @@ class LeaseScheduler(object):
             vmrr = lease.get_last_vmrr()
             self._handle_end_rr(vmrr)
             # TODO: Exception handling
-            self.vm_scheduler._handle_unscheduled_end_vm(lease, vmrr, enact=False)
+            self.vm_scheduler._handle_unscheduled_end_vm(lease, vmrr)
             self._handle_end_lease(lease)
             nexttime = get_clock().get_next_schedulable_time()
             # We need to reevaluate the schedule to see if there are any future
@@ -470,7 +466,7 @@ class LeaseScheduler(object):
             # (only intra-node transfer)
             earliest = dict([(node+1, [nexttime, constants.REQTRANSFER_NO, None]) for node in range(lease.numnodes)])
         else:
-            raise InconsistentLeaseStateError(l, doing = "scheduling a best-effort lease")
+            raise InconsistentLeaseStateError(lease, doing = "scheduling a best-effort lease")
         
         if isinstance(lease, BestEffortLease):
             (vmrr, preemptions) = self.vm_scheduler.fit_asap(lease, nexttime, earliest)
@@ -486,18 +482,18 @@ class LeaseScheduler(object):
                 
         # Schedule deployment
         is_ready = False
-        deploy_rrs = []
+        preparation_rrs = []
         if lease_state == Lease.STATE_SUSPENDED_QUEUED:
             self.vm_scheduler.schedule_migration(lease, vmrr, nexttime)
         else:
-            deploy_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, nexttime)
+            preparation_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, nexttime)
 
         # At this point, the lease is feasible.
         # Commit changes by adding RRs to lease and to slot table
         
         # Add deployment RRs (if any) to lease
-        for rr in deploy_rrs:
-            lease.append_deployrr(rr)
+        for rr in preparation_rrs:
+            lease.append_preparationrr(rr)
         
         # Add VMRR to lease
         lease.append_vmrr(vmrr)
@@ -506,7 +502,7 @@ class LeaseScheduler(object):
         # Add resource reservations to slottable
         
         # Deployment RRs (if any)
-        for rr in deploy_rrs:
+        for rr in preparation_rrs:
             self.slottable.addReservation(rr)
         
         # Pre-VM RRs (if any)
@@ -611,13 +607,13 @@ class LeaseScheduler(object):
         leases = set([rr.lease for rr in vmrrs])
         leases = [l for l in leases if isinstance(l, BestEffortLease) and l.get_state() in (Lease.STATE_SUSPENDED_SCHEDULED, Lease.STATE_READY) and not l in checkedleases]
         for lease in leases:
-            self.logger.debug("Found lease %i" % l.id)
-            l.print_contents()
+            self.logger.debug("Found lease %i" % lease.id)
+            lease.print_contents()
             # Earliest time can't be earlier than time when images will be
             # available in node
             earliest = max(nexttime, lease.imagesavail)
             self.vm_scheduler.slideback(lease, earliest)
-            checkedleases.append(l)
+            checkedleases.append(lease)
         #for l in leases:
         #    vmrr, susprr = l.getLastVMRR()
         #    self.reevaluateSchedule(l, vmrr.nodes.values(), vmrr.end, checkedleases)        

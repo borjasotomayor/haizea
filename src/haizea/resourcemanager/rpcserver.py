@@ -27,11 +27,13 @@ class StoppableSimpleXMLRPCServer(SimpleXMLRPCServer):
 
     def serve_forever(self):
         self.run = True
+        self.socket.settimeout(1)
         while self.run:
             self.handle_request()
 
     def stop(self):
         self.run = False
+        self.socket.close()
 
 class RPCServer(object):
     def __init__(self, rm):
@@ -39,6 +41,7 @@ class RPCServer(object):
         self.logger = logging.getLogger("RPCSERVER")
         self.port = DEFAULT_HAIZEA_PORT
         self.server = StoppableSimpleXMLRPCServer(("localhost", self.port), allow_none=True)
+        self.server_thread = None
         self.register_rpc(self.test_func)
         self.register_rpc(self.cancel_lease)
         self.register_rpc(self.get_leases)
@@ -49,11 +52,12 @@ class RPCServer(object):
 
     def start(self):
         # Start the XML-RPC server
-        server_thread = threading.Thread( target = self.serve )
-        server_thread.start()
+        self.server_thread = threading.Thread( target = self.serve )
+        self.server_thread.start()
         
     def stop(self):
         self.server.stop()
+        self.server_thread.join()
         
     def register_rpc(self, func):
         self.server.register_function(func)
@@ -80,7 +84,7 @@ class RPCServer(object):
         return [l.xmlrpc_marshall() for l in self.rm.scheduler.queue]
 
     def get_hosts(self):
-        return [h.xmlrpc_marshall() for h in self.rm.scheduler.resourcepool.nodes]
+        return [h.xmlrpc_marshall() for h in self.rm.scheduler.vm_scheduler.resourcepool.nodes]
 
     def notify_event(self, lease_id, enactment_id, event):
         pass

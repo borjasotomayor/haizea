@@ -20,6 +20,7 @@ import os
 import os.path
 import haizea.common.constants as constants
 from haizea.common.utils import pickle, get_config, get_clock
+from haizea.resourcemanager.leases import BestEffortLease
 from errno import EEXIST
 
 class AccountingData(object):
@@ -41,7 +42,7 @@ class AccountingData(object):
         waiting_times = {}
         for lease_id in self.leases:
             lease = self.leases[lease_id]
-            if isinstance(lease, ds.BestEffortLease):
+            if isinstance(lease, BestEffortLease):
                 waiting_times[lease_id] = lease.get_waiting_time()
         return waiting_times
 
@@ -49,12 +50,12 @@ class AccountingData(object):
         slowdowns = {}
         for lease_id in self.leases:
             lease = self.leases[lease_id]
-            if isinstance(lease, ds.BestEffortLease):
+            if isinstance(lease, BestEffortLease):
                 slowdowns[lease_id] = lease.get_slowdown()
         return slowdowns
     
     def get_besteffort_end(self):
-        return max([l.end for l in self.leases.values() if isinstance(l, ds.BestEffortLease)])
+        return max([l.end for l in self.leases.values() if isinstance(l, BestEffortLease)])
 
 class AccountingDataCollection(object):
     def __init__(self, rm, datafile):

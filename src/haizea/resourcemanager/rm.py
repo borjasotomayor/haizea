@@ -33,7 +33,6 @@ This module provides the following classes:
 
 import haizea.resourcemanager.accounting as accounting
 import haizea.common.constants as constants
-import haizea.resourcemanager.enact as enact
 from haizea.resourcemanager.scheduler.preparation_schedulers.unmanaged import UnmanagedPreparationScheduler
 from haizea.resourcemanager.scheduler.preparation_schedulers.imagetransfer import ImageTransferPreparationScheduler
 from haizea.resourcemanager.enact.opennebula import OpenNebulaResourcePoolInfo, OpenNebulaVMEnactment, OpenNebulaDummyDeploymentEnactment
@@ -41,7 +40,7 @@ from haizea.resourcemanager.enact.simulated import SimulatedResourcePoolInfo, Si
 from haizea.resourcemanager.frontends.tracefile import TracefileFrontend
 from haizea.resourcemanager.frontends.opennebula import OpenNebulaFrontend
 from haizea.resourcemanager.frontends.rpc import RPCFrontend
-from haizea.resourcemanager.leases import ARLease, BestEffortLease, ImmediateLease
+from haizea.resourcemanager.leases import BestEffortLease
 from haizea.resourcemanager.scheduler import UnrecoverableError
 from haizea.resourcemanager.scheduler.lease_scheduler import LeaseScheduler
 from haizea.resourcemanager.scheduler.vm_scheduler import VMScheduler
@@ -298,8 +297,12 @@ class ResourceManager(Singleton):
             
         # Start the clock
         self.clock.run()
-        
+
     def stop(self):
+        """Stops the resource manager by stopping the clock"""
+        self.clock.stop()
+        
+    def graceful_stop(self):
         """Stops the resource manager gracefully and exits"""
         
         self.logger.status("Stopping resource manager gracefully...")
@@ -394,7 +397,7 @@ class ResourceManager(Singleton):
         """    
         try:
             lease = self.scheduler.get_lease_by_id(lease_id)
-            self.scheduler.cancel_lease(lease_id)
+            self.scheduler.cancel_lease(lease)
         except UnrecoverableError, exc:
             self.__unrecoverable_error(exc)
         except Exception, exc:
@@ -431,7 +434,7 @@ class ResourceManager(Singleton):
         """
         self.logger.error("An unrecoverable error has happened.")
         self.logger.error("Original exception:")
-        self.print_exception(exc.exc, exc.get_traceback())
+        self.__print_exception(exc.exc, exc.get_traceback())
         self.logger.error("Unrecoverable error traceback:")
         self.__print_exception(exc, sys.exc_traceback)
         self.__panic()
@@ -492,6 +495,7 @@ class Clock(object):
     """
     def __init__(self, rm):
         self.rm = rm
+        self.done = False
     
     def get_time(self): 
         """Return the current time"""
@@ -516,6 +520,13 @@ class Clock(object):
         """Start and run the clock. This function is, in effect,
         the main loop of the resource manager."""
         return abstract()     
+
+    def stop(self):
+        """Stop the clock.
+        
+        Stopping the clock makes Haizea exit.
+        """
+        self.done = True    
     
         
 class SimulatedClock(Clock):
@@ -564,9 +575,9 @@ class SimulatedClock(Clock):
         self.logger.status("Starting simulated clock")
         self.rm.accounting.start(self.get_start_time())
         prevstatustime = self.time
-        done = False
+        
         # Main loop
-        while not done:
+        while not self.done:
             # Check to see if there are any leases which are ending prematurely.
             # Note that this is unique to simulation.
             prematureends = self.rm.scheduler.slottable.getPrematurelyEndingRes(self.time)
@@ -590,11 +601,12 @@ class SimulatedClock(Clock):
                 prevstatustime = self.time
                 
             # Skip to next point in time.
-            self.time, done = self.__get_next_time()
+            self.time, self.done = self.__get_next_time()
                     
+        self.logger.status("Simulated clock has stopped")
+
         # Stop the resource manager
-        self.logger.status("Stopping simulated clock")
-        self.rm.stop()
+        self.rm.graceful_stop()
         
     
     def __get_next_time(self):
@@ -605,7 +617,6 @@ class SimulatedClock(Clock):
         * The start or end of a reservation (a "changepoint" in the slot table)
         * A premature end of a lease
         """
-        done = False
         
         # Determine candidate next times
         tracefrontend = self.__get_trace_frontend()
@@ -646,7 +657,7 @@ class SimulatedClock(Clock):
         # If there's no more leases in the system, and no more pending requests,
         # then we're done.
         if not self.rm.exists_leases_in_rm() and not tracefrontend.exists_more_requests():
-            done = True
+            self.done = True
         
         # We can also be done if we've specified that we want to stop when
         # the best-effort requests are all done or when they've all been submitted.
@@ -655,17 +666,17 @@ class SimulatedClock(Clock):
         pendingbesteffort = [r for r in tracefrontend.requests if isinstance(r, BestEffortLease)]
         if stopwhen == constants.STOPWHEN_BEDONE:
             if self.rm.scheduler.is_queue_empty() and len(besteffort) + len(pendingbesteffort) == 0:
-                done = True
+                self.done = True
         elif stopwhen == constants.STOPWHEN_BESUBMITTED:
             if len(pendingbesteffort) == 0:
-                done = True
+                self.done = True
                 
         # If we didn't arrive at a new time, and we're not done, we've fallen into
         # an infinite loop. This is A Bad Thing(tm).
-        if newtime == prevtime and done != True:
+        if newtime == prevtime and self.done != True:
             raise Exception, "Simulated clock has fallen into an infinite loop."
         
-        return newtime, done
+        return newtime, self.done
 
     def __get_trace_frontend(self):
         """Gets the tracefile frontend from the resource manager"""
@@ -740,12 +751,17 @@ class RealClock(Clock):
         self.logger.status("Starting clock")
         self.rm.accounting.start(self.get_start_time())
         
-        signal.signal(signal.SIGINT, self.signalhandler_gracefulstop)
-        signal.signal(signal.SIGTERM, self.signalhandler_gracefulstop)
+        try:
+            signal.signal(signal.SIGINT, self.signalhandler_gracefulstop)
+            signal.signal(signal.SIGTERM, self.signalhandler_gracefulstop)
+        except ValueError, exc:
+            # This means Haizea is not the main thread, which will happen
+            # when running it as part of a py.test. We simply ignore this
+            # to allow the test to continue.
+            pass
         
-        done = False
         # Main loop
-        while not done:
+        while not self.done:
             self.logger.status("Waking up to manage resources")
             
             # Save the waking time. We want to use a consistent time in the 
@@ -794,18 +810,19 @@ class RealClock(Clock):
             if self.rm.config._options.has_key("stop-when-no-more-leases"):
                 stop_when_no_more_leases = self.rm.config.get("stop-when-no-more-leases")
                 if stop_when_no_more_leases and not self.rm.exists_leases_in_rm():
-                    done = True
+                    self.done = True
             
             # Sleep
-            if not done:
+            if not self.done:
                 if not self.fastforward:
                     sleep((nextwakeup - now()).seconds)
                 else:
                     self.lastwakeup = nextwakeup
 
+        self.logger.status("Real clock has stopped")
+
         # Stop the resource manager
-        self.logger.status("Stopping real clock")
-        self.rm.stop()
+        self.rm.graceful_stop()
     
     def signalhandler_gracefulstop(self, signum, frame):
         """Handler for SIGTERM and SIGINT. Allows Haizea to stop gracefully."""
@@ -816,5 +833,5 @@ class RealClock(Clock):
         elif signum == signal.SIGINT:
             sigstr = " (SIGINT)"
         self.logger.status("Received signal %i%s" %(signum, sigstr))
-        self.rm.stop()
+        self.done = True
 
