@@ -218,6 +218,7 @@ class LeaseStateMachine(StateMachine):
                                                      (Lease.STATE_REJECTED,   "")],
                                                      
                    Lease.STATE_SCHEDULED:           [(Lease.STATE_PREPARING,  ""),
+                                                     (Lease.STATE_QUEUED,     ""),
                                                      (Lease.STATE_READY,      ""),
                                                      (Lease.STATE_CANCELLED,  "")],
                                                      
@@ -229,10 +230,12 @@ class LeaseStateMachine(StateMachine):
                                                      (Lease.STATE_FAIL,       "")],
                                                      
                    Lease.STATE_READY:               [(Lease.STATE_ACTIVE,     ""),
+                                                     (Lease.STATE_QUEUED,     ""),
                                                      (Lease.STATE_CANCELLED,  ""),
                                                      (Lease.STATE_FAIL,       "")],
                                                      
                    Lease.STATE_ACTIVE:              [(Lease.STATE_SUSPENDING, ""),
+                                                     (Lease.STATE_QUEUED,     ""),
                                                      (Lease.STATE_DONE,       ""),
                                                      (Lease.STATE_CANCELLED,  ""),
                                                      (Lease.STATE_FAIL,       "")],
@@ -246,12 +249,12 @@ class LeaseStateMachine(StateMachine):
                                                      (Lease.STATE_CANCELLED,  ""),
                                                      (Lease.STATE_FAIL,       "")],
                                                      
-                   Lease.STATE_SUSPENDED_QUEUED:    [(Lease.STATE_SUSPENDED_QUEUED,     ""),
-                                                     (Lease.STATE_SUSPENDED_SCHEDULED,  ""),
+                   Lease.STATE_SUSPENDED_QUEUED:    [(Lease.STATE_SUSPENDED_SCHEDULED,  ""),
                                                      (Lease.STATE_CANCELLED,  ""),
                                                      (Lease.STATE_FAIL,       "")],
                                                      
-                   Lease.STATE_SUSPENDED_SCHEDULED: [(Lease.STATE_MIGRATING,  ""),
+                   Lease.STATE_SUSPENDED_SCHEDULED: [(Lease.STATE_SUSPENDED_QUEUED,     ""),
+                                                     (Lease.STATE_MIGRATING,  ""),
                                                      (Lease.STATE_RESUMING,   ""),
                                                      (Lease.STATE_CANCELLED,  ""),
                                                      (Lease.STATE_FAIL,       "")],

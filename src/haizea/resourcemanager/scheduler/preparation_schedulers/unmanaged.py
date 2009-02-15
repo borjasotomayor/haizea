@@ -36,8 +36,9 @@ class UnmanagedPreparationScheduler(PreparationScheduler):
         earliest = dict([(node, [nexttime, constants.REQTRANSFER_NO, None]) for node in nod_ids])
         return earliest
             
-    def cancel_deployment(self, lease):
-        pass
+    def cancel_preparation(self, lease):
+        self.cleanup(lease)
+        lease.diskimagemap = {}
 
     def cleanup(self, lease):
         for vnode, pnode in lease.diskimagemap.items():

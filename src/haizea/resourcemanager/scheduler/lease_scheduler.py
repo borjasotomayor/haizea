@@ -464,7 +464,8 @@ class LeaseScheduler(object):
         elif lease_state == Lease.STATE_SUSPENDED_QUEUED:
             # No need to transfer images from repository
             # (only intra-node transfer)
-            earliest = dict([(node+1, [nexttime, constants.REQTRANSFER_NO, None]) for node in range(lease.numnodes)])
+            migr_time = self.vm_scheduler.estimate_migration_time(lease)
+            earliest = dict([(node+1, [nexttime + migr_time, constants.REQTRANSFER_NO, None]) for node in range(lease.numnodes)])
         else:
             raise InconsistentLeaseStateError(lease, doing = "scheduling a best-effort lease")
         
@@ -565,9 +566,12 @@ class LeaseScheduler(object):
             self.vm_scheduler.cancel_vm(vmrr)
             lease.remove_vmrr(vmrr)
             self.preparation_scheduler.cancel_preparation(lease)
-            lease.set_state(Lease.STATE_QUEUED)
+            # TODO: Take into account other states
+            if lease.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
+                lease.set_state(Lease.STATE_SUSPENDED_QUEUED)
+            else:
+                lease.set_state(Lease.STATE_QUEUED)
             self.__enqueue_in_order(lease)
-            get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
         else:
             self.logger.info("... lease #%i will be suspended at %s." % (lease.id, preemption_time))
             self.vm_scheduler.preempt_vm(vmrr, preemption_time)            

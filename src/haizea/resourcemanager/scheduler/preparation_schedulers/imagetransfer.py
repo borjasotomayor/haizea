@@ -20,10 +20,9 @@ import haizea.common.constants as constants
 from haizea.resourcemanager.scheduler.preparation_schedulers import PreparationScheduler
 from haizea.resourcemanager.scheduler.slottable import ResourceReservation
 from haizea.resourcemanager.leases import Lease, ARLease, BestEffortLease
-from haizea.resourcemanager.scheduler import ReservationEventHandler
+from haizea.resourcemanager.scheduler import ReservationEventHandler, NotSchedulableException
 from haizea.common.utils import estimate_transfer_time, get_config
 from haizea.resourcemanager.scheduler.slottable import ResourceTuple
-from haizea.resourcemanager.scheduler import ReservationEventHandler
 
 
 import copy

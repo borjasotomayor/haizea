@@ -230,10 +230,10 @@ class SlotTable(object):
         if resreq != None:
             newnodes = {}
             for n, node in nodes.items():
-                if not resreq.fits_in(node.capacity) or (canpreempt and not resreq.fits_in(node.capacitywithpreemption)):
-                    pass
-                else:
+                if (not canpreempt and resreq.fits_in(node.capacity)) or (canpreempt and resreq.fits_in(node.capacitywithpreemption)):
                     newnodes[n]=node
+                else:
+                    pass
             nodes = newnodes
 
         return nodes

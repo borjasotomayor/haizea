@@ -296,7 +296,12 @@ class ResourceManager(Singleton):
             self.rpc_server.start()
             
         # Start the clock
-        self.clock.run()
+        try:
+            self.clock.run()
+        except UnrecoverableError, exc:
+            self.__unrecoverable_error(exc)
+        except Exception, exc:
+            self.__unexpected_exception(exc)
 
     def stop(self):
         """Stops the resource manager by stopping the clock"""
@@ -479,10 +484,10 @@ class ResourceManager(Singleton):
 
         # Exit
         treatment = self.config.get("lease-failure-handling")
-        if treatment == constants.ONFAILURE_EXIT:
-            exit(1)
-        elif treatment == constants.ONFAILURE_EXIT_RAISE:
+        if treatment == constants.ONFAILURE_EXIT_RAISE:
             raise
+        else:
+            exit(1)
 
             
 class Clock(object):

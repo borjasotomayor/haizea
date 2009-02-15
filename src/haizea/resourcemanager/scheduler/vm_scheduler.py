@@ -30,6 +30,8 @@ import logging
 class VMScheduler(object):
     """The Haizea VM Scheduler
     
+    TODO: This class needs to be documented. It will also change quite a bit in TP2.0, when all
+    policy decisions are factored out into a separate module.
     """
     
     def __init__(self, slottable, resourcepool):
@@ -408,7 +410,9 @@ class VMScheduler(object):
 
         return vmrr, []
 
-    # TODO: This has to be tied in with the preparation scheduler
+    def estimate_migration_time(self, lease):
+        return self.__estimate_migration_time(lease)
+
     def schedule_migration(self, lease, vmrr, nexttime):
         last_vmrr = lease.get_last_vmrr()
         vnode_migrations = dict([(vnode, (last_vmrr.nodes[vnode], vmrr.nodes[vnode])) for vnode in vmrr.nodes])
@@ -439,7 +443,7 @@ class VMScheduler(object):
             migrations.append(migration)
         
         # Create migration RRs
-        start = last_vmrr.post_rrs[-1].end
+        start = max(last_vmrr.post_rrs[-1].end, nexttime)
         migr_time = self.__estimate_migration_time(lease)
         bandwidth = self.resourcepool.info.get_migration_bandwidth()
         migr_rrs = []
@@ -861,13 +865,16 @@ class VMScheduler(object):
         else:
             return self.__estimate_suspend_resume_time(lease, rate)
 
-
     def __estimate_migration_time(self, lease):
         whattomigrate = get_config().get("what-to-migrate")
-        bandwidth = self.resourcepool.info.get_migration_bandwidth()
         if whattomigrate == constants.MIGRATE_NONE:
-            return TimeDelta(seconds=0)
+            # TODO: At this point, giving an RR a duration of 0 seconds
+            # will produce unexpected results. So, we need to give
+            # migrations a symbolic duration of one second,
+            # even when we are assuming that migrations are instantaneous
+            return TimeDelta(seconds=1)
         else:
+            bandwidth = self.resourcepool.info.get_migration_bandwidth()
             if whattomigrate == constants.MIGRATE_MEM:
                 mbtotransfer = lease.requested_resources.get_by_type(constants.RES_MEM)
             elif whattomigrate == constants.MIGRATE_MEMDISK:
@@ -1178,7 +1185,7 @@ class VMScheduler(object):
         rr.state = ResourceReservation.STATE_DONE
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleEndShutdown" % l.id)
-        self.logger.info("Lease %i shutdown." % (l.id))
+        self.logger.info("Lease %i's VMs have shutdown." % (l.id))
         raise NormalEndLeaseException
 
 
@@ -1320,6 +1327,12 @@ class VMResourceReservation(ResourceReservation):
             rrdur = self.end - self.start
             if remdur < rrdur:
                 self.prematureend = self.start + remdur
+                # Kludgy, but this corner case actually does happen
+                # (because of preemptions, it may turn out that
+                # the premature end time coincides with the
+                # starting time of the VMRR)
+                if self.prematureend == self.start:
+                    self.prematureend += 1 
             else:
                 self.prematureend = None
         else:
