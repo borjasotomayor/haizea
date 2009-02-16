@@ -81,10 +81,16 @@ Which results in the following output:
 [2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
 [2006-11-25 13:00:00.00] CLOCK   Stopping simulated clock
-[2006-11-25 13:00:00.00] RM      Stopping resource manager
-[2006-11-25 13:00:00.00] RM        Completed best-effort leases: 0
-[2006-11-25 13:00:00.00] RM        Accepted AR leases: 0
-[2006-11-25 13:00:00.00] RM        Rejected AR leases: 0
+[2006-11-25 13:00:00.00] RM      --- Haizea status summary ---
+[2006-11-25 13:00:00.00] RM      Number of leases (not including completed): 0
+[2006-11-25 13:00:00.00] RM      Completed leases: 0
+[2006-11-25 13:00:00.00] RM      Completed best-effort leases: 0
+[2006-11-25 13:00:00.00] RM      Queue size: 0
+[2006-11-25 13:00:00.00] RM      Accepted AR leases: 0
+[2006-11-25 13:00:00.00] RM      Rejected AR leases: 0
+[2006-11-25 13:00:00.00] RM      Accepted IM leases: 0
+[2006-11-25 13:00:00.00] RM      Rejected IM leases: 0
+[2006-11-25 13:00:00.00] RM      ---- End summary ----
 \end{wideshellverbatim}
 
 Now that you've seen the tracefile, you can see why the simulator starts up and immediately stops: all the lease requests in the tracefile are commented out, and there's nothing to schedule. Go ahead and uncomment only the first lease request and run Haizea again. You should now see the following:
@@ -94,20 +100,27 @@ Now that you've seen the tracefile, you can see why the simulator starts up and 
 [2006-11-25 13:00:00.00] TFILE   Loaded workload with 1 requests (1 best-effort + 0 AR)
 [2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
-[2006-11-25 13:00:00.00] SCHED   Received (and queueing) best-effort lease request #1, 
-                                 1 nodes for 01:00:00.00.
-[2006-11-25 13:00:00.00] SCHED   Next request in the queue is lease 1. 
-                                 Attempting to schedule...
-[2006-11-25 13:00:00.00] SCHED   Lease #1 has been scheduled on nodes [1] 
+[2006-11-25 13:00:00.00] LSCHED  Lease #1 has been requested and is pending.
+[2006-11-25 13:00:00.00] LSCHED  Queued best-effort lease request #1, 1 nodes for 01:00:00.00.
+[2006-11-25 13:00:00.00] LSCHED  Next request in the queue is lease 1. Attempting to schedule...
+[2006-11-25 13:00:00.00] VMSCHED Lease #1 has been scheduled on nodes [1] 
                                  from 2006-11-25 13:00:00.00 
                                    to 2006-11-25 14:00:00.00
-[2006-11-25 13:00:00.00] SCHED   Started VMs for lease 1 on nodes [1]
-[2006-11-25 14:00:00.00] SCHED   Stopped VMs for lease 1 on nodes [1]
-[2006-11-25 14:00:00.00] CLOCK   Stopping simulated clock
-[2006-11-25 14:00:00.00] RM      Stopping resource manager
-[2006-11-25 14:00:00.00] RM        Completed best-effort leases: 1
-[2006-11-25 14:00:00.00] RM        Accepted AR leases: 0
-[2006-11-25 14:00:00.00] RM        Rejected AR leases: 0
+[2006-11-25 13:00:00.00] VMSCHED Started VMs for lease 1 on nodes [1]
+[2006-11-25 14:00:00.00] VMSCHED Stopped VMs for lease 1 on nodes [1]
+[2006-11-25 14:00:00.00] VMSCHED Lease 1's VMs have shutdown.
+[2006-11-25 14:00:00.00] CLOCK   Simulated clock has stopped
+[2006-11-25 14:00:00.00] RM      Stopping resource manager gracefully...
+[2006-11-25 14:00:00.00] RM      --- Haizea status summary ---
+[2006-11-25 14:00:00.00] RM      Number of leases (not including completed): 0
+[2006-11-25 14:00:00.00] RM      Completed leases: 1
+[2006-11-25 14:00:00.00] RM      Completed best-effort leases: 1
+[2006-11-25 14:00:00.00] RM      Queue size: 0
+[2006-11-25 14:00:00.00] RM      Accepted AR leases: 0
+[2006-11-25 14:00:00.00] RM      Rejected AR leases: 0
+[2006-11-25 14:00:00.00] RM      Accepted IM leases: 0
+[2006-11-25 14:00:00.00] RM      Rejected IM leases: 0
+[2006-11-25 14:00:00.00] RM      ---- End summary ----
 \end{wideshellverbatim}
 
 The above corresponds to the following schedule:
@@ -127,51 +140,49 @@ So, what would happen if we also added the AR lease? Since it requires all the c
 Uncomment the AR lease request, and run Haizea again. You should now see the following:
 
 \begin{wideshellverbatim}
-[2006-11-25 13:00:00.00] TRACE   Loading tracefile /usr/share/haizea/traces/sample.lwf
-[2006-11-25 13:00:00.00] TRACE   Loaded workload with 2 requests (1 best-effort + 1 AR)
+[2006-11-25 13:00:00.00] TFILE   Loading tracefile /home/haizea/sample.lwf
+[2006-11-25 13:00:00.00] TFILE   Loaded workload with 2 requests (1 best-effort + 1 AR)
 [2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
-[2006-11-25 13:00:00.00] SCHED   Received (and queueing) best-effort lease request #1, 
-                                 1 nodes for 01:00:00.00.
-[2006-11-25 13:00:00.00] SCHED   Next request in the queue is lease 1. 
-                                 Attempting to schedule...
-[2006-11-25 13:00:00.00] SCHED   Lease #1 has been scheduled on nodes [1] 
+[2006-11-25 13:00:00.00] LSCHED  Lease #1 has been requested and is pending.
+[2006-11-25 13:00:00.00] LSCHED  Queued best-effort lease request #1, 1 nodes for 01:00:00.00.
+[2006-11-25 13:00:00.00] LSCHED  Next request in the queue is lease 1. Attempting to schedule...
+[2006-11-25 13:00:00.00] VMSCHED Lease #1 has been scheduled on nodes [1] 
                                  from 2006-11-25 13:00:00.00 
                                    to 2006-11-25 14:00:00.00
-[2006-11-25 13:00:00.00] SCHED   Started VMs for lease 1 on nodes [1]
+[2006-11-25 13:00:00.00] VMSCHED Started VMs for lease 1 on nodes [1]
 
-[2006-11-25 13:15:00.00] SCHED   Received AR lease request #2, 4 nodes 
+[2006-11-25 13:15:00.00] LSCHED  Lease #2 has been requested and is pending.
+[2006-11-25 13:15:00.00] LSCHED  Scheduling AR lease #2, 4 nodes
                                  from 2006-11-25 13:30:00.00 
                                    to 2006-11-25 14:00:00.00.
-[2006-11-25 13:15:00.00] SCHED   Must preempt leases [1] to make room for AR lease #2
-[2006-11-25 13:15:00.00] SCHED   Preempting lease #1...
-[2006-11-25 13:15:00.00] SCHED   ... lease #1 will be suspended 
+[2006-11-25 13:15:00.00] LSCHED  Must preempt leases [1] to make room for lease #2
+[2006-11-25 13:15:00.00] LSCHED  Preempting lease #1...
+[2006-11-25 13:15:00.00] LSCHED  ... lease #1 will be suspended 
                                      at 2006-11-25 13:30:00.00.
-[2006-11-25 13:15:00.00] SCHED   AR lease request #2 has been accepted.
+[2006-11-25 13:15:00.00] LSCHED  AR lease #2 has been accepted.
 
-[2006-11-25 13:29:39.00] SCHED   Stopped VMs for lease 1 on nodes [1]
-[2006-11-25 13:29:39.00] SCHED   Suspending lease 1...
+[2006-11-25 13:29:39.00] VMSCHED Stopped VMs for lease 1 on nodes [1]
+[2006-11-25 13:29:39.00] VMSCHED Suspending lease 1...
 
-[2006-11-25 13:30:00.00] SCHED   Lease 1 suspended.
-[2006-11-25 13:30:00.00] SCHED   Started VMs for lease 2 on nodes [2, 3, 4, 1]
-[2006-11-25 13:30:00.00] SCHED   Next request in the queue is lease 1. 
-                                 Attempting to schedule...
-[2006-11-25 13:30:00.00] SLOT    Lease #1 has been scheduled on nodes [1] 
+[2006-11-25 13:30:00.00] VMSCHED Lease 1 suspended.
+[2006-11-25 13:30:00.00] VMSCHED Started VMs for lease 2 on nodes [2, 3, 4, 1]
+[2006-11-25 13:30:00.00] LSCHED  Next request in the queue is lease 1. Attempting to schedule...
+[2006-11-25 13:30:00.00] VMSCHED Lease #1 has been scheduled on nodes [1]
                                  from 2006-11-25 14:00:21.00 (resuming) 
                                    to 2006-11-25 14:30:42.00
 
-[2006-11-25 14:00:00.00] SCHED   Stopped VMs for lease 2 on nodes [2, 3, 4, 1]
-[2006-11-25 14:00:00.00] SCHED   Resuming lease 1...
+[2006-11-25 14:00:00.00] VMSCHED Stopped VMs for lease 2 on nodes [2, 3, 4, 1]
+[2006-11-25 14:00:00.00] VMSCHED Resuming lease 1...
+[2006-11-25 14:00:00.00] VMSCHED Lease 2's VMs have shutdown.
 
-[2006-11-25 14:00:21.00] SCHED   Resumed lease 1
-[2006-11-25 14:00:21.00] SCHED   Started VMs for lease 1 on nodes [1]
+[2006-11-25 14:00:21.00] VMSCHED Resumed lease 1
+[2006-11-25 14:00:21.00] VMSCHED Started VMs for lease 1 on nodes [1]
 
-[2006-11-25 14:30:42.00] SCHED   Stopped VMs for lease 1 on nodes [1]
-[2006-11-25 14:30:42.00] CLOCK   Stopping simulated clock
-[2006-11-25 14:30:42.00] RM      Stopping resource manager
-[2006-11-25 14:30:42.00] RM        Completed best-effort leases: 1
-[2006-11-25 14:30:42.00] RM        Accepted AR leases: 1
-[2006-11-25 14:30:42.00] RM        Rejected AR leases: 0
+[2006-11-25 14:30:42.00] VMSCHED Stopped VMs for lease 1 on nodes [1]
+[2006-11-25 14:30:42.00] VMSCHED Lease 1's VMs have shutdown.
+[2006-11-25 14:30:42.00] CLOCK   Simulated clock has stopped
+[2006-11-25 14:30:42.00] RM      Stopping resource manager gracefully...
 \end{wideshellverbatim}
 
 Notice how the above corresponds to the previous figure. In particular, notice the following:
@@ -197,14 +208,14 @@ suspension: none
 Rerun Haizea. Now, when the AR lease arrives at 13:15, the scheduler will realise it has to preempt the best-effort lease to make room for the AR lease, but will no longer be able to suspend it. The only option is to cancel the best-effort lease and resubmit it to the queue:
 
 \begin{wideshellverbatim}
-[2006-11-25 13:15:00.00] SCHED   Preempting lease #1...
-[2006-11-25 13:15:00.00] SCHED   ... lease #1 has been cancelled and requeued
+[2006-11-25 13:15:00.00] LSCHED  Preempting lease #1...
+[2006-11-25 13:15:00.00] LSCHED  ... lease #1 has been cancelled and requeued
 \end{wideshellverbatim}
 
 Now, the best-effort lease can only be scheduled after the AR lease, at 14:00:
 
 \begin{wideshellverbatim}
-[2006-11-25 13:15:00.00] SLOT    Lease #1 has been scheduled on nodes [1] 
+[2006-11-25 13:15:00.00] VMSCHED Lease #1 has been scheduled on nodes [1] 
                                  from 2006-11-25 14:00:00.00 
                                    to 2006-11-25 15:00:00.00
 \end{wideshellverbatim}
@@ -231,8 +242,8 @@ If you look at the bottom of the sample configuration file, you will find a sect
 Rerun Haizea again. You should get a schedule similar to the previous one, but with some extra messages indicating that image transfers are taking place:
 
 \begin{wideshellverbatim}
-[2006-11-25 13:00:00.00] SCHED   Starting image transfer for lease 1
-[2006-11-25 13:01:22.00] SCHED   Completed image transfer for lease 1
+[2006-11-25 13:00:00.00] DEPLOY  Starting image transfer for lease 1
+[2006-11-25 13:01:22.00] DEPLOY  Completed image transfer for lease 1
 \end{wideshellverbatim}
 
 As you can see, the best-effort lease can no longer start right at 13:00, since an image transfer has to take place before the starting time. The same is true of the AR lease, but notice how Haizea schedules the image transfer in such a way that the AR lease can still start at 13:30 as planned (instead of delaying the starting time until 13:31:22).
@@ -285,7 +296,7 @@ However, when Haizea plans an event (e.g., leases that have to start or end), it
 So, let's give Haizea something to do. The \texttt{haizea-request-lease} command is used to request leases. For example, the following command is used to request an 1-node AR lease one minute in the future, for ten minutes:
 
 \begin{wideshellverbatim}
-haizea-request-lease -t +00:01:00 -d 00:10:00 -n 1 --non-preemptible \
+haizea-request-lease -t +00:02:00 -d 00:10:00 -n 1 --non-preemptible \
                      -c 1 -m 512 -i foobar.img -z 600 
 \end{wideshellverbatim}
 

@@ -75,11 +75,18 @@ This will use a sample configuration file to simulate running the scheduler with
 [2006-11-25 13:00:00.00] TFILE   Loaded workload with 0 requests (0 best-effort + 0 AR)
 [2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
-[2006-11-25 13:00:00.00] CLOCK   Stopping simulated clock
-[2006-11-25 13:00:00.00] RM      Stopping resource manager
-[2006-11-25 13:00:00.00] RM        Completed best-effort leases: 0
-[2006-11-25 13:00:00.00] RM        Accepted AR leases: 0
-[2006-11-25 13:00:00.00] RM        Rejected AR leases: 0
+[2006-11-25 13:00:00.00] CLOCK   Simulated clock has stopped
+[2006-11-25 13:00:00.00] RM      Stopping resource manager gracefully...
+[2006-11-25 13:00:00.00] RM      --- Haizea status summary ---
+[2006-11-25 13:00:00.00] RM      Number of leases (not including completed): 0
+[2006-11-25 13:00:00.00] RM      Completed leases: 0
+[2006-11-25 13:00:00.00] RM      Completed best-effort leases: 0
+[2006-11-25 13:00:00.00] RM      Queue size: 0
+[2006-11-25 13:00:00.00] RM      Accepted AR leases: 0
+[2006-11-25 13:00:00.00] RM      Rejected AR leases: 0
+[2006-11-25 13:00:00.00] RM      Accepted IM leases: 0
+[2006-11-25 13:00:00.00] RM      Rejected IM leases: 0
+[2006-11-25 13:00:00.00] RM      ---- End summary ----
 \end{wideshellverbatim}
 
 Ok, not terribly exciting, but if you see this then the basic machinery is working fine. We will see how to do more elaborate simulations, and how to use Haizea to manage real hardware, in the next chapters.
