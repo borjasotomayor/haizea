@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='haizea',
-      version='TP1.2',
+      version='TP1.3',
       description='Haizea',
       author='University of Chicago',
       author_email='borja@cs.uchicago.edu',
@@ -11,7 +11,8 @@ setup(name='haizea',
                 'haizea.cli',
                 'haizea.common', 
                 'haizea.resourcemanager',
-                'haizea.resourcemanager.deployment',
+                'haizea.resourcemanager.scheduler',
+                'haizea.resourcemanager.scheduler.preparation_schedulers',
                 'haizea.resourcemanager.enact',
                 'haizea.resourcemanager.frontends',
                 'haizea.traces'],

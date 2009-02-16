@@ -3,3 +3,7 @@ include etc/*.template
 include traces/*.lwf
 include traces/sample.images
 include traces/multi/*.lwf
+include tests/*.lwf
+include tests/*.py
+include tests/*.db
+include tests/onevm
