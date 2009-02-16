@@ -2,5 +2,5 @@
 # Description: A simple trace where an AR lease 
 # preempts a best-effort lease that is already
 # running. 
-0   -1   3600 3600 4 1 1024 0 foobar1.img 1024
-0   1800 1800 1800 2 1 1024 0 foobar2.img 1024
+0   -1   3600 3600 1 1 1024 0 foobar1.img 1024
+900 1800 1800 1800 4 1 1024 0 foobar2.img 1024
