@@ -7,3 +7,4 @@ include tests/*.lwf
 include tests/*.py
 include tests/*.db
 include tests/onevm
+exclude test/*

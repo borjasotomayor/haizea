@@ -1,4 +1,0 @@
-# A simple trace where a single best-effort
-# request is made. Good for testing that
-# OpenNebula integration works. 
-3 -1 15 15 1 1 256 0 globus-002 4096
