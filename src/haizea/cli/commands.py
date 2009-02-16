@@ -245,8 +245,7 @@ class haizea_generate_scripts(Command):
 class haizea_convert_data(Command):
     """
     Converts Haizea datafiles into another (easier to process) format.
-    
-    This command is still not fully implemented."""
+    """
     
     name = "haizea-convert-data"
 
@@ -256,7 +255,7 @@ class haizea_convert_data(Command):
         self.optparser.add_option(Option("-t", "--type", action="store",  dest="type",
                                          choices = ["per-experiment", "per-lease"],
                                          help = """
-                                         Type of data to produce
+                                         Type of data to produce.
                                          """))
         self.optparser.add_option(Option("-f", "--format", action="store", type="string", dest="format",
                                          help = """
