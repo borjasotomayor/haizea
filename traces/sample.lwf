@@ -1,109 +1,59 @@
-# This file is a collection of sample workloads to
-# test the scheduler. They are not meant to be all run
-# one after the other. Rather, just uncomment the
-# workload you want to test (and make sure you
-# comment it out before trying out another one).
-#
-# The format used in this file is specific to Haizea. Time
-# is measured in seconds and starts at second 0. Each line
-# is a lease request. Each field is separated by whitespace 
-# The meaning of each field is:
-#
-#  0  Request time  : The time at which the lease is requested
-#  1  Start time    : The time at which the lease must start. 
-#                     -1 denotes that no start time is requested
-#                     (i.e., best-effort start time)
-#  2  Duration      : Requested duration
-#  3  Real duration : Real duration. This field is used to 
-#                     simulate leases that end prematurely
-#  4  # of nodes    : Number of nodes in the lease
-#  5  CPU           : Number of CPUs, per node.
-#  6  Memory        : Memory per node, in MB.
-#  7  Disk          : Additional disk space (not counting the VM image)
-#                     In MB, per node
-#  8  Disk Image    : Disk image identifier
-#  9  Image size    : Size of disk image
-#
-# Note: These workloads were written with the
-# simulator in mind, so they might require some
-# tweaking if you want to run them with OpenNebula;
-# more specifically, the durations may be unrealistically
-# short or long, and the VM images will have to be changed.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+This is an example tracefile.
 
-# Name: PREEMPT
-# Description: A simple trace where an AR lease 
-# preempts a best-effort lease that is already
-# running. 
-#0   -1   3600 3600 1 1 1024 0 foobar.img 1024
-#900 1800 1800 1800 4 1 1024 0 foobar.img 1024
+More files can be found in the tests directory.
+-->
+<lease-workload name="sample">
+	<description>
+	A simple trace where an AR lease preempts a 
+	best-effort lease that is already running. 
+	</description>
 
-# Name: PREEMPT-PREMATUREEND
-# Description: Same as PREEMPT, but with 
-# premature end time for the best-effort lease.
-#0   -1   3600 2700 1 1 1024 0 foobar.img 1024
-#900 1800 900  900  4 1 1024 0 foobar.img 1024
+	<lease-requests>
+	
+	<!-- The lease requests are initially commented out -->
+	
+	<!-- First lease request -->
+	<!--
+	<lease-request arrival="00:00:00">
+	<lease preemptible="true">
+		<nodes>
+			<node-set numnodes="1">
+				<res type="CPU" amount="100"/>
+				<res type="Memory" amount="1024"/>
+			</node-set>
+		</nodes>	
+		<start></start>
+		<duration time="01:00:00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+	</lease>
+	</lease-request>
+	-->
 
-# Name: PREEMPT-PREMATUREEND2
-# Description: Same as PREEMPT, but with 
-# premature end time for both leases.
-#0   -1   3600 2700 1 1 1024 0 foobar.img 1024
-#900 1800 900  600  4 1 1024 0 foobar.img 1024
+	<!-- Second lease request -->
+	<!--
+	<lease-request arrival="00:15:00">
+	<lease preemptible="false">
+		<nodes>
+			<node-set numnodes="4">
+				<res type="CPU" amount="100"/>
+				<res type="Memory" amount="1024"/>
+			</node-set>
+		</nodes>	
+		<start>
+			<exact time="00:30:00"/>
+		</start>
+		<duration time="00:30:00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+	</lease>
+	</lease-request>
+	-->
+	
+	</lease-requests>
+</lease-workload>
 
-# Name: RESERVATION
-# Description: Two best-effort leases. The first one is a long
-# single-node lease, while the second one is a short wide lease
-# using up all the nodes. With backfilling, the scheduler
-# should make a future reservation for the second lease.
-#0   -1   3600 3600 1 1 1024 0 foobar.img 1024
-#900 -1   900  900  4 1 1024 0 foobar.img 1024
-
-# Name: RESERVATION-PREMATUREEND
-# Description: Same as RESERVATION. However, the first lease
-# ends prematurely, freeing up resources earlier than
-# expected. The scheduler should reschedule the second lease
-# (for which a reservation was made in the future)
-# since it can now start earlier
-#0   -1   3600 1800 1 1 1024 0 foobar.img 1024
-#900 -1   900  900  4 1 1024 0 foobar.img 1024
-
-# Name: MIGRATE
-# Description: Slightly convoluted combination of requests with
-#   the ultimate purpose of forcing one of the leases (the third
-#   one) to cold-migrate from nodes P3, P4 to nodes P1, P2
-#   (which become available earlier than expected due to the
-#   early end of the first AR lease)
-#0    1800 3600 900  2 1 1024 0 foobar.img 1024
-#0    1800 3600 3600 2 1 1024 0 foobar.img 1024
-#0    -1   3600 3600 2 1 1024 0 foobar.img 1024
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
-
-# Name: REUSE-1
-# Description: Two lease requests, both requiring the same
-#   disk image. The second (best-effort) should be able to avoid 
-#   doing an image transfer by reusing the cached image from the 
-#   first (AR) request.
-#0     900  900  900 1 1 1024 0 foobar.img 1024
-#2700   -1  900  900 1 1 1024 0 foobar.img 1024
-
-# Name: REUSE-2
-# Description: The first two lease requests are AR leases happening
-#   at the same time, but with different images. The third one is
-#   a best-effort one, using the image from the second AR request
-#   (which should be scheduled on nodes P3, P4). The scheduler should
-#   prefer scheduling the best-effort lease on P3, P4 since it
-#   avoids an image transfer.
-#0     900  900  900 2 1 1024 0 foobar1.img 1024
-#0     900  900  900 2 1 1024 0 foobar2.img 1024
-#2700   -1  900  900 1 1 1024 0 foobar2.img 1024
-
-# Name: WAIT
-# Description: All best-effort requests, all of which (except the first)
-# will have to wait in the queue before starting.
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
-#0    -1   900  900  4 1 1024 0 foobar.img 1024
