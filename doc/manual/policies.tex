@@ -1,0 +1,151 @@
+Haizea uses several scheduling algorithms internally to determine what resources to allocate to a lease. For the most part, modifying these algorithms requires digging deep into the Haizea code. However, several scheduling decisions that depend on an organizations own resource allocation policies are factored out of the main scheduling code into pluggable \emph{policy decision module}. In particular, the following decisions are factored out:
+
+\begin{description}
+ \item[Lease admission]: Should a lease request be accepted or rejected? Take into account that this decision takes place before Haizea determines if the request is even feasible. For example, an organization may require that all AR leases must be requested at least one hour in advance, regardless of whether there would be enough resources to satisfy the request before tha time. However, being accepted doesn't guarantee the lease will get resources (although this could factor into the decision too); an AR lease could meet the ``one hour advance warning'' requirement, but still end up being rejected because there are no resources available at the requested time.
+ \item[Lease preemptability]: How preemptable is a lease? Not all leases are created equal and, if the scheduler determines that a lease request can only be satisfied by preempting other leases, it may have to determine what leases are better candidates for preemption. For example, given a choice of preempting a lease that's been running for a week and another that's been running for five minutes, an organization might prefer to not interrupt the long-running lease.
+ \item[Host selection]: What hosts should a lease be scheduled in? When the scheduler has a choice of several physical hosts on which to deploy VMs, some might be preferable than others. For example, an organization might want to pack as many VMs into the same hosts, to shut down those that are not running VMs, while another might want to spread those VMs across several hosts, leaving some free resources available in each host in case the VMs need extra capacity further down the road.
+\end{description}
+
+As you can see, these are all policy decisions that are driven by an organization's own goals for its resources. Thus, Haizea makes it simple to write your own policy decision code \emph{without} having to modify Haizea's code. All you have to do is write a simple Python module, and then ``plug it'' into Haizea by instructing it (through the configuration file) to use that module. This chapter describes how this is done.
+
+\begin{warning}
+This documentation refers to Haizea objects, such as \texttt{Lease} and \texttt{SlotTable} that are not yet documented in this manual. For now, you will need to read the Haizea source code to see what attributes and methods these classes have. A more complete documentation will be included in the final 1.0 release.
+\end{warning}
+
+\section{Lease admission}
+
+A lease admission policy module looks like this:
+
+\begin{wideshellverbatim}
+from haizea.core.scheduler.policy import LeaseAdmissionPolicy
+
+class MyPolicy(LeaseAdmissionPolicy):
+    def __init__(self, slottable):
+        LeaseAdmissionPolicy.__init__(self, slottable)
+        
+    def accept_lease(self, lease):
+        # Your code goes here
+\end{wideshellverbatim}
+
+The \texttt{accept\_lease} method receives a \texttt{Lease} object, and must return \texttt{True} if the lease can be accepted, and \texttt{False} if it should be rejected. You can also add code to the constructor, but cannot alter its parameter list. Haizea includes some built-in admission policies that you can see in \texttt{src/haizea/policies/admission.py}
+
+The lease admission policy that Haizea must use is specified using the \texttt{policy-admission} option of the \texttt{[scheduling]} section in the configuration file. So, assuming you save your module as \texttt{policies.py}, you would specify the following in the configuration file:
+
+\begin{wideshellverbatim}
+[scheduling]
+...
+policy-admission: policies.MyPolicy
+...
+\end{wideshellverbatim}
+
+For this to work, you have to make sure that the \texttt{policies.py} module you created is in your \texttt{PYTHONPATH} when you start Haizea.
+
+For example, let's suppose we want to write an admission policy that, as described earlier, will reject AR leases that are not requested at least one hour in advance. This policy module would look like this:
+
+\begin{wideshellverbatim}
+from haizea.core.scheduler.policy import LeaseAdmissionPolicy
+from haizea.core.leases import Lease
+from haizea.common.utils import get_clock
+from mx.DateTime import TimeDelta
+
+class MyPolicy(LeaseAdmissionPolicy):
+    def __init__(self, slottable):
+        LeaseAdmissionPolicy.__init__(self, slottable)
+        
+    def accept_lease(self, lease):
+        allowed = TimeDelta(hours=1)
+        now = get_clock().get_time()
+        
+        if lease.get_type() == Lease.ADVANCE_RESERVATION:
+            if lease.start.requested - now <= allowed:
+                return False
+        return True
+\end{wideshellverbatim}
+
+Save this file as \texttt{policies.py}, make sure the directory it's in is in your \texttt{PYTHONPATH}, and set \texttt{[scheduling].policy-admission} to \texttt{policies.MyPolicy} in the configuration file. If you rerun the example from the quickstart guide, instead of seeing this:
+
+\begin{wideshellverbatim}
+[2006-11-25 13:15:00.00] LSCHED  Lease #2 has been requested.
+[2006-11-25 13:15:00.00] LSCHED  Lease #2 has been marked as pending.
+\end{wideshellverbatim}
+
+You will see that the AR lease, which is requested 15 minutes before it starts, is rejected:
+
+\begin{wideshellverbatim}
+[2006-11-25 13:15:00.00] LSCHED  Lease #2 has been requested.
+[2006-11-25 13:15:00.00] LSCHED  Lease #2 has not been accepted
+\end{wideshellverbatim}
+
+In fact, if you modify the starting time to be the following:
+
+\begin{wideshellverbatim}
+<start>
+	<exact time="02:00:00"/>
+</start>
+\end{wideshellverbatim}
+
+The lease will be accepted again, although it will start later than before:
+
+\begin{wideshellverbatim}
+[2006-11-25 15:00:00.00] VMSCHED Started VMs for lease 2 on nodes [1, 2, 3, 4]
+[2006-11-25 15:30:00.00] VMSCHED Stopped VMs for lease 2 on nodes [1, 2, 3, 4]
+\end{wideshellverbatim}
+
+\section{Lease preemptability}
+
+A lease preemptability policy module looks like this:
+
+\begin{wideshellverbatim}
+from haizea.core.leases import Lease
+from haizea.core.scheduler.policy import PreemptabilityPolicy
+
+class MyPolicy(PreemptabilityPolicy):
+    def __init__(self, slottable):
+        PreemptabilityPolicy.__init__(self, slottable)
+    
+    def get_lease_preemptability_score(self, preemptor, preemptee, time):
+        # Your code goes here
+\end{wideshellverbatim}
+
+The \texttt{get\_lease\_preemptability\_score} receives two \texttt{Lease} objects, the lease that wants to preempt resources (the \texttt{preemptor}) and the lease that is being considered for preemption (the \texttt{preemptee}), and the time at which the preemption would take place. The method should return the \emph{preemptability score} of the preemptee, indicating how preemptable the lease is. This score can take on the following values:
+
+\begin{itemize}
+ \item $-1$: Cannot be preempted under any circumstances
+ \item $0.0 \leq \textrm{score} \leq 1.0$: The lease can be preempted. The higher the score, the "more preemptable" it is. Take into account that this is a relative measure: the score will be used by the scheduler to determine which of several leases is a better candidate for preemption.
+\end{itemize}
+
+The lease preemptability policy to use is specified using the \texttt{policy-preemption} option of the \texttt{[scheduling]} section in the configuration file. So, assuming you save your module as \texttt{policies.py}, you would specify the following in the configuration file:
+
+\begin{wideshellverbatim}
+[scheduling]
+...
+policy-preemption: policies.MyPolicy
+...
+\end{wideshellverbatim}
+
+\section{Host selection}
+
+A host selection policy module looks like this:
+
+\begin{wideshellverbatim}
+from haizea.core.scheduler.policy import HostSelectionPolicy
+
+class NoPolicy(HostSelectionPolicy):
+    def __init__(self, slottable):
+        HostSelectionPolicy.__init__(self, slottable)
+    
+    
+    def get_host_score(self, node, time, lease):       
+        # Your code goes here
+\end{wideshellverbatim}
+
+The \texttt{get\_host\_score} methos receives a physical host (the integer node identifier used in the slot table, which all policy modules have access to), a time, and a \texttt{Lease} object we would like to schedule at that time. This method returns a score indicating how desireable that host is for that lease at that time. The score can be between 0.0 and 1.0, and the higher the score,       the "more desireable" the physical host is. Like the lease preemptability score, this is a relative measure; the score will be used to determine which of several physical hosts is more desireable for this lease.
+
+The host selection policy to use is specified using the \texttt{policy-host-selection} option of the \texttt{[scheduling]} section in the configuration file. So, assuming you save your module as \texttt{policies.py}, you would specify the following in the configuration file:
+
+\begin{wideshellverbatim}
+[scheduling]
+...
+policy-host-selection: policies.MyPolicy
+...
+\end{wideshellverbatim}
