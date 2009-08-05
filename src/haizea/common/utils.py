@@ -76,6 +76,10 @@ def get_lease_id():
     LEASE_ID += 1
     return l
 
+def reset_lease_id_counter():
+    global LEASE_ID
+    LEASE_ID = 1
+
 def pretty_nodemap(nodes):
     pnodes = list(set(nodes.values()))
     normmap = [([y[0] for y in nodes.items() if y[1]==x], x) for x in pnodes]
@@ -95,6 +99,14 @@ def xmlrpc_marshall_singlevalue(value):
         return value.seconds
     else:
         return value
+    
+def import_class(fq_name):
+    fq_name = fq_name.split(".")
+    package_name = ".".join(fq_name[:-1])
+    class_name = fq_name[-1]
+    module = __import__(package_name, fromlist=[class_name])
+    exec("cls = module.%s" % class_name)
+    return cls
     
 class Singleton(object):
      """ 
@@ -116,16 +128,20 @@ class Singleton(object):
 
  
 def get_config():
-    from haizea.resourcemanager.rm import ResourceManager
-    return ResourceManager.get_singleton().config
+    from haizea.core.manager import Manager
+    return Manager.get_singleton().config
 
 def get_accounting():
-    from haizea.resourcemanager.rm import ResourceManager
-    return ResourceManager.get_singleton().accounting
+    from haizea.core.manager import Manager
+    return Manager.get_singleton().accounting
 
 def get_clock():
-    from haizea.resourcemanager.rm import ResourceManager
-    return ResourceManager.get_singleton().clock
+    from haizea.core.manager import Manager
+    return Manager.get_singleton().clock
+
+def get_policy():
+    from haizea.core.manager import Manager
+    return Manager.get_singleton().policy
 
 class InvalidStateMachineTransition(Exception):
     pass

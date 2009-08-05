@@ -16,12 +16,14 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.resourcemanager.rm import ResourceManager
+from haizea.core.manager import Manager
 from haizea.common.utils import generate_config_name, unpickle
-from haizea.resourcemanager.configfile import HaizeaConfig, HaizeaMultiConfig
+from haizea.core.configfile import HaizeaConfig, HaizeaMultiConfig
 from haizea.common.config import ConfigException
 from haizea.cli.optionparser import OptionParser, Option
 from haizea.cli import Command
+from mx.DateTime import TimeDelta
+import xml.etree.ElementTree as ET
 import haizea.common.defaults as defaults
 import sys
 import os
@@ -108,9 +110,9 @@ class haizea(Command):
                 
             daemon = not self.opt.foreground
         
-            rm = ResourceManager(config, daemon, pidfile)
+            manager = Manager(config, daemon, pidfile)
         
-            rm.start()
+            manager.start()
         elif self.opt.stop: # Stop Haizea
             # Based on code in:  http://aspn.activestate.com/ASPN/Cookbook/Python/Recipe/66012
             try:
@@ -296,5 +298,114 @@ class haizea_convert_data(Command):
                 slowdowns = stats.get_slowdowns()
                 for lease_id in waitingtimes:
                     print ",".join([attrs, `lease_id`, `waitingtimes[lease_id].seconds`, `slowdowns[lease_id]`])
+
+class haizea_lwf2xml(Command):
+    """
+    Converts old Haizea LWF file into new XML-based LWF format
+    """
+    
+    name = "haizea-lwf2xml"
+
+    def __init__(self, argv):
+        Command.__init__(self, argv)
+        
+        self.optparser.add_option(Option("-i", "--in", action="store",  type="string", dest="inf",
+                                         help = """
+                                         Input file
+                                         """))
+        self.optparser.add_option(Option("-o", "--out", action="store", type="string", dest="outf",
+                                         help = """
+                                         Output file
+                                         """))
+                
+    def run(self):            
+        self.parse_options()
+
+        infile = self.opt.inf
+        outfile = self.opt.outf
+        
+        root = ET.Element("lease-workload")
+        root.set("name", infile)
+        description = ET.SubElement(root, "description")
+        time = TimeDelta(seconds=0)
+        id = 1
+        requests = ET.SubElement(root, "lease-requests")
+        
+        
+        infile = open(infile, "r")
+        for line in infile:
+            if line[0]!='#' and len(line.strip()) != 0:
+                fields = line.split()
+                submit_time = int(fields[0])
+                start_time = int(fields[1])
+                duration = int(fields[2])
+                real_duration = int(fields[3])
+                num_nodes = int(fields[4])
+                cpu = int(fields[5])
+                mem = int(fields[6])
+                disk = int(fields[7])
+                vm_image = fields[8]
+                vm_imagesize = int(fields[9])
+                
+                
+        
+                lease_request = ET.SubElement(requests, "lease-request")
+                lease_request.set("arrival", str(TimeDelta(seconds=submit_time)))
+                if real_duration != duration:
+                    realduration = ET.SubElement(lease_request, "realduration")
+                    realduration.set("time", str(TimeDelta(seconds=real_duration)))
+                
+                lease = ET.SubElement(lease_request, "lease")
+                lease.set("id", `id`)
+
+                
+                nodes = ET.SubElement(lease, "nodes")
+                node_set = ET.SubElement(nodes, "node-set")
+                node_set.set("numnodes", `num_nodes`)
+                res = ET.SubElement(node_set, "res")
+                res.set("type", "CPU")
+                if cpu == 1:
+                    res.set("amount", "100")
+                else:
+                    pass
+                res = ET.SubElement(node_set, "res")
+                res.set("type", "Memory")
+                res.set("amount", `mem`)
+                
+                start = ET.SubElement(lease, "start")
+                if start_time == -1:
+                    lease.set("preemptible", "true")
+                else:
+                    lease.set("preemptible", "false")
+                    exact = ET.SubElement(start, "exact")
+                    exact.set("time", str(TimeDelta(seconds=start_time)))
+
+                duration_elem = ET.SubElement(lease, "duration")
+                duration_elem.set("time", str(TimeDelta(seconds=duration)))
+
+                software = ET.SubElement(lease, "software")
+                diskimage = ET.SubElement(software, "disk-image")
+                diskimage.set("id", vm_image)
+                diskimage.set("size", `vm_imagesize`)
+                
+                    
+                id += 1
+        tree = ET.ElementTree(root)
+        print ET.tostring(root)
+        #tree.write("page.xhtml")
+#head = ET.SubElement(root, "head")
+
+#title = ET.SubElement(head, "title")
+#title.text = "Page Title"
+
+#body = ET.SubElement(root, "body")
+#body.set("bgcolor", "#ffffff")
+
+#body.text = "Hello, World!"
+
+# wrap it in an ElementTree instance, and save as XML
+#tree = ET.ElementTree(root)
+
+        
 
 

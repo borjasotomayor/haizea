@@ -22,11 +22,10 @@ A sample configuration file is provided with Haizea and is located in \texttt{/u
 \begin{wideshellverbatim}
 [simulation]
 starttime: 2006-11-25 13:00:00
-nodes: 4
-resources: CPU,1;Mem,1024;Net (in),100;Net (out),100;Disk,20000
+resources: 4  CPU:100 Memory:1024
 \end{wideshellverbatim}
 
-These options are used to describe the characteristics of our simulated cluster. In particular, we're using a 4-node cluster, each node with 1 CPU, 1024 MB of memory, 20GB of disk space, and 100Mbps of inbound/outbound network bandwidth. In this document, we will represent this cluster over time like this:
+These options are used to describe the characteristics of our simulated cluster. In particular, we're using a 4-node cluster, each node with 1 CPU, 1024 MB of memory. In this document, we will represent this cluster over time like this:
 
 \begin{center}
 \includegraphics{images/quickstart_leasegraph1.png}
@@ -49,21 +48,34 @@ As mentioned earlier, the simulator will read trace requests from a tracefile. T
 tracefile: /usr/share/haizea/traces/sample.lwf 
 \end{wideshellverbatim}
 
-The default value is a sample tracefile included with Haizea. If you copy the file to a different location, make sure to update the \texttt{tracefile} option accordingly. The format of this file is LWF (Lease Workload Format), which is particular to Haizea. The sample file includes documentation on the file format, and several sample workloads. You can also find details on the LWF format in Appendix~\ref{app:lwf}. For now, we will focus on the first workload, "PREEMPT":
+The default value is a sample tracefile included with Haizea. If you copy the file to a different location, make sure to update the \texttt{tracefile} option accordingly. The format of this file is LWF (Lease Workload Format), an XML format which is particular to Haizea. For now, don't worry about parsing the trace format in detail; it is fairly human-readable and you can also find details on the LWF format in Appendix~\ref{app:lwf}.
 
 \begin{wideshellverbatim}
-# 0   -1   3600 3600 1 1 1024 0 foobar.img 1024
-# 900 1800 1800 1800 4 1 1024 0 foobar.img 1024
+<lease-workload name="sample">
+	<description>
+	A simple trace where an AR lease preempts a 
+	best-effort lease that is already running. 
+	</description>
+
+	<lease-requests>
+	
+	<!-- The lease requests are initially commented out -->
+	
+	<!-- First lease request -->
+	<!--
+	...
+	-->
+
+	<!-- Second lease request -->
+	<!--
+	...
+	-->
+	
+	</lease-requests>
+</lease-workload>
 \end{wideshellverbatim}
 
-For now, don't worry about parsing the trace format in detail. The above represents two lease requests:
-
-\begin{itemize}
-\item The first line is a request for a best-effort lease, requested at time 0 (right at the start of the simulation), requiring 1 hour (3600 seconds), and only one node.
-\item The second line is an advance reservation (AR) lease, requested 15 minutes into the simulation (900 seconds), starting 30 minutes into the simulation (1800 seconds), requiring 30 minutes (1800 seconds), and all four nodes in the cluster. Since the start time of the simulation is set to 13:00, this means the lease request is received at 13:15, and that the lease must run from 13:30 to 14:00.
-\end{itemize}
-
-Both leases require 1 CPU per node, 1024 MB of memory, a disk image called "foobar.img" (which uses up 1024MB of disk space). The \# characters are used to comment out the lease requests. Do not change this for now.
+As you can see, there are two lease requests in the file, but they are initially commented out. We will take a closer look at each of these requests next.
 
 \section{Running the simulator}
 
@@ -77,10 +89,11 @@ Which results in the following output:
 
 \begin{wideshellverbatim}
 [2006-11-25 13:00:00.00] TFILE   Loading tracefile /usr/share/haizea/traces/sample.lwf
-[2006-11-25 13:00:00.00] TFILE   Loaded workload with 0 requests (0 best-effort + 0 AR)
+[2006-11-25 13:00:00.00] TFILE   Loaded workload with 0 requests ()
 [2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
-[2006-11-25 13:00:00.00] CLOCK   Stopping simulated clock
+[2006-11-25 13:00:00.00] CLOCK   Simulated clock has stopped
+[2006-11-25 13:00:00.00] RM      Stopping resource manager gracefully...
 [2006-11-25 13:00:00.00] RM      --- Haizea status summary ---
 [2006-11-25 13:00:00.00] RM      Number of leases (not including completed): 0
 [2006-11-25 13:00:00.00] RM      Completed leases: 0
@@ -93,14 +106,35 @@ Which results in the following output:
 [2006-11-25 13:00:00.00] RM      ---- End summary ----
 \end{wideshellverbatim}
 
-Now that you've seen the tracefile, you can see why the simulator starts up and immediately stops: all the lease requests in the tracefile are commented out, and there's nothing to schedule. Go ahead and uncomment only the first lease request and run Haizea again. You should now see the following:
+Now that you've seen the tracefile, you can see why the simulator starts up and immediately stops: all the lease requests in the tracefile are commented out, and there's nothing to schedule. Go ahead and uncomment the first lease request, which looks like this:
+
+\begin{wideshellverbatim}
+<lease-request arrival="00:00:00">
+<lease preemptible="true">
+	<nodes>
+		<node-set numnodes="1">
+			<res type="CPU" amount="100"/>
+			<res type="Memory" amount="1024"/>
+		</node-set>
+	</nodes>	
+	<start></start>
+	<duration time="01:00:00"/>
+	<software>
+		<disk-image id="foobar.img" size="1024"/>
+	</software>
+</lease>
+</lease-request>
+\end{wideshellverbatim}
+
+This is a request for a best-effort lease (notice how the starting time is left empty, meaning it's up to Haizea to determine the start time), requested at time 00:00:00 (right at the start of the simulation), requiring 1 hour, and only one node. Now run Haizea again. You should now see the following:
 
 \begin{wideshellverbatim}
 [2006-11-25 13:00:00.00] TFILE   Loading tracefile /usr/share/haizea/traces/sample.lwf
-[2006-11-25 13:00:00.00] TFILE   Loaded workload with 1 requests (1 best-effort + 0 AR)
+[2006-11-25 13:00:00.00] TFILE   Loaded workload with 1 requests (1 Best-effort)
 [2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
-[2006-11-25 13:00:00.00] LSCHED  Lease #1 has been requested and is pending.
+[2006-11-25 13:00:00.00] LSCHED  Lease #1 has been requested.
+[2006-11-25 13:00:00.00] LSCHED  Lease #1 has been marked as pending.
 [2006-11-25 13:00:00.00] LSCHED  Queued best-effort lease request #1, 1 nodes for 01:00:00.00.
 [2006-11-25 13:00:00.00] LSCHED  Next request in the queue is lease 1. Attempting to schedule...
 [2006-11-25 13:00:00.00] VMSCHED Lease #1 has been scheduled on nodes [1] 
@@ -131,7 +165,29 @@ The above corresponds to the following schedule:
 
 A best-effort request is received at 13:00 and, since the cluster is empty, it is scheduled immediately. Notice how the VMs for the lease start at 13:00 and stop at 14:00. For now, we're assuming that the disk images are predeployed on the physical nodes (we will modify this option in the next section).
 
-So, what would happen if we also added the AR lease? Since it requires all the cluster resources from 13:30 to 14:00, the best-effort lease will be unable to run in that time interval. Since the leases are implemented as VMs, Haizea will still schedule the best-effort lease to start at 13:00, but will suspend it before the AR lease starts, and will resume it once the AR lease has finished. In effect, we want the schedule to look like this:
+Now go ahead and uncomment the second lease request, which looks like this:
+
+\begin{wideshellverbatim}
+<lease-request arrival="00:15:00">
+<lease preemptible="false">
+	<nodes>
+		<node-set numnodes="4">
+			<res type="CPU" amount="100"/>
+			<res type="Memory" amount="1024"/>
+		</node-set>
+	</nodes>
+	<start>
+		<exact time="00:30:00"/>
+	</start>
+	<duration time="00:30:00"/>
+	<software>
+		<disk-image id="foobar.img" size="1024"/>
+	</software>
+</lease>
+</lease-request>
+\end{wideshellverbatim}
+
+This is a request for an advance reservation lease (notice how there is an exact starting time specified), requesting all four nodes for 30 minutes. So, what would happen if we also added this AR lease? Since it requires all the cluster resources from 13:30 to 14:00, the best-effort lease will be unable to run in that time interval. Since the leases are implemented as VMs, Haizea will still schedule the best-effort lease to start at 13:00, but will suspend it before the AR lease starts, and will resume it once the AR lease has finished. In effect, we want the schedule to look like this:
 
 \begin{center}
 \includegraphics{images/quickstart_leasegraph3.png}
@@ -140,11 +196,12 @@ So, what would happen if we also added the AR lease? Since it requires all the c
 Uncomment the AR lease request, and run Haizea again. You should now see the following:
 
 \begin{wideshellverbatim}
-[2006-11-25 13:00:00.00] TFILE   Loading tracefile /home/haizea/sample.lwf
-[2006-11-25 13:00:00.00] TFILE   Loaded workload with 2 requests (1 best-effort + 1 AR)
+[2006-11-25 13:00:00.00] TFILE   Loading tracefile /usr/share/haizea/traces/sample.lwf
+[2006-11-25 13:00:00.00] TFILE   Loaded workload with 2 requests (1 Best-effort + 1 AR)
 [2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
-[2006-11-25 13:00:00.00] LSCHED  Lease #1 has been requested and is pending.
+[2006-11-25 13:00:00.00] LSCHED  Lease #1 has been requested.
+[2006-11-25 13:00:00.00] LSCHED  Lease #1 has been marked as pending.
 [2006-11-25 13:00:00.00] LSCHED  Queued best-effort lease request #1, 1 nodes for 01:00:00.00.
 [2006-11-25 13:00:00.00] LSCHED  Next request in the queue is lease 1. Attempting to schedule...
 [2006-11-25 13:00:00.00] VMSCHED Lease #1 has been scheduled on nodes [1] 
@@ -152,7 +209,8 @@ Uncomment the AR lease request, and run Haizea again. You should now see the fol
                                    to 2006-11-25 14:00:00.00
 [2006-11-25 13:00:00.00] VMSCHED Started VMs for lease 1 on nodes [1]
 
-[2006-11-25 13:15:00.00] LSCHED  Lease #2 has been requested and is pending.
+[2006-11-25 13:15:00.00] LSCHED  Lease #2 has been requested.
+[2006-11-25 13:15:00.00] LSCHED  Lease #2 has been marked as pending.
 [2006-11-25 13:15:00.00] LSCHED  Scheduling AR lease #2, 4 nodes
                                  from 2006-11-25 13:30:00.00 
                                    to 2006-11-25 14:00:00.00.
@@ -160,29 +218,29 @@ Uncomment the AR lease request, and run Haizea again. You should now see the fol
 [2006-11-25 13:15:00.00] LSCHED  Preempting lease #1...
 [2006-11-25 13:15:00.00] LSCHED  ... lease #1 will be suspended 
                                      at 2006-11-25 13:30:00.00.
-[2006-11-25 13:15:00.00] LSCHED  AR lease #2 has been accepted.
+[2006-11-25 13:15:00.00] LSCHED  AR lease #2 has been scheduled.
 
-[2006-11-25 13:29:39.00] VMSCHED Stopped VMs for lease 1 on nodes [1]
-[2006-11-25 13:29:39.00] VMSCHED Suspending lease 1...
+[2006-11-25 13:29:28.00] VMSCHED Stopped VMs for lease 1 on nodes [1]
+[2006-11-25 13:29:28.00] VMSCHED Suspending lease 1...
 
 [2006-11-25 13:30:00.00] VMSCHED Lease 1 suspended.
 [2006-11-25 13:30:00.00] VMSCHED Started VMs for lease 2 on nodes [2, 3, 4, 1]
 [2006-11-25 13:30:00.00] LSCHED  Next request in the queue is lease 1. Attempting to schedule...
 [2006-11-25 13:30:00.00] VMSCHED Lease #1 has been scheduled on nodes [1]
-                                 from 2006-11-25 14:00:21.00 (resuming) 
-                                   to 2006-11-25 14:30:42.00
+                                 from 2006-11-25 14:00:00.00 (resuming) 
+                                   to 2006-11-25 14:31:04.00
 
 [2006-11-25 14:00:00.00] VMSCHED Stopped VMs for lease 2 on nodes [2, 3, 4, 1]
 [2006-11-25 14:00:00.00] VMSCHED Resuming lease 1...
 [2006-11-25 14:00:00.00] VMSCHED Lease 2's VMs have shutdown.
 
-[2006-11-25 14:00:21.00] VMSCHED Resumed lease 1
-[2006-11-25 14:00:21.00] VMSCHED Started VMs for lease 1 on nodes [1]
+[2006-11-25 14:00:32.00] VMSCHED Resumed lease 1
+[2006-11-25 14:00:32.00] VMSCHED Started VMs for lease 1 on nodes [1]
 
-[2006-11-25 14:30:42.00] VMSCHED Stopped VMs for lease 1 on nodes [1]
-[2006-11-25 14:30:42.00] VMSCHED Lease 1's VMs have shutdown.
-[2006-11-25 14:30:42.00] CLOCK   Simulated clock has stopped
-[2006-11-25 14:30:42.00] RM      Stopping resource manager gracefully...
+[2006-11-25 14:31:04.00] VMSCHED Stopped VMs for lease 1 on nodes [1]
+[2006-11-25 14:31:04.00] VMSCHED Lease 1's VMs have shutdown.
+[2006-11-25 14:31:04.00] CLOCK   Simulated clock has stopped
+[2006-11-25 14:31:04.00] RM      Stopping resource manager gracefully...
 \end{wideshellverbatim}
 
 Notice how the above corresponds to the previous figure. In particular, notice the following:
@@ -233,7 +291,7 @@ Another scheduling option you can modify is whether Haizea should transfer the V
 \begin{wideshellverbatim}
 [general]
 ...
-lease-deployment: imagetransfer
+lease-preparation: imagetransfer
 ...
 \end{wideshellverbatim}
 
@@ -300,6 +358,12 @@ haizea-request-lease -t +00:02:00 -d 00:10:00 -n 1 --non-preemptible \
                      -c 1 -m 512 -i foobar.img -z 600 
 \end{wideshellverbatim}
 
+Additionally, you can also write a lease request using the XML format seen previous, save it to a file, and have \texttt{haizea-request-lease} command parse it:
+
+\begin{wideshellverbatim}
+haizea-request-lease -f request.xml
+\end{wideshellverbatim}
+
 You can find more details on this command's parameters by running \texttt{haizea-request-lease -h} or taking a look at Appendix~\ref{app:cli}. Once you've submitted the lease, you should see the following:
 
 \begin{wideshellverbatim}
@@ -316,8 +380,8 @@ haizea-list-leases
 You should see the following:
 
 \begin{wideshellverbatim}
- ID   Type  State      Starting time           Duration      Nodes  
- 1    AR    Scheduled  2008-09-24 14:24:47.00  00:10:00.00   1       
+ ID   Type          State      Starting time           Duration      Nodes  
+ 1    AR            Scheduled  2009-08-04 11:25:57.00  00:10:00.00   1        
 \end{wideshellverbatim}
 
 Note: You may not see your lease right away, since Haizea has to ``become aware'' of it (which won't happen until it wakes up to check if there are any new requests). Future versions of Haizea will enable it to be notified immediately of incoming requests.
@@ -325,15 +389,15 @@ Note: You may not see your lease right away, since Haizea has to ``become aware'
 Remember that the lease has been requested one minute into the future, so it will remain in a ``Scheduled'' state for a couple seconds. If you run \texttt{haizea-list-leases} periodically, you should see it pass through a couple other states. If image transfers are still enabled, it will first transition to the ``Preparing'' state:
 
 \begin{wideshellverbatim}
- ID   Type  State      Starting time           Duration      Nodes  
- 1    AR    Preparing  2008-09-24 14:24:47.00  00:10:00.00   1       
+ ID   Type          State      Starting time           Duration      Nodes  
+ 1    AR            Preparing  2009-08-04 11:25:57.00  00:10:00.00   1       
 \end{wideshellverbatim}
 
 And then to the ``Active'' state:
 
 \begin{wideshellverbatim}
- ID   Type  State      Starting time           Duration      Nodes  
- 1    AR    Active     2008-09-24 14:24:47.00  00:10:00.00   1       
+ ID   Type          State      Starting time           Duration      Nodes  
+ 1    AR            Active     2009-08-04 11:25:57.00  00:10:00.00   1       
 \end{wideshellverbatim}
 
 Now let's request a best-effort lease:
@@ -346,23 +410,23 @@ haizea-request-lease -t best_effort -d 00:10:00 -n 4 --non-preemptible \
 The list of leases will now look like this:
 
 \begin{wideshellverbatim}
- ID   Type  State      Starting time           Duration      Nodes  
- 1    AR    Active     2008-09-24 14:24:47.00  00:10:00.00   1       
- 2    BE    Scheduled  None                    00:10:00.00   4       
+ ID   Type          State      Starting time           Duration      Nodes  
+ 1    AR            Active     2009-08-04 11:25:57.00  00:10:00.00   1       
+ 2    Best-effort   Scheduled  Unspecified             00:10:00.00   4       
 \end{wideshellverbatim}
 
-Note how, for best-effort leases, the starting time is set to ``None'', which means this time is not specified by the user, but instead determined on a best-effort basis by the scheduler. Since the lease is in a ``Scheduled'' state, that means that it has been assigned a starting time (although that information is currently not available through the command-line interface; it can be seen in the Haizea log).
+Note how, for best-effort leases, the starting time is set to ``Unspecified'', which means this time is not specified by the user, but instead determined on a best-effort basis by the scheduler. Since the lease is in a ``Scheduled'' state, that means that it has been assigned a starting time (although that information is currently not available through the command-line interface; it can be seen in the Haizea log).
 
 Now try to rerun the \texttt{haizea-request-lease} command a couple times (i.e., lets submit a couple more best-effort requests). The scheduler won't be able to schedule them, since they require all the available nodes, and the AR lease is using up one of them. The previous best-effort lease was scheduled because Haizea's default behaviour is to schedule at most one best-effort lease in the future if resources cannot be found right away (this is due to Haizea's use of backfilling algorithms; for now, don't worry if you don't know what they are). Anyway, the list of leases should now look like this:
 
 \begin{wideshellverbatim}
  ID   Type  State      Starting time           Duration      Nodes  
- 1    AR    Active     2008-09-24 14:24:47.00  00:10:00.00   1       
- 2    BE    Scheduled  None                    00:10:00.00   4       
- 3    BE    Queued     None                    00:10:00.00   4       
- 4    BE    Queued     None                    00:10:00.00   4       
- 5    BE    Queued     None                    00:10:00.00   4       
- 6    BE    Queued     None                    00:10:00.00   4       
+ 1    AR            Active     2009-08-04 11:25:57.00  00:10:00.00   1       
+ 2    Best-effort   Scheduled  Unspecified             00:10:00.00   4       
+ 3    Best-effort   Queued     Unspecified             00:10:00.00   4       
+ 4    Best-effort   Queued     Unspecified             00:10:00.00   4       
+ 5    Best-effort   Queued     Unspecified             00:10:00.00   4       
+ 6    Best-effort   Queued     Unspecified             00:10:00.00   4       
 \end{wideshellverbatim}
 
 Notice how the extra best-effort requests have been queued. If you only want to see the contents of the queue, you can use the following command:
@@ -374,11 +438,11 @@ haizea-show-queue
 This should show the following:
 
 \begin{wideshellverbatim}
- ID   Type  State      Sched. Start time       Duration      Nodes  
- 3    BE    Queued     None                    00:10:00.00   4       
- 4    BE    Queued     None                    00:10:00.00   4       
- 5    BE    Queued     None                    00:10:00.00   4       
- 6    BE    Queued     None                    00:10:00.00   4       
+ ID   Type          State      Starting time           Duration      Nodes  
+ 3    Best-effort   Queued     Unspecified             00:10:00.00   4       
+ 4    Best-effort   Queued     Unspecified             00:10:00.00   4       
+ 5    Best-effort   Queued     Unspecified             00:10:00.00   4       
+ 6    Best-effort   Queued     Unspecified             00:10:00.00   4       
 \end{wideshellverbatim}
 
 When you're done, you can shut Haizea down cleanly by running the following:
@@ -391,8 +455,6 @@ haizea --stop
 \section{Other things you can do with Haizea}
 
 At this point, we have seen how to run simple simulations with Haizea. However, there is a lot more that Haizea can do:
-
-When not running in simulation, Haizea runs as a daemon that can accept requests (e.g., through a command-line interface) and sends out enactment commands ("start VM", "stop VM", etc.) to the appropriate enactment module. For example, when running OpenNebula with Haizea as a scheduling backend, Haizea is in charge of processing the requests received by OpenNebula, coming up with a schedule, and then instructing OpenNebula on when VMs should be start/stop/suspend/resume on what physical nodes.
 
 \begin{description}
 \item[Run on real hardware] First and foremost, almost everything you just saw above in simulation can be done on real hardware. This is accomplished by using Haizea with the OpenNebula virtual infrastructure manager. So, if you have a Xen or KVM cluster, you can just install OpenNebula and Haizea to enable your users to request VM-based leases on your cluster. This is explained in Chapter~\ref{chap:opennebula}.

@@ -17,16 +17,11 @@
 # -------------------------------------------------------------------------- #
 
 # Types of resources
-RES_CPU = 0
-RES_MEM = 1
-RES_NETIN = 2
-RES_NETOUT = 3
-RES_DISK = 4
-
-# Types of types of resources
-RESTYPE_FLOAT = 0
-RESTYPE_INT = 1
-
+RES_CPU = "CPU"
+RES_MEM = "Memory"
+RES_NETIN = "Net-in"
+RES_NETOUT = "Net-out"
+RES_DISK = "Disk"
 
 COMMON_SEC="common"
 MULTI_SEC="multi"
@@ -47,9 +42,9 @@ SUSPENSION_ALL="all"
 SUSPRES_EXCLUSION_LOCAL="local"
 SUSPRES_EXCLUSION_GLOBAL="global"
 
-MIGRATE_NONE="nothing"
-MIGRATE_MEM="mem"
-MIGRATE_MEMDISK="mem+disk"
+MIGRATE_NO="no"
+MIGRATE_YES="yes"
+MIGRATE_YES_NOTRANSFER="yes-notransfer"
 
 TRANSFER_UNICAST="unicast"
 TRANSFER_MULTICAST="multicast"
@@ -72,12 +67,6 @@ PREPARATION_TRANSFER = "imagetransfer"
 CLOCK_SIMULATED = "simulated"
 CLOCK_REAL = "real"
 
-# Transfer required in deployment
-REQTRANSFER_NO = 0
-REQTRANSFER_YES = 1
-REQTRANSFER_COWPOOL = 2
-REQTRANSFER_PIGGYBACK = 3
-
 # Misc
 BETTER = -1
 EQUAL = 0
@@ -90,7 +79,7 @@ CACHESIZE_UNLIMITED = -1
 
 
 
-ENACT_PACKAGE="haizea.resourcemanager.enact"
+ENACT_PACKAGE="haizea.core.enact"
 
 COUNTER_ARACCEPTED="Accepted AR"
 COUNTER_ARREJECTED="Rejected AR"

@@ -1,4 +1,4 @@
-from haizea.resourcemanager.configfile import HaizeaConfig
+from haizea.core.configfile import HaizeaConfig
 from haizea.common.config import OPTTYPE_INT, OPTTYPE_FLOAT, OPTTYPE_STRING, OPTTYPE_BOOLEAN, OPTTYPE_DATETIME, OPTTYPE_TIMEDELTA 
 from docutils.core import publish_string
 import re

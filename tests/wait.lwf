@@ -1,11 +1,140 @@
-# Name: WAIT
-# Description: All best-effort requests, all of which (except the first)
-# will have to wait in the queue before starting.
-#0    -1   900  900  4 1 1024 0 foobar1.img 1024
-#0    -1   900  900  4 1 1024 0 foobar2.img 1024
-#0    -1   900  900  4 1 1024 0 foobar3.img 1024
-#0    -1   900  900  4 1 1024 0 foobar4.img 1024
-#0    -1   900  900  4 1 1024 0 foobar5.img 1024
-#0    -1   900  900  4 1 1024 0 foobar6.img 1024
-#0    -1   900  900  4 1 1024 0 foobar7.img 1024
-#0    -1   900  900  4 1 1024 0 foobar8.img 1024
+<?xml version="1.0"?>
+<lease-workload name="wait">
+  <description>
+	All best-effort requests, all of which (except the first)
+    will have to wait in the queue before starting.
+  </description>
+  
+  <site>
+    <resource-types names="CPU Memory"/>
+    <nodes>
+      <node-set numnodes="4">
+        <res type="CPU" amount="100"/>
+        <res type="Memory" amount="1024"/>
+      </node-set>
+    </nodes>
+  </site>
+  
+  <lease-requests>
+    <lease-request arrival="00:00:00.00">
+      <lease id="1" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar1.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:00:00.00">
+      <lease id="2" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar2.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:00:00.00">
+      <lease id="3" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar3.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:00:00.00">
+      <lease id="4" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar4.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:00:00.00">
+      <lease id="5" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar5.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:00:00.00">
+      <lease id="6" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar6.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:00:00.00">
+      <lease id="7" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar7.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:00:00.00">
+      <lease id="8" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar8.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+  </lease-requests>
+</lease-workload>

@@ -1,13 +1,227 @@
-3600 4500 450 450 2 1 1024 0 foobar.img 1024
-7200 8100 450 450 2 1 1024 0 foobar.img 1024
-10800 11700 450 450 1 1 1024 0 foobar.img 1024
-14400 15300 450 450 2 1 1024 0 foobar.img 1024
-18000 18900 450 450 1 1 1024 0 foobar.img 1024
-21600 22500 450 450 2 1 1024 0 foobar.img 1024
-25200 26100 450 450 2 1 1024 0 foobar.img 1024
-28800 29700 450 450 2 1 1024 0 foobar.img 1024
-32400 33300 450 450 1 1 1024 0 foobar.img 1024
-36000 36900 450 450 1 1 1024 0 foobar.img 1024
-39600 40500 450 450 1 1 1024 0 foobar.img 1024
-43200 44100 450 450 1 1 1024 0 foobar.img 1024
-46800 47700 450 450 1 1 1024 0 foobar.img 1024
+<?xml version="1.0"?>
+<lease-workload name="inj1.lwf.old">
+  <description/>
+  <lease-requests>
+    <lease-request arrival="01:00:00.00">
+      <lease id="1" preemptible="false">
+        <nodes>
+          <node-set numnodes="2">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="01:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="02:00:00.00">
+      <lease id="2" preemptible="false">
+        <nodes>
+          <node-set numnodes="2">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="02:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="03:00:00.00">
+      <lease id="3" preemptible="false">
+        <nodes>
+          <node-set numnodes="1">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="03:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="04:00:00.00">
+      <lease id="4" preemptible="false">
+        <nodes>
+          <node-set numnodes="2">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="04:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="05:00:00.00">
+      <lease id="5" preemptible="false">
+        <nodes>
+          <node-set numnodes="1">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="05:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="06:00:00.00">
+      <lease id="6" preemptible="false">
+        <nodes>
+          <node-set numnodes="2">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="06:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="07:00:00.00">
+      <lease id="7" preemptible="false">
+        <nodes>
+          <node-set numnodes="2">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="07:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="08:00:00.00">
+      <lease id="8" preemptible="false">
+        <nodes>
+          <node-set numnodes="2">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="08:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="09:00:00.00">
+      <lease id="9" preemptible="false">
+        <nodes>
+          <node-set numnodes="1">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="09:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="10:00:00.00">
+      <lease id="10" preemptible="false">
+        <nodes>
+          <node-set numnodes="1">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="10:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="11:00:00.00">
+      <lease id="11" preemptible="false">
+        <nodes>
+          <node-set numnodes="1">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="11:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="12:00:00.00">
+      <lease id="12" preemptible="false">
+        <nodes>
+          <node-set numnodes="1">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="12:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="13:00:00.00">
+      <lease id="13" preemptible="false">
+        <nodes>
+          <node-set numnodes="1">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="13:15:00.00"/>
+        </start>
+        <duration time="00:07:30.00"/>
+        <software>
+          <disk-image id="foobar.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+  </lease-requests>
+</lease-workload>
