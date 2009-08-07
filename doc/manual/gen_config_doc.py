@@ -39,7 +39,7 @@ for s in HaizeaConfig.sections:
             elif opt.type == OPTTYPE_STRING:
                 print "Any string"
             elif opt.type == OPTTYPE_BOOLEAN:
-                print "\texttt{True} or \texttt{False}"
+                print "\\texttt{True} or \\texttt{False}"
             elif opt.type == OPTTYPE_DATETIME:
                 print "An ISO timestamp: i.e., \\texttt{YYYY-MM-DD HH:MM:SS}"
             elif opt.type == OPTTYPE_TIMEDELTA:
