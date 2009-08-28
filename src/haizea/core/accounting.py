@@ -27,10 +27,15 @@ class AccountingData(object):
     def __init__(self):
         # Counters
         self.counters = {}
-        self.counter_lists = {}
         self.counter_avg_type = {}
         
-        # Lease data
+        # Per-lease data
+        self.lease_stats = {}
+
+        # Per-run data ("statistics")
+        self.stats = {}
+
+        # Leases
         self.leases = {}
         
         # Attributes
@@ -38,38 +43,28 @@ class AccountingData(object):
         
         self.starttime = None
         
-    def get_waiting_times(self):
-        waiting_times = {}
-        for lease_id in self.leases:
-            lease = self.leases[lease_id]
-            if lease.get_type() == Lease.BEST_EFFORT:
-                waiting_times[lease_id] = lease.get_waiting_time()
-        return waiting_times
-
-    def get_slowdowns(self):
-        slowdowns = {}
-        for lease_id in self.leases:
-            lease = self.leases[lease_id]
-            if lease.get_type() == Lease.BEST_EFFORT:
-                slowdowns[lease_id] = lease.get_slowdown()
-        return slowdowns
-    
-    def get_besteffort_end(self):
-        return max([l.end for l in self.leases.values() if l.get_type() == Lease.BEST_EFFORT])
 
 class AccountingDataCollection(object):
+    
+    AVERAGE_NONE=0
+    AVERAGE_NORMAL=1
+    AVERAGE_TIMEWEIGHTED=2
+    
     def __init__(self, manager, datafile):
         self.data = AccountingData()
         self.manager = manager
         self.datafile = datafile
+        self.probes = []
         
         attrs = get_config().get_attrs()
         for attr in attrs:
             self.data.attrs[attr] = get_config().get_attr(attr)
 
-    def create_counter(self, counter_id, avgtype, initial=0):
-        self.data.counters[counter_id] = initial
-        self.data.counter_lists[counter_id] = []
+    def add_probe(self):
+        pass
+
+    def create_counter(self, counter_id, avgtype):
+        self.data.counters[counter_id] = []
         self.data.counter_avg_type[counter_id] = avgtype
 
     def incr_counter(self, counter_id, lease_id = None):
@@ -83,15 +78,15 @@ class AccountingDataCollection(object):
     def append_stat(self, counter_id, value, lease_id = None, time = None):
         if time == None:
             time = get_clock().get_time()
-        if len(self.data.counter_lists[counter_id]) > 0:
-            prevtime = self.data.counter_lists[counter_id][-1][0]
+        if len(self.data.counters[counter_id]) > 0:
+            prevtime = self.data.counters[counter_id][-1][0]
         else:
             prevtime = None
-        self.data.counters[counter_id] = value
+
         if time == prevtime:
-            self.data.counter_lists[counter_id][-1][2] = value
+            self.data.counters[counter_id][-1][2] = value
         else:
-            self.data.counter_lists[counter_id].append([time, lease_id, value])
+            self.data.counters[counter_id].append([time, lease_id, value])
 
         
     def start(self, time):
@@ -99,8 +94,7 @@ class AccountingDataCollection(object):
         
         # Start the counters
         for counter_id in self.data.counters:
-            initial = self.data.counters[counter_id]
-            self.append_stat(counter_id, initial, time = time)
+            self.append_stat(counter_id, 0, time = time)
 
         
     def stop(self):
@@ -108,18 +102,18 @@ class AccountingDataCollection(object):
 
         # Stop the counters
         for counter_id in self.data.counters:
-            self.append_stat(counter_id, self.data.counters[counter_id], time=time)
+            self.append_stat(counter_id, self.data.counters[counter_id][-1][2], time=time)
         
         # Add the averages
         for counter_id in self.data.counters:
-            l = self.normalize_times(self.data.counter_lists[counter_id])
+            l = self.normalize_times(self.data.counters[counter_id])
             avgtype = self.data.counter_avg_type[counter_id]
             if avgtype == constants.AVERAGE_NONE:
-                self.data.counter_lists[counter_id] = self.add_no_average(l)
+                self.data.counters[counter_id] = self.add_no_average(l)
             elif avgtype == constants.AVERAGE_NORMAL:
-                self.data.counter_lists[counter_id] = self.add_average(l)
+                self.data.counters[counter_id] = self.add_average(l)
             elif avgtype == constants.AVERAGE_TIMEWEIGHTED:
-                self.data.counter_lists[counter_id] = self.add_timeweighted_average(l)
+                self.data.counters[counter_id] = self.add_timeweighted_average(l)
             
     def normalize_times(self, data):
         return [((v[0] - self.data.starttime).seconds, v[1], v[2]) for v in data]
@@ -182,5 +176,105 @@ class AccountingDataCollection(object):
         # Save data
         pickle(self.data, self.datafile)
 
+class AccountingProbe(object):
+    # Base abstract class for an accounting probe
+    def __init__(self, accounting):
+        self.accounting = accounting
+    
+    def create_counters(self):
+        pass
+    
+    def finalize_accounting(self):
+        pass
+    
+    def at_timestep(self, lease_scheduler):
+        pass
+    
+    def at_lease_request(self, lease):
+        pass
+    
+    def at_lease_done(self, lease):
+        pass
                 
-            
+                
+class ARProbe(object):
+    
+    COUNTER_ARACCEPTED="Accepted AR"
+    COUNTER_ARREJECTED="Rejected AR"
+    
+    def __init__(self):
+        AccountingProbe.__init__(self, accounting)
+
+    def create_counters(self):
+        self.accounting.create_counter(ARProbe.COUNTER_ARACCEPTED, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(ARProbe.COUNTER_ARREJECTED, AccountingDataCollection.AVERAGE_NONE)
+
+    def finalize_accounting(self):
+        pass
+        # Accepted/rejected
+
+    def at_lease_request(self, lease):
+        pass
+        # If lease is accepted, ...
+        # If lease is rejected, ...
+
+class IMProbe(object):
+    
+    COUNTER_IMACCEPTED="Accepted Immediate"
+    COUNTER_IMREJECTED="Rejected Immediate"
+    
+    def __init__(self):
+        AccountingProbe.__init__(self, accounting)
+    
+    def create_counters(self):
+        self.accounting.create_counter(IMProbe.COUNTER_IMACCEPTED, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(IMProbe.COUNTER_IMREJECTED, AccountingDataCollection.AVERAGE_NONE)
+
+    def finalize_accounting(self):
+        pass
+        # Accepted/rejected
+
+    def at_lease_request(self, lease):
+        pass
+        # If lease is accepted, ...
+        # If lease is rejected, ...
+
+class BEProbe(object):
+    
+    COUNTER_BESTEFFORTCOMPLETED="Best-effort completed"
+    COUNTER_QUEUESIZE="Queue size"    
+    
+    def __init__(self):
+        AccountingProbe.__init__(self, accounting)
+    
+    def create_counters(self):
+        self.accounting.create_counter(BEProbe.COUNTER_BESTEFFORTCOMPLETED, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(BEProbe.COUNTER_QUEUESIZE, AccountingDataCollection.AVERAGE_TIMEWEIGHTED)
+
+    def finalize_accounting(self):
+        pass
+        # Compute all-best-effort-done
+    
+    def at_timestep(self, lease_scheduler):
+        pass
+        # Get queue size
+
+    def at_lease_done(self, lease):
+        pass
+        # Compute waiting time and slowdown
+
+class UtilizationProbe(object):
+    
+    COUNTER_DISKUSAGE="Disk usage"
+    COUNTER_UTILIZATION="Resource utilization"        
+    
+    def __init__(self):
+        AccountingProbe.__init__(self, accounting)
+    
+    def create_counters(self):
+        self.accounting.create_counter(UtilizationProbe.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
+        self.accounting.create_counter(UtilizationProbe.COUNTER_UTILIZATION, constants.AVERAGE_NONE)
+    
+    def at_timestep(self, lease_scheduler):
+        self.accounting.append_stat(constants.COUNTER_UTILIZATION, util)
+

@@ -181,8 +181,6 @@ class Lease(object):
         self.enactment_info = None
         self.vnode_enactment_info = dict([(n, None) for n in self.requested_resources.keys()])
         
-        self.logger = logging.getLogger("LEASES")
-        
         
     @classmethod
     def create_new(cls, submit_time, requested_resources, start, duration, 
@@ -389,35 +387,37 @@ class Lease(object):
         Argument:
         loglevel -- The loglevel at which to print the information
         """           
-        self.logger.log(loglevel, "__________________________________________________")
-        self.logger.log(loglevel, "Lease ID       : %i" % self.id)
-        self.logger.log(loglevel, "Type           : %s" % Lease.type_str[self.get_type()])
-        self.logger.log(loglevel, "Submission time: %s" % self.submit_time)
-        self.logger.log(loglevel, "Start          : %s" % self.start)
-        self.logger.log(loglevel, "Duration       : %s" % self.duration)
-        self.logger.log(loglevel, "State          : %s" % Lease.state_str[self.get_state()])
-        self.logger.log(loglevel, "Resource req   : %s" % self.requested_resources)
-        self.logger.log(loglevel, "Software       : %s" % self.software)
+        logger = logging.getLogger("LEASES")
+        logger.log(loglevel, "__________________________________________________")
+        logger.log(loglevel, "Lease ID       : %i" % self.id)
+        logger.log(loglevel, "Type           : %s" % Lease.type_str[self.get_type()])
+        logger.log(loglevel, "Submission time: %s" % self.submit_time)
+        logger.log(loglevel, "Start          : %s" % self.start)
+        logger.log(loglevel, "Duration       : %s" % self.duration)
+        logger.log(loglevel, "State          : %s" % Lease.state_str[self.get_state()])
+        logger.log(loglevel, "Resource req   : %s" % self.requested_resources)
+        logger.log(loglevel, "Software       : %s" % self.software)
         self.print_rrs(loglevel)
-        self.logger.log(loglevel, "--------------------------------------------------")
+        logger.log(loglevel, "--------------------------------------------------")
 
     def print_rrs(self, loglevel=LOGLEVEL_VDEBUG):
         """Prints the lease's resource reservations to the log.
                 
         Argument:
         loglevel -- The loglevel at which to print the information
-        """              
+        """            
+        logger = logging.getLogger("LEASES")  
         if len(self.preparation_rrs) > 0:
-            self.logger.log(loglevel, "DEPLOYMENT RESOURCE RESERVATIONS")
-            self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+            logger.log(loglevel, "DEPLOYMENT RESOURCE RESERVATIONS")
+            logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
             for r in self.preparation_rrs:
                 r.print_contents(loglevel)
-                self.logger.log(loglevel, "##")
-        self.logger.log(loglevel, "VM RESOURCE RESERVATIONS")
-        self.logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~~~~")
+                logger.log(loglevel, "##")
+        logger.log(loglevel, "VM RESOURCE RESERVATIONS")
+        logger.log(loglevel, "~~~~~~~~~~~~~~~~~~~~~~~~")
         for r in self.vm_rrs:
             r.print_contents(loglevel)
-            self.logger.log(loglevel, "##")
+            logger.log(loglevel, "##")
 
     def get_active_vmrrs(self, time):
         """Returns the active VM resource reservations at a given time
@@ -589,7 +589,7 @@ class LeaseStateMachine(StateMachine):
     See the Haizea documentation for a description of states and
     valid transitions.
     
-    """    
+    """
     transitions = {Lease.STATE_NEW:                 [(Lease.STATE_PENDING,    "")],
                    
                    Lease.STATE_PENDING:             [(Lease.STATE_SCHEDULED,  ""),
@@ -599,9 +599,10 @@ class LeaseStateMachine(StateMachine):
                                                      
                    Lease.STATE_SCHEDULED:           [(Lease.STATE_PREPARING,  ""),
                                                      (Lease.STATE_QUEUED,     ""),
-                                                     (Lease.STATE_PENDING,     ""),
+                                                     (Lease.STATE_PENDING,    ""),
                                                      (Lease.STATE_READY,      ""),
-                                                     (Lease.STATE_CANCELLED,  "")],
+                                                     (Lease.STATE_CANCELLED,  ""),
+                                                     (Lease.STATE_FAIL,       "")],
                                                      
                    Lease.STATE_QUEUED:              [(Lease.STATE_SCHEDULED,  ""),
                                                      (Lease.STATE_CANCELLED,  "")],

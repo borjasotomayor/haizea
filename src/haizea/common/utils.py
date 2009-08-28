@@ -131,10 +131,6 @@ def get_config():
     from haizea.core.manager import Manager
     return Manager.get_singleton().config
 
-def get_accounting():
-    from haizea.core.manager import Manager
-    return Manager.get_singleton().accounting
-
 def get_clock():
     from haizea.core.manager import Manager
     return Manager.get_singleton().clock
@@ -142,6 +138,10 @@ def get_clock():
 def get_policy():
     from haizea.core.manager import Manager
     return Manager.get_singleton().policy
+
+def get_persistence():
+    from haizea.core.manager import Manager
+    return Manager.get_singleton().persistence
 
 class InvalidStateMachineTransition(Exception):
     pass

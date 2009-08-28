@@ -50,6 +50,18 @@ class ResourceTuple(object):
         if self.slottable.has_multiinst:
             self.multiinst = dict([(i,[]) for i in range(self.slottable.rtuple_len, self.slottable.rtuple_nres)])
 
+    def __getstate__(self):
+        if self.slottable.has_multiinst:
+            return (self._res, self.multiinst)
+        else:
+            return (self._res,)
+
+    def __setstate__(self, state):
+        self.slottable = None
+        self._res = state[0]
+        if len(state) == 2:
+            self.multiinst = state[1]
+
     @classmethod
     def copy(cls, rt):
         rt2 = cls(rt.slottable, rt._res[:])
@@ -159,13 +171,13 @@ class ResourceReservation(object):
         self.end = end
         self.state = None
         self.resources_in_pnode = res # pnode -> ResourceTuple
-        self.logger = logging.getLogger("LEASES")
                         
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
-        self.logger.log(loglevel, "Start          : %s" % self.start)
-        self.logger.log(loglevel, "End            : %s" % self.end)
-        self.logger.log(loglevel, "State          : %s" % ResourceReservation.state_str[self.state])
-        self.logger.log(loglevel, "Resources      : \n                         %s" % "\n                         ".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()])) 
+        logger = logging.getLogger("LEASES")
+        logger.log(loglevel, "Start          : %s" % self.start)
+        logger.log(loglevel, "End            : %s" % self.end)
+        logger.log(loglevel, "State          : %s" % ResourceReservation.state_str[self.state])
+        logger.log(loglevel, "Resources      : \n                         %s" % "\n                         ".join(["N%i: %s" %(i, x) for i, x in self.resources_in_pnode.items()])) 
                 
     def xmlrpc_marshall(self):
         # Convert to something we can send through XMLRPC

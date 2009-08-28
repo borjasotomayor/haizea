@@ -28,7 +28,7 @@ from mx.DateTime import TimeDelta
 
 import copy
 import bisect
-
+import logging
 
 class ImageTransferPreparationScheduler(PreparationScheduler):
     def __init__(self, slottable, resourcepool, deployment_enact):
@@ -555,10 +555,11 @@ class FileTransferResourceReservation(ResourceReservation):
 
     def print_contents(self, loglevel="VDEBUG"):
         ResourceReservation.print_contents(self, loglevel)
-        self.logger.log(loglevel, "Type           : FILE TRANSFER")
-        self.logger.log(loglevel, "Deadline       : %s" % self.deadline)
-        self.logger.log(loglevel, "File           : %s" % self.file)
-        self.logger.log(loglevel, "Transfers      : %s" % self.transfers)
+        logger = logging.getLogger("LEASES")
+        logger.log(loglevel, "Type           : FILE TRANSFER")
+        logger.log(loglevel, "Deadline       : %s" % self.deadline)
+        logger.log(loglevel, "File           : %s" % self.file)
+        logger.log(loglevel, "Transfers      : %s" % self.transfers)
         
     def piggyback(self, lease_id, vnode, physnode):
         if self.transfers.has_key(physnode):

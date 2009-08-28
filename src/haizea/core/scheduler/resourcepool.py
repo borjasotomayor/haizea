@@ -16,7 +16,7 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.common.utils import vnodemapstr, get_accounting
+from haizea.common.utils import vnodemapstr
 import haizea.common.constants as constants
 import haizea.core.enact.actions as actions
 from haizea.core.scheduler import EnactmentError
@@ -132,7 +132,6 @@ class ResourcePool(object):
         self.logger.vdebug("Files AFTER:")
         self.get_node(pnode).print_files()
         
-        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
         return img
             
     def remove_diskimage(self, pnode, lease, vnode):
@@ -143,9 +142,7 @@ class ResourcePool(object):
         node.remove_diskimage(lease, vnode)
 
         node.print_files()
-        
-        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())    
-        
+                
     def add_ramfile(self, pnode, lease_id, vnode, size):
         node = self.get_node(pnode)
         self.logger.debug("Adding RAM file for L%iV%i in node %i" % (lease_id, vnode, pnode))
@@ -153,7 +150,6 @@ class ResourcePool(object):
         f = RAMImageFile("RAM_L%iV%i" % (lease_id, vnode), size, lease_id, vnode)
         node.add_file(f)        
         node.print_files()
-        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
 
     def remove_ramfile(self, pnode, lease_id, vnode):
         node = self.get_node(pnode)
@@ -161,7 +157,6 @@ class ResourcePool(object):
         node.print_files()
         node.remove_ramfile(lease_id, vnode)
         node.print_files()
-        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
         
     def get_max_disk_usage(self):
         return max([n.get_disk_usage() for n in self.nodes.values()])
@@ -283,7 +278,6 @@ class ResourcePoolWithReusableImages(ResourcePool):
         self.logger.vdebug("Files AFTER:")
         self.get_node(pnode).print_files()
         
-        get_accounting().append_stat(constants.COUNTER_DISKUSAGE, self.get_max_disk_usage())
         return img
     
     def add_mapping_to_existing_reusable_image(self, pnode_id, diskimage_id, lease_id, vnode, timeout):

@@ -44,7 +44,7 @@ from haizea.core.scheduler import UnrecoverableError
 from haizea.core.scheduler.lease_scheduler import LeaseScheduler
 from haizea.core.scheduler.vm_scheduler import VMScheduler
 from haizea.core.scheduler.mapper import class_mappings as mapper_mappings
-from haizea.core.scheduler.slottable import SlotTable
+from haizea.core.scheduler.slottable import SlotTable, ResourceReservation
 from haizea.core.scheduler.policy import PolicyManager
 from haizea.core.scheduler.resourcepool import ResourcePool, ResourcePoolWithReusableImages
 from haizea.core.leases import Lease, Site
@@ -58,6 +58,7 @@ import logging
 import signal
 import sys, os
 import traceback
+import shelve
 from time import sleep
 from math import ceil
 from mx.DateTime import now, TimeDelta
@@ -209,8 +210,11 @@ class Manager(Singleton):
         elif mode == "opennebula":
                 self.frontends = [OpenNebulaFrontend(self)]               
 
+        self.persistence = PersistenceManager("/tmp/haizea.dat")
+
         # Statistics collection 
         self.accounting = accounting.AccountingDataCollection(self, self.config.get("datafile"))
+        # TODO: Load accounting plugins
         
         self.logger = logging.getLogger("RM")
 
@@ -284,21 +288,13 @@ class Manager(Singleton):
     def start(self):
         """Starts the resource manager"""
         self.logger.info("Starting resource manager")
-
-        # Create counters to keep track of interesting data.
-        self.accounting.create_counter(constants.COUNTER_ARACCEPTED, constants.AVERAGE_NONE)
-        self.accounting.create_counter(constants.COUNTER_ARREJECTED, constants.AVERAGE_NONE)
-        self.accounting.create_counter(constants.COUNTER_IMACCEPTED, constants.AVERAGE_NONE)
-        self.accounting.create_counter(constants.COUNTER_IMREJECTED, constants.AVERAGE_NONE)
-        self.accounting.create_counter(constants.COUNTER_BESTEFFORTCOMPLETED, constants.AVERAGE_NONE)
-        self.accounting.create_counter(constants.COUNTER_QUEUESIZE, constants.AVERAGE_TIMEWEIGHTED)
-        self.accounting.create_counter(constants.COUNTER_DISKUSAGE, constants.AVERAGE_NONE)
-        self.accounting.create_counter(constants.COUNTER_UTILIZATION, constants.AVERAGE_NONE)
         
         if self.daemon:
             self.daemonize()
         if self.rpc_server:
             self.rpc_server.start()
+            
+        self.__recover()            
             
         # Start the clock
         try:
@@ -319,6 +315,8 @@ class Manager(Singleton):
         
         # Stop collecting data (this finalizes counters)
         self.accounting.stop()
+        
+        self.persistence.close()
         
         # TODO: When gracefully stopping mid-scheduling, we need to figure out what to
         #       do with leases that are still running.
@@ -392,22 +390,7 @@ class Manager(Singleton):
         except UnrecoverableError, exc:
             self.__unrecoverable_error(exc)
         except Exception, exc:
-            self.__unexpected_exception(exc)
-         
-    def get_utilization(self, nowtime):
-        """ Gather utilization information at a given time.
-        
-        Each time we process reservations, we report resource utilization 
-        to the accounting module. This utilization information shows what 
-        portion of the physical resources is used by each type of reservation 
-        (e.g., 70% are running a VM, 5% are doing suspensions, etc.) See the 
-        accounting module for details on how this data is stored.
-        Currently we only collect utilization from the VM Scheduler 
-        (in the future, information may also be gathered from the preparation 
-        scheduler).
-        """
-        util = self.scheduler.vm_scheduler.get_utilization(nowtime)
-        self.accounting.append_stat(constants.COUNTER_UTILIZATION, util)             
+            self.__unexpected_exception(exc)             
              
     def notify_event(self, lease_id, event):
         """Notifies an asynchronous event to Haizea.
@@ -454,13 +437,87 @@ class Manager(Singleton):
         self.logger.status("--- Haizea status summary ---")
         self.logger.status("Number of leases (not including completed): %i" % len(leases))
         self.logger.status("Completed leases: %i" % len(completed_leases))
-        self.logger.status("Completed best-effort leases: %i" % self.accounting.data.counters[constants.COUNTER_BESTEFFORTCOMPLETED])
-        self.logger.status("Queue size: %i" % self.accounting.data.counters[constants.COUNTER_QUEUESIZE])
-        self.logger.status("Accepted AR leases: %i" % self.accounting.data.counters[constants.COUNTER_ARACCEPTED])
-        self.logger.status("Rejected AR leases: %i" % self.accounting.data.counters[constants.COUNTER_ARREJECTED])
-        self.logger.status("Accepted IM leases: %i" % self.accounting.data.counters[constants.COUNTER_IMACCEPTED])
-        self.logger.status("Rejected IM leases: %i" % self.accounting.data.counters[constants.COUNTER_IMREJECTED])
         self.logger.status("---- End summary ----")        
+
+    def __recover(self):
+        leases = self.persistence.get_leases()
+        for lease in leases:
+            rrs = lease.preparation_rrs + lease.vm_rrs
+            for vmrr in lease.vm_rrs:
+                rrs += vmrr.pre_rrs + vmrr.post_rrs
+
+            # Bind resource tuples to slot table
+            for rr in rrs:
+                for restuple in rr.resources_in_pnode.values():
+                    restuple.slottable = self.scheduler.slottable
+
+            self.logger.debug("Attempting to recover lease %i" % lease.id)
+            lease.print_contents()
+            
+            load_rrs = False
+            lease_state = lease.get_state()
+            if lease_state in (Lease.STATE_DONE, Lease.STATE_CANCELLED, Lease.STATE_REJECTED, Lease.STATE_FAIL):
+                self.logger.info("Recovered lease %i (already done)" % lease.id)
+                self.scheduler.completed_leases.add(lease)
+            elif lease_state in (Lease.STATE_NEW, Lease.STATE_PENDING):
+                self.scheduler.leases.add(lease)
+            elif lease_state == Lease.STATE_QUEUED:
+                load_rrs = True
+                self.scheduler.leases.add(lease)
+                self.logger.info("Recovered lease %i (queued)" % lease.id)
+            elif lease_state in (Lease.STATE_SCHEDULED, Lease.STATE_READY):
+                # Check if schedule is still valid.
+                vmrr = lease.get_last_vmrr()
+                if len(vmrr.pre_rrs) > 0:
+                    start = vmrr.pre_rrs[0].start
+                else:
+                    start = vmrr.start
+                if self.clock.get_time() < start:
+                    load_rrs = True
+                    self.scheduler.leases.add(lease)
+                    self.logger.info("Recovered lease %i" % lease.id)
+                else:
+                    lease.set_state(Lease.STATE_FAIL)
+                    self.scheduler.completed_leases.add(lease)
+                    self.logger.info("Could not recover lease %i (scheduled starting time has passed)" % lease.id)
+            elif lease_state == Lease.STATE_ACTIVE:
+                vmrr = lease.get_last_vmrr()
+                if self.clock.get_time() < self.clock.get_time():
+                    # TODO: Check if VMs are actually running
+                    load_rrs = True
+                    self.scheduler.leases.add(lease)
+                    self.logger.info("Recovered lease %i" % lease.id)
+                else:
+                    # TODO: May have to stop extant virtual machines
+                    lease.set_state(Lease.STATE_FAIL)
+                    self.scheduler.completed_leases.add(lease)                    
+                    self.logger.info("Could not recover lease %i (scheduled ending time has passed)" % lease.id)
+            else:
+                # No support for recovering lease in the
+                # remaining states
+                lease.set_state(Lease.STATE_FAIL)
+                self.scheduler.completed_leases.add(lease)                    
+                self.logger.info("Could not recover lease %i (unsupported state for recovery)" % lease.id)
+                
+            if load_rrs:
+                for rr in rrs:
+                    if rr.state in (ResourceReservation.STATE_ACTIVE, ResourceReservation.STATE_SCHEDULED):
+                        self.scheduler.slottable.add_reservation(rr)
+                        
+        queue = self.persistence.get_queue()
+        for lease_id in queue:
+            if self.scheduler.leases.has_lease(lease_id):
+                lease = self.scheduler.leases.get_lease(lease_id)
+                self.scheduler.queue.enqueue(lease)
+
+        future = self.persistence.get_future_leases()
+        print future
+        for lease_id in future:
+            if self.scheduler.leases.has_lease(lease_id):
+                lease = self.scheduler.leases.get_lease(lease_id)
+                self.scheduler.vm_scheduler.future_leases.add(lease)
+        print [l.id for l in self.scheduler.vm_scheduler.future_leases]   
+
 
     def __unrecoverable_error(self, exc):
         """Handles an unrecoverable error.
@@ -865,3 +922,37 @@ class RealClock(Clock):
         self.logger.status("Received signal %i%s" %(signum, sigstr))
         self.done = True
 
+
+class PersistenceManager(object):
+    def __init__(self, file):
+        self.shelf = shelve.open(file, flag='c', protocol = -1)
+        
+    def persist_lease(self, lease):
+        self.shelf["lease-%i" % lease.id] = lease
+        self.shelf.sync()
+
+    def persist_queue(self, queue):
+        self.shelf["queue"] = [l.id for l in queue]
+        
+    def persist_future_leases(self, leases):
+        self.shelf["future"] = [l.id for l in leases]        
+        
+    def get_leases(self):
+        return [v for k,v in self.shelf.items() if k.startswith("lease-")]
+    
+    def get_queue(self):
+        if self.shelf.has_key("queue"):
+            return self.shelf["queue"]
+        else:
+            return []
+        
+    def get_future_leases(self):
+        if self.shelf.has_key("future"):
+            return self.shelf["future"]
+        else:
+            return []        
+    
+    def close(self):
+        self.shelf.close()
+        
+    

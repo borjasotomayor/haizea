@@ -25,7 +25,7 @@ reservations that will be placed in the slot table and correspond to VMs.
 """
 
 import haizea.common.constants as constants
-from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_clock, get_policy
+from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_clock, get_policy, get_persistence
 from haizea.core.leases import Lease, Capacity
 from haizea.core.scheduler.slottable import ResourceReservation, ResourceTuple
 from haizea.core.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, EnactmentError, NotSchedulableException, InconsistentScheduleError, InconsistentLeaseStateError, MigrationResourceReservation
@@ -235,6 +235,7 @@ class VMScheduler(object):
         # remove that lease from the set of future leases.
         if vmrr.lease in self.future_leases:
             self.future_leases.remove(vmrr.lease)
+            get_persistence().persist_future_leases(self.future_leases)
 
         # If there are any pre-RRs that are scheduled, remove them
         for rr in vmrr.pre_rrs:
@@ -318,6 +319,10 @@ class VMScheduler(object):
         
     def get_utilization(self, time):
         """ Computes resource utilization (currently just CPU-based)
+        
+        This utilization information shows what 
+        portion of the physical resources is used by each type of reservation 
+        (e.g., 70% are running a VM, 5% are doing suspensions, etc.)
 
         Arguments:
         time -- Time at which to determine utilization
@@ -600,6 +605,7 @@ class VMScheduler(object):
         
         if in_future:
             self.future_leases.add(lease)
+            get_persistence().persist_future_leases(self.future_leases)
 
         susp_str = res_str = ""
         if mustresume:
@@ -1139,6 +1145,7 @@ class VMScheduler(object):
         # remove that status, since the future is now.
         if rr.lease in self.future_leases:
             self.future_leases.remove(l)
+            get_persistence().persist_future_leases(self.future_leases)
         
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleStartVM" % l.id)
@@ -1419,16 +1426,17 @@ class VMResourceReservation(ResourceReservation):
         return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], ShutdownResourceReservation)
 
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
+        logger = logging.getLogger("LEASES")
         for resmrr in self.pre_rrs:
             resmrr.print_contents(loglevel)
-            self.logger.log(loglevel, "--")
-        self.logger.log(loglevel, "Type           : VM")
-        self.logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
+            logger.log(loglevel, "--")
+        logger.log(loglevel, "Type           : VM")
+        logger.log(loglevel, "Nodes          : %s" % pretty_nodemap(self.nodes))
         if self.prematureend != None:
-            self.logger.log(loglevel, "Premature end  : %s" % self.prematureend)
+            logger.log(loglevel, "Premature end  : %s" % self.prematureend)
         ResourceReservation.print_contents(self, loglevel)
         for susprr in self.post_rrs:
-            self.logger.log(loglevel, "--")
+            logger.log(loglevel, "--")
             susprr.print_contents(loglevel)
 
         
@@ -1439,8 +1447,9 @@ class SuspensionResourceReservation(ResourceReservation):
         self.vnodes = vnodes
 
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
-        self.logger.log(loglevel, "Type           : SUSPEND")
-        self.logger.log(loglevel, "Vnodes         : %s" % self.vnodes)
+        logger = logging.getLogger("LEASES")
+        logger.log(loglevel, "Type           : SUSPEND")
+        logger.log(loglevel, "Vnodes         : %s" % self.vnodes)
         ResourceReservation.print_contents(self, loglevel)
         
     def is_first(self):
@@ -1457,8 +1466,9 @@ class ResumptionResourceReservation(ResourceReservation):
         self.vnodes = vnodes
 
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
-        self.logger.log(loglevel, "Type           : RESUME")
-        self.logger.log(loglevel, "Vnodes         : %s" % self.vnodes)
+        logger = logging.getLogger("LEASES")
+        logger.log(loglevel, "Type           : RESUME")
+        logger.log(loglevel, "Vnodes         : %s" % self.vnodes)
         ResourceReservation.print_contents(self, loglevel)
 
     def is_first(self):
@@ -1477,7 +1487,8 @@ class ShutdownResourceReservation(ResourceReservation):
         self.vnodes = vnodes
 
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
-        self.logger.log(loglevel, "Type           : SHUTDOWN")
+        logger = logging.getLogger("LEASES")
+        logger.log(loglevel, "Type           : SHUTDOWN")
         ResourceReservation.print_contents(self, loglevel)
 
 
@@ -1486,6 +1497,7 @@ class MemImageMigrationResourceReservation(MigrationResourceReservation):
         MigrationResourceReservation.__init__(self, lease, start, end, res, vmrr, transfers)
   
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
-        self.logger.log(loglevel, "Type           : MEM IMAGE MIGRATION")
-        self.logger.log(loglevel, "Transfers      : %s" % self.transfers)
+        logger = logging.getLogger("LEASES")
+        logger.log(loglevel, "Type           : MEM IMAGE MIGRATION")
+        logger.log(loglevel, "Transfers      : %s" % self.transfers)
         ResourceReservation.print_contents(self, loglevel)   

@@ -30,7 +30,7 @@ by the lease scheduler.
 """
 
 import haizea.common.constants as constants
-from haizea.common.utils import round_datetime, get_config, get_accounting, get_clock, get_policy
+from haizea.common.utils import round_datetime, get_config, get_clock, get_policy, get_persistence
 from haizea.core.leases import Lease
 from haizea.core.scheduler import RescheduleLeaseException, NormalEndLeaseException, InconsistentLeaseStateError, EnactmentError, UnrecoverableError, NotSchedulableException, EarliestStartingTime
 from haizea.core.scheduler.slottable import ResourceReservation
@@ -68,6 +68,10 @@ class LeaseScheduler(object):
         
         # Assign schedulers and slottable
         self.vm_scheduler = vm_scheduler
+        """
+        VM Scheduler
+        @type: VMScheduler
+        """
         self.preparation_scheduler = preparation_scheduler
         self.slottable = slottable
 
@@ -125,7 +129,8 @@ class LeaseScheduler(object):
             self.logger.info("Lease #%i has not been accepted" % lease.id)
             lease.set_state(Lease.STATE_REJECTED)
             self.completed_leases.add(lease)
-
+        
+        get_persistence().persist_lease(lease)
         
     def schedule(self, nexttime):
         """ The main scheduling function
@@ -149,6 +154,7 @@ class LeaseScheduler(object):
             self.__enqueue(lease)
             lease.set_state(Lease.STATE_QUEUED)
             self.logger.info("Queued best-effort lease request #%i, %i nodes for %s." % (lease.id, lease.numnodes, lease.duration.requested))
+            get_persistence().persist_lease(lease)
 
         # Schedule immediate leases
         for lease in im_leases:
@@ -158,14 +164,13 @@ class LeaseScheduler(object):
             try:
                 self.__schedule_lease(lease, nexttime=nexttime)
                 self.logger.info("Immediate lease #%i has been scheduled." % lease.id)
-                get_accounting().incr_counter(constants.COUNTER_IMACCEPTED, lease.id)
                 lease.print_contents()
             except NotSchedulableException, exc:
-                get_accounting().incr_counter(constants.COUNTER_IMREJECTED, lease.id)
                 self.logger.info("Immediate lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
                 lease.set_state(Lease.STATE_REJECTED)
                 self.completed_leases.add(lease)
                 self.leases.remove(lease)            
+            get_persistence().persist_lease(lease)
 
         # Schedule AR requests
         for lease in ar_leases:
@@ -175,18 +180,17 @@ class LeaseScheduler(object):
             try:
                 self.__schedule_lease(lease, nexttime)
                 self.logger.info("AR lease #%i has been scheduled." % lease.id)
-                get_accounting().incr_counter(constants.COUNTER_ARACCEPTED, lease.id)
                 lease.print_contents()
             except NotSchedulableException, exc:
-                get_accounting().incr_counter(constants.COUNTER_ARREJECTED, lease.id)
                 self.logger.info("AR lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
                 lease.set_state(Lease.STATE_REJECTED)
                 self.completed_leases.add(lease)
                 self.leases.remove(lease)            
+            get_persistence().persist_lease(lease)
             
         # Process queue (i.e., traverse queue in search of leases that can be scheduled)
         self.__process_queue(nexttime)
-        
+        get_persistence().persist_queue(self.queue)
     
     def process_starting_reservations(self, nowtime):
         """Processes starting reservations
@@ -224,6 +228,8 @@ class LeaseScheduler(object):
             # Other exceptions are not expected, and generally indicate a programming error.
             # Thus, they are propagated upwards to the Manager where they will make
             # Haizea crash and burn.
+            
+            get_persistence().persist_lease(lease)
 
     def process_ending_reservations(self, nowtime):
         """Processes ending reservations
@@ -257,6 +263,7 @@ class LeaseScheduler(object):
                         # Put back in the queue, in the same order it arrived
                         self.__enqueue_in_order(lease)
                         lease.set_state(Lease.STATE_SUSPENDED_QUEUED)
+                        get_persistence().persist_queue(self.queue)
                     else:
                         raise InconsistentLeaseStateError(lease, doing = "rescheduling best-effort lease")
                     
@@ -281,6 +288,8 @@ class LeaseScheduler(object):
             # Other exceptions are not expected, and generally indicate a programming error.
             # Thus, they are propagated upwards to the Manager where they will make
             # Haizea crash and burn.
+            
+            get_persistence().persist_lease(lease)
 
     def get_lease_by_id(self, lease_id):
         """Gets a lease with the given ID
@@ -334,6 +343,7 @@ class LeaseScheduler(object):
             
             self.logger.info("Lease %i is in the queue. Removing..." % lease.id)
             self.queue.remove_lease(lease)
+            get_persistence().persist_queue(self.queue)
         else:
             # Cancelling in any of the other states is currently unsupported
             raise InconsistentLeaseStateError(lease, doing = "cancelling the VM")
@@ -342,6 +352,7 @@ class LeaseScheduler(object):
         lease.set_state(Lease.STATE_CANCELLED)
         self.completed_leases.add(lease)
         self.leases.remove(lease)
+        get_persistence().persist_lease(lease)
 
     
     def fail_lease(self, lease, exc=None):
@@ -362,6 +373,7 @@ class LeaseScheduler(object):
             lease.set_state(Lease.STATE_FAIL)
             self.completed_leases.add(lease)
             self.leases.remove(lease)
+            get_persistence().persist_lease(lease)
         elif treatment == constants.ONFAILURE_EXIT or treatment == constants.ONFAILURE_EXIT_RAISE:
             # In this case, a lease failure makes Haizea exit. This is useful when debugging,
             # so we can immediately know about any errors.
@@ -387,10 +399,12 @@ class LeaseScheduler(object):
             # TODO: Exception handling
             self.vm_scheduler._handle_unscheduled_end_vm(lease, vmrr)
             self._handle_end_lease(lease)
-            nexttime = get_clock().get_next_schedulable_time()
+            get_persistence().persist_lease(lease)
+            
             # We need to reevaluate the schedule to see if there are any 
             # leases scheduled in the future that could be rescheduled
             # to start earlier
+            nexttime = get_clock().get_next_schedulable_time()
             self.reevaluate_schedule(nexttime)
 
 
@@ -469,7 +483,6 @@ class LeaseScheduler(object):
                     self.logger.info("Next request in the queue is lease %i. Attempting to schedule..." % lease.id)
                     lease.print_contents()
                     self.__schedule_lease(lease, nexttime)
-                    get_accounting().decr_counter(constants.COUNTER_QUEUESIZE, lease.id)
                 except NotSchedulableException, msg:
                     # Put back on queue
                     newqueue.enqueue(lease)
@@ -603,6 +616,25 @@ class LeaseScheduler(object):
         elif lease_state == Lease.STATE_SUSPENDED_PENDING or lease_state == Lease.STATE_SUSPENDED_QUEUED:
             lease.set_state(Lease.STATE_SUSPENDED_SCHEDULED)
 
+        #print lease.__dict__
+        #print lease.preparation_rrs[0].__dict__
+        #print lease.vm_rrs[0].__dict__
+        #print lease.vm_rrs[0].post_rrs[0].__dict__
+        
+        #lease.preparation_rrs = []
+        #lease.vm_rrs = []
+        #lease.preparation_rrs[0].end = None
+        #lease.preparation_rrs[0].start = None
+        #lease.preparation_rrs[0].deadline = None
+        #lease.preparation_rrs[0].lease = None
+        #lease.preparation_rrs[0].resources_in_pnode = None
+        #lease.preparation_rrs[0].transfers = None
+        #lease.preparation_rrs[0].state = None
+        #lease.preparation_rrs[0].file = None
+        #print lease.preparation_rrs[0].__dict__
+        #exit()
+        get_persistence().persist_lease(lease)
+        #exit()
         lease.print_contents()
 
         
@@ -659,6 +691,8 @@ class LeaseScheduler(object):
             self.logger.info("... lease #%i will be suspended at %s." % (lease.id, preemption_time))
             self.vm_scheduler.preempt_vm(vmrr, preemption_time)            
             
+        get_persistence().persist_lease(lease)
+
         self.logger.vdebug("Lease after preemption:")
         lease.print_contents()
                 
@@ -669,7 +703,6 @@ class LeaseScheduler(object):
         Arguments:
         lease -- Lease to be queued
         """
-        get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
         self.queue.enqueue(lease)
 
 
@@ -679,7 +712,6 @@ class LeaseScheduler(object):
         Arguments:
         lease -- Lease to be queued
         """
-        get_accounting().incr_counter(constants.COUNTER_QUEUESIZE, lease.id)
         self.queue.enqueue_in_order(lease)
 
 
@@ -704,8 +736,6 @@ class LeaseScheduler(object):
         self.preparation_scheduler.cleanup(l)
         self.completed_leases.add(l)
         self.leases.remove(l)
-        if l.get_type() == Lease.BEST_EFFORT:
-            get_accounting().incr_counter(constants.COUNTER_BESTEFFORTCOMPLETED, l.id)
         
 
 class Queue(object):
