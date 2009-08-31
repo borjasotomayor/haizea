@@ -210,7 +210,10 @@ class Manager(Singleton):
         elif mode == "opennebula":
                 self.frontends = [OpenNebulaFrontend(self)]               
 
-        self.persistence = PersistenceManager("/tmp/haizea.dat")
+        persistence_file = self.config.get("persistence-file")
+        if persistence_file == "none":
+            persistence_file = None
+        self.persistence = PersistenceManager(persistence_file)
 
         # Statistics collection 
         self.accounting = accounting.AccountingDataCollection(self, self.config.get("datafile"))
@@ -440,13 +443,28 @@ class Manager(Singleton):
         self.logger.status("---- End summary ----")        
 
     def __recover(self):
+        """Loads persisted leases and scheduling information
+        
+        This method does three things:
+        1. Recover persisted leases. Note that not all persisted leases
+           may be recoverable. For example, if a lease was scheduled
+           to start at a certain time, but that time passed while
+           Haizea was not running, the lease will simply be transitioned
+           to a failed state.
+        2. Recover the queue.
+        3. Recover the list of "future leases" as determined by
+           the backfilling algorithm.
+        """
+        
+        # Load leases
         leases = self.persistence.get_leases()
         for lease in leases:
+            # Create a list of RRs
             rrs = lease.preparation_rrs + lease.vm_rrs
             for vmrr in lease.vm_rrs:
                 rrs += vmrr.pre_rrs + vmrr.post_rrs
 
-            # Bind resource tuples to slot table
+            # Bind resource tuples in RRs to slot table
             for rr in rrs:
                 for restuple in rr.resources_in_pnode.values():
                     restuple.slottable = self.scheduler.slottable
@@ -454,6 +472,7 @@ class Manager(Singleton):
             self.logger.debug("Attempting to recover lease %i" % lease.id)
             lease.print_contents()
             
+            # Check the lease's state and determine how to proceed.
             load_rrs = False
             lease_state = lease.get_state()
             if lease_state in (Lease.STATE_DONE, Lease.STATE_CANCELLED, Lease.STATE_REJECTED, Lease.STATE_FAIL):
@@ -497,26 +516,27 @@ class Manager(Singleton):
                 # remaining states
                 lease.set_state(Lease.STATE_FAIL)
                 self.scheduler.completed_leases.add(lease)                    
-                self.logger.info("Could not recover lease %i (unsupported state for recovery)" % lease.id)
+                self.logger.info("Could not recover lease %i (unsupported state %i for recovery)" % (lease.id, lease_state))
                 
+            # Load the lease's RRs into the slot table
             if load_rrs:
                 for rr in rrs:
                     if rr.state in (ResourceReservation.STATE_ACTIVE, ResourceReservation.STATE_SCHEDULED):
                         self.scheduler.slottable.add_reservation(rr)
-                        
+                
+        # Rebuild the queue        
         queue = self.persistence.get_queue()
         for lease_id in queue:
             if self.scheduler.leases.has_lease(lease_id):
                 lease = self.scheduler.leases.get_lease(lease_id)
                 self.scheduler.queue.enqueue(lease)
 
+        # Rebuild the "future leases"
         future = self.persistence.get_future_leases()
-        print future
         for lease_id in future:
             if self.scheduler.leases.has_lease(lease_id):
                 lease = self.scheduler.leases.get_lease(lease_id)
                 self.scheduler.vm_scheduler.future_leases.add(lease)
-        print [l.id for l in self.scheduler.vm_scheduler.future_leases]   
 
 
     def __unrecoverable_error(self, exc):
@@ -923,36 +943,98 @@ class RealClock(Clock):
         self.done = True
 
 
-class PersistenceManager(object):
+class PersistenceManager(object):    
+    """Persistence manager.
+    
+    The persistence manager is in charge of persisting leases, and some
+    scheduling data, to disk. This allows Haizea to recover from crashes.
+    """    
+    
     def __init__(self, file):
-        self.shelf = shelve.open(file, flag='c', protocol = -1)
+        """Constructor
+        
+        Initializes the persistence manager. If the specified file
+        does not exist, it is created. If the file is created, it
+        is opened but the information is not recovered (this is
+        the responsibility of the Manager class)
+        
+        Arguments:
+        file -- Persistence file. If None is specified, then
+                persistence is disabled and Haizea will run entirely
+                in-memory.
+        """
+        if file == None:
+            self.disabled = True
+            self.shelf = {}
+        else:
+            self.disabled = False
+            file = os.path.expanduser(file)
+            d = os.path.dirname(file)
+            if not os.path.exists(d):
+                os.makedirs(d)
+            self.shelf = shelve.open(file, flag='c', protocol = -1)
         
     def persist_lease(self, lease):
-        self.shelf["lease-%i" % lease.id] = lease
-        self.shelf.sync()
+        """Persists a single lease to disk
+                
+        Arguments:
+        lease -- Lease to persist
+        """        
+        if not self.disabled:
+            self.shelf["lease-%i" % lease.id] = lease
+            self.shelf.sync()
 
     def persist_queue(self, queue):
-        self.shelf["queue"] = [l.id for l in queue]
+        """Persists the queue to disk
+                
+        Arguments:
+        queue -- The queue
+        """        
+        if not self.disabled:
+            self.shelf["queue"] = [l.id for l in queue]
+            self.shelf.sync()
         
     def persist_future_leases(self, leases):
-        self.shelf["future"] = [l.id for l in leases]        
+        """Persists the set of future leases
+                
+        Arguments:
+        leases -- "Future leases" (as determined by backfilling algorithm)
+        """              
+        if not self.disabled:
+            self.shelf["future"] = [l.id for l in leases]        
+            self.shelf.sync()
         
     def get_leases(self):
+        """Returns the leases persisted to disk.
+                
+        """              
         return [v for k,v in self.shelf.items() if k.startswith("lease-")]
     
     def get_queue(self):
+        """Returns the queue persisted to disk.
+                
+        """              
         if self.shelf.has_key("queue"):
             return self.shelf["queue"]
         else:
             return []
         
     def get_future_leases(self):
+        """Returns the future leases persisted to disk.
+                
+        """              
         if self.shelf.has_key("future"):
             return self.shelf["future"]
         else:
             return []        
     
     def close(self):
-        self.shelf.close()
+        """Closes the persistence manager.
+        
+        Closing the persistence manager saves any remaining
+        data to disk.
+        """              
+        if not self.disabled:
+            self.shelf.close()
         
     

@@ -4,6 +4,8 @@ import os.path
 CONFIG_LOCATIONS = ["/etc/haizea.conf",
                             os.path.expanduser("~/.haizea/haizea.conf")]
 
+PERSISTENCE_LOCATION = "~/.haizea/leases.dat"
+
 DAEMON_PIDFILE = "/var/tmp/haizea.pid"
 
 RPC_SERVER = "localhost"

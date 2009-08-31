@@ -121,6 +121,20 @@ class HaizeaConfig(Config):
                and will facilitate debugging it.
             """),
 
+     Option(name        = "persistence-file",
+            getter      = "persistence-file",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            default     = defaults.PERSISTENCE_LOCATION,
+            doc         = """
+            This is the file where lease information, along with some
+            additional scheduling information, is persisted to. If set
+            to "none", no information will be persisted to disk, and
+            Haizea will run entirely in-memory (this is advisable
+            when running in simulation, as persisting to disk adds
+            considerable overhead, compared to running in-memory).
+            """),
+            
      Option(name        = "datafile",
             getter      = "datafile",
             type        = OPTTYPE_STRING,
