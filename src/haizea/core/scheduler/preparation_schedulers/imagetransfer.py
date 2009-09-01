@@ -588,6 +588,7 @@ class DiskImageMigrationResourceReservation(MigrationResourceReservation):
         MigrationResourceReservation.__init__(self, lease, start, end, res, vmrr, transfers)
 
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
-        self.logger.log(loglevel, "Type           : DISK IMAGE MIGRATION")
-        self.logger.log(loglevel, "Transfers      : %s" % self.transfers)
+        logger = logging.getLogger("LEASES")
+        logger.log(loglevel, "Type           : DISK IMAGE MIGRATION")
+        logger.log(loglevel, "Transfers      : %s" % self.transfers)
         ResourceReservation.print_contents(self, loglevel)     

@@ -84,9 +84,6 @@ class AccountingDataCollection(object):
         
     def set_lease_stat(self, stat_id, lease_id, value):
         self.data.lease_stats.setdefault(lease_id, {})[stat_id] = value
-        print lease_id, stat_id, value
-        print self.data.lease_stats
-        print self.data.lease_stats[lease_id][stat_id]
 
     def set_stat(self, stat_id, value):
         self.data.stats[stat_id] = value

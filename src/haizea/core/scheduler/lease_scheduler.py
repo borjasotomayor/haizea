@@ -621,25 +621,8 @@ class LeaseScheduler(object):
         elif lease_state == Lease.STATE_SUSPENDED_PENDING or lease_state == Lease.STATE_SUSPENDED_QUEUED:
             lease.set_state(Lease.STATE_SUSPENDED_SCHEDULED)
 
-        #print lease.__dict__
-        #print lease.preparation_rrs[0].__dict__
-        #print lease.vm_rrs[0].__dict__
-        #print lease.vm_rrs[0].post_rrs[0].__dict__
-        
-        #lease.preparation_rrs = []
-        #lease.vm_rrs = []
-        #lease.preparation_rrs[0].end = None
-        #lease.preparation_rrs[0].start = None
-        #lease.preparation_rrs[0].deadline = None
-        #lease.preparation_rrs[0].lease = None
-        #lease.preparation_rrs[0].resources_in_pnode = None
-        #lease.preparation_rrs[0].transfers = None
-        #lease.preparation_rrs[0].state = None
-        #lease.preparation_rrs[0].file = None
-        #print lease.preparation_rrs[0].__dict__
-        #exit()
         get_persistence().persist_lease(lease)
-        #exit()
+
         lease.print_contents()
 
         

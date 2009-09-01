@@ -108,7 +108,6 @@ class BEProbe(AccountingProbe):
     
     def at_timestep(self, lease_scheduler):
         queue_len = lease_scheduler.queue.length()
-        print queue_len
         self.accounting.append_to_counter(BEProbe.COUNTER_QUEUESIZE, queue_len)
 
     def at_lease_done(self, lease):
