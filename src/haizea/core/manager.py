@@ -31,7 +31,6 @@ This module provides the following classes:
 * RealClock: A clock that advances in realtime.
 """
  
-import haizea.core.accounting as accounting
 import haizea.common.constants as constants
 from haizea.core.scheduler.preparation_schedulers.unmanaged import UnmanagedPreparationScheduler
 from haizea.core.scheduler.preparation_schedulers.imagetransfer import ImageTransferPreparationScheduler
@@ -40,6 +39,7 @@ from haizea.core.enact.simulated import SimulatedResourcePoolInfo, SimulatedVMEn
 from haizea.core.frontends.tracefile import TracefileFrontend
 from haizea.core.frontends.opennebula import OpenNebulaFrontend
 from haizea.core.frontends.rpc import RPCFrontend
+from haizea.core.accounting import AccountingDataCollection
 from haizea.core.scheduler import UnrecoverableError
 from haizea.core.scheduler.lease_scheduler import LeaseScheduler
 from haizea.core.scheduler.vm_scheduler import VMScheduler
@@ -51,7 +51,8 @@ from haizea.core.leases import Lease, Site
 from haizea.core.log import HaizeaLogger
 from haizea.core.rpcserver import RPCServer
 from haizea.common.utils import abstract, round_datetime, Singleton, import_class
-from haizea.policies import admission_class_mappings, preemption_class_mappings, host_class_mappings 
+from haizea.pluggable.policies import admission_class_mappings, preemption_class_mappings, host_class_mappings 
+from haizea.pluggable.accounting import probe_class_mappings
 
 import operator
 import logging
@@ -196,8 +197,19 @@ class Manager(Singleton):
         mapper = mapper(slottable, self.policy)
         vm_scheduler = VMScheduler(slottable, resourcepool, mapper)
     
+        # Statistics collection 
+        self.accounting = AccountingDataCollection(self.config.get("datafile"))
+        # Load probes
+        probes = self.config.get("accounting-probes")
+        probes = probes.split()
+        for probe in probes:
+            probe_class = probe_class_mappings.get(probe, probe)
+            probe_class = import_class(probe_class)
+            probe_obj = probe_class(self.accounting)
+            self.accounting.add_probe(probe_obj)    
+    
         # Lease Scheduler
-        self.scheduler = LeaseScheduler(vm_scheduler, preparation_scheduler, slottable)
+        self.scheduler = LeaseScheduler(vm_scheduler, preparation_scheduler, slottable, self.accounting)
         
         # Lease request frontends
         if mode == "simulated":
@@ -214,10 +226,6 @@ class Manager(Singleton):
         if persistence_file == "none":
             persistence_file = None
         self.persistence = PersistenceManager(persistence_file)
-
-        # Statistics collection 
-        self.accounting = accounting.AccountingDataCollection(self, self.config.get("datafile"))
-        # TODO: Load accounting plugins
         
         self.logger = logging.getLogger("RM")
 
@@ -331,7 +339,8 @@ class Manager(Singleton):
             lease.print_contents()
             
         # Write all collected data to disk
-        self.accounting.save_to_disk()
+        leases = self.scheduler.completed_leases.entries
+        self.accounting.save_to_disk(leases)
         
         # Stop RPC server
         if self.rpc_server != None:
@@ -710,6 +719,7 @@ class SimulatedClock(Clock):
             # And one final call to deal with nil-duration reservations
             self.manager.process_ending_reservations(self.time)
             
+            self.manager.accounting.at_timestep(self.manager.scheduler)
             
             # Print a status message
             if self.statusinterval != None and (self.time - prevstatustime).minutes >= self.statusinterval:
@@ -886,6 +896,8 @@ class RealClock(Clock):
             self.manager.process_starting_reservations(self.lastwakeup)
             # TODO: Compute nextschedulable here, before processing requests
             self.manager.process_requests(self.nextschedulable)
+
+            self.manager.accounting.at_timestep(self.manager.scheduler)
             
             # Next wakeup time
             time_now = now()

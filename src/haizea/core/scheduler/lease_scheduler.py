@@ -49,7 +49,7 @@ class LeaseScheduler(object):
     coordinates all the different operations involved in scheduling a lease.    
     """
     
-    def __init__(self, vm_scheduler, preparation_scheduler, slottable):
+    def __init__(self, vm_scheduler, preparation_scheduler, slottable, accounting):
         """Constructor
         
         The constructor does little more than create the lease scheduler's
@@ -61,6 +61,7 @@ class LeaseScheduler(object):
         vm_scheduler -- VM scheduler
         preparation_scheduler -- Preparation scheduler
         slottable -- Slottable
+        accounting -- AccountingDataCollection object
         """
         
         # Logger
@@ -74,6 +75,7 @@ class LeaseScheduler(object):
         """
         self.preparation_scheduler = preparation_scheduler
         self.slottable = slottable
+        self.accounting = accounting
 
         # Create other data structures
         self.queue = Queue()
@@ -130,6 +132,7 @@ class LeaseScheduler(object):
             lease.set_state(Lease.STATE_REJECTED)
             self.completed_leases.add(lease)
         
+        self.accounting.at_lease_request(lease)
         get_persistence().persist_lease(lease)
         
     def schedule(self, nexttime):
@@ -169,6 +172,7 @@ class LeaseScheduler(object):
                 self.logger.info("Immediate lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
                 lease.set_state(Lease.STATE_REJECTED)
                 self.completed_leases.add(lease)
+                self.accounting.at_lease_done(lease)
                 self.leases.remove(lease)            
             get_persistence().persist_lease(lease)
 
@@ -185,6 +189,7 @@ class LeaseScheduler(object):
                 self.logger.info("AR lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
                 lease.set_state(Lease.STATE_REJECTED)
                 self.completed_leases.add(lease)
+                self.accounting.at_lease_done(lease)
                 self.leases.remove(lease)            
             get_persistence().persist_lease(lease)
             
@@ -736,6 +741,8 @@ class LeaseScheduler(object):
         self.preparation_scheduler.cleanup(l)
         self.completed_leases.add(l)
         self.leases.remove(l)
+        self.accounting.at_lease_done(l)
+
         
 
 class Queue(object):

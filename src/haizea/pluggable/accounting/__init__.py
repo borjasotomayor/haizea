@@ -16,17 +16,14 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-"""This package contains modules with pluggable policies for Haizea.
+"""This package contains modules with pluggable accounting probes for Haizea.
 """
 
 # The following dictionaries provide a shorthand notation to refer to
-# the policy classes (this shorthand is used in the configuration file,
+# the accounting probes (this shorthand is used in the configuration file,
 # so the fully-qualified class name doesn't have to be written)
-admission_class_mappings = {"accept-all": "haizea.pluggable.policies.admission.AcceptAllPolicy",
-                            "no-ARs": "haizea.pluggable.policies.admission.NoARsPolicy"}
-
-preemption_class_mappings = {"no-preemption": "haizea.pluggable.policies.preemption.NoPreemptionPolicy",
-                             "ar-preempts-everything": "haizea.pluggable.policies.preemption.ARPreemptsEverythingPolicy"}
-
-host_class_mappings = {"no-policy": "haizea.pluggable.policies.host_selection.NoPolicy",
-                       "greedy": "haizea.pluggable.policies.host_selection.GreedyPolicy"}
+probe_class_mappings = {         "ar": "haizea.pluggable.accounting.leases.ARProbe",
+                        "best-effort": "haizea.pluggable.accounting.leases.BEProbe",
+                          "immediate": "haizea.pluggable.accounting.leases.IMProbe",
+                        "utilization": "haizea.pluggable.accounting.utilization.UtilizationProbe",
+                        }     

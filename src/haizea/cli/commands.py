@@ -19,6 +19,7 @@
 from haizea.core.manager import Manager
 from haizea.common.utils import generate_config_name, unpickle
 from haizea.core.configfile import HaizeaConfig, HaizeaMultiConfig
+from haizea.core.accounting import AccountingDataCollection
 from haizea.common.config import ConfigException
 from haizea.cli.optionparser import OptionParser, Option
 from haizea.cli import Command
@@ -255,13 +256,22 @@ class haizea_convert_data(Command):
         Command.__init__(self, argv)
         
         self.optparser.add_option(Option("-t", "--type", action="store",  dest="type",
-                                         choices = ["per-experiment", "per-lease"],
+                                         choices = ["per-run", "per-lease", "counter"],
                                          help = """
                                          Type of data to produce.
+                                         """))
+        self.optparser.add_option(Option("-c", "--counter", action="store",  dest="counter",
+                                         help = """
+                                         Counter to print out when using '--type counter'.
                                          """))
         self.optparser.add_option(Option("-f", "--format", action="store", type="string", dest="format",
                                          help = """
                                          Output format. Currently supported: csv
+                                         """))
+        self.optparser.add_option(Option("-l", "--list-counters", action="store_true",  dest="list_counters",
+                                         help = """
+                                         If specified, the command will just print out the names of counters
+                                         stored in the data file and then exit, regardless of other parameters.
                                          """))
                 
     def run(self):            
@@ -272,32 +282,56 @@ class haizea_convert_data(Command):
             print "Please specify at least one datafile to convert"
             exit(1)
         
-        attr_names = unpickle(datafiles[0]).attrs.keys()
-
-        if len(attr_names) == 0:
-            header = ""
-        else:
-            header = ",".join(attr_names) + ","
+        datafile1 = unpickle(datafiles[0])
         
-        if self.opt.type == "per-experiment":
-            header += "all-best-effort"
+        counter_names = datafile1.counters.keys()
+        attr_names = datafile1.attrs.keys()
+        lease_stats_names = datafile1.lease_stats_names
+        stats_names = datafile1.stats_names
+
+        if self.opt.list_counters:
+            for counter in counter_names:
+                print counter
+            exit(0)
+        
+        if self.opt.type == "per-run":
+            header_fields = attr_names + stats_names
         elif self.opt.type == "per-lease":
-            header += "lease_id,waiting_time,slowdown"
+            header_fields = attr_names + ["lease_id"] + lease_stats_names
+        elif self.opt.type == "counter":
+            counter = self.opt.counter
+            if not datafile1.counters.has_key(counter):
+                print "The specified datafile does not have a counter called '%s'" % counter
+                exit(1)
+            header_fields = attr_names + ["time", "value"]
+            if datafile1.counter_avg_type[counter] != AccountingDataCollection.AVERAGE_NONE:
+                header_fields.append("average")                
+
+        header = ",".join(header_fields)
             
         print header
         
         for datafile in datafiles:
-            stats = unpickle(datafile)
+            data = unpickle(datafile)
         
-            attrs = ",".join([stats.attrs[attr_name] for attr_name in attr_names])
-            
-            if self.opt.type == "per-experiment":
-                print attrs + "," + `(stats.get_besteffort_end() - stats.starttime).seconds`
+            attrs = [data.attrs[attr_name] for attr_name in attr_names]
+                        
+            if self.opt.type == "per-run":
+                fields = attrs + [`data.stats[stats_name]` for stats_name in stats_names]
+                print ",".join(fields)
             elif self.opt.type == "per-lease":
-                waitingtimes = stats.get_waiting_times()
-                slowdowns = stats.get_slowdowns()
-                for lease_id in waitingtimes:
-                    print ",".join([attrs, `lease_id`, `waitingtimes[lease_id].seconds`, `slowdowns[lease_id]`])
+                leases = data.lease_stats
+                for lease_id, lease_stat in leases.items():
+                    fields = attrs + [`lease_id`] + [`lease_stat.get(lease_stat_name,"")` for lease_stat_name in lease_stats_names]
+                    print ",".join(fields)
+            elif self.opt.type == "counter":
+                for (time, lease_id, value, avg) in data.counters[counter]:
+                    fields = attrs + [`time`, `value`]
+                    if data.counter_avg_type[counter] != AccountingDataCollection.AVERAGE_NONE:
+                        fields.append(`avg`)
+                    print ",".join(fields)
+                    
+
 
 class haizea_lwf2xml(Command):
     """

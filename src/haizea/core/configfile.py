@@ -133,28 +133,8 @@ class HaizeaConfig(Config):
             Haizea will run entirely in-memory (this is advisable
             when running in simulation, as persisting to disk adds
             considerable overhead, compared to running in-memory).
-            """),
-            
-     Option(name        = "datafile",
-            getter      = "datafile",
-            type        = OPTTYPE_STRING,
-            required    = False,
-            default     = None,
-            doc         = """
-            This is the file where statistics on
-            the scheduler's run will be saved to (waiting time of leases,
-            utilization data, etc.). If omitted, no data will be saved.
-            """),
-
-     Option(name        = "attributes",
-            getter      = "attributes",
-            type        = OPTTYPE_STRING,
-            required    = False,
-            doc         = """
-            This option is used internally by Haizea when using
-            multiconfiguration files. See the multiconfiguration
-            documentation for more details.        
             """)
+
     ]
 
     sections.append(general)
@@ -553,6 +533,60 @@ class HaizeaConfig(Config):
     ]
     sections.append(simulation)
     
+
+    # ============================= #
+    #                               #
+    #      ACCOUNTING OPTIONS       #
+    #                               #
+    # ============================= #
+
+    accounting = Section("accounting", required=True,
+                      doc = "Haizea can collect information while running, and save that information to a file for off-line processing. This section includes options controlling this feature.")
+
+    accounting.options = \
+    [
+     Option(name        = "datafile",
+            getter      = "datafile",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            default     = None,
+            doc         = """
+            This is the file where statistics on
+            the scheduler's run will be saved to (waiting time of leases,
+            utilization data, etc.). If omitted, no data will be saved.
+            """),
+
+     Option(name        = "probes",
+            getter      = "accounting-probes",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            doc         = """
+            Accounting probes.
+            
+            There are four built-in probes:
+            
+             - AR: Collects information on AR leases.
+             - best-effort: Collects information on best effort leases.
+             - immediate: Collects information immediate leases.
+             - utilization: Collects information on resource utilization.
+             
+            See the Haizea documentation for details on how to write your
+            own accounting probes.
+      
+            """),
+
+     Option(name        = "attributes",
+            getter      = "attributes",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            doc         = """
+            This option is used internally by Haizea when using
+            multiconfiguration files. See the multiconfiguration
+            documentation for more details.        
+            """)
+    ]
+    
+    sections.append(accounting)
 
     # ============================= #
     #                               #

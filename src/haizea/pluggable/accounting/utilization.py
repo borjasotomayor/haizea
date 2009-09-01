@@ -16,17 +16,18 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-"""This package contains modules with pluggable policies for Haizea.
-"""
+from haizea.core.accounting import AccountingProbe, AccountingDataCollection
 
-# The following dictionaries provide a shorthand notation to refer to
-# the policy classes (this shorthand is used in the configuration file,
-# so the fully-qualified class name doesn't have to be written)
-admission_class_mappings = {"accept-all": "haizea.pluggable.policies.admission.AcceptAllPolicy",
-                            "no-ARs": "haizea.pluggable.policies.admission.NoARsPolicy"}
+class UtilizationProbe(AccountingProbe):
+    
+    COUNTER_DISKUSAGE="Disk usage"
+    COUNTER_UTILIZATION="Resource utilization"        
+    
+    def __init__(self, accounting):
+        AccountingProbe.__init__(self, accounting)
+        self.accounting.create_counter(UtilizationProbe.COUNTER_DISKUSAGE, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(UtilizationProbe.COUNTER_UTILIZATION, AccountingDataCollection.AVERAGE_NONE)
+        
+    def at_timestep(self, lease_scheduler):
+        self.accounting.append_to_counter(UtilizationProbe.COUNTER_UTILIZATION, 0)
 
-preemption_class_mappings = {"no-preemption": "haizea.pluggable.policies.preemption.NoPreemptionPolicy",
-                             "ar-preempts-everything": "haizea.pluggable.policies.preemption.ARPreemptsEverythingPolicy"}
-
-host_class_mappings = {"no-policy": "haizea.pluggable.policies.host_selection.NoPolicy",
-                       "greedy": "haizea.pluggable.policies.host_selection.GreedyPolicy"}
