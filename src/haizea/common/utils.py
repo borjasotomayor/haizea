@@ -20,6 +20,9 @@ from mx import DateTime
 from math import ceil, floor
 from cPickle import dump, load, HIGHEST_PROTOCOL
 from datetime import datetime
+from docutils.core import publish_string
+import re
+import textwrap
 
 def generate_config_name(profile, tracefile, injectedfile):
     tracename=tracefile.split("/")[-1].split(".")[0]
@@ -107,6 +110,13 @@ def import_class(fq_name):
     module = __import__(package_name, fromlist=[class_name])
     exec("cls = module.%s" % class_name)
     return cls
+    
+def rst2latex(text):
+    latex = textwrap.dedent(text).strip()
+    latex = publish_string(latex,  writer_name="latex")
+    latex = re.compile("\\\\begin{document}\n\n\\\\setlength{\\\\locallinewidth}{\\\\linewidth}\n\n(.*)\\\\end{document}", flags=re.DOTALL).search(latex)
+    latex = latex.group(1)
+    return latex
     
 class Singleton(object):
      """ 
