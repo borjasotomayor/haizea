@@ -16,18 +16,48 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+"""Accounting probes that collect data on resource utilization"""
+
 from haizea.core.accounting import AccountingProbe, AccountingDataCollection
 
-class UtilizationProbe(AccountingProbe):
+class CPUUtilizationProbe(AccountingProbe):
+    """
+    Collects information on CPU utilization
     
-    COUNTER_DISKUSAGE="Disk usage"
-    COUNTER_UTILIZATION="Resource utilization"        
+    * Counters
+    
+      - "CPU utilization": Amount of CPU resources used in the entire site
+        at a given time. The value ranges between 0 and 1.
+
+    """    
+    COUNTER_UTILIZATION="CPU utilization"        
     
     def __init__(self, accounting):
+        """See AccountingProbe.__init__"""        
         AccountingProbe.__init__(self, accounting)
-        self.accounting.create_counter(UtilizationProbe.COUNTER_DISKUSAGE, AccountingDataCollection.AVERAGE_NONE)
         self.accounting.create_counter(UtilizationProbe.COUNTER_UTILIZATION, AccountingDataCollection.AVERAGE_NONE)
         
     def at_timestep(self, lease_scheduler):
+        """See AccountingProbe.at_timestep"""
         self.accounting.append_to_counter(UtilizationProbe.COUNTER_UTILIZATION, 0)
 
+
+class DiskUsageProbe(AccountingProbe):
+    """
+    Collects information on disk usage
+    
+    * Counters
+    
+      - "Disk usage": Maximum disk space used across nodes.
+
+    """    
+    COUNTER_DISKUSAGE="Disk usage"
+    
+    def __init__(self, accounting):
+        """See AccountingProbe.__init__"""        
+        AccountingProbe.__init__(self, accounting)
+        self.accounting.create_counter(UtilizationProbe.COUNTER_DISKUSAGE, AccountingDataCollection.AVERAGE_NONE)
+        
+    def at_timestep(self, lease_scheduler):
+        """See AccountingProbe.at_timestep"""
+        pass
