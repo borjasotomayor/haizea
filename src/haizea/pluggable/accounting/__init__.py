@@ -26,4 +26,4 @@ probe_class_mappings = {         "ar": "haizea.pluggable.accounting.leases.ARPro
                         "best-effort": "haizea.pluggable.accounting.leases.BEProbe",
                           "immediate": "haizea.pluggable.accounting.leases.IMProbe",
                         "utilization": "haizea.pluggable.accounting.utilization.UtilizationProbe",
-                        }     
+                        }

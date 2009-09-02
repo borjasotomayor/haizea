@@ -1500,4 +1500,4 @@ class MemImageMigrationResourceReservation(MigrationResourceReservation):
         logger = logging.getLogger("LEASES")
         logger.log(loglevel, "Type           : MEM IMAGE MIGRATION")
         logger.log(loglevel, "Transfers      : %s" % self.transfers)
-        ResourceReservation.print_contents(self, loglevel)   
+        ResourceReservation.print_contents(self, loglevel)

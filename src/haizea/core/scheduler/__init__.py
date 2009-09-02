@@ -99,4 +99,5 @@ class MigrationResourceReservation(ResourceReservation):
     def __init__(self, lease, start, end, res, vmrr, transfers):
         ResourceReservation.__init__(self, lease, start, end, res)
         self.vmrr = vmrr
-        self.transfers = transfers         
+        self.transfers = transfers
+        

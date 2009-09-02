@@ -591,4 +591,4 @@ class DiskImageMigrationResourceReservation(MigrationResourceReservation):
         logger = logging.getLogger("LEASES")
         logger.log(loglevel, "Type           : DISK IMAGE MIGRATION")
         logger.log(loglevel, "Transfers      : %s" % self.transfers)
-        ResourceReservation.print_contents(self, loglevel)     
+        ResourceReservation.print_contents(self, loglevel)

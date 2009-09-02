@@ -27,4 +27,4 @@ class PreparationScheduler(object):
         self.logger = logging.getLogger("DEPLOY")
         
     def cleanup(self, lease):
-        abstract() 
+        abstract()
