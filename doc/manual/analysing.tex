@@ -1,63 +1,70 @@
 While Haizea is running, it collects data that can be analysed offline (accepted/rejected leases, waiting times, etc.). This data is saved to disk when Haizea stops running so, for now, this information is (in practice) only useful for simulation experiments. In the future, Haizea will save data periodically to disk so it can also be analysed online.
 
-The file where the collected data will be saved is specified in the datafile option of the general section:
+The information that is collected can be specified through a series of \emph{probes}. For example, there is a \texttt{best-effort} probe that collects information relevant to best-effort leases, such as the time the lease had to wait in the queue until it was allocated resources. Haizea includes several probes (see Appendix~\ref{app:probes}) and also allows you to write your own probes (see Chapter~\ref{chap:accounting})
+
+The file where the collected data will be saved and the probes to use are specified in the \texttt{[accounting]} section of the configuration file:
 
 \begin{wideshellverbatim}
-[general]
-...
-
+[accounting]
 datafile: /var/tmp/haizea.dat
-
-...
+probes: ar best-effort immediate utilization
 \end{wideshellverbatim}
 
-This file is not human-readable, and there are two ways of accessing its contents: using the \texttt{haizea-convert-data} command or programmatically through Python. These are both described next.
+This file is not human-readable, and there are two ways of accessing its contents: using the \texttt{haizea-convert-data} command or programmatically through Python. Both are described in this chapter.
+
+\section{Type of data collected}
+
+Accounting probes can collect three types of data:
+
+\begin{description}
+\item[Per-lease data]: Data attributable to individual leases or derived from how each lease was scheduled. For example, as mentioned earlier, the \texttt{best-effort} probe collects the waiting time of each best-effort lease.
+\item[Per-run data]: Data from a single run of Haizea. For example, the \texttt{ar} probe collects the total number of AR leases that were accepted and rejected during the entire run.
+\item[Counters]: A counter is a time-ordered list showing how some metric varied throughout a single run of Haizea. For example, the \texttt{best-effort} probe keeps track of the length of the queue. 
+\end{description}
+
+See Appendix~\ref{app:probes}) for a list of probes included with Haizea, and a description of the specific data they collect.
 
 
 \section{The \texttt{haizea-convert-data} command}
 
-The \texttt{haizea-convert-data} command will convert some of the data contained in the data file into a CSV file. Currently, this command only prints a very small subset of the data contained in the data file. Future versions of Haizea will include more complete data conversion tools.
+The \texttt{haizea-convert-data} command will convert the contents of the data file into a CSV file. 
 
-To print out the data from one simulation run, simply run the following: 
+To print out all the per-lease data, simply run the following: 
 
 \begin{shellverbatim}
 haizea-convert-data -t per-lease /var/tmp/haizea.dat
 \end{shellverbatim}
 
-This will print out one line per best-effort lease, showing its lease ID, waiting time, and slowdown. 
+This will print out one line per lease, showing its lease ID and all data collected for that lease. Take into account that some fields will be empty, as a probe might collect data just for one specific type of lease (e.g., AR leases will have empty values for the `Waiting time' information collected by the \texttt{best-effort}).
+
+To print out all the per-run data, run the following:
+
+\begin{shellverbatim}
+haizea-convert-data -t per-run /var/tmp/haizea.dat
+\end{shellverbatim}
+
+To print out a counter, run the following:
+
+\begin{shellverbatim}
+haizea-convert-data -t counter -c countername /var/tmp/haizea.dat
+\end{shellverbatim}
+
+Where \texttt{countername} should be substituted for the counter you want to access. If you do not know what counters are included in the file, the following will print out a list of counters:
+
+\begin{shellverbatim}
+haizea-convert-data -l /var/tmp/haizea.dat
+\end{shellverbatim}
 
 When running multiple simulations (as described in \ref{sec:multiplesim}), Haizea will generate one data file for each simulation profile, which are all stored in the same directory. \texttt{haizea-convert-data} can also be used to produce aggregate statistics from all these data files. For example:
 
 \begin{shellverbatim}
-haizea-convert-data -t per-experiment /var/tmp/results/*.dat
+haizea-convert-data -t per-run /var/tmp/results/*.dat
 \end{shellverbatim}
 
-This will print out one line \emph{per simulation run} (i.e., one for each combination of a simulation profile, tracefile, and injection file). Currently, only the \emph{all-best-effort} metric is printed out (the time at which the last best-effort lease ended).
+This will print out one line per simulation run, each with the per-run data for the run along with the simulation profile, tracefile, and injection file used in that run. Similarly, you can run \texttt{haizea-convert-data} with \texttt{-t per-lease} or \texttt{-t counter} to print the per-lease data or a counter from multiple simulation runs, using the simulation profile, tracefile, and injection file columns to disambiguate the run the data originated from.
 
 \section{Analysing data programmatically} 
 
-The data file generated by Haizea is basically contains a Python-pickled \texttt{AccountingData} object (see module \texttt{haizea.resourcemanager.accounting}) with all the information collected during a simulation experiment. Thus, this data can be accessed programmatically from Python. An example of how this file is unpickled, and some of its information accessed, can be found in function \texttt{haizea\_convert\_data} in module \texttt{haizea.cli.commands}.
+The data file generated by Haizea is a Python-pickled \texttt{AccountingData} object. This object contains all the per-lease and per-run data, along with all the counters. You can analyse the data programmatically by unpicklying the file from your own Python code and accessing the data contained in the \texttt{AccountingData} object (see the generated pydoc documentation linked from the Haizea website for details on the object's attributes). An example of how this file is unpickled, and some of its information accessed, can be found in function \texttt{haizea\_convert\_data} in module \texttt{haizea.cli.commands}.
 
-The \texttt{StatsData} object contains the following information:
 
-\begin{description}
- \item[Counter lists] Haizea keeps tracks of several metrics, such as the number of accepted AR leases or the number of best-effort leases completed, and keeps a log of how these metrics varied over time. In particular, it keeps track of the following:
-\begin{itemize}
-
- \item \texttt{COUNTER\_ARACCEPTED}: Number of accepted AR leases.
- \item \texttt{COUNTER\_ARREJECTED}: Number of rejected AR leases.
- \item \texttt{COUNTER\_IMACCEPTED}: Number of accepted immediate leases.
- \item \texttt{COUNTER\_IMREJECTED}: Number of rejected immediate leases.
- \item \texttt{COUNTER\_BESTEFFORTCOMPLETED}: Number of completed best-effort leases.
- \item \texttt{COUNTER\_QUEUESIZE}: Queue size (best-effort leases)
- \item \texttt{COUNTER\_DISKUSAGE}: Total disk space used by VM images in the node pool.
-\end{itemize}
-      A "counter list" (which should more appropriately be called a "metric log") includes an entry for each time a metric changes. Each entry is a tuple (time, lease\_id, value, average). If the metric is not associated with any particular lease, then the lease ID will be \texttt{None}. The average is a running average which will be \texttt{None} when it does not make sense to keep an average (e.g., the number of accepted AR requests).
-\item[Lease descriptors] The lease descriptors (i.e., \texttt{ARLease}, \texttt{BestEffortLease}, or \texttt{ImmediateLease} objects) of all the leases that have been scheduled are included in the object. The resource reservations are removed, as it would make the datafile too big. However, this still conserves interesting metrics like starting and ending times, waiting times, etc.
-\end{description}
-
-When running multiple simulations (as described in \ref{sec:multiplesim}), Haizea will add information on the simulation profile to the \texttt{AccountingData} object. In particular, the profile name can be accessed through the \texttt{attrs} attribute:
-
-\begin{wideshellverbatim}
-profile = accounting_data_obj.attrs["profile"]
-\end{wideshellverbatim}
