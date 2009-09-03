@@ -1,0 +1,116 @@
+In Chapter~\ref{chap:analysing} we saw that Haizea collects data while running through the use of \emph{probes}. While Haizea includes several probes, it is also possible for you to write your own probes by implementing a class that extends from the \texttt{AccountingProbe} class. A barebones probe would look like this:
+
+\begin{wideshellverbatim}
+from haizea.core.accounting import AccountingProbe
+
+class MyProbe(AccountingProbe):
+    
+    def __init__(self, accounting):
+        AccountingProbe.__init__(self, accounting)
+        # Create counters, per-lease stats, per-run stats
+    
+    def finalize_accounting(self):
+	# Collect information
+
+    def at_timestep(self, lease_scheduler):
+	# Collect information
+
+    def at_lease_request(self, lease):
+	# Collect information 
+
+    def at_lease_done(self, lease):
+	# Collect information 
+\end{wideshellverbatim}
+
+All the methods shown above are also present in \texttt{AccountingProbe}, but don't do anything. You have to override some or all of the methods to make sure that data gets collected. More specifically:
+
+\begin{description}
+\item[\texttt{at\_timestep}] Override this method to perform any actions every time the Haizea scheduler wakes up. The \texttt{lease\_scheduler} parameter contains Haizea's lease scheduler (an instance of the \texttt{LeaseScheduler} class), which you can use to gather scheduling data.
+\item[\texttt{at\_lease\_request}] Override this method to collect data after a lease has been requested.
+\item[\texttt{at\_lease\_done}] Override this method to collect data after a lease is done (this includes successful completion and rejected/cancelled/failed leases).
+\item[\texttt{finalize\_accounting}] Override this method to perform any actions when data collection stops. This is usually where per-run data is computed.
+\end{description}
+
+Probes can collect three types of data:
+
+\begin{description}
+\item[Per-lease data:] Data attributable to individual leases or derived from how each lease was scheduled. 
+\item[Per-run data:] Data from an entire run of Haizea
+\item[Counters:] A counter is a time-ordered list showing how some metric varied throughout a single run of Haizea. 
+\end{description}
+
+The probe's constructor should create the counters and specify what per-lease data and per-run data will be collected by your probe (the methods to do this are described next). Notice how a probe's constructor receives a \texttt{accounting} parameter. When creating your probe, Haizea will pass an \texttt{AccountingDataCollection} object that you will be able to use in your probe's other methods to store data.
+
+Once a probe has been implemented, it can be used in Haizea by specifying its full name in the \texttt{probes} option of the \texttt{accounting} section of the configuration file. For example, suppose you created a class called \texttt{MyProbe} in the {foobar.probes} module. To use the probe, the \texttt{probes} option would look like this:
+
+\begin{wideshellverbatim}
+probes: foobar.probes.MyProbe
+\end{wideshellverbatim}
+
+When running Haizea, you have to make sure that \texttt{foobar.probes.MyProbe} is in your \texttt{PYTHONPATH}. After running Haizea with your probe, you can access the data it collects using the \texttt{haizea-convert-data} command described in Section~\ref{sec:haizea-convert-data}
+
+\section{Collecting per-lease data}
+
+To collect per-lease data, you first have to specify the new type of data (or ``stat'') you will be collecting in your probe's constructor. This is done using the \verb+create_lease_stat+ method in \texttt{AccountingDataCollection} (which is stored in an \texttt{accounting} attribute in all probes). For example, let's assume you want to keep track of an admittedly silly statistic: whether the lease's identifier is odd or even. You could create a stat called \texttt{Odd or even?}:
+
+\begin{wideshellverbatim}
+from haizea.core.accounting import AccountingProbe
+
+class MyProbe(AccountingProbe):
+    
+    def __init__(self, accounting):
+        AccountingProbe.__init__(self, accounting)
+        self.accounting.create_lease_stat("Odd or even?")	
+\end{wideshellverbatim}
+
+To set the value of this stat, you must use the \verb+set_lease_stat+ method in \texttt{AccountingDataCollection}. For this stat, it would make sense to call this method from the \texttt{at\_lease\_request} method in the probe:
+
+\begin{wideshellverbatim}
+def at_lease_request(self, lease):
+    if lease.id \% 2 == 1:
+        value = "odd"
+    else:
+        value = "even"
+    self.accounting.set_lease_stat("Odd or even?", lease.id, value)	
+\end{wideshellverbatim}
+
+If you run Haizea with this probe, and then use \texttt{haizea-convert-data} to print the per-lease data collected by the probes, there will be an additional column titled \texttt{Odd or even?} in the generated CSV file.
+
+
+\section{Collecting per-run data}
+
+Collecting per-run data is similar to collecting per-lease data, and relies on two methods in \texttt{AccountingDataCollection}: \verb+create_stat+ to create the stat in the probe constructor and \verb+set_stat+ to set the value of the stat. Given that per-run data summarizes information from the entire run, \verb+set_stat+ will usually be called from the probe's \texttt{finalize\_accounting} method.
+
+
+\section{Creating and updating counters}
+
+To collect data using a counter you must first create the counter from the probe's constructor using the \verb+create_counter+ method in \texttt{AccountingDataCollection}:
+
+\begin{wideshellverbatim}
+create_counter(counter_id, avgtype)
+\end{wideshellverbatim}
+
+The first parameter is the name of the counter. The second paramter specifies the type of average to compute for the counter; Counters can store not just the value of the counter throughout time, but also a running average. There are three types of averages that can be specified through the \texttt{avgtype}
+        
+\begin{description}
+\item[\texttt{AccountingDataCollection.AVERAGE\_NONE}:] Don't compute an average
+\item[\texttt{AccountingDataCollection.AVERAGE\_NORMAL}:] For each entry, compute the average of all the values including and preceding that entry.
+\item[\texttt{AccountingDataCollection.AVERAGE\_TIMEWEIGHTED}:]  For each entry, compute the average of all the values including and preceding that entry, weighing the average according to the time between each entry.
+\end{description}
+
+All counters are initialized to zero.
+
+The counter can be updated using one of the following three methods:
+
+\begin{wideshellverbatim}
+incr_counter(counter_id, lease_id):
+decr_counter(counter_id, lease_id):
+append_to_counter(counter_id, value, lease_id):
+\end{wideshellverbatim}
+
+All three methods receive the name of the counter (\verb+counter_id+) and, optionally, the identifier of the lease that caused the update. \verb+incr_counter+ and \verb+decr_counter+ increment or decrement the counter, respectively, while \verb+append_to_counter+ changes the counter's value to the value specified by the \verb+value+ parameter.
+
+
+\section{Examples}
+
+See the \texttt{haizea.pluggable.accounting} module for the source code of the default probes included with Haizea.
