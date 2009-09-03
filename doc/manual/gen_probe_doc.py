@@ -1,7 +1,7 @@
 from haizea.common.utils import rst2latex
 from haizea.pluggable.accounting import probe_class_mappings
-from haizea.pluggable.accounting.leases import *
-from haizea.pluggable.accounting.utilization import *
+from haizea.pluggable.accounting.leases import ARProbe, BEProbe, IMProbe
+from haizea.pluggable.accounting.utilization import  CPUUtilizationProbe, DiskUsageProbe
 
 probes = [ARProbe, BEProbe, IMProbe, CPUUtilizationProbe, DiskUsageProbe]
 
