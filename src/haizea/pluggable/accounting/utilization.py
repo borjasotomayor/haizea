@@ -35,11 +35,11 @@ class CPUUtilizationProbe(AccountingProbe):
     def __init__(self, accounting):
         """See AccountingProbe.__init__"""        
         AccountingProbe.__init__(self, accounting)
-        self.accounting.create_counter(UtilizationProbe.COUNTER_UTILIZATION, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(CPUUtilizationProbe.COUNTER_UTILIZATION, AccountingDataCollection.AVERAGE_NONE)
         
     def at_timestep(self, lease_scheduler):
         """See AccountingProbe.at_timestep"""
-        self.accounting.append_to_counter(UtilizationProbe.COUNTER_UTILIZATION, 0)
+        self.accounting.append_to_counter(CPUUtilizationProbe.COUNTER_UTILIZATION, 0)
 
 
 class DiskUsageProbe(AccountingProbe):
@@ -56,7 +56,7 @@ class DiskUsageProbe(AccountingProbe):
     def __init__(self, accounting):
         """See AccountingProbe.__init__"""        
         AccountingProbe.__init__(self, accounting)
-        self.accounting.create_counter(UtilizationProbe.COUNTER_DISKUSAGE, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(DiskUsageProbe.COUNTER_DISKUSAGE, AccountingDataCollection.AVERAGE_NONE)
         
     def at_timestep(self, lease_scheduler):
         """See AccountingProbe.at_timestep"""

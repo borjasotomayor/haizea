@@ -164,7 +164,7 @@ class BEProbe(AccountingProbe):
     def finalize_accounting(self):
         """See AccountingProbe.finalize_accounting"""        
         self._set_stat_from_counter(BEProbe.STAT_BESTEFFORTCOMPLETED, BEProbe.COUNTER_BESTEFFORTCOMPLETED)
-        all_best_effort = self.accounting.data.counters[BEProbe.COUNTER_BESTEFFORTCOMPLETED][-1][0]
+        all_best_effort = self.accounting.get_last_counter_time(BEProbe.COUNTER_BESTEFFORTCOMPLETED)
         self.accounting.set_stat(BEProbe.STAT_ALLBESTEFFORT, all_best_effort)
     
     def at_timestep(self, lease_scheduler):
