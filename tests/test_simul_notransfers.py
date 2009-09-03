@@ -2,7 +2,8 @@ from common import BaseSimulatorTest
 
 class TestSimulator(BaseSimulatorTest):
     def __init__(self):
-        self.config = self.load_configfile("base_config_simulator.conf")
+        config = BaseSimulatorTest.load_configfile("base_config_simulator.conf")
+        BaseSimulatorTest.__init__(self, config)
    
     def test_preemption(self):
         BaseSimulatorTest.test_preemption(self)

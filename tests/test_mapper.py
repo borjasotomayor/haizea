@@ -1,11 +1,7 @@
-from haizea.core.leases import Lease
-from haizea.core.scheduler.resourcepool import ResourcePoolNode
 from haizea.core.scheduler.policy import PolicyManager
-from haizea.core.scheduler.slottable import ResourceTuple, SlotTable, ResourceReservation, AvailabilityWindow
+from haizea.core.scheduler.slottable import ResourceReservation
 from haizea.core.scheduler.mapper import GreedyMapper
 from haizea.pluggable.policies.host_selection import GreedyPolicy
-from mx import DateTime
-import haizea.common.constants as constants
 from sample_slottables import *
 from common import create_tmp_slottable
 

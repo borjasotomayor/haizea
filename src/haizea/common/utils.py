@@ -59,13 +59,13 @@ def abstract():
     caller = inspect.stack()[1][3]
     raise NotImplementedError(caller + ' must be implemented in subclass')
 
-def pickle(data, file):
-    f = open (file, "w")
+def pickle(data, filename):
+    f = open (filename, "w")
     dump(data, f, protocol = HIGHEST_PROTOCOL)
     f.close()
 
-def unpickle(file):
-    f = open (file, "r")
+def unpickle(filename):
+    f = open (filename, "r")
     data = load(f)
     f.close()
     return data
@@ -119,22 +119,22 @@ def rst2latex(text):
     return latex
     
 class Singleton(object):
-     """ 
-     A singleton base class. 
-     Based on: http://code.activestate.com/recipes/52558/
-     """
-     _singleton = None
-     def __new__(cls, *args, **kwargs):
-         if cls._singleton == None:
-             cls._singleton = object.__new__(cls, *args, **kwargs)
-         return cls._singleton
-     
-     @classmethod
-     def get_singleton(cls):
-         if '_singleton' not in vars(cls):
-             return None
-         else:
-             return cls._singleton
+    """ 
+    A singleton base class. 
+    Based on: http://code.activestate.com/recipes/52558/
+    """
+    _singleton = None
+    def __new__(cls, *args, **kwargs):
+        if cls._singleton == None:
+            cls._singleton = object.__new__(cls, *args, **kwargs)
+        return cls._singleton
+    
+    @classmethod
+    def get_singleton(cls):
+        if '_singleton' not in vars(cls):
+            return None
+        else:
+            return cls._singleton
 
  
 def get_config():

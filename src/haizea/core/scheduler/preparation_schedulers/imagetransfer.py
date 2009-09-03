@@ -19,14 +19,12 @@
 import haizea.common.constants as constants
 from haizea.core.scheduler.preparation_schedulers import PreparationScheduler
 from haizea.core.scheduler.slottable import ResourceReservation
-from haizea.core.scheduler import MigrationResourceReservation
+from haizea.core.scheduler import MigrationResourceReservation, InconsistentLeaseStateError
 from haizea.core.leases import Lease, Capacity, UnmanagedSoftwareEnvironment
 from haizea.core.scheduler import ReservationEventHandler, NotSchedulableException, EarliestStartingTime
 from haizea.common.utils import estimate_transfer_time, get_config
-from haizea.core.scheduler.slottable import ResourceTuple
 from mx.DateTime import TimeDelta
 
-import copy
 import bisect
 import logging
 
@@ -396,10 +394,10 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             return deadline - required_duration
         else:
             for i in xrange(len(self.transfers) - 1, 0, -1):
-                if self.transfers[i].start != self.transfer[i-1].end:
-                    hole_duration = self.transfer[i].start - self.transfers[i-1].end
+                if self.transfers[i].start != self.transfers[i-1].end:
+                    hole_duration = self.transfers[i].start - self.transfers[i-1].end
                     if hole_duration >= required_duration:
-                        return self.transfer[i].start - required_duration
+                        return self.transfers[i].start - required_duration
             return self.transfers[0].start - required_duration
 
     def __remove_transfers(self, lease):
@@ -433,7 +431,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             rr.state = ResourceReservation.STATE_ACTIVE
             # TODO: Enactment
         else:
-            raise InconsistentLeaseStateError(l, doing = "starting a file transfer")
+            raise InconsistentLeaseStateError(lease, doing = "starting a file transfer")
             
         # TODO: Check for piggybacking
         
@@ -465,7 +463,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
                 # TODO: ENACTMENT: Verify the image was transferred correctly
                 sched._add_diskimages(physnode, rr.file, lease.software.image_size, vnodes, timeout=maxend)
         else:
-            raise InconsistentLeaseStateError(l, doing = "ending a file transfer")
+            raise InconsistentLeaseStateError(lease, doing = "ending a file transfer")
 
         sched.transfers.remove(rr)
         lease.print_contents()

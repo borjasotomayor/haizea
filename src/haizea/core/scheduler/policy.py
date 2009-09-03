@@ -35,7 +35,6 @@ pluggable policies.
 
 
 from haizea.common.utils import abstract
-from haizea.core.leases import Lease
 from mx.DateTime import DateTimeDelta
 import operator
 

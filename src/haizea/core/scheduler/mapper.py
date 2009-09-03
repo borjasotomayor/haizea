@@ -23,8 +23,6 @@ VMs) and maps them to physical nodes (if such a mapping exists).
 """
 
 from haizea.common.utils import abstract
-from haizea.core.scheduler.slottable import ResourceTuple, AvailabilityWindow
-import haizea.common.constants as constants
 import operator
 
 # This dictionary provides a shorthand notation for any mappers

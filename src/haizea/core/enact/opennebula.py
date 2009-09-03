@@ -19,7 +19,6 @@
 from haizea.core.scheduler import EnactmentError
 from haizea.core.leases import Capacity
 from haizea.core.scheduler.resourcepool import ResourcePoolNode
-from haizea.core.scheduler.slottable import ResourceTuple
 from haizea.core.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
 from haizea.common.utils import get_config
 from haizea.common.opennebula_xmlrpc import OpenNebulaXMLRPCClient, OpenNebulaVM, OpenNebulaHost

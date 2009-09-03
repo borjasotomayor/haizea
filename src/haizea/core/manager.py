@@ -220,7 +220,7 @@ class Manager(Singleton):
                 # In simulation with a real clock, only the RPC frontend can be used
                 self.frontends = [RPCFrontend(self)]             
         elif mode == "opennebula":
-                self.frontends = [OpenNebulaFrontend(self)]               
+            self.frontends = [OpenNebulaFrontend(self)]               
 
         persistence_file = self.config.get("persistence-file")
         if persistence_file == "none":

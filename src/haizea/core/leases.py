@@ -34,7 +34,7 @@
 """
 
 from haizea.common.constants import LOGLEVEL_VDEBUG
-from haizea.common.utils import StateMachine, round_datetime, round_datetime_delta, get_lease_id, pretty_nodemap, xmlrpc_marshall_singlevalue
+from haizea.common.utils import StateMachine, round_datetime_delta, get_lease_id
 from haizea.core.scheduler.slottable import ResourceReservation
 
 from mx.DateTime import DateTime, TimeDelta, Parser
@@ -113,7 +113,7 @@ class Lease(object):
                 IMMEDIATE: "Immediate",
                 UNKNOWN: "Unknown"}
     
-    def __init__(self, id, submit_time, requested_resources, start, duration, 
+    def __init__(self, lease_id, submit_time, requested_resources, start, duration, 
                  deadline, preemptible, software, state):
         """Constructs a lease.
         
@@ -141,7 +141,7 @@ class Lease(object):
           software environment required by the lease.
         """        
         # Lease ID (read only)
-        self.id = id
+        self.id = lease_id
         
         # Lease attributes
         self.submit_time = submit_time
@@ -185,9 +185,9 @@ class Lease(object):
     @classmethod
     def create_new(cls, submit_time, requested_resources, start, duration, 
                  deadline, preemptible, software):
-        id = get_lease_id()
+        lease_id = get_lease_id()
         state = Lease.STATE_NEW
-        return cls(id, submit_time, requested_resources, start, duration, 
+        return cls(lease_id, submit_time, requested_resources, start, duration, 
                  deadline, preemptible, software, state)
         
     @classmethod
@@ -232,12 +232,12 @@ class Lease(object):
         element -- Element object containing a "<lease>" element.
         """        
         
-        id = element.get("id")
+        lease_id = element.get("id")
         
-        if id == None:
-            id = None
+        if lease_id == None:
+            lease_id = None
         else:
-            id = int(id)
+            lease_id = int(lease_id)
 
         state = element.get("state")
         if state == None:
@@ -286,7 +286,7 @@ class Lease(object):
             image_size = int(disk_image.get("size"))
             software = DiskImageSoftwareEnvironment(image_id, image_size)
         
-        return Lease(id, submit_time, requested_resources, start, duration, 
+        return Lease(lease_id, submit_time, requested_resources, start, duration, 
                      deadline, preemptible, software, state)
 
 
@@ -701,28 +701,28 @@ class Capacity(object):
         Argument:
         types -- List of resource types. e.g., ["CPU", "Memory"]
         """          
-        self.ninstances = dict([(type, 1) for type in types])
-        self.quantity = dict([(type, [0]) for type in types])
+        self.ninstances = dict([(res_type, 1) for res_type in types])
+        self.quantity = dict([(res_type, [0]) for res_type in types])
         
-    def get_ninstances(self, type):
+    def get_ninstances(self, res_type):
         """Gets the number of instances for a resource type
                 
         Argument:
         type -- The type of resource (using the same name passed
         when constructing the Capacity object)
         """               
-        return self.ninstances[type]
+        return self.ninstances[res_type]
            
-    def get_quantity(self, type):
+    def get_quantity(self, res_type):
         """Gets the quantity of a single-instance resource
                 
         Argument:
         type -- The type of resource (using the same name passed
         when constructing the Capacity object)
         """               
-        return self.get_quantity_instance(type, 1)
+        return self.get_quantity_instance(res_type, 1)
     
-    def get_quantity_instance(self, type, instance):
+    def get_quantity_instance(self, res_type, instance):
         """Gets the quantity of a specific instance of a 
         multi-instance resource.
                         
@@ -732,9 +732,9 @@ class Capacity(object):
         instance -- The instance. Note that instances are numbered
         from 1.
         """               
-        return self.quantity[type][instance-1]
+        return self.quantity[res_type][instance-1]
 
-    def set_quantity(self, type, amount):
+    def set_quantity(self, res_type, amount):
         """Sets the quantity of a single-instance resource
                 
         Argument:
@@ -742,9 +742,9 @@ class Capacity(object):
         when constructing the Capacity object)
         amount -- The amount to set the resource to.
         """            
-        self.set_quantity_instance(type, 1, amount)
+        self.set_quantity_instance(res_type, 1, amount)
     
-    def set_quantity_instance(self, type, instance, amount):
+    def set_quantity_instance(self, res_type, instance, amount):
         """Sets the quantity of a specific instance of a 
         multi-instance resource.
                         
@@ -755,9 +755,9 @@ class Capacity(object):
         from 1.
         amount -- The amount to set the instance of the resource to.
         """        
-        self.quantity[type][instance-1] = amount
+        self.quantity[res_type][instance-1] = amount
     
-    def set_ninstances(self, type, ninstances):
+    def set_ninstances(self, res_type, ninstances):
         """Changes the number of instances of a resource type.
                         
         Note that changing the number of instances will initialize
@@ -769,8 +769,8 @@ class Capacity(object):
         when constructing the Capacity object)
         ninstance -- The number of instances
         """                
-        self.ninstances[type] = ninstances
-        self.quantity[type] = [0 for i in range(ninstances)]
+        self.ninstances[res_type] = ninstances
+        self.quantity[res_type] = [0] * ninstances
        
     def get_resource_types(self):
         """Returns the types of resources in this capacity.
@@ -782,12 +782,12 @@ class Capacity(object):
         """Tests if two capacities are the same
                         
         """        
-        for type in self.quantity:
-            if not other.quantity.has_key(type):
+        for res_type in self.quantity:
+            if not other.quantity.has_key(res_type):
                 return False
-            if self.ninstances[type] != other.ninstances[type]:
+            if self.ninstances[res_type] != other.ninstances[res_type]:
                 return False
-            if self.quantity[type] != other.quantity[type]:
+            if self.quantity[res_type] != other.quantity[res_type]:
                 return False
         return True
 
@@ -799,7 +799,7 @@ class Capacity(object):
             
     def __repr__(self):
         """Returns a string representation of the Capacity"""
-        return "  |  ".join("%s: %i" % (type,q[0]) for type, q in self.quantity.items())
+        return "  |  ".join("%s: %i" % (res_type,q[0]) for res_type, q in self.quantity.items())
             
 
 class Timestamp(object):
@@ -937,7 +937,7 @@ class UnmanagedSoftwareEnvironment(SoftwareEnvironment):
         """Constructor.
         
         Does nothing."""        
-        pass
+        SoftwareEnvironment.__init__(self)
 
 class DiskImageSoftwareEnvironment(SoftwareEnvironment):
     """Reprents a software environment encapsulated in a disk image.
@@ -958,6 +958,8 @@ class DiskImageSoftwareEnvironment(SoftwareEnvironment):
         image_size -- The size, in MB, of the disk image. """         
         self.image_id = image_id
         self.image_size = image_size
+        SoftwareEnvironment.__init__(self)
+
 
     
 class LeaseWorkload(object):
@@ -1180,12 +1182,12 @@ class Site(object):
         res = {}
         
         for r in resources:
-            type, amount = r.split(":")
-            res[type] = int(amount)
+            res_type, amount = r.split(":")
+            res[res_type] = int(amount)
             
         capacity = Capacity(res.keys())
-        for (type,amount) in res.items():
-            capacity.set_quantity(type, amount)
+        for (res_type, amount) in res.items():
+            capacity.set_quantity(res_type, amount)
         
         nodes = Nodes([(numnodes,capacity)])
 
@@ -1272,11 +1274,11 @@ class Nodes(object):
             r = Capacity([])
             resources = nodeset_elem.findall("res")
             for i, res in enumerate(resources):
-                type = res.get("type")
+                res_type = res.get("type")
                 if len(res.getchildren()) == 0:
                     amount = int(res.get("amount"))
-                    r.set_ninstances(type, 1)
-                    r.set_quantity(type, amount)
+                    r.set_ninstances(res_type, 1)
+                    r.set_quantity(res_type, amount)
                 else:
                     instances = res.findall("instance")
                     r.set_ninstances(type, len(instances))
@@ -1301,12 +1303,12 @@ class Nodes(object):
         for (numnodes, capacity) in self.node_sets:
             nodeset = ET.SubElement(nodes, "node-set")
             nodeset.set("numnodes", str(numnodes))
-            for type in capacity.get_resource_types():
+            for res_type in capacity.get_resource_types():
                 res = ET.SubElement(nodeset, "res")
-                res.set("type", type)
-                ninstances = capacity.get_ninstances(type)
+                res.set("type", res_type)
+                ninstances = capacity.get_ninstances(res_type)
                 if ninstances == 1:
-                    res.set("amount", str(capacity.get_quantity(type)))                
+                    res.set("amount", str(capacity.get_quantity(res_type)))                
             
         return nodes
     

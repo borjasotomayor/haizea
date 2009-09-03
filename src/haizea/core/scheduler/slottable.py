@@ -18,7 +18,6 @@
 
 import haizea.common.constants as constants
 from haizea.common.utils import xmlrpc_marshall_singlevalue
-from math import floor
 import bisect
 import logging
 from operator import attrgetter
@@ -224,6 +223,10 @@ class SlotTable(object):
         self.resource_types = resource_types
         self.reservations_by_start = []
         self.reservations_by_end = []
+        
+        self.availabilitycache = {}
+        self.awcache_time = None
+        self.awcache = None
         self.__dirty()
 
         # Resource tuple fields

@@ -16,10 +16,8 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.core.leases import Lease
 from haizea.core.scheduler import EarliestStartingTime
 from haizea.core.scheduler.preparation_schedulers import PreparationScheduler
-import haizea.common.constants as constants
 from mx.DateTime import TimeDelta
 
 class UnmanagedPreparationScheduler(PreparationScheduler):

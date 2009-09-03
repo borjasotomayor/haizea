@@ -15,12 +15,9 @@
 # See the License for the specific language governing permissions and        #
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
-import haizea.common.constants as constants
-from haizea.core.scheduler.slottable import ResourceTuple
 from haizea.core.leases import Lease
 from haizea.core.frontends import RequestFrontend
-from haizea.common.utils import round_datetime, get_config, get_clock, get_lease_id
-from mx.DateTime import DateTimeDelta, TimeDelta, ISO
+from haizea.common.utils import get_config, get_lease_id
 import logging
 
 class RPCFrontend(RequestFrontend):

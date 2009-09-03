@@ -19,10 +19,9 @@
 import haizea.common.constants as constants
 from haizea.core.leases import Lease, Capacity, Timestamp, Duration, UnmanagedSoftwareEnvironment
 from haizea.core.frontends import RequestFrontend
-from haizea.core.scheduler.slottable import ResourceTuple
-from haizea.common.utils import UNIX2DateTime, round_datetime, get_config, get_clock
+from haizea.common.utils import UNIX2DateTime, round_datetime, get_config
 from haizea.common.opennebula_xmlrpc import OpenNebulaXMLRPCClient, OpenNebulaVM
-from mx.DateTime import DateTimeDelta, TimeDelta, ISO
+from mx.DateTime import DateTimeDelta, ISO
 
 import operator
 import logging

@@ -34,7 +34,6 @@ from haizea.common.utils import round_datetime, get_config, get_clock, get_polic
 from haizea.core.leases import Lease
 from haizea.core.scheduler import RescheduleLeaseException, NormalEndLeaseException, InconsistentLeaseStateError, EnactmentError, UnrecoverableError, NotSchedulableException, EarliestStartingTime
 from haizea.core.scheduler.slottable import ResourceReservation
-from haizea.core.scheduler.vm_scheduler import VMResourceReservation
 from operator import attrgetter
 
 import logging

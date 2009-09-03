@@ -1,16 +1,17 @@
 from common import BaseXMLRPCTest
-from mx.DateTime import TimeDelta
 from haizea.common.utils import reset_lease_id_counter
 import haizea.cli.rpc_commands as rpc
 import time
 
 class TestXMLRPC(BaseXMLRPCTest):
     def __init__(self):
-        self.config = self.load_configfile("base_config_simulator.conf")
-        self.config.set("simulation", "clock", "real")
-        self.config.set("simulation", "resources", "4  CPU:100 Memory:1024")
-        self.config.set("scheduling", "backfilling", "off")
-        self.config.set("scheduling", "non-schedulable-interval", "2")
+        config = BaseXMLRPCTest.load_configfile("base_config_simulator.conf")
+        config = self.load_configfile("base_config_simulator.conf")
+        config.set("simulation", "clock", "real")
+        config.set("simulation", "resources", "4  CPU:100 Memory:1024")
+        config.set("scheduling", "backfilling", "off")
+        config.set("scheduling", "non-schedulable-interval", "2")
+        BaseXMLRPCTest.__init__(self, config)
    
     def test_getters(self):
         self.start()

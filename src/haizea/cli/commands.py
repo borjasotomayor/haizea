@@ -21,7 +21,7 @@ from haizea.common.utils import generate_config_name, unpickle
 from haizea.core.configfile import HaizeaConfig, HaizeaMultiConfig
 from haizea.core.accounting import AccountingDataCollection
 from haizea.common.config import ConfigException
-from haizea.cli.optionparser import OptionParser, Option
+from haizea.cli.optionparser import Option
 from haizea.cli import Command
 from mx.DateTime import TimeDelta
 import xml.etree.ElementTree as ET
@@ -30,7 +30,7 @@ import sys
 import os
 import errno
 import signal
-import time
+from time import sleep
 
 
 class haizea(Command):
@@ -125,16 +125,16 @@ class haizea(Command):
                 sys.stderr.write(msg % pidfile)
                 sys.exit(1)
             try:
-               while 1:
-                   os.kill(pid, signal.SIGTERM)
-                   time.sleep(1)
+                while 1:
+                    os.kill(pid, signal.SIGTERM)
+                    sleep(1)
             except OSError, err:
-               err = str(err)
-               if err.find("No such process") > 0:
-                   os.remove(pidfile)
-               else:
-                   print str(err)
-                   sys.exit(1)
+                err = str(err)
+                if err.find("No such process") > 0:
+                    os.remove(pidfile)
+                else:
+                    print str(err)
+                    sys.exit(1)
 
 class haizea_generate_configs(Command):
     """
@@ -163,11 +163,11 @@ class haizea_generate_configs(Command):
         configfile=self.opt.conf
         multiconfig = HaizeaMultiConfig.from_file(configfile)
         
-        dir = self.opt.dir
+        etcdir = self.opt.dir
         
         configs = multiconfig.get_configs()
         
-        etcdir = os.path.abspath(dir)    
+        etcdir = os.path.abspath(etcdir)    
         if not os.path.exists(etcdir):
             os.makedirs(etcdir)
             
@@ -219,7 +219,7 @@ class haizea_generate_scripts(Command):
                 
         try:
             from mako.template import Template
-        except:
+        except Exception, e:
             print "You need Mako Templates for Python to run this command."
             print "You can download them at http://www.makotemplates.org/"
             exit(1)
@@ -362,7 +362,7 @@ class haizea_lwf2xml(Command):
         root.set("name", infile)
         description = ET.SubElement(root, "description")
         time = TimeDelta(seconds=0)
-        id = 1
+        lease_id = 1
         requests = ET.SubElement(root, "lease-requests")
         
         
@@ -390,7 +390,7 @@ class haizea_lwf2xml(Command):
                     realduration.set("time", str(TimeDelta(seconds=real_duration)))
                 
                 lease = ET.SubElement(lease_request, "lease")
-                lease.set("id", `id`)
+                lease.set("id", `lease_id`)
 
                 
                 nodes = ET.SubElement(lease, "nodes")
@@ -423,22 +423,11 @@ class haizea_lwf2xml(Command):
                 diskimage.set("size", `vm_imagesize`)
                 
                     
-                id += 1
+                lease_id += 1
         tree = ET.ElementTree(root)
         print ET.tostring(root)
         #tree.write("page.xhtml")
-#head = ET.SubElement(root, "head")
 
-#title = ET.SubElement(head, "title")
-#title.text = "Page Title"
-
-#body = ET.SubElement(root, "body")
-#body.set("bgcolor", "#ffffff")
-
-#body.text = "Hello, World!"
-
-# wrap it in an ElementTree instance, and save as XML
-#tree = ET.ElementTree(root)
 
         
 

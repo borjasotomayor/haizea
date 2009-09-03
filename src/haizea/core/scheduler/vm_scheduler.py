@@ -25,7 +25,7 @@ reservations that will be placed in the slot table and correspond to VMs.
 """
 
 import haizea.common.constants as constants
-from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_clock, get_policy, get_persistence
+from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_clock, get_persistence
 from haizea.core.leases import Lease, Capacity
 from haizea.core.scheduler.slottable import ResourceReservation, ResourceTuple
 from haizea.core.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, EnactmentError, NotSchedulableException, InconsistentScheduleError, InconsistentLeaseStateError, MigrationResourceReservation
@@ -141,7 +141,7 @@ class VMScheduler(object):
         if migration == constants.MIGRATE_YES:
             vmrr = lease.get_last_vmrr()
             mem_in_pnode = dict([(pnode,0) for pnode in set(vmrr.nodes.values())])
-            for (vnode,pnode) in vmrr.nodes.items():
+            for pnode in vmrr.nodes.values():
                 mem = vmrr.resources_in_pnode[pnode].get_by_type(constants.RES_MEM)
                 mem_in_pnode[pnode] += mem
             max_mem_to_transfer = max(mem_in_pnode.values())
@@ -546,9 +546,9 @@ class VMScheduler(object):
                                                                      min_duration)
         
         if start == None and not allow_in_future:
-                # We did not find a suitable starting time. This can happen
-                # if we're unable to schedule in the future
-                raise NotSchedulableException, "Could not find enough resources for this request"
+            # We did not find a suitable starting time. This can happen
+            # if we're unable to schedule in the future
+            raise NotSchedulableException, "Could not find enough resources for this request"
 
         # If we haven't been able to fit the lease, check if we can
         # reserve it in the future
@@ -824,7 +824,6 @@ class VMScheduler(object):
         vmrr -- The VM reservation that will be shutdown
         
         """                 
-        config = get_config()
         shutdown_time = self.__estimate_shutdown_time(vmrr.lease)
 
         start = vmrr.end - shutdown_time

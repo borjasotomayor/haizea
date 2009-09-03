@@ -19,7 +19,7 @@
 import haizea.common.constants as constants
 from haizea.common.utils import get_clock
 from haizea.core.frontends import RequestFrontend
-from haizea.core.leases import LeaseWorkload, Lease
+from haizea.core.leases import LeaseWorkload, Lease, DiskImageSoftwareEnvironment
 import operator
 import logging
 
@@ -52,7 +52,7 @@ class TracefileFrontend(RequestFrontend):
 
         if imagefile != None:
             self.logger.info("Loading image file %s" % imagefile)
-            file = open (imgfile, "r")
+            file = open (imagefile, "r")
             imagesizes = {}
             images = []
             state = 0  # 0 -> Reading image sizes  1 -> Reading image sequence
@@ -74,10 +74,10 @@ class TracefileFrontend(RequestFrontend):
             slowdown_overhead = config.get("runtime-slowdown-overhead")
             boot_overhead = config.get("bootshutdown-overhead")
             for r in self.requests:
-                if add_overhead == constants.RUNTIMEOVERHEAD_ALL or (add_overhead == constants.RUNTIMEOVERHEAD_BE and isinstance(r,BestEffortLease)):
-                   if slowdown_overhead != 0:
-                       r.add_runtime_overhead(slowdown_overhead)
-                   r.add_boot_overhead(boot_overhead)
+                if add_overhead == constants.RUNTIMEOVERHEAD_ALL or (add_overhead == constants.RUNTIMEOVERHEAD_BE and r.get_type() == Lease.BEST_EFFORT):
+                    if slowdown_overhead != 0:
+                        r.add_runtime_overhead(slowdown_overhead)
+                    r.add_boot_overhead(boot_overhead)
 
         # Override requested memory, if necessary
         memory = config.get("override-memory")

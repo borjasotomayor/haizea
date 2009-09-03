@@ -188,7 +188,7 @@ class ResourcePoolNode(object):
         elif len(image) == 1:
             return image[0]
         elif len(image) > 1:
-            self.logger.warning("More than one tainted image for L%iV%i on node %i" % (lease_id, vnode, self.nod_id))
+            self.logger.warning("More than one tainted image for L%iV%i on node %i" % (lease_id, vnode, self.id))
             return image[0]
 
     def remove_diskimage(self, lease_id, vnode):

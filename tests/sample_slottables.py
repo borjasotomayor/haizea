@@ -1,6 +1,5 @@
 from haizea.core.leases import Lease, Capacity
-from haizea.core.scheduler.resourcepool import ResourcePoolNode
-from haizea.core.scheduler.slottable import ResourceTuple, SlotTable, ResourceReservation, AvailabilityWindow
+from haizea.core.scheduler.slottable import ResourceTuple, SlotTable, ResourceReservation
 from mx import DateTime
 import haizea.common.constants as constants
 from common import create_ar_lease,  create_reservation_from_lease

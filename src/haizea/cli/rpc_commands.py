@@ -19,11 +19,11 @@ import haizea.common.defaults as defaults
 import haizea.common.constants as constants
 from haizea.core.leases import Lease, Capacity, Duration, Timestamp, DiskImageSoftwareEnvironment
 from haizea.common.utils import round_datetime
-from haizea.cli.optionparser import OptionParser, Option
+from haizea.cli.optionparser import Option
 from haizea.cli import Command
 import xmlrpclib
 import sys
-from mx.DateTime import TimeDelta, ISO, now
+from mx.DateTime import ISO, now, DateTimeDelta, Parser
 import xml.etree.ElementTree as ET
 
 class RPCCommand(Command):
@@ -122,7 +122,7 @@ class haizea_request_lease(RPCCommand):
                 duration = ISO.ParseTimeDelta(self.opt.duration)
     
             if self.opt.start == haizea_request_lease.START_NOW:
-                lease = Lease(id = None,
+                lease = Lease(lease_id = None,
                               submit_time = None,
                               requested_resources = requested_resources, 
                               start = Timestamp(Timestamp.NOW),
@@ -133,7 +133,7 @@ class haizea_request_lease(RPCCommand):
                               state = None
                               )
             elif self.opt.start == haizea_request_lease.START_BESTEFFORT:
-                lease = Lease(id = None,
+                lease = Lease(lease_id = None,
                               submit_time = None,
                               requested_resources = requested_resources, 
                               start = Timestamp(Timestamp.UNSPECIFIED),
@@ -145,7 +145,7 @@ class haizea_request_lease(RPCCommand):
                               )
             else:
                 start = self.__absolute_time(self.opt.start)
-                lease = Lease(id = None,
+                lease = Lease(lease_id = None,
                               submit_time = None,
                               requested_resources = requested_resources, 
                               start = Timestamp(start),

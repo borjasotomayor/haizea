@@ -1,7 +1,5 @@
 import ConfigParser
-import os
 import threading
-import shutil
 
 from haizea.core.configfile import HaizeaConfig
 from haizea.core.scheduler.slottable import ResourceReservation, SlotTable
@@ -9,19 +7,20 @@ from haizea.core.leases import Lease, Timestamp, Duration
 from haizea.core.manager import Manager
 
 class BaseTest(object):
-    def __init__(self):
-        pass
+    def __init__(self, config):
+        self.config = config
 
-    def load_configfile(self, configfile):
-        file = open (configfile, "r")
+    @staticmethod
+    def load_configfile(configfile):
+        f = open (configfile, "r")
         c = ConfigParser.ConfigParser()
-        c.readfp(file)
+        c.readfp(f)
         return c
 
 
 class BaseSimulatorTest(BaseTest):
-    def __init__(self):
-        pass
+    def __init__(self, config):
+        BaseTest.__init__(self, config)
 
     def set_tracefile(self, tracefile):
         self.config.set("tracefile", "tracefile", tracefile)
@@ -70,21 +69,12 @@ class BaseSimulatorTest(BaseTest):
         self.set_tracefile("wait.lwf")
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
-        
-        
-class BaseOpenNebulaTest(BaseTest):
-    def __init__(self):
-        pass
-
-    def do_test(self, db):
-        shutil.copyfile(db, "one.db")
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
-        os.remove("one.db")
     
 
 class BaseXMLRPCTest(BaseTest):
-    def __init__(self):
+    def __init__(self, config):
+        BaseTest.__init__(self, config)
+        self.haizea = None
         self.haizea_thread = None
 
     def start(self):

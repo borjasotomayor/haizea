@@ -9,6 +9,8 @@ class Command(object):
                                          help = """
                                          Run command in debug mode.
                                          """))
+        self.opt = None
+        self.args = None
         
     def parse_options(self):
         opt, args = self.optparser.parse_args(self.argv)

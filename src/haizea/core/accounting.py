@@ -16,15 +16,20 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
+"""Classes used to collect data"""
+
 import os
 import os.path
-import haizea.common.constants as constants
-from haizea.core.leases import Lease
 from haizea.common.utils import pickle, get_config, get_clock
 from errno import EEXIST
 
 class AccountingData(object):
+    """A container for all the accounting data. When Haizea saves
+    accounting data, it does so by pickling an object of this class.
+    """
+    
     def __init__(self):
+        """Initializes all the counters and data to empty values"""
         # Counters
         self.counters = {}
         self.counter_avg_type = {}
@@ -47,66 +52,82 @@ class AccountingData(object):
         
 
 class AccountingDataCollection(object):
+    """Accounting data collection """
     
     AVERAGE_NONE=0
     AVERAGE_NORMAL=1
     AVERAGE_TIMEWEIGHTED=2
     
     def __init__(self, datafile):
-        self.data = AccountingData()
-        self.datafile = datafile
-        self.probes = []
+        """Constructor
+        
+        @param datafile: Path to file where accounting data will be saved
+        @type datafile: C{str}
+        """
+        self.__data = AccountingData()
+        self.__datafile = datafile
+        self.__probes = []
         
         attrs = get_config().get_attrs()
         for attr in attrs:
-            self.data.attrs[attr] = get_config().get_attr(attr)
+            self.__data.attrs[attr] = get_config().get_attr(attr)
 
     def add_probe(self, probe):
-        self.probes.append(probe)
+        """Adds a new accounting probe
+        
+        @param probe: Probe to add
+        @type probe: L{AccountingProbe}
+        """
+        self.__probes.append(probe)
 
     def create_counter(self, counter_id, avgtype):
-        self.data.counters[counter_id] = []
-        self.data.counter_avg_type[counter_id] = avgtype
+        self.__data.counters[counter_id] = []
+        self.__data.counter_avg_type[counter_id] = avgtype
 
     def create_lease_stat(self, stat_id):
-        self.data.lease_stats_names.append(stat_id)
+        self.__data.lease_stats_names.append(stat_id)
 
     def create_stat(self, stat_id):
-        self.data.stats_names.append(stat_id)
+        self.__data.stats_names.append(stat_id)
 
     def incr_counter(self, counter_id, lease_id = None):
         time = get_clock().get_time()
-        self.append_to_counter(counter_id, self.data.counters[counter_id][-1][2] + 1, lease_id, time)
+        self.append_to_counter(counter_id, self.__data.counters[counter_id][-1][2] + 1, lease_id, time)
 
     def decr_counter(self, counter_id, lease_id = None):
         time = get_clock().get_time()
-        self.append_to_counter(counter_id, self.data.counters[counter_id][-1][2] - 1, lease_id, time)
+        self.append_to_counter(counter_id, self.__data.counters[counter_id][-1][2] - 1, lease_id, time)
         
     def set_lease_stat(self, stat_id, lease_id, value):
-        self.data.lease_stats.setdefault(lease_id, {})[stat_id] = value
+        self.__data.lease_stats.setdefault(lease_id, {})[stat_id] = value
 
     def set_stat(self, stat_id, value):
-        self.data.stats[stat_id] = value
+        self.__data.stats[stat_id] = value
         
     def append_to_counter(self, counter_id, value, lease_id = None, time = None):
         if time == None:
             time = get_clock().get_time()
-        if len(self.data.counters[counter_id]) > 0:
-            prevtime = self.data.counters[counter_id][-1][0]
+        if len(self.__data.counters[counter_id]) > 0:
+            prevtime = self.__data.counters[counter_id][-1][0]
         else:
             prevtime = None
 
         if time == prevtime:
-            self.data.counters[counter_id][-1][2] = value
+            self.__data.counters[counter_id][-1][2] = value
         else:
-            self.data.counters[counter_id].append([time, lease_id, value])
+            self.__data.counters[counter_id].append([time, lease_id, value])
 
+    def get_last_counter_time(self, counter_id):
+        return self.__data.counters[counter_id][-1][0]
+
+    def get_last_counter_value(self, counter_id):
+        return self.__data.counters[counter_id][-1][2]
         
     def start(self, time):
-        self.data.starttime = time
+        self.__data.starttime = time
         
         # Start the counters
-        for counter_id in self.data.counters:
+        for counter_id in self.__data.counters:
             self.append_to_counter(counter_id, 0, time = time)
 
         
@@ -114,42 +135,61 @@ class AccountingDataCollection(object):
         time = get_clock().get_time()
 
         # Stop the counters
-        for counter_id in self.data.counters:
-            self.append_to_counter(counter_id, self.data.counters[counter_id][-1][2], time=time)
+        for counter_id in self.__data.counters:
+            self.append_to_counter(counter_id, self.__data.counters[counter_id][-1][2], time=time)
         
         # Add the averages
-        for counter_id in self.data.counters:
-            l = self.normalize_times(self.data.counters[counter_id])
-            avgtype = self.data.counter_avg_type[counter_id]
+        for counter_id in self.__data.counters:
+            l = self.__normalize_times(self.__data.counters[counter_id])
+            avgtype = self.__data.counter_avg_type[counter_id]
             if avgtype == AccountingDataCollection.AVERAGE_NONE:
-                self.data.counters[counter_id] = self.add_no_average(l)
+                self.__data.counters[counter_id] = self.__add_no_average(l)
             elif avgtype == AccountingDataCollection.AVERAGE_NORMAL:
-                self.data.counters[counter_id] = self.add_average(l)
+                self.__data.counters[counter_id] = self.__add_average(l)
             elif avgtype == AccountingDataCollection.AVERAGE_TIMEWEIGHTED:
-                self.data.counters[counter_id] = self.add_timeweighted_average(l)
+                self.__data.counters[counter_id] = self.__add_timeweighted_average(l)
         
-        for probe in self.probes:
+        for probe in self.__probes:
             probe.finalize_accounting()
             
+    def save_to_disk(self, leases):
+        try:
+            dirname = os.path.dirname(self.__datafile)
+            if not os.path.exists(dirname):
+                os.makedirs(dirname)
+        except OSError, e:
+            if e.errno != EEXIST:
+                raise e
+    
+        # Add lease data
+        # Remove some data that won't be necessary in the reporting tools
+        for l in leases.values():
+            l.clear_rrs()
+            l.logger = None
+            self.__data.leases[l.id] = l
+
+        # Save data
+        pickle(self.__data, self.__datafile)
+            
     def at_timestep(self, lease_scheduler):
-        for probe in self.probes:
+        for probe in self.__probes:
             probe.at_timestep(lease_scheduler)
     
     def at_lease_request(self, lease):
-        for probe in self.probes:
+        for probe in self.__probes:
             probe.at_lease_request(lease)
     
     def at_lease_done(self, lease):
-        for probe in self.probes:
+        for probe in self.__probes:
             probe.at_lease_done(lease)
                 
-    def normalize_times(self, data):
-        return [((v[0] - self.data.starttime).seconds, v[1], v[2]) for v in data]
+    def __normalize_times(self, data):
+        return [((v[0] - self.__data.starttime).seconds, v[1], v[2]) for v in data]
         
-    def add_no_average(self, data):
+    def __add_no_average(self, data):
         return [(v[0], v[1], v[2], None) for v in data]
     
-    def add_timeweighted_average(self, data):
+    def __add_timeweighted_average(self, data):
         accum = 0
         prev_time = None
         prev_value = None
@@ -171,7 +211,7 @@ class AccountingDataCollection(object):
         
         return stats        
     
-    def add_average(self, data):
+    def __add_average(self, data):
         accum = 0
         count = 0
         stats = []
@@ -184,24 +224,6 @@ class AccountingDataCollection(object):
         
         return stats          
     
-    def save_to_disk(self, leases):
-        try:
-            dirname = os.path.dirname(self.datafile)
-            if not os.path.exists(dirname):
-                os.makedirs(dirname)
-        except OSError, e:
-            if e.errno != EEXIST:
-                raise e
-    
-        # Add lease data
-        # Remove some data that won't be necessary in the reporting tools
-        for l in leases.values():
-            l.clear_rrs()
-            l.logger = None
-            self.data.leases[l.id] = l
-
-        # Save data
-        pickle(self.data, self.datafile)
 
 class AccountingProbe(object):
     # Base abstract class for an accounting probe
@@ -221,7 +243,7 @@ class AccountingProbe(object):
         pass
     
     def _set_stat_from_counter(self, stat_id, counter_id):
-        value = self.accounting.data.counters[counter_id][-1][2]
+        value = self.accounting.get_last_counter_value(counter_id)
         self.accounting.set_stat(stat_id, value)
                            
 
