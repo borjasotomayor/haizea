@@ -3,7 +3,6 @@
 from ConfigParser import RawConfigParser
 from haizea.core.configfile import HaizeaConfig
 from haizea.common.config import OPTTYPE_INT, OPTTYPE_FLOAT, OPTTYPE_STRING, OPTTYPE_BOOLEAN, OPTTYPE_DATETIME, OPTTYPE_TIMEDELTA 
-import re
 import textwrap
 
 HEADER_WIDTH=70
@@ -92,6 +91,8 @@ def gen_config_file(config, filename, verbose):
             
     f.close()
         
+        
+# Sample configuration file for simulation w/ tracefile
 
 sample_trace = RawConfigParser()
 sample_trace.add_section("general")
@@ -130,5 +131,36 @@ sample_trace.set("tracefile", "tracefile", "/usr/share/haizea/traces/sample.lwf"
 
 sample_trace = HaizeaConfig(sample_trace)
 
-gen_config_file(sample_trace.config, "sample_trace_full.conf", verbose = True)
-gen_config_file(sample_trace.config, "sample_trace.conf", verbose = False)
+gen_config_file(sample_trace.config, "sample_trace.conf", verbose = True)
+gen_config_file(sample_trace.config, "sample_trace_barebones.conf", verbose = False)
+
+
+# Sample configuration file for OpenNebula
+
+sample_opennebula = RawConfigParser()
+sample_opennebula.add_section("general")
+sample_opennebula.set("general", "loglevel", "INFO")
+sample_opennebula.set("general", "mode", "opennebula")
+sample_opennebula.set("general", "lease-preparation", "unmanaged")
+
+sample_opennebula.add_section("opennebula")
+sample_opennebula.set("opennebula", "host", "localhost")
+
+sample_opennebula.add_section("accounting")
+sample_opennebula.set("accounting", "datafile", "/var/tmp/haizea/results.dat")
+sample_opennebula.set("accounting", "probes", "ar best-effort immediate cpu-utilization")
+
+sample_opennebula.add_section("scheduling")
+sample_opennebula.set("scheduling", "backfilling", "aggressive")
+sample_opennebula.set("scheduling", "policy-preemption", "ar-preempts-everything")
+sample_opennebula.set("scheduling", "suspension", "all")
+sample_opennebula.set("scheduling", "migration", "no")
+sample_opennebula.set("scheduling", "suspendresume-exclusion", "global")
+sample_opennebula.set("scheduling", "suspend-rate", "32")
+sample_opennebula.set("scheduling", "resume-rate", "32")
+sample_opennebula.set("scheduling", "migration", "yes")
+
+sample_opennebula = HaizeaConfig(sample_opennebula)
+
+gen_config_file(sample_opennebula.config, "sample_opennebula.conf", verbose = True)
+gen_config_file(sample_opennebula.config, "sample_opennebula_barebones.conf", verbose = False)
