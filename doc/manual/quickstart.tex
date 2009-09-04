@@ -17,7 +17,7 @@ So, let's start by writing a configuration file specifying the simulation option
 
 \section{The configuration file}
 
-A sample configuration file is provided with Haizea and is located in \texttt{/usr/share/haizea/etc/sample\_trace.conf} (or \texttt{\$HOME/share/haizea/etc/sample\_trace.conf} if you installed Haizea in your home directory). For this guide, you may want to make a copy of this file and use that instead (so you can preserve the original sample file). If you look at the contents of the file, you will see that it also includes documentation on every option. For now, take a look at the following three options:
+A sample configuration file is provided with Haizea and is located in \texttt{/usr/share/haizea/etc/sample\_trace.conf} (or \texttt{\$HOME/share/haizea/etc/sample\_trace.conf} if you installed Haizea in your home directory). For this guide, you may want to make a copy of this file and use that instead (so you can preserve the original sample file). If you look at the contents of the file, you will see that it also includes documentation on every option (if you find the documentation gets in the way, there is also a \texttt{sample\_trace\_barebones.conf} file that has the same options, but without any documentation). For now, take a look at the following three options:
 
 \begin{wideshellverbatim}
 [simulation]
@@ -88,9 +88,9 @@ haizea -c /usr/share/haizea/etc/sample_trace.conf
 Which results in the following output:
 
 \begin{wideshellverbatim}
+[2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] TFILE   Loading tracefile /usr/share/haizea/traces/sample.lwf
 [2006-11-25 13:00:00.00] TFILE   Loaded workload with 0 requests ()
-[2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
 [2006-11-25 13:00:00.00] CLOCK   Simulated clock has stopped
 [2006-11-25 13:00:00.00] RM      Stopping resource manager gracefully...
@@ -129,9 +129,9 @@ Now that you've seen the tracefile, you can see why the simulator starts up and 
 This is a request for a best-effort lease (notice how the starting time is left empty, meaning it's up to Haizea to determine the start time), requested at time 00:00:00 (right at the start of the simulation), requiring 1 hour, and only one node. Now run Haizea again. You should now see the following:
 
 \begin{wideshellverbatim}
+[2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] TFILE   Loading tracefile /usr/share/haizea/traces/sample.lwf
 [2006-11-25 13:00:00.00] TFILE   Loaded workload with 1 requests (1 Best-effort)
-[2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
 [2006-11-25 13:00:00.00] LSCHED  Lease #1 has been requested.
 [2006-11-25 13:00:00.00] LSCHED  Lease #1 has been marked as pending.
@@ -196,9 +196,9 @@ This is a request for an advance reservation lease (notice how there is an exact
 Uncomment the AR lease request, and run Haizea again. You should now see the following:
 
 \begin{wideshellverbatim}
+[2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] TFILE   Loading tracefile /usr/share/haizea/traces/sample.lwf
 [2006-11-25 13:00:00.00] TFILE   Loaded workload with 2 requests (1 Best-effort + 1 AR)
-[2006-11-25 13:00:00.00] RM      Starting resource manager
 [2006-11-25 13:00:00.00] CLOCK   Starting simulated clock
 [2006-11-25 13:00:00.00] LSCHED  Lease #1 has been requested.
 [2006-11-25 13:00:00.00] LSCHED  Lease #1 has been marked as pending.

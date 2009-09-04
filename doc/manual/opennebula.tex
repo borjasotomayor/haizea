@@ -10,7 +10,7 @@ Before proceeding, you may want to follow the OpenNebula quickstart guide (\url{
 
 \section{Configuring Haizea}
 
-Haizea must be configured to run in OpenNebula mode. Haizea includes a sample OpenNebula configuration file that you can use as a starting point. This file is installed, by default, in \texttt{/usr/share/haizea/etc/sample\_opennebula.conf}. In OpenNebula mode, Haizea will process requests coming from OpenNebula, and will send all enactment commands to OpenNebula. To activate this mode, the \texttt{mode} option of the \texttt{general} section in the Haizea configuration file must be set to \texttt{opennebula}:
+Haizea must be configured to run in OpenNebula mode. Haizea includes a sample OpenNebula configuration file that you can use as a starting point. This file is installed, by default, in \texttt{/usr/share/haizea/etc/sample\_opennebula.conf} (there is also a \texttt{sample\_opennebula\_barebones.conf} file that has the same options, but without any documentation). In OpenNebula mode, Haizea will process requests coming from OpenNebula, and will send all enactment commands to OpenNebula. To activate this mode, the \texttt{mode} option of the \texttt{general} section in the Haizea configuration file must be set to \texttt{opennebula}:
 
 \begin{wideshellverbatim}
 [general]
@@ -42,13 +42,13 @@ Now that Haizea is configured to run alongside OpenNebula, running them is as si
 oned
 \end{wideshellverbatim}
 
-%TODO: ONE_AUTH, explain distinction between hosts
-
 Followed by Haizea:
 
 \begin{wideshellverbatim}
 haizea -c /usr/share/haizea/etc/sample_opennebula.conf
 \end{wideshellverbatim}
+
+The above assumes that you are running OpenNebula and Haizea in the same machine and with the same user. If this is not the case, you have to set the \texttt{ONE\_AUTH} environment variable (as described in the OpenNebula documentation) for the user and machine running Haizea. The variable must contain the username and password of the OpenNebula administrator user (typically called \texttt{oneadmin}) with the format \texttt{username:password}. 
 
 By default, Haizea runs as a daemon when running in OpenNebula mode. For this chapter, you may want to run it in the foreground so you can see the Haizea log messages in your console:
 
@@ -59,7 +59,7 @@ haizea --fg -c /usr/share/haizea/etc/sample_opennebula.conf
 When Haizea starts up, it will print out something like this:
 
 \begin{wideshellverbatim}
-[2009-07-30 18:36:54.06] ENACT.ONE.INFO Fetched N nodes from OpenNebula
+[                      ] ENACT.ONE.INFO Fetched N nodes from OpenNebula
 [2009-07-30 18:36:54.07] RM      Starting resource manager
 [2009-07-30 18:36:54.07] RPCSERVER RPC server started on port 42493
 [2009-07-30 18:36:54.07] CLOCK   Starting clock
