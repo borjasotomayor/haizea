@@ -823,14 +823,14 @@ class HaizeaConfig(Config):
     
     def __init__(self, config):
         Config.__init__(self, config, self.sections)
-        
+
         self.attrs = {}
         if self._options["attributes"] != None:
-            self.attrs = {}
             attrs = self._options["attributes"].split(",")
             for attr in attrs:
                 (k,v) = attr.split("=")
                 self.attrs[k] = v
+
         
     def get_attr(self, attr):
         return self.attrs[attr]
@@ -907,16 +907,19 @@ class HaizeaMultiConfig(Config):
                     datadir = self.config.get(self.MULTI_SEC, self.DATADIR_OPT)
                     datafilename = generate_config_name(profile, tracefile, injectfile)
                     datafile = datadir + "/" + datafilename + ".dat"
-                    profileconfig.set("general", "datafile", datafile)
+                    # The accounting section may have not been created
+                    if not profileconfig.has_section("accounting"):
+                        profileconfig.add_section("accounting")
+                    profileconfig.set("accounting", "datafile", datafile)
                     
                     # Set "attributes" option (only used internally)
                     attrs = {"profile":profile,"tracefile":tracefile,"injectfile":injectfile}
                     # TODO: Load additional attributes from trace/injfiles
                     attrs_str = ",".join(["%s=%s" % (k,v) for (k,v) in attrs.items()])
-                    if profileconfig.has_option("general", "attributes"):
+                    if profileconfig.has_option("accounting", "attributes"):
                         attrs_str += ",%s" % profileconfig.get("general", "attributes")
-                    profileconfig.set("general", "attributes", attrs_str)
-                    
+                    profileconfig.set("accounting", "attributes", attrs_str)
+
                     try:
                         c = HaizeaConfig(profileconfig)
                     except ConfigException, msg:
