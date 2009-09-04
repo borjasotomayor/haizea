@@ -24,11 +24,14 @@ import operator
 import logging
 
 class TracefileFrontend(RequestFrontend):
-    def __init__(self, manager, starttime):
-        RequestFrontend.__init__(self, manager)
+    def __init__(self, starttime):
+        RequestFrontend.__init__(self)
         self.logger = logging.getLogger("TFILE")
-        config = manager.config
+        self.starttime = starttime
 
+    def load(self, manager):
+        config = manager.config
+        
         tracefile = config.get("tracefile")
         injectfile = config.get("injectionfile")
         imagefile = config.get("imagefile")
@@ -38,14 +41,14 @@ class TracefileFrontend(RequestFrontend):
         self.logger.info("Loading tracefile %s" % tracefile)
         self.requests = None
         if tracefile.endswith(".swf"):
-            self.requests = LeaseWorkload.from_swf_file(tracefile, starttime)
+            self.requests = LeaseWorkload.from_swf_file(tracefile, self.starttime)
         elif tracefile.endswith(".lwf") or tracefile.endswith(".xml"):
-            lease_workload = LeaseWorkload.from_xml_file(tracefile, starttime)
+            lease_workload = LeaseWorkload.from_xml_file(tracefile, self.starttime)
             self.requests = lease_workload.get_leases()
     
         if injectfile != None:
             self.logger.info("Loading injection file %s" % injectfile)
-            inj_lease_workload = LeaseWorkload.from_xml_file(injectfile, starttime)
+            inj_lease_workload = LeaseWorkload.from_xml_file(injectfile, self.starttime)
             inj_leases = inj_lease_workload.get_leases()
             self.requests += inj_leases
             self.requests.sort(key=operator.attrgetter("submit_time"))

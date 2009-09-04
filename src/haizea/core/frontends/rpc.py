@@ -21,12 +21,12 @@ from haizea.common.utils import get_config, get_lease_id
 import logging
 
 class RPCFrontend(RequestFrontend):
-    def __init__(self, manager):
-        self.manager = manager
+    def __init__(self):
         self.logger = logging.getLogger("RPCREQ")
         self.accumulated = []
-        config = get_config()
-        self.manager.rpc_server.register_rpc(self.create_lease)
+
+    def load(self, manager):
+        manager.rpc_server.register_rpc(self.create_lease)
 
     def get_accumulated_requests(self):
         acc = self.accumulated

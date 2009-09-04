@@ -19,23 +19,12 @@
 import haizea.common.constants as constants
 from haizea.core.leases import Lease, Capacity, Timestamp, Duration, UnmanagedSoftwareEnvironment
 from haizea.core.frontends import RequestFrontend
-from haizea.common.utils import UNIX2DateTime, round_datetime, get_config
-from haizea.common.opennebula_xmlrpc import OpenNebulaXMLRPCClient, OpenNebulaVM
+from haizea.common.utils import UNIX2DateTime, round_datetime, get_config, OpenNebulaXMLRPCClientSingleton
+from haizea.common.opennebula_xmlrpc import OpenNebulaVM
 from mx.DateTime import DateTimeDelta, ISO
 
 import operator
 import logging
-
-one_rpc = None
-
-def get_one_xmlrpcclient():
-    global one_rpc
-    if one_rpc == None:
-        host = get_config().get("one.host")
-        port = get_config().get("one.port")
-        user, passw = OpenNebulaXMLRPCClient.get_userpass_from_env()
-        one_rpc = OpenNebulaXMLRPCClient(host, port, user, passw)
-    return one_rpc
 
 class OpenNebulaHaizeaVM(object):
     HAIZEA_PARAM = "HAIZEA"
@@ -116,12 +105,13 @@ class OpenNebulaHaizeaVM(object):
     
 class OpenNebulaFrontend(RequestFrontend):    
     
-    def __init__(self, manager):
-        self.manager = manager
+    def __init__(self):
         self.processed = []
         self.logger = logging.getLogger("ONEREQ")
-        self.rpc = get_one_xmlrpcclient()
+        self.rpc = OpenNebulaXMLRPCClientSingleton().client
 
+    def load(self, manager):
+        pass
         
     def get_accumulated_requests(self):
         vms = self.rpc.vmpool_info()

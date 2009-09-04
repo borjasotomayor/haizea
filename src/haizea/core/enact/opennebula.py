@@ -20,22 +20,11 @@ from haizea.core.scheduler import EnactmentError
 from haizea.core.leases import Capacity
 from haizea.core.scheduler.resourcepool import ResourcePoolNode
 from haizea.core.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
-from haizea.common.utils import get_config
-from haizea.common.opennebula_xmlrpc import OpenNebulaXMLRPCClient, OpenNebulaVM, OpenNebulaHost
+from haizea.common.utils import get_config, OpenNebulaXMLRPCClientSingleton
+from haizea.common.opennebula_xmlrpc import OpenNebulaVM, OpenNebulaHost
 import haizea.common.constants as constants
 import logging
 from time import sleep
-
-one_rpc = None
-
-def get_one_xmlrpcclient():
-    global one_rpc
-    if one_rpc == None:
-        host = get_config().get("one.host")
-        port = get_config().get("one.port")
-        user, passw = OpenNebulaXMLRPCClient.get_userpass_from_env()
-        one_rpc = OpenNebulaXMLRPCClient(host, port, user, passw)
-    return one_rpc
 
 class OpenNebulaEnactmentError(EnactmentError):
     def __init__(self, method, msg):
@@ -49,7 +38,7 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
         ResourcePoolInfo.__init__(self)
         self.logger = logging.getLogger("ENACT.ONE.INFO")
 
-        self.rpc = get_one_xmlrpcclient()
+        self.rpc = OpenNebulaXMLRPCClientSingleton().client
 
         # Get information about nodes from OpenNebula
         self.nodes = {}
@@ -106,7 +95,7 @@ class OpenNebulaVMEnactment(VMEnactment):
     def __init__(self):
         VMEnactment.__init__(self)
         self.logger = logging.getLogger("ENACT.ONE.VM")
-        self.rpc = get_one_xmlrpcclient()
+        self.rpc = OpenNebulaXMLRPCClientSingleton().client
 
     def start(self, action):
         for vnode in action.vnodes:

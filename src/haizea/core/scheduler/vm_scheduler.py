@@ -42,7 +42,7 @@ class VMScheduler(object):
     the requirements of that lease.
     """
     
-    def __init__(self, slottable, resourcepool, mapper):
+    def __init__(self, slottable, resourcepool, mapper, max_in_future):
         """Constructor
         
         The constructor does little more than create the VM scheduler's
@@ -88,17 +88,8 @@ class VMScheduler(object):
                                 on_start = VMScheduler._handle_start_migrate,
                                 on_end   = VMScheduler._handle_end_migrate)
         
-        # When using backfilling, set the number of leases that can be
-        # scheduled in the future.
-        backfilling = get_config().get("backfilling")
-        if backfilling == constants.BACKFILLING_OFF:
-            self.max_in_future = 0
-        elif backfilling == constants.BACKFILLING_AGGRESSIVE:
-            self.max_in_future = 1
-        elif backfilling == constants.BACKFILLING_CONSERVATIVE:
-            self.max_in_future = -1 # Unlimited
-        elif backfilling == constants.BACKFILLING_INTERMEDIATE:
-            self.max_in_future = get_config().get("backfilling-reservations")
+        self.max_in_future = max_in_future
+        
         self.future_leases = set()
 
 

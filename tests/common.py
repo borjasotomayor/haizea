@@ -27,46 +27,55 @@ class BaseSimulatorTest(BaseTest):
 
     def test_preemption(self):
         self.set_tracefile("preemption.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
         
     def test_preemption_prematureend(self):
         self.set_tracefile("preemption_prematureend.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
         
     def test_preemption_prematureend2(self):
         self.set_tracefile("preemption_prematureend2.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
         
     def test_reservation(self):
         self.set_tracefile("reservation.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
         
     def test_reservation_prematureend(self):
         self.set_tracefile("reservation_prematureend.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
         
     def test_migrate(self):
         self.set_tracefile("migrate.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
         
     def test_reuse1(self):
         self.set_tracefile("reuse1.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
         
     def test_reuse2(self):
         self.set_tracefile("reuse2.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
         
     def test_wait(self):
         self.set_tracefile("wait.lwf")
+        Manager.reset_singleton()
         haizea = Manager(HaizeaConfig(self.config))
         haizea.start()
     
@@ -78,6 +87,7 @@ class BaseXMLRPCTest(BaseTest):
         self.haizea_thread = None
 
     def start(self):
+        Manager.reset_singleton()
         self.haizea = Manager(HaizeaConfig(self.config))
         self.haizea_thread = threading.Thread(target=self.haizea.start)
         self.haizea_thread.start()

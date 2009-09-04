@@ -50,7 +50,8 @@ from haizea.core.scheduler.resourcepool import ResourcePool, ResourcePoolWithReu
 from haizea.core.leases import Lease, Site
 from haizea.core.log import HaizeaLogger
 from haizea.core.rpcserver import RPCServer
-from haizea.common.utils import abstract, round_datetime, Singleton, import_class
+from haizea.common.utils import abstract, round_datetime, Singleton, import_class, OpenNebulaXMLRPCClientSingleton
+from haizea.common.opennebula_xmlrpc import OpenNebulaXMLRPCClient
 from haizea.pluggable.policies import admission_class_mappings, preemption_class_mappings, host_class_mappings 
 from haizea.pluggable.accounting import probe_class_mappings
 
@@ -60,6 +61,7 @@ import signal
 import sys, os
 import traceback
 import shelve
+import socket
 from time import sleep
 from math import ceil
 from mx.DateTime import now, TimeDelta
@@ -68,7 +70,7 @@ DAEMON_STDOUT = DAEMON_STDIN = "/dev/null"
 DAEMON_STDERR = "/var/tmp/haizea.err"
 DEFAULT_LOGFILE = "/var/tmp/haizea.log"
 
-class Manager(Singleton):
+class Manager(object):
     """The root of Haizea
     
     This class is the root of Haizea. Pretty much everything else (scheduler,
@@ -76,6 +78,8 @@ class Manager(Singleton):
     class is meant to be a singleton.
     
     """
+    
+    __metaclass__ = Singleton
     
     def __init__(self, config, daemon=False, pidfile=None):
         """Initializes the manager.
@@ -123,6 +127,23 @@ class Manager(Singleton):
             else:
                 self.rpc_server = RPCServer(self)
                     
+        # Create the RPC singleton client for OpenNebula mode
+        if mode == "opennebula":
+            host = self.config.get("one.host")
+            port = self.config.get("one.port")
+            rv = OpenNebulaXMLRPCClient.get_userpass_from_env()
+            if rv == None:
+                print "ONE_AUTH environment variable is not set"
+                exit(1)
+            else:
+                user, passw = rv[0], rv[1]
+                try:
+                    OpenNebulaXMLRPCClientSingleton(host, port, user, passw)
+                except socket.error, e:
+                    print "Unable to connect to OpenNebula"
+                    print "Reason: %s" % e
+                    exit(1)
+                    
         # Enactment modules
         if mode == "simulated":
             resources = self.config.get("simul.resources")
@@ -135,9 +156,10 @@ class Manager(Singleton):
             else:
                 site = Site.from_resources_string(resources)
     
+            deploy_bandwidth = config.get("imagetransfer-bandwidth")
             info_enact = SimulatedResourcePoolInfo(site)
             vm_enact = SimulatedVMEnactment()
-            deploy_enact = SimulatedDeploymentEnactment()
+            deploy_enact = SimulatedDeploymentEnactment(deploy_bandwidth)
         elif mode == "opennebula":
             # Enactment modules
             info_enact = OpenNebulaResourcePoolInfo()
@@ -195,10 +217,25 @@ class Manager(Singleton):
         mapper = mapper_mappings.get(mapper, mapper)
         mapper = import_class(mapper)
         mapper = mapper(slottable, self.policy)
-        vm_scheduler = VMScheduler(slottable, resourcepool, mapper)
+        
+        # When using backfilling, set the number of leases that can be
+        # scheduled in the future.
+        backfilling = self.config.get("backfilling")
+        if backfilling == constants.BACKFILLING_OFF:
+            max_in_future = 0
+        elif backfilling == constants.BACKFILLING_AGGRESSIVE:
+            max_in_future = 1
+        elif backfilling == constants.BACKFILLING_CONSERVATIVE:
+            max_in_future = -1 # Unlimited
+        elif backfilling == constants.BACKFILLING_INTERMEDIATE:
+            max_in_future = self.config.get("backfilling-reservations")
+        
+        vm_scheduler = VMScheduler(slottable, resourcepool, mapper, max_in_future)
     
         # Statistics collection 
-        self.accounting = AccountingDataCollection(self.config.get("datafile"))
+        attrs = dict([(attr, self.config.get_attr(attr)) for attr in self.config.get_attrs()])    
+        
+        self.accounting = AccountingDataCollection(self.config.get("datafile"), attrs)
         # Load probes
         probes = self.config.get("accounting-probes")
         probes = probes.split()
@@ -210,17 +247,17 @@ class Manager(Singleton):
     
         # Lease Scheduler
         self.scheduler = LeaseScheduler(vm_scheduler, preparation_scheduler, slottable, self.accounting)
-        
+                                
         # Lease request frontends
         if mode == "simulated":
             if clock == constants.CLOCK_SIMULATED:
                 # In pure simulation, we can only use the tracefile frontend
-                self.frontends = [TracefileFrontend(self, self.clock.get_start_time())]
+                self.frontends = [TracefileFrontend(self.clock.get_start_time())]
             elif clock == constants.CLOCK_REAL:
                 # In simulation with a real clock, only the RPC frontend can be used
-                self.frontends = [RPCFrontend(self)]             
+                self.frontends = [RPCFrontend()]             
         elif mode == "opennebula":
-            self.frontends = [OpenNebulaFrontend(self)]               
+            self.frontends = [OpenNebulaFrontend()]               
 
         persistence_file = self.config.get("persistence-file")
         if persistence_file == "none":
@@ -299,6 +336,9 @@ class Manager(Singleton):
     def start(self):
         """Starts the resource manager"""
         self.logger.info("Starting resource manager")
+        
+        for frontend in self.frontends:
+            frontend.load(self)
         
         if self.daemon:
             self.daemonize()

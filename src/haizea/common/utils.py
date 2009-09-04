@@ -118,40 +118,39 @@ def rst2latex(text):
     latex = latex.group(1)
     return latex
     
-class Singleton(object):
+class Singleton(type):
     """ 
-    A singleton base class. 
-    Based on: http://code.activestate.com/recipes/52558/
+    A singleton metaclass. 
+    From: http://en.wikipedia.org/wiki/Singleton_pattern#Python
     """
-    _singleton = None
-    def __new__(cls, *args, **kwargs):
-        if cls._singleton == None:
-            cls._singleton = object.__new__(cls, *args, **kwargs)
-        return cls._singleton
+    def __init__(self, name, bases, dict):
+        super(Singleton, self).__init__(name, bases, dict)
+        self.instance = None
+ 
+    def __call__(self, *args, **kw):
+        if self.instance is None:
+            self.instance = super(Singleton, self).__call__(*args, **kw)
+ 
+        return self.instance
     
-    @classmethod
-    def get_singleton(cls):
-        if '_singleton' not in vars(cls):
-            return None
-        else:
-            return cls._singleton
-
+    def reset_singleton(self):
+        self.instance = None
  
 def get_config():
     from haizea.core.manager import Manager
-    return Manager.get_singleton().config
+    return Manager().config
 
 def get_clock():
     from haizea.core.manager import Manager
-    return Manager.get_singleton().clock
+    return Manager().clock
 
 def get_policy():
     from haizea.core.manager import Manager
-    return Manager.get_singleton().policy
+    return Manager().policy
 
 def get_persistence():
     from haizea.core.manager import Manager
-    return Manager.get_singleton().persistence
+    return Manager().persistence
 
 class InvalidStateMachineTransition(Exception):
     pass
@@ -177,4 +176,13 @@ class StateMachine(object):
             return "%s" % state
         else:
             return self.state_str[state]
+        
+class OpenNebulaXMLRPCClientSingleton(object):
+    
+    __metaclass__ = Singleton
+    
+    def __init__(self, *args, **kwargs):
+        from haizea.common.opennebula_xmlrpc import OpenNebulaXMLRPCClient
+        self.client = OpenNebulaXMLRPCClient(*args, **kwargs)
+        
                                              

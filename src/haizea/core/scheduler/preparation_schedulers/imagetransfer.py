@@ -36,13 +36,6 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         
         self.transfers = []
         self.completed_transfers = []
-
-        config = get_config()
-        self.reusealg = config.get("diskimage-reuse")
-        if self.reusealg == constants.REUSE_IMAGECACHES:
-            self.maxcachesize = config.get("diskimage-cache-size")
-        else:
-            self.maxcachesize = None
         
         self.imagenode_bandwidth = self.deployment_enact.get_bandwidth()
         
@@ -497,12 +490,19 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
     def _add_diskimages(self, pnode_id, diskimage_id, diskimage_size, vnodes, timeout):
         self.logger.debug("Adding image for leases=%s in nod_id=%i" % (vnodes, pnode_id))
 
+        config = get_config()
+        reusealg = config.get("diskimage-reuse")
+        if reusealg == constants.REUSE_IMAGECACHES:
+            maxcachesize = config.get("diskimage-cache-size")
+        else:
+            maxcachesize = None
+            
         pnode = self.resourcepool.get_node(pnode_id)
 
-        if self.reusealg == constants.REUSE_NONE:
+        if reusealg == constants.REUSE_NONE:
             for (lease_id, vnode) in vnodes:
                 self.resourcepool.add_diskimage(pnode_id, diskimage_id, diskimage_size, lease_id, vnode)
-        elif self.reusealg == constants.REUSE_IMAGECACHES:
+        elif reusealg == constants.REUSE_IMAGECACHES:
             # Sometimes we might find that the image is already deployed
             # (although unused). In that case, don't add another copy to
             # the pool. Just "reactivate" it.
@@ -510,18 +510,18 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
                 for (lease_id, vnode) in vnodes:
                     pnode.add_mapping_to_existing_reusable_image(diskimage_id, lease_id, vnode, timeout)
             else:
-                if self.maxcachesize == constants.CACHESIZE_UNLIMITED:
+                if maxcachesize == constants.CACHESIZE_UNLIMITED:
                     can_add_to_cache = True
                 else:
                     # We may have to remove images from the cache
                     cachesize = pnode.get_reusable_images_size()
                     reqsize = cachesize + diskimage_size
-                    if reqsize > self.maxcachesize:
+                    if reqsize > maxcachesize:
                         # Have to shrink cache
-                        desiredsize = self.maxcachesize - diskimage_size
+                        desiredsize = maxcachesize - diskimage_size
                         self.logger.debug("Adding the image would make the size of pool in node %i = %iMB. Will try to bring it down to %i" % (pnode_id, reqsize, desiredsize))
                         pnode.print_files()
-                        success = pnode.purge_downto(self.maxcachesize)
+                        success = pnode.purge_downto(maxcachesize)
                         if not success:
                             can_add_to_cache = False
                         else:

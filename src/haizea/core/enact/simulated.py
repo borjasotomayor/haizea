@@ -20,14 +20,12 @@ from haizea.core.leases import Capacity
 from haizea.core.scheduler.resourcepool import ResourcePoolNode
 from haizea.core.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
 import haizea.common.constants as constants
-from haizea.common.utils import get_config
 import logging
 
 class SimulatedResourcePoolInfo(ResourcePoolInfo):
     def __init__(self, site):
         ResourcePoolInfo.__init__(self)
         self.logger = logging.getLogger("ENACT.SIMUL.INFO")
-        config = get_config()
                 
         if not ("CPU" in site.resource_types and "Memory" in site.resource_types):
             # CPU and Memory must be specified
@@ -99,12 +97,11 @@ class SimulatedVMEnactment(VMEnactment):
         return 0
     
 class SimulatedDeploymentEnactment(DeploymentEnactment):    
-    def __init__(self):
+    def __init__(self, bandwidth):
         DeploymentEnactment.__init__(self)
         self.logger = logging.getLogger("ENACT.SIMUL.INFO")
-        config = get_config()
                 
-        self.bandwidth = config.get("imagetransfer-bandwidth")
+        self.bandwidth = bandwidth
         
         imgcapacity = Capacity([constants.RES_NETOUT])
         imgcapacity.set_quantity(constants.RES_NETOUT, self.bandwidth)

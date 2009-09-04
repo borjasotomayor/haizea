@@ -20,7 +20,7 @@
 
 import os
 import os.path
-from haizea.common.utils import pickle, get_config, get_clock
+from haizea.common.utils import pickle, get_clock
 from errno import EEXIST
 
 class AccountingData(object):
@@ -79,19 +79,19 @@ class AccountingDataCollection(object):
     AVERAGE_TIMEWEIGHTED=2
 
 
-    def __init__(self, datafile):
+    def __init__(self, datafile, attrs):
         """Constructor
         
         @param datafile: Path to file where accounting data will be saved
         @type datafile: C{str}
+        @param attrs: Run attributes
+        @type attrs: C{dict}
         """
         self.__data = AccountingData()
         self.__datafile = datafile
         self.__probes = []
-        
-        attrs = get_config().get_attrs()
-        for attr in attrs:
-            self.__data.attrs[attr] = get_config().get_attr(attr)
+
+        self.__data.attrs = attrs
 
 
     def add_probe(self, probe):
@@ -182,13 +182,16 @@ class AccountingDataCollection(object):
         time = get_clock().get_time()
         if len(self.__data.counters[counter_id]) > 0:
             prevtime = self.__data.counters[counter_id][-1][0]
-        else:
-            prevtime = None
-
-        if time == prevtime:
-            self.__data.counters[counter_id][-1][2] = value
+            prevlease = self.__data.counters[counter_id][-1][1]
+            prevval = self.__data.counters[counter_id][-1][2]
+            if time == prevtime:
+                self.__data.counters[counter_id][-1][2] = value
+            else:
+                if prevlease != lease_id or prevval != value:
+                    self.__data.counters[counter_id].append([time, lease_id, value])
         else:
             self.__data.counters[counter_id].append([time, lease_id, value])
+
 
 
     def get_last_counter_time(self, counter_id):

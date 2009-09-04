@@ -19,8 +19,10 @@
 from haizea.common.utils import abstract
 
 class RequestFrontend(object):
-    def __init__(self, manager):
-        self.manager = manager
+    def __init__(self):
+        pass
+    
+    def load(self, manager): abstract()
     
     def get_accumulated_requests(self): abstract()
     
