@@ -19,6 +19,7 @@
 """Accounting probes that collect data on resource utilization"""
 
 from haizea.core.accounting import AccountingProbe, AccountingDataCollection
+from haizea.common.utils import get_clock
 
 class CPUUtilizationProbe(AccountingProbe):
     """
@@ -35,11 +36,13 @@ class CPUUtilizationProbe(AccountingProbe):
     def __init__(self, accounting):
         """See AccountingProbe.__init__"""        
         AccountingProbe.__init__(self, accounting)
-        self.accounting.create_counter(CPUUtilizationProbe.COUNTER_UTILIZATION, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(CPUUtilizationProbe.COUNTER_UTILIZATION, AccountingDataCollection.AVERAGE_TIMEWEIGHTED)
         
     def at_timestep(self, lease_scheduler):
         """See AccountingProbe.at_timestep"""
-        self.accounting.append_to_counter(CPUUtilizationProbe.COUNTER_UTILIZATION, 0)
+        util = lease_scheduler.vm_scheduler.get_utilization(get_clock().get_time())
+        utilization = sum([v for k,v in util.items() if k != None])
+        self.accounting.append_to_counter(CPUUtilizationProbe.COUNTER_UTILIZATION, utilization)
 
 
 class DiskUsageProbe(AccountingProbe):
@@ -60,4 +63,5 @@ class DiskUsageProbe(AccountingProbe):
         
     def at_timestep(self, lease_scheduler):
         """See AccountingProbe.at_timestep"""
-        pass
+        usage = lease_scheduler.vm_scheduler.resourcepool.get_max_disk_usage()
+        self.accounting.append_to_counter(DiskUsageProbe.COUNTER_DISKUSAGE, usage)
