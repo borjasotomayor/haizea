@@ -107,7 +107,7 @@ def import_class(fq_name):
     fq_name = fq_name.split(".")
     package_name = ".".join(fq_name[:-1])
     class_name = fq_name[-1]
-    module = __import__(package_name, fromlist=[class_name])
+    module = __import__(package_name, globals(), locals(), [class_name])
     exec("cls = module.%s" % class_name)
     return cls
     

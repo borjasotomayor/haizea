@@ -24,7 +24,12 @@ from haizea.cli import Command
 import xmlrpclib
 import sys
 from mx.DateTime import ISO, now, DateTimeDelta, Parser
-import xml.etree.ElementTree as ET
+
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    # Compatibility with Python <=2.4
+    import elementtree.ElementTree as ET 
 
 class RPCCommand(Command):
     def __init__(self, argv):

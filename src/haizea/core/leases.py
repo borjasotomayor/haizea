@@ -40,7 +40,12 @@ from haizea.core.scheduler.slottable import ResourceReservation
 from mx.DateTime import DateTime, TimeDelta, Parser
 
 import logging
-import xml.etree.ElementTree as ET
+
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    # Compatibility with Python <=2.4
+    import elementtree.ElementTree as ET 
 
 
 

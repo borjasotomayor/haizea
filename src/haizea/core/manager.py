@@ -277,7 +277,10 @@ class Manager(object):
             handler = logging.FileHandler(self.config.get("logfile"))
         else:
             handler = logging.StreamHandler()
-        formatter = logging.Formatter('[%(haizeatime)s] %(name)-7s %(message)s')
+        if sys.version_info[1] <= 4:
+            formatter = logging.Formatter('%(name)-7s %(message)s')
+        else:
+            formatter = logging.Formatter('[%(haizeatime)s] %(name)-7s %(message)s')
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         level = logging.getLevelName(self.config.get("loglevel"))

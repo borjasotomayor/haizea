@@ -1,7 +1,12 @@
 import xmlrpclib
 import os
 import hashlib
-import xml.etree.ElementTree as ET
+
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    # Compatibility with Python <=2.4
+    import elementtree.ElementTree as ET 
 
 class OpenNebulaXMLRPCClient(object):
     def __init__(self, host, port, user, password):

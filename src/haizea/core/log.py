@@ -17,6 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 import logging
+import sys
 from haizea.common.utils import get_clock
 from haizea.common.constants import LOGLEVEL_VDEBUG, LOGLEVEL_STATUS
 
@@ -26,11 +27,10 @@ logging.addLevelName(LOGLEVEL_STATUS, "STATUS")
 # Custom logger that uses our log record
 class HaizeaLogger(logging.Logger):
     
-    def makeRecord(self, name, lvl, fn, lno, msg, args, exc_info, func, extra):
+    def makeRecord(self, name, lvl, fn, lno, msg, args, exc_info, func=None, extra=None):
         # Modify "extra" parameter keyword
         try:
             haizeatime = get_clock().get_time()
-            extra = { "haizeatime" : haizeatime}
         except:
             # This is a kludge. Basically, calling get_clock will
             # fail if Manager is not yet fully constructed (since it's
@@ -38,8 +38,13 @@ class HaizeaLogger(logging.Logger):
             # separate the initialization code in the Manager from the
             # initialization that actually involves interacting with
             # other components (which may want to use the logger)
-            extra = { "haizeatime" : "                      "}
-        return logging.Logger.makeRecord(self, name, lvl, fn, lno, msg, args, exc_info, func, extra)
+            haizeatime = "                      "
+        extra = { "haizeatime" : haizeatime}
+        if sys.version_info[1] <= 4:
+            name = "[%s] %s" % (haizeatime, name)
+            return logging.Logger.makeRecord(self, name, lvl, fn, lno, msg, args, exc_info)
+        else:
+            return logging.Logger.makeRecord(self, name, lvl, fn, lno, msg, args, exc_info, func, extra)
     
     def status(self, msg):
         self.log(logging.getLevelName("STATUS"), msg)

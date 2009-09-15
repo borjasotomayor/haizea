@@ -24,13 +24,18 @@ from haizea.common.config import ConfigException
 from haizea.cli.optionparser import Option
 from haizea.cli import Command
 from mx.DateTime import TimeDelta
-import xml.etree.ElementTree as ET
 import haizea.common.defaults as defaults
 import sys
 import os
 import errno
 import signal
 from time import sleep
+
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    # Compatibility with Python <=2.4
+    import elementtree.ElementTree as ET 
 
 
 class haizea(Command):
