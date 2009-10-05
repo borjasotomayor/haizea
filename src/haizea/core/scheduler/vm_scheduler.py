@@ -719,7 +719,7 @@ class VMScheduler(object):
                 
             for (vnode,pnode) in vmrr.nodes.items():
                 if override == None:
-                    mem = vmrr.lease.requested_resources.get_by_type(constants.RES_MEM)
+                    mem = vmrr.lease.requested_resources[vnode].get_quantity(constants.RES_MEM)
                     op_time = self.__compute_suspend_resume_time(mem, rate)
                 else:
                     op_time = override
