@@ -330,8 +330,10 @@ class VMScheduler(object):
                     use = r.vmrr.resources_in_pnode[node].get_by_type(constants.RES_CPU)
                     util[type(r)] = use + util.setdefault(type(r),0.0)
         util[None] = total - sum(util.values())
-        for k in util:
-            util[k] /= total
+        
+        if total != 0:
+            for k in util:
+                util[k] /= total
             
         return util              
         

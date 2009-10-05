@@ -41,46 +41,20 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
         self.rpc = OpenNebulaXMLRPCClientSingleton().client
 
         # Get information about nodes from OpenNebula
+        self.max_nod_id = 0
         self.nodes = {}
-        hosts = self.rpc.hostpool_info()
-        for (i, host) in enumerate(hosts):
-            if not host.state in (OpenNebulaHost.STATE_ERROR, OpenNebulaHost.STATE_DISABLED):
-                nod_id = i+1
-                enact_id = host.id
-                hostname = host.name
-                capacity = Capacity([constants.RES_CPU, constants.RES_MEM, constants.RES_DISK])
-                
-                # CPU
-                # OpenNebula reports each CPU as "100"
-                # (so, a 4-core machine is reported as "400")
-                # We need to convert this to a multi-instance
-                # resource type in Haizea
-                cpu = host.max_cpu
-                ncpu = cpu / 100
-                capacity.set_ninstances(constants.RES_CPU, ncpu)
-                for i in range(ncpu):
-                    capacity.set_quantity_instance(constants.RES_CPU, i+1, 100)            
-                
-                # Memory. Must divide by 1024 to obtain quantity in MB
-                capacity.set_quantity(constants.RES_MEM, host.max_mem / 1024.0)
-                
-                # Disk
-                # OpenNebula doesn't report this correctly yet.
-                # We set it to an arbitrarily high value.
-                capacity.set_quantity(constants.RES_DISK, 80000)
-    
-                node = ResourcePoolNode(nod_id, hostname, capacity)
-                node.enactment_info = enact_id
-                self.nodes[nod_id] = node
-            
+
         self.resource_types = []
         self.resource_types.append((constants.RES_CPU,1))
         self.resource_types.append((constants.RES_MEM,1))
         self.resource_types.append((constants.RES_DISK,1))
-            
-        self.logger.info("Fetched %i nodes from OpenNebula" % len(self.nodes))
-        for n in self.nodes.values():
-            self.logger.debug("%i %s %s" % (n.id, n.hostname, n.capacity))
+                    
+        self.logger.info("Fetching nodes from OpenNebula")            
+        self.__fetch_nodes()
+        self.logger.info("Fetched %i nodes from OpenNebula" % len(self.nodes))            
+        
+    def refresh(self):
+        return self.__fetch_nodes()
         
     def get_nodes(self):
         return self.nodes
@@ -90,6 +64,59 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
 
     def get_bandwidth(self):
         return 0
+    
+    def __fetch_nodes(self):
+        new_nodes = []
+        hosts = self.rpc.hostpool_info()
+        hostnames = set([n.hostname for n in self.nodes.values()])
+        for host in hosts:
+            # CPU
+            # OpenNebula reports each CPU as "100"
+            # (so, a 4-core machine is reported as "400")
+            # We need to convert this to a multi-instance
+            # resource type in Haizea            
+            cpu = host.max_cpu
+            ncpu = cpu / 100
+            enact_id = host.id                
+            hostname = host.name
+            
+            # We want to skip nodes we're already aware of ...
+            if hostname in hostnames:
+                continue
+
+            # ... and those in an error or disabled state ...
+            if host.state in (OpenNebulaHost.STATE_ERROR, OpenNebulaHost.STATE_DISABLED):
+                continue
+            
+            # ... and those were monitoring information is not yet available.
+            if cpu == 0:
+                self.logger.debug("Skipping node '%s' (monitoring information not yet available)" % hostname)
+                continue
+            
+            self.max_nod_id += 1
+            
+            nod_id = self.max_nod_id
+            capacity = Capacity([constants.RES_CPU, constants.RES_MEM, constants.RES_DISK])
+            
+            capacity.set_ninstances(constants.RES_CPU, ncpu)
+            for i in range(ncpu):
+                capacity.set_quantity_instance(constants.RES_CPU, i+1, 100)            
+            
+            # Memory. Must divide by 1024 to obtain quantity in MB
+            capacity.set_quantity(constants.RES_MEM, host.max_mem / 1024.0)
+            
+            # Disk
+            # OpenNebula doesn't report this correctly yet.
+            # We set it to an arbitrarily high value.
+            capacity.set_quantity(constants.RES_DISK, 80000)
+
+            node = ResourcePoolNode(nod_id, hostname, capacity)
+            node.enactment_info = enact_id
+            self.nodes[nod_id] = node
+            new_nodes.append(node)
+            self.logger.debug("Fetched node %i %s %s" % (node.id, node.hostname, node.capacity))
+        return new_nodes
+        
 
 class OpenNebulaVMEnactment(VMEnactment):
     def __init__(self):

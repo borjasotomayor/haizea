@@ -53,6 +53,9 @@ class SimulatedResourcePoolInfo(ResourcePoolInfo):
         
     def get_nodes(self):
         return self.nodes
+
+    def refresh(self): 
+        return []  
     
     def get_resource_types(self):
         return self.resource_types

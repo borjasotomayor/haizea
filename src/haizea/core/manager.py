@@ -742,6 +742,12 @@ class SimulatedClock(Clock):
         
         # Main loop
         while not self.done:
+            # Check if there are any changes in the resource pool
+            new_nodes = self.manager.scheduler.vm_scheduler.resourcepool.refresh_nodes()      
+            for n in new_nodes:
+                rt = slottable.create_resource_tuple_from_capacity(n.capacity)
+                slottable.add_node(n.id, rt)   
+            
             # Check to see if there are any leases which are ending prematurely.
             # Note that this is unique to simulation.
             prematureends = self.manager.scheduler.slottable.get_prematurely_ending_res(self.time)
@@ -923,7 +929,7 @@ class RealClock(Clock):
         # Main loop
         while not self.done:
             self.logger.status("Waking up to manage resources")
-            
+                        
             # Save the waking time. We want to use a consistent time in the 
             # resource manager operations (if we use now(), we'll get a different
             # time every time)
@@ -933,6 +939,12 @@ class RealClock(Clock):
                 
             # Next schedulable time
             self.nextschedulable = round_datetime(self.lastwakeup + self.non_sched)
+            
+            # Check if there are any changes in the resource pool
+            new_nodes = self.manager.scheduler.vm_scheduler.resourcepool.refresh_nodes()      
+            for n in new_nodes:
+                rt = self.manager.scheduler.slottable.create_resource_tuple_from_capacity(n.capacity)
+                self.manager.scheduler.slottable.add_node(n.id, rt)                  
             
             # Wake up the resource manager
             self.manager.process_ending_reservations(self.lastwakeup)

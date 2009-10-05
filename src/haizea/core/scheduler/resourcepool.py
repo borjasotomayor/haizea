@@ -102,6 +102,12 @@ class ResourcePool(object):
         verify_resume_action.from_rr(rr)
         self.vm.verify_resume(verify_resume_action)    
     
+    def refresh_nodes(self):
+        new_nodes = self.info.refresh()
+        for node in new_nodes:
+            self.nodes[node.id] = node
+        return new_nodes        
+    
     def get_nodes(self):
         return self.nodes.values()
     

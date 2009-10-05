@@ -26,6 +26,9 @@ class ResourcePoolInfo(object):
         """ Returns the nodes in the resource pool. """
         abstract()
         
+    def refresh(self): 
+        abstract()
+                
     def get_resource_types(self):
         abstract()
         
