@@ -1,3 +1,0 @@
-# First batch job ends early, clearing path for next batch job
-0;0;NONE;600;1;1024;100;RW;NULL;1800;900;BATCH
-0;1800;NONE;600;1;1024;100;RW;NULL;3600;3600;BATCH

@@ -1,7 +1,0 @@
-#!/usr/bin/python
-
-from haizea.cli import commands
-import sys
-	
-c = commands.haizea_convert_data(sys.argv)
-c.run()

@@ -1,7 +1,0 @@
-#!/usr/bin/python
-
-from haizea.cli import commands
-import sys
-
-c = commands.haizea_generate_scripts(sys.argv)
-c.run()

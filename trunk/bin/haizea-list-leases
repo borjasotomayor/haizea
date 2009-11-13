@@ -1,7 +1,0 @@
-#!/usr/bin/python
-
-from haizea.cli import rpc_commands
-import sys
-
-c = rpc_commands.haizea_list_leases(sys.argv)
-c.run()

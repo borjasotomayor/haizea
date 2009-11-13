@@ -1,7 +1,0 @@
-#!/usr/bin/python
-
-from haizea.cli import commands
-import sys
-
-c = commands.haizea_generate_configs(sys.argv)
-c.run()

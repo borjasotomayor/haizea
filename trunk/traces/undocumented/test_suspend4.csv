@@ -1,4 +1,0 @@
-# Preempting a lease that hasn't started yet.
-0;0;nfs:///var/workspace/images/600M_0.img;600;1;1024;100;RW;NULL;3600;3600;BATCH
-0;0;nfs:///var/workspace/images/600M_0.img;600;4;1024;100;RW;NULL;1800;1800;BATCH
-900;0;nfs:///var/workspace/images/600M_0.img;600;1;1024;100;RW;2700;900;900;AR

@@ -1,7 +1,0 @@
-#!/bin/bash
-
-% for configname, configfile in configs:
-echo Running ${configname}
-haizea -c ${configfile}
-
-% endfor

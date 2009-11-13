@@ -1,4 +1,0 @@
-# First request is an exact lease. This will prevent the next request
-# from running to completion. Best-effort should be suspended.
-0;0;nfs:///var/workspace/images/600M_0.img;640;4;640;50;RW;3600;900;900;AR
-900;0;nfs:///var/workspace/images/600M_0.img;640;1;640;100;RW;NULL;7200;6300;BATCH
