@@ -1,0 +1,200 @@
+Haizea uses XML to encode certain information, most notably in the LWF (Lease Workload File) files. This chapter describes three XML elements that are used in various Haizea components, and also describes the LWF format.
+
+\section{Nodes element}
+
+A \texttt{<nodes>} element is used to describe a collection of machines (``nodes''), such as those required by a lease or those in a simulated site. Instead of describing each node individually, the \texttt{<nodes>} stores information on each distinct node capacity along with the number of nodes with that capacity. For example, if a lease required 5 nodes with 1024MB of memory and 10 nodes with 2048GB of memory, the \texttt{<nodes>} will have two ``sets of nodes'', instead of 15 individual entries.
+
+The root \texttt{<nodes>} element has no attributes:
+
+\begin{wideshellverbatim} 
+<nodes>
+  ...
+</nodes>
+\end{wideshellverbatim}
+
+And must contain one or more \texttt{node-set} element:
+
+\begin{wideshellverbatim} 
+<node-set numnodes="...">
+  ...
+</node-set>
+\end{wideshellverbatim}
+
+Each \texttt{<node-set>} element represents a ``set of nodes''. The \texttt{numnodes} attribute is used to denote the number of nodes with the same capacity. This capacity is described with one or more \texttt{<res>} elements:
+
+\begin{wideshellverbatim} 
+<res type="..." amount="..."/>
+\end{wideshellverbatim}
+
+The \texttt{type} attribute specifies the type of resource (\texttt{CPU}, \texttt{Memory}, etc.), and \texttt{amount} specifies the amount of that resource in each node (the amount must be a positive integer). There resource type must be a string and, although the \texttt{<res>} element places no restrictions on this string (i.e., you can use any arbitrary resource you want), the \texttt{<lease>} and \texttt{<site>} elements (described below) do place some restrictions on it.
+
+\subsection{Example}
+
+The following specifies a collection of 12 nodes, all with one CPU, four with 1024MB of memory and eight with 2048MB of memory.
+
+\begin{wideshellverbatim} 
+<nodes>
+  <node-set numnodes="4">
+    <res type="CPU" amount="100"/>
+    <res type="Memory" amount="1024"/>
+  </node-set>
+  <node-set numnodes="8">
+    <res type="CPU" amount="100"/>
+    <res type="Memory" amount="2048"/>
+  </node-set>
+</nodes>
+\end{wideshellverbatim}
+
+
+\section{Lease element}
+
+The \texttt{<lease>} element is used by Haizea's XML-RPC API to send lease requests to Haizea, and to return lease information to the client. It is also used in the LWF format to describe lease requests.
+
+The \texttt{<lease>} element has two attributes: \texttt{id}, a unique integer identifier (assigned by Haizea), and \texttt{preemptible}, indicating whether the lease can be safely preempted (\texttt{yes} or \texttt{no})
+
+\begin{wideshellverbatim} 
+<lease id="..." preemptible="...">
+  ...
+</lease>
+\end{wideshellverbatim}
+
+The \texttt{<lease>} element has four child elements:
+
+\begin{itemize}
+ \item \texttt{<nodes>} (as described above): Specifies the nodes requested by the lease, and the capacity required in these nodes.
+ \item \texttt{<duration>}: The requested duration of the lease. This element has a single attribute \texttt{time} which is used to specify a duration with format \texttt{DD:HH:MM.SS} (DD: days; HH: hours; MM: minutes; SS: seconds)
+ \item \texttt{<start>}: The requested started time of the lease. If the element is empty, this means the requested starting time is unspecified, and it is up to Haizea to determine the starting time on a best-effort basis:
+\begin{wideshellverbatim} 
+<start/>
+\end{wideshellverbatim}
+
+If an exact starting time is specified, then this element has an \texttt{<exact>} child element with a \texttt{time} attribute specifying the starting time using an ISO timestamp (\texttt{YYYY-MM-DD HH:MM:SS}) or a relative starting time (\texttt{+DD:HH:MM:SS}), which is interpreted as being relative to the time the lease is submitted to Haizea.
+
+\begin{wideshellverbatim} 
+<start>
+  <exact time="..."/>
+</exact>
+\end{wideshellverbatim}
+
+If the lease is requested to start immediately, then this element has an empty \texttt{<now>} child element:
+
+\begin{wideshellverbatim} 
+<start>
+  <now/>
+</exact>
+\end{wideshellverbatim}
+
+ \item \texttt{<software>}: The software environment required by the lease. Currently, Haizea only supports specifying a lease's software environment as being contained inside a disk image:
+
+\begin{wideshellverbatim} 
+<software>
+  <disk-image id="..." size="..."/>
+</software>
+\end{wideshellverbatim}
+
+The \texttt{disk-image} child element specifies information about the disk image: \texttt{id}, a unique identifier, and \texttt{size}, its size in megabytes.
+
+Additionally, the software environment can be left unspecified, which means that Haizea can assume that setting up the software environment will be handled by another entity:
+
+\begin{wideshellverbatim} 
+<software>
+  <none/>
+</software>
+\end{wideshellverbatim}
+
+\end{itemize}
+
+
+\subsection{Example}
+
+The following specifies a best-effort lease, requesting one node with one CPU and 1024 MB of memory, for one hour, and a software environment contained in diskimage \texttt{foobar1.img} (a 1GB image).
+
+\begin{wideshellverbatim} 
+<lease id="1" preemptible="true">
+  <nodes>
+    <node-set numnodes="1">
+      <res amount="100" type="CPU"/>
+      <res amount="1024" type="Memory"/>
+    </node-set>
+  </nodes>
+  <start/>
+  <duration time="01:00:00"/>
+  <software>
+    <disk-image id="foobar1.img" size="1024"/>
+  </software>
+</lease>
+\end{wideshellverbatim}
+
+\section{Site element}
+
+The \texttt{<site>} element is used in LWF files to describe the site the lease workload is meant to be run on. In future versions of Haizea, it will also be used to specify simulated sites from the configuration file.
+
+The \texttt{<site>} has two child elements: \texttt{<resource-types>}, used to specify the valid resource types in the site (separated by spaces), and a \texttt{<nodes>} element specifying the nodes in the site:
+
+\begin{wideshellverbatim} 
+<site>
+  <resource-types names="..."/>
+  <nodes>
+    ...
+  </nodes>
+</site>
+\end{wideshellverbatim} 
+
+The nodes can only have resources specified in \texttt{<resource-types>}. For example, if \texttt{"CPU Memory"} is specified, then the \texttt{type} attribute of the \texttt{<res>} elements in \texttt{<nodes>} can only be \texttt{CPU} or \texttt{Memory}. Note that Haizea doesn't ``understand'' what these types are, and treats them all as consumable capacities, so you can specify any resource types you want. However, Haizea does require that, at the very least, all sites specify at least a \texttt{CPU} and a \texttt{Memory} resource.
+
+\subsection{Example}
+The following specifies a site supporting three types of resources: \texttt{CPU}, \texttt{Memory}, and \texttt{Ponies}. Again, Haizea does not interpret the resource type names (other than \texttt{CPU} and \texttt{Memory}), so it is up to you to interpret what the \texttt{Ponies} resource type means, and what it means for a lease to request ponies. 
+
+The site has eight nodes, all with one CPU and 1024MB of memory. Four of them have four ponies, and the other four have none (if no amount is specified for a resource type, it defaults to zero).
+
+\begin{wideshellverbatim} 
+<site>
+  <resource-types names="CPU Memory Ponies"/>
+  <nodes>
+    <node-set numnodes="4">
+      <res type="CPU" amount="100"/>
+      <res type="Memory" amount="1024"/>
+      <res type="Ponies" amount="4"/>
+    </node-set>
+    <node-set numnodes="4">
+      <res type="CPU" amount="100"/>
+      <res type="Memory" amount="1024"/>
+    </node-set>
+  </nodes>
+</site>
+\end{wideshellverbatim} 
+
+\section{LWF file format}
+
+The LWF (Lease Workload Format) describes a workload of leases that can be used by Haizea when running in simulation mode. In this workload, the starting time is \texttt{00:00:00:00}, and all times are specified relative to that starting time. For example, an AR lease requested to start at \texttt{00:01:00:00} starts one hour after the start of the workload. Each lease also has an \texttt{arrival time}, the time at which the lease is submitted to Haizea.
+
+The root element of an LWF file is the \texttt{<lease-workload>} element:
+
+\begin{wideshellverbatim} 
+<lease-workload name="...">
+  <description>
+	...
+  </description>
+  
+  <site>
+    ...
+  </site>
+  
+  <lease-requests>
+    ...
+  </lease-requests>
+</lease-workload>
+\end{wideshellverbatim} 
+
+This element has a single attribute \texttt{name}, with the name of this workload. The \texttt{<description>} child element can be used to provide a longer description of the workload. The \texttt{<site>} element is used to specify the site the workload is meant to be run on, and the \texttt{<lease-request>} element contains the actual lease requests. Each \texttt{<lease>} element is wrapped inside a \texttt{<lease-request>} element:
+
+\begin{wideshellverbatim} 
+<lease-request arrival="...">
+  <realduration time="..."/>
+  <lease ...>
+      ...
+  </lease>
+</lease-request>
+\end{wideshellverbatim} 
+
+This element has an attribute \texttt{arrival} indicating when the lease is submitted to Haizea. It can also have an \emph{optional} \texttt{<realduration>} child element specifying the real duration of the lease. In many systems, users request resources for a period of time, but relinquish the resources earlier. When simulating workloads, it is important to take this information into account, since the simulator must stop the lease at the end of that ``real duration'', not at the end of the full requested duration. Note that, if a \texttt{<realduration>}, Haizea will still schedule the lease assuming it is going to use its full requested duration (since, like a non-simulated scheduler, it can't assume to have a priori knowledge of when the lease will really end), but the simulator will generate an event indicating the lease has ended prematurely when its ``real duration'' has elapsed.
