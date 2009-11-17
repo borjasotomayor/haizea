@@ -147,51 +147,46 @@ class LeaseScheduler(object):
         
         # Get pending leases
         pending_leases = self.leases.get_leases_by_state(Lease.STATE_PENDING)  
-        ar_leases = [req for req in pending_leases if req.get_type() == Lease.ADVANCE_RESERVATION]
-        im_leases = [req for req in pending_leases if req.get_type() == Lease.IMMEDIATE]
-        be_leases = [req for req in pending_leases if req.get_type() == Lease.BEST_EFFORT]
         
-        # Queue best-effort leases
-        for lease in be_leases:
+        # Process leases that have to be queued. Right now, only best-effort leases get queued.
+        queue_leases = [req for req in pending_leases if req.get_type() == Lease.BEST_EFFORT]
+
+        # Queue leases
+        for lease in queue_leases:
             self.__enqueue(lease)
             lease.set_state(Lease.STATE_QUEUED)
-            self.logger.info("Queued best-effort lease request #%i, %i nodes for %s." % (lease.id, lease.numnodes, lease.duration.requested))
+            self.logger.info("Queued lease request #%i, %i nodes for %s." % (lease.id, lease.numnodes, lease.duration.requested))
             get_persistence().persist_lease(lease)
 
-        # Schedule immediate leases
-        for lease in im_leases:
-            self.logger.info("Scheduling immediate lease #%i (%i nodes)" % (lease.id, lease.numnodes))
+
+        # Process leases that have to be scheduled right away. Right now, this is any
+        # lease that is not a best-effort lease (ARs, immediate, and deadlined leases)
+        now_leases = [req for req in pending_leases if req.get_type() != Lease.BEST_EFFORT]
+        
+        # Schedule leases
+        for lease in now_leases:
+            lease_type = Lease.type_str[lease.get_type()]
+            self.logger.info("Scheduling lease #%i (%i nodes) -- %s" % (lease.id, lease.numnodes, lease_type))
+            if lease.get_type() == Lease.ADVANCE_RESERVATION:
+                self.logger.info("From %s to %s" % (lease.start.requested, lease.start.requested + lease.duration.requested))
+            elif lease.get_type() == Lease.DEADLINE:
+                self.logger.info("Starting at %s. Deadline: %s" % (lease.start.requested, lease.deadline))
+                
             lease.print_contents()
        
             try:
                 self.__schedule_lease(lease, nexttime=nexttime)
-                self.logger.info("Immediate lease #%i has been scheduled." % lease.id)
+                self.logger.info("Lease #%i has been scheduled." % lease.id)
                 lease.print_contents()
             except NotSchedulableException, exc:
-                self.logger.info("Immediate lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
+                self.logger.info("Lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
                 lease.set_state(Lease.STATE_REJECTED)
                 self.completed_leases.add(lease)
                 self.accounting.at_lease_done(lease)
                 self.leases.remove(lease)            
             get_persistence().persist_lease(lease)
 
-        # Schedule AR requests
-        for lease in ar_leases:
-            self.logger.info("Scheduling AR lease #%i, %i nodes from %s to %s." % (lease.id, lease.numnodes, lease.start.requested, lease.start.requested + lease.duration.requested))
-            lease.print_contents()
-            
-            try:
-                self.__schedule_lease(lease, nexttime)
-                self.logger.info("AR lease #%i has been scheduled." % lease.id)
-                lease.print_contents()
-            except NotSchedulableException, exc:
-                self.logger.info("AR lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
-                lease.set_state(Lease.STATE_REJECTED)
-                self.completed_leases.add(lease)
-                self.accounting.at_lease_done(lease)
-                self.leases.remove(lease)            
-            get_persistence().persist_lease(lease)
-            
+                        
         # Process queue (i.e., traverse queue in search of leases that can be scheduled)
         self.__process_queue(nexttime)
         get_persistence().persist_queue(self.queue)

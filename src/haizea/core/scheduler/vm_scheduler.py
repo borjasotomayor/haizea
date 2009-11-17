@@ -110,6 +110,8 @@ class VMScheduler(object):
             return self.__schedule_exact(lease, nexttime, earliest)
         elif lease.get_type() == Lease.IMMEDIATE:
             return self.__schedule_asap(lease, nexttime, earliest, allow_in_future = False)
+        elif lease.get_type() == Lease.DEADLINE:
+            return self.__schedule_exact(lease, nexttime, earliest)
 
 
     def estimate_migration_time(self, lease):

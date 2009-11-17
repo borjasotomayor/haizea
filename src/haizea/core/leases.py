@@ -110,12 +110,14 @@ class Lease(object):
     BEST_EFFORT = 1
     ADVANCE_RESERVATION = 2
     IMMEDIATE = 3
+    DEADLINE = 4
     UNKNOWN = -1
     
     # String representation of lease types    
     type_str = {BEST_EFFORT: "Best-effort",
                 ADVANCE_RESERVATION: "AR",
                 IMMEDIATE: "Immediate",
+                DEADLINE: "Deadline",
                 UNKNOWN: "Unknown"}
     
     def __init__(self, lease_id, submit_time, requested_resources, start, duration, 
@@ -273,7 +275,10 @@ class Lease(object):
         
         duration = Duration(Parser.DateTimeDeltaFromString(element.find("duration").get("time")))
 
-        deadline = None
+        deadline = element.find("deadline")
+        
+        if deadline != None:
+            deadline = Parser.DateTimeFromString(deadline.get("time"))
         
         preemptible = element.get("preemptible").capitalize()
         if preemptible == "True":
@@ -367,7 +372,10 @@ class Lease(object):
         elif self.start.requested == Timestamp.NOW:
             return Lease.IMMEDIATE            
         else:
-            return Lease.ADVANCE_RESERVATION
+            if self.deadline == None:
+                return Lease.ADVANCE_RESERVATION
+            else:
+                return Lease.DEADLINE
         
     def get_state(self):
         """Returns the lease's state.
@@ -399,6 +407,7 @@ class Lease(object):
         logger.log(loglevel, "Submission time: %s" % self.submit_time)
         logger.log(loglevel, "Start          : %s" % self.start)
         logger.log(loglevel, "Duration       : %s" % self.duration)
+        logger.log(loglevel, "Deadline       : %s" % self.deadline)
         logger.log(loglevel, "State          : %s" % Lease.state_str[self.get_state()])
         logger.log(loglevel, "Resource req   : %s" % self.requested_resources)
         logger.log(loglevel, "Software       : %s" % self.software)
@@ -1006,47 +1015,6 @@ class LeaseWorkload(object):
         """        
         return cls.__from_xml_element(ET.parse(xml_file).getroot(), inittime)
 
-    # TODO: need to adapt the old SWF trace reading code to new Lease
-    # data structures
-#    @classmethod
-#    def from_swf_file(cls, swf_file, inittime = DateTime(0)):
-#        file = open (tracefile, "r")
-#        requests = []
-#        inittime = config.get("starttime")
-#        for line in file:
-#            if line[0]!=';':
-#                req = None
-#                fields = line.split()
-#                reqtime = float(fields[8])
-#                runtime = int(fields[3]) # 3: RunTime
-#                waittime = int(fields[2])
-#                status = int(fields[10])
-#                
-#                if reqtime > 0:
-#                    tSubmit = int(fields[1]) # 1: Submission time
-#                    tSubmit = inittime + TimeDelta(seconds=tSubmit) 
-#                    vmimage = "NOIMAGE"
-#                    vmimagesize = 600 # Arbitrary
-#                    numnodes = int(fields[7]) # 7: reqNProcs
-#                    resreq = ResourceTuple.create_empty()
-#                    resreq.set_by_type(constants.RES_CPU, 1) # One CPU per VM, should be configurable
-#                    resreq.set_by_type(constants.RES_MEM, 1024) # Should be configurable
-#                    resreq.set_by_type(constants.RES_DISK, vmimagesize + 0) # Should be configurable
-#                    maxdur = TimeDelta(seconds=reqtime)
-#                    if runtime < 0 and status==5:
-#                        # This is a job that got cancelled while waiting in the queue
-#                        continue
-#                    else:
-#                        if runtime == 0:
-#                            runtime = 1 # Runtime of 0 is <0.5 rounded down.
-#                        realdur = TimeDelta(seconds=runtime) # 3: RunTime
-#                    if realdur > maxdur:
-#                        realdur = maxdur
-#                    preemptible = True
-#                    req = BestEffortLease(tSubmit, maxdur, vmimage, vmimagesize, numnodes, resreq, preemptible, realdur)
-#                    requests.append(req)
-#        return requests
-
     @classmethod
     def __from_xml_element(cls, element, inittime):
         """Constructs a lease from an ElementTree element.
@@ -1073,6 +1041,12 @@ class LeaseWorkload(object):
             if exact != None:
                 start = inittime + Parser.DateTimeDeltaFromString(exact.get("time"))
                 exact.set("time", str(start))
+
+            # If a deadline is specified, add the init time
+            deadline = lease.find("deadline")
+            if deadline != None:
+                t = inittime + Parser.DateTimeDeltaFromString(deadline.get("time"))
+                deadline.set("time", str(t))
                 
             lease = Lease.create_new_from_xml_element(lease)
             

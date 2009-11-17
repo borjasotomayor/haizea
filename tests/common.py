@@ -9,6 +9,7 @@ from haizea.core.manager import Manager
 class BaseTest(object):
     def __init__(self, config):
         self.config = config
+        self.haizea = None
 
     @staticmethod
     def load_configfile(configfile):
@@ -16,68 +17,45 @@ class BaseTest(object):
         c = ConfigParser.ConfigParser()
         c.readfp(f)
         return c
+    
+    def _tracefile_test(self, tracefile):
+        self.config.set("tracefile", "tracefile", tracefile)
+        Manager.reset_singleton()
+        self.haizea = Manager(HaizeaConfig(self.config))
+        self.haizea.start()    
 
 
 class BaseSimulatorTest(BaseTest):
     def __init__(self, config):
         BaseTest.__init__(self, config)
 
-    def set_tracefile(self, tracefile):
-        self.config.set("tracefile", "tracefile", tracefile)
-
     def test_preemption(self):
-        self.set_tracefile("preemption.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
+        self._tracefile_test("preemption.lwf")
         
     def test_preemption_prematureend(self):
-        self.set_tracefile("preemption_prematureend.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
+        self._tracefile_test("preemption_prematureend.lwf")
         
     def test_preemption_prematureend2(self):
-        self.set_tracefile("preemption_prematureend2.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
-        
+        self._tracefile_test("preemption_prematureend2.lwf")
+
     def test_reservation(self):
-        self.set_tracefile("reservation.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
+        self._tracefile_test("reservation.lwf")
         
     def test_reservation_prematureend(self):
-        self.set_tracefile("reservation_prematureend.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
+        self._tracefile_test("reservation_prematureend.lwf")
         
     def test_migrate(self):
-        self.set_tracefile("migrate.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
+        self._tracefile_test("migrate.lwf")
         
     def test_reuse1(self):
-        self.set_tracefile("reuse1.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
+        self._tracefile_test("reuse1.lwf")
         
     def test_reuse2(self):
-        self.set_tracefile("reuse2.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
+        self._tracefile_test("reuse2.lwf")
         
     def test_wait(self):
-        self.set_tracefile("wait.lwf")
-        Manager.reset_singleton()
-        haizea = Manager(HaizeaConfig(self.config))
-        haizea.start()
+        self._tracefile_test("wait.lwf")
+
     
 
 class BaseXMLRPCTest(BaseTest):
