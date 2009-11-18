@@ -23,7 +23,7 @@ from haizea.core.accounting import AccountingDataCollection
 from haizea.common.config import ConfigException
 from haizea.cli.optionparser import Option
 from haizea.cli import Command
-from mx.DateTime import TimeDelta
+from mx.DateTime import TimeDelta, Parser
 import haizea.common.defaults as defaults
 import sys
 import os
@@ -431,9 +431,267 @@ class haizea_lwf2xml(Command):
                 lease_id += 1
         tree = ET.ElementTree(root)
         print ET.tostring(root)
-        #tree.write("page.xhtml")
 
 
         
+class haizea_swf2lwf(Command):
+    """
+    Converts Standard Workload Format (SWF, used in the Parallel Workloads Archive at
+    http://www.cs.huji.ac.il/labs/parallel/workload/) to Lease Workload Format
+    """
+    
+    name = "haizea-swf2lwf"
+
+    def __init__(self, argv):
+        Command.__init__(self, argv)
+        
+        self.optparser.add_option(Option("-i", "--in", action="store",  type="string", dest="inf", required=True,
+                                         help = """
+                                         Input file
+                                         """))
+        self.optparser.add_option(Option("-o", "--out", action="store", type="string", dest="outf", required=True,
+                                         help = """
+                                         Output file
+                                         """))
+        self.optparser.add_option(Option("-p", "--preemptible", action="store", type="string", dest="preemptible", required=True,
+                                         help = """
+                                         Should the leases be preemptable or not?
+                                         """))
+        self.optparser.add_option(Option("-f", "--from", action="store", type="string", dest="from_time", default="00:00:00:00",
+                                         help = """
+                                         This parameter, together with the --amount parameter, allows converting just
+                                         an interval of the SWF file.
+                                         
+                                         This parameter must be a timestamp of the format DD:HH:MM:SS. Only jobs sumitted
+                                         at or after that time will be converted.
+                                         
+                                         Default is 00:00:00:00
+                                         """))        
+        self.optparser.add_option(Option("-l", "--interval-length", action="store", type="string", dest="interval_length",
+                                         help = """
+                                         Length of the interval in format DD:HH:MM:SS. Default is to convert jobs until the
+                                         end of the SWF file.
+                                         """))        
+        self.optparser.add_option(Option("-q", "--queues", action="store", type="string", dest="queues",
+                                         help = """
+                                         Only convert jobs from the specified queues
+                                         """))
+        self.optparser.add_option(Option("-m", "--memory", action="store", type="string", dest="mem",
+                                         help = """
+                                         Memory requested by jobs.
+                                         """))
+                
+    def run(self):            
+        self.parse_options()
+
+        infile = self.opt.inf
+        outfile = self.opt.outf
+        
+        from_time = Parser.DateTimeDeltaFromString(self.opt.from_time)
+        if self.opt.interval_length == None:
+            to_time = None
+        else:
+            to_time = from_time + Parser.DateTimeDeltaFromString(self.opt.interval_length)
+
+        root = ET.Element("lease-workload")
+        root.set("name", infile)
+        description = ET.SubElement(root, "description")
+        description.text = "Created with haizea-swf2lwf %s" % " ".join(self.argv[1:])
+        time = TimeDelta(seconds=0)
+        requests = ET.SubElement(root, "lease-requests")
+        
+        
+        infile = open(infile, "r")
+        for line in infile:
+            if line[0]!=';' and len(line.strip()) != 0:
+                fields = line.split()
+                
+                # Unpack the job's attributes. The description of each field is
+                # taken from the SWF documentation at
+                # http://www.cs.huji.ac.il/labs/parallel/workload/swf.html
+                
+                # Job Number -- a counter field, starting from 1. 
+                job_number = int(fields[0])
+                
+                # Submit Time -- in seconds. The earliest time the log refers to is zero, 
+                # and is the submittal time the of the first job. The lines in the log are 
+                # sorted by ascending submittal times. It makes sense for jobs to also be 
+                # numbered in this order.
+                submit_time = int(fields[1])
+
+                # Wait Time -- in seconds. The difference between the job's submit time 
+                # and the time at which it actually began to run. Naturally, this is only 
+                # relevant to real logs, not to models.
+                wait_time = int(fields[2])
+
+                # Run Time -- in seconds. The wall clock time the job was running (end 
+                # time minus start time).
+                # We decided to use ``wait time'' and ``run time'' instead of the equivalent 
+                # ``start time'' and ``end time'' because they are directly attributable to 
+                # the scheduler and application, and are more suitable for models where only 
+                # the run time is relevant.
+                # Note that when values are rounded to an integral number of seconds (as 
+                # often happens in logs) a run time of 0 is possible and means the job ran 
+                # for less than 0.5 seconds. On the other hand it is permissable to use 
+                # floating point values for time fields.
+                run_time = int(fields[3])
+                
+                # Number of Allocated Processors -- an integer. In most cases this is also 
+                # the number of processors the job uses; if the job does not use all of them, 
+                # we typically don't know about it.
+                num_processors_allocated = int(fields[4])
+                
+                # Average CPU Time Used -- both user and system, in seconds. This is the 
+                # average over all processors of the CPU time used, and may therefore be 
+                # smaller than the wall clock runtime. If a log contains the total CPU time 
+                # used by all the processors, it is divided by the number of allocated 
+                # processors to derive the average.
+                avg_cpu_time = float(fields[5])
+                
+                # Used Memory -- in kilobytes. This is again the average per processor.
+                used_memory = int(fields[6])
+                
+                # Requested Number of Processors.
+                num_processors_requested = int(fields[7])
+                
+                # Requested Time. This can be either runtime (measured in wallclock seconds), 
+                # or average CPU time per processor (also in seconds) -- the exact meaning 
+                # is determined by a header comment. In many logs this field is used for 
+                # the user runtime estimate (or upper bound) used in backfilling. If a log 
+                # contains a request for total CPU time, it is divided by the number of 
+                # requested processors.
+                time_requested = int(fields[8])
+                
+                # Requested Memory (again kilobytes per processor).
+                mem_requested = int(fields[9])
+                
+                # Status 1 if the job was completed, 0 if it failed, and 5 if cancelled. 
+                # If information about chekcpointing or swapping is included, other values 
+                # are also possible. See usage note below. This field is meaningless for 
+                # models, so would be -1.
+                status = int(fields[10])
+                
+                # User ID -- a natural number, between one and the number of different users.
+                user_id = int(fields[11])
+                
+                # Group ID -- a natural number, between one and the number of different groups. 
+                # Some systems control resource usage by groups rather than by individual users.
+                group_id = int(fields[12])
+                
+                # Executable (Application) Number -- a natural number, between one and the number 
+                # of different applications appearing in the workload. in some logs, this might 
+                # represent a script file used to run jobs rather than the executable directly; 
+                # this should be noted in a header comment.
+                exec_number = int(fields[13])
+                
+                # Queue Number -- a natural number, between one and the number of different 
+                # queues in the system. The nature of the system's queues should be explained 
+                # in a header comment. This field is where batch and interactive jobs should 
+                # be differentiated: we suggest the convention of denoting interactive jobs by 0.
+                queue = int(fields[14])
+                
+                # Partition Number -- a natural number, between one and the number of different 
+                # partitions in the systems. The nature of the system's partitions should be 
+                # explained in a header comment. For example, it is possible to use partition 
+                # numbers to identify which machine in a cluster was used.
+                partition = int(fields[15])
+                
+                # Preceding Job Number -- this is the number of a previous job in the workload, 
+                # such that the current job can only start after the termination of this preceding 
+                # job. Together with the next field, this allows the workload to include feedback 
+                # as described below.
+                prec_job = int(fields[16])
+
+                # Think Time from Preceding Job -- this is the number of seconds that should elapse 
+                # between the termination of the preceding job and the submittal of this one. 
+                prec_job_thinktime = int(fields[17])
+
+                                
+                # Check if we have to skip this job
+                
+                submit_time = TimeDelta(seconds=submit_time)
+                
+                if submit_time < from_time:
+                    continue
+                
+                if to_time != None and submit_time > to_time:
+                    break
+                
+                if run_time < 0 and status==5:
+                    # This is a job that got cancelled while waiting in the queue
+                    continue
+                
+                if self.opt.queues != None:
+                    queues = [int(q) for q in self.opt.queues.split(",")]
+                    if queue not in queues:
+                        # Job was submitted to a queue we're filtering out
+                        continue              
+        
+                # Make submission time relative to starting time of trace
+                submit_time = submit_time - from_time
+        
+                lease_request = ET.SubElement(requests, "lease-request")
+                lease_request.set("arrival", str(submit_time))
+
+                if run_time == 0:
+                    # As specified in the SWF documentation, a runtime of 0 means
+                    # the job ran for less than a second, so we round up to 1.
+                    run_time = 1 
+                realduration = ET.SubElement(lease_request, "realduration")
+                realduration.set("time", str(TimeDelta(seconds=run_time)))
+                
+                lease = ET.SubElement(lease_request, "lease")
+                lease.set("id", `job_number`)
+
+                
+                nodes = ET.SubElement(lease, "nodes")
+                node_set = ET.SubElement(nodes, "node-set")
+                node_set.set("numnodes", `num_processors_requested`)
+                res = ET.SubElement(node_set, "res")
+                res.set("type", "CPU")
+                res.set("amount", "100")
+
+                res = ET.SubElement(node_set, "res")
+                res.set("type", "Memory")
+                if self.opt.mem != None:
+                    res.set("amount", self.opt.mem)
+                elif mem_requested != -1:
+                    res.set("amount", `mem_requested / 1024`)
+                else:
+                    print "Cannot convert this file. Job #%i does not specify requested memory, and --memory parameter not specified" % job_number
+                    exit(-1)
+                
+                start = ET.SubElement(lease, "start")
+                #lease.set("preemptible", self.opt.preemptible)
+                lease.set("user", `user_id`)
+
+                duration_elem = ET.SubElement(lease, "duration")
+                duration_elem.set("time", str(TimeDelta(seconds=time_requested)))
+
+                # No software environment specified. The annotator would have to be used to
+                # add one (or an image file when running a simulation).
+                software = ET.SubElement(lease, "software")
+                diskimage = ET.SubElement(software, "none")
+                
+                # Add unused SWF attributes to the extra section, for future reference.
+                extra = ET.SubElement(lease, "extra")
+                attr = ET.SubElement(extra, "attr")
+                attr.set("name", "SWF_waittime")
+                attr.set("value", `wait_time`)
+                attr = ET.SubElement(extra, "attr")
+                attr.set("name", "SWF_avgcputime")
+                attr.set("value", `avg_cpu_time`)
+                attr = ET.SubElement(extra, "attr")
+                attr.set("name", "SWF_queue")
+                attr.set("value", `queue`)
+                attr = ET.SubElement(extra, "attr")
+                attr.set("name", "SWF_group")
+                attr.set("value", `group_id`)
+                attr = ET.SubElement(extra, "attr")
+                attr.set("name", "SWF_execnumber")
+                attr.set("value", `exec_number`)
+                    
+        tree = ET.ElementTree(root)
+        print ET.tostring(root)
 
 
