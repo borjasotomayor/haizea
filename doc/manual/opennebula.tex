@@ -48,7 +48,7 @@ Followed by Haizea:
 haizea -c /usr/share/haizea/etc/sample_opennebula.conf
 \end{wideshellverbatim}
 
-The above assumes that you are running OpenNebula and Haizea in the same machine and with the same user. If this is not the case, you have to set the \texttt{ONE\_AUTH} environment variable (as described in the OpenNebula documentation) for the user and machine running Haizea. The variable must contain the username and password of the OpenNebula administrator user (typically called \texttt{oneadmin}) with the format \texttt{username:password}. 
+The above assumes that you are running OpenNebula and Haizea in the same machine and with the same user. If this is not the case, you have to set the \texttt{ONE\_AUTH} environment variable (as described in the OpenNebula documentation) for the user and machine running Haizea. The variable must contain the path to a file containing the username and password of the OpenNebula administrator user (typically called \texttt{oneadmin}) with the format \texttt{username:password}. 
 
 By default, Haizea runs as a daemon when running in OpenNebula mode. For this chapter, you may want to run it in the foreground so you can see the Haizea log messages in your console:
 

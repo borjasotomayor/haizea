@@ -1,5 +1,6 @@
 import xmlrpclib
 import os
+import os.path
 import hashlib
 
 try:
@@ -9,6 +10,9 @@ except ImportError:
     import elementtree.ElementTree as ET 
 
 class OpenNebulaXMLRPCClient(object):
+    
+    DEFAULT_ONE_AUTH = "~/.one/one_auth"
+    
     def __init__(self, host, port, user, password):
         uri = "http://%s:%i" % (host, port)
         self.rpc = xmlrpclib.ServerProxy(uri)
@@ -30,11 +34,23 @@ class OpenNebulaXMLRPCClient(object):
     @staticmethod
     def get_userpass_from_env():
         if not os.environ.has_key("ONE_AUTH"):
-            return None
+            one_auth = OpenNebulaXMLRPCClient.DEFAULT_ONE_AUTH
         else:
-            auth = os.environ["ONE_AUTH"]
-            user, passw = auth.split(":")
+            one_auth = os.environ["ONE_AUTH"]
+            
+        one_auth = os.path.expanduser(one_auth)
+        
+        if not os.path.exists(one_auth):
+            raise Exception("Authorization file %s does not exists" % one_auth) 
+        
+        f = open(one_auth, "r")
+        try:
+            line = f.readline().strip()
+            user, passw = line.split(":")
             return user, passw
+        except:
+            raise Exception("Authorization file is malformed")
+
         
     def hostpool_info(self):
         try:
