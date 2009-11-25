@@ -146,7 +146,7 @@ class GreedyMapper(Mapper):
         vnodes = self.__sort_vnodes(requested_resources)
         
         # Get the leases that intersect with the requested interval.
-        leases = aw.get_leases_until(end)
+        leases = aw.get_leases_between(start, end)
         # Ask the policy engine to sort the leases based on their
         # preemptability
         leases = self.policy.sort_leases(lease, leases, start)
@@ -179,7 +179,7 @@ class GreedyMapper(Mapper):
                 # lease node we are trying to map now.
                 need_to_map = self.slottable.create_empty_resource_tuple()
                 need_to_map.incr(cur_vnode_capacity)
-                avail=aw.get_availability_at_node(start, pnode, preempted_leases = preempting)
+                avail=aw.get_ongoing_availability(start, pnode, preempted_leases = preempting)
                 
                 # Try to fit as many lease nodes as we can into this physical node
                 pnode_done = False
@@ -243,18 +243,18 @@ class GreedyMapper(Mapper):
         # Find the maximum requested resources for each resource type
         max_res = self.slottable.create_empty_resource_tuple()
         for res in requested_resources.values():
-            for i in range(len(res._res)):
-                if res._res[i] > max_res._res[i]:
-                    max_res._res[i] = res._res[i]
+            for i in range(len(res._single_instance)):
+                if res._single_instance[i] > max_res._single_instance[i]:
+                    max_res._single_instance[i] = res._single_instance[i]
                     
         # Normalize the capacities of the lease nodes (divide each
         # requested amount of a resource type by the maximum amount)
         norm_res = {}
         for k,v in requested_resources.items():
             norm_capacity = 0
-            for i in range(len(max_res._res)):
-                if max_res._res[i] > 0:
-                    norm_capacity += v._res[i] / float(max_res._res[i])
+            for i in range(len(max_res._single_instance)):
+                if max_res._single_instance[i] > 0:
+                    norm_capacity += v._single_instance[i] / float(max_res._single_instance[i])
             norm_res[k] = norm_capacity
              
         vnodes = norm_res.items()

@@ -52,50 +52,51 @@ class TestSlotTable(object):
         assert c2_50.fits_in(c1_100)
         assert c2_50.fits_in(c2_100)
         assert not c2_50.fits_in(c1_50)
-        
+
         empty = self.slottable.create_empty_resource_tuple()
         empty.incr(c2_100)
-        assert empty._res[0] == 1024
-        assert empty.multiinst[1] == [100,100]
- 
+        assert empty._single_instance[0] == 1024
+        assert empty._multi_instance[1] == [100,100]
+        
         empty = self.slottable.create_empty_resource_tuple()
         empty.incr(c1_100)
-        assert empty._res[0] == 1024
-        assert empty.multiinst[1] == [100]
+        assert empty._single_instance[0] == 1024
+        assert empty._multi_instance[1] == [100]
         empty.incr(c1_100)
-        assert empty._res[0] == 2048
-        assert empty.multiinst[1] == [100,100]
+        assert empty._single_instance[0] == 2048
+        assert empty._multi_instance[1] == [100,100]
 
         empty = self.slottable.create_empty_resource_tuple()
         empty.incr(c1_100)
-        assert empty._res[0] == 1024
-        assert empty.multiinst[1] == [100]
+        assert empty._single_instance[0] == 1024
+        assert empty._multi_instance[1] == [100]
         empty.incr(c1_50)
-        assert empty._res[0] == 2048
-        assert empty.multiinst[1] == [100,50]
+        assert empty._single_instance[0] == 2048
+        assert empty._multi_instance[1] == [100,50]
    
         c1_100a = ResourceTuple.copy(c1_100)
         c1_100a.decr(c1_50)
-        assert c1_100a._res[0] == 0
-        assert c1_100a.multiinst[1] == [50]
+        assert c1_100a._single_instance[0] == 0
+        assert c1_100a._multi_instance[1] == [50]
 
         c2_100a = ResourceTuple.copy(c2_100)
-        c2_100a._res[0] = 2048
+        c2_100a._single_instance[0] = 2048
         c2_100a.decr(c1_50)
-        assert c2_100a._res[0] == 1024
-        assert c2_100a.multiinst[1] == [50,100]
+        
+        assert c2_100a._single_instance[0] == 1024
+        assert c2_100a._multi_instance[1] == [50,100]
         c2_100a.decr(c1_50)
-        assert c2_100a._res[0] == 0
-        assert c2_100a.multiinst[1] == [0,100]
+        assert c2_100a._single_instance[0] == 0
+        assert c2_100a._multi_instance[1] == [0,100]
 
         c2_100a = ResourceTuple.copy(c2_100)
-        c2_100a._res[0] = 2048
+        c2_100a._single_instance[0] = 2048
         c2_100a.decr(c2_50)
-        assert c2_100a._res[0] == 1024
-        assert c2_100a.multiinst[1] == [0,100]
+        assert c2_100a._single_instance[0] == 1024
+        assert c2_100a._multi_instance[1] == [0,100]
         c2_100a.decr(c2_50)
-        assert c2_100a._res[0] == 0
-        assert c2_100a.multiinst[1] == [0,0]
+        assert c2_100a._single_instance[0] == 0
+        assert c2_100a._multi_instance[1] == [0,0]
    
     def test_slottable(self):
         def assert_capacity(node, percent):
@@ -543,12 +544,12 @@ class TestSlotTable(object):
         avail_node_assertions(time = T1415, avail = FULL_NODE, node_id = 4, 
                               leases = {}, next_cp = None)
         
-        avail = aw.get_availability_at_node(T1300, 1)
+        avail = aw.get_ongoing_availability(T1300, 1)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == EMPT_NODE)
         assert(avail.avail_list[0].until     == None)
 
-        avail = aw.get_availability_at_node(T1300, 2)
+        avail = aw.get_ongoing_availability(T1300, 2)
         assert(len(avail.avail_list)==3)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == T1315)
@@ -557,14 +558,14 @@ class TestSlotTable(object):
         assert(avail.avail_list[2].available == EMPT_NODE)
         assert(avail.avail_list[2].until     == None)
 
-        avail = aw.get_availability_at_node(T1300, 3)
+        avail = aw.get_ongoing_availability(T1300, 3)
         assert(len(avail.avail_list)==2)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == T1330)
         assert(avail.avail_list[1].available == EMPT_NODE)
         assert(avail.avail_list[1].until     == None)
 
-        avail = aw.get_availability_at_node(T1300, 4)
+        avail = aw.get_ongoing_availability(T1300, 4)
         assert(len(avail.avail_list)==2)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == T1330)
@@ -572,47 +573,47 @@ class TestSlotTable(object):
         assert(avail.avail_list[1].until     == None)
 
 
-        avail = aw.get_availability_at_node(T1330, 1)
+        avail = aw.get_ongoing_availability(T1330, 1)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == None)
 
-        avail = aw.get_availability_at_node(T1330, 2)
+        avail = aw.get_ongoing_availability(T1330, 2)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == EMPT_NODE)
         assert(avail.avail_list[0].until     == None)
 
-        avail = aw.get_availability_at_node(T1330, 3)
+        avail = aw.get_ongoing_availability(T1330, 3)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == EMPT_NODE)
         assert(avail.avail_list[0].until     == None)
 
-        avail = aw.get_availability_at_node(T1330, 4)
+        avail = aw.get_ongoing_availability(T1330, 4)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == EMPT_NODE)
         assert(avail.avail_list[0].until     == None)
         
         
-        avail = aw.get_availability_at_node(T1345, 1)
+        avail = aw.get_ongoing_availability(T1345, 1)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == None)
 
-        avail = aw.get_availability_at_node(T1345, 2)
+        avail = aw.get_ongoing_availability(T1345, 2)
         assert(len(avail.avail_list)==2)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == T1350)
         assert(avail.avail_list[1].available == HALF_NODE)
         assert(avail.avail_list[1].until     == None)
 
-        avail = aw.get_availability_at_node(T1345, 3)
+        avail = aw.get_ongoing_availability(T1345, 3)
         assert(len(avail.avail_list)==2)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == T1350)
         assert(avail.avail_list[1].available == HALF_NODE)
         assert(avail.avail_list[1].until     == None)
 
-        avail = aw.get_availability_at_node(T1345, 4)
+        avail = aw.get_ongoing_availability(T1345, 4)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == EMPT_NODE)
         assert(avail.avail_list[0].until     == None)        
@@ -629,22 +630,22 @@ class TestSlotTable(object):
         avail_node_assertions(time = T1415, avail = FULL_NODE, node_id = 4, 
                               leases = {}, next_cp = None)
 
-        avail = aw.get_availability_at_node(T1415, 1)
+        avail = aw.get_ongoing_availability(T1415, 1)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == None)
         
-        avail = aw.get_availability_at_node(T1415, 2)
+        avail = aw.get_ongoing_availability(T1415, 2)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == None)
         
-        avail = aw.get_availability_at_node(T1415, 3)
+        avail = aw.get_ongoing_availability(T1415, 3)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == None)
         
-        avail = aw.get_availability_at_node(T1415, 4)
+        avail = aw.get_ongoing_availability(T1415, 4)
         assert(len(avail.avail_list)==1)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == None) 
@@ -663,7 +664,7 @@ class TestSlotTable(object):
         avail_node_assertions(time = T1330, avail = QRTR_NODE, node_id = 1, 
                               leases = {lease1:HALF_NODE,lease2:QRTR_NODE}, next_cp = T1415)
         
-        avail = aw.get_availability_at_node(T1300, 1)
+        avail = aw.get_ongoing_availability(T1300, 1)
         assert(len(avail.avail_list)==3)
         assert(avail.avail_list[0].available == FULL_NODE)
         assert(avail.avail_list[0].until     == T1315)
