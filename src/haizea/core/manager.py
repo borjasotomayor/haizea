@@ -131,18 +131,19 @@ class Manager(object):
         if mode == "opennebula":
             host = self.config.get("one.host")
             port = self.config.get("one.port")
-            rv = OpenNebulaXMLRPCClient.get_userpass_from_env()
-            if rv == None:
-                print "ONE_AUTH environment variable is not set"
+            try:
+                rv = OpenNebulaXMLRPCClient.get_userpass_from_env()
+            except:
+                print "ONE_AUTH environment variable is not set or authorization file is malformed"
                 exit(1)
-            else:
-                user, passw = rv[0], rv[1]
-                try:
-                    OpenNebulaXMLRPCClientSingleton(host, port, user, passw)
-                except socket.error, e:
-                    print "Unable to connect to OpenNebula"
-                    print "Reason: %s" % e
-                    exit(1)
+                
+            user, passw = rv[0], rv[1]
+            try:
+                OpenNebulaXMLRPCClientSingleton(host, port, user, passw)
+            except socket.error, e:
+                print "Unable to connect to OpenNebula"
+                print "Reason: %s" % e
+                exit(1)
                     
         # Enactment modules
         if mode == "simulated":

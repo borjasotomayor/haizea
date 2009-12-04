@@ -95,13 +95,13 @@ class GreedyPolicy(HostSelectionPolicy):
 
 
         # 2nd: we prefer nodes with the highest capacity
-        avail = aw.get_availability_at(node, time)
+        avail = aw.get_availability(time, node)
         # TODO: normalize into a score
         high_capacity_score = 1.0
         
         # 3rd: we prefer nodes where the current capacity
         # doesn't change for the longest time.
-        duration = aw.get_capacity_interval(node, time)
+        duration = aw.get_capacity_duration(node, time)
         if duration == None or duration>=lease.duration.requested:
             duration_score = 1.0
         else:

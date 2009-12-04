@@ -281,7 +281,7 @@ class VMScheduler(object):
         self.__schedule_suspension(vmrr, t)
         
         # Update the VMRR in the slot table
-        self.slottable.update_reservation_with_key_change(vmrr, old_start, old_end)
+        self.slottable.update_reservation(vmrr, old_start, old_end)
         
         # Add the suspension RRs to the VM's post-RRs
         for susprr in vmrr.post_rrs:

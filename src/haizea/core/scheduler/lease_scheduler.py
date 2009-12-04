@@ -326,7 +326,19 @@ class LeaseScheduler(object):
             # If a lease is active, that means we have to shut down its VMs to cancel it.
             self.logger.info("Lease %i is active. Stopping active reservation..." % lease.id)
             vmrr = lease.get_active_vmrrs(time)[0]
+            self._handle_end_rr(vmrr)
             self.vm_scheduler._handle_unscheduled_end_vm(lease, vmrr)
+            
+            # Force machines to shut down
+            try:
+                self.vm_scheduler.resourcepool.stop_vms(lease, vmrr)
+            except EnactmentError, exc:
+                self.logger.error("Enactment error when shutting down VMs.")
+                # Right now, this is a non-recoverable error, so we just
+                # propagate it upwards.
+                # In the future, it may be possible to react to these
+                # kind of errors.
+                raise            
 
         elif lease_state in [Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED, Lease.STATE_READY, Lease.STATE_RESUMED_READY]:
             # If a lease is scheduled or ready, we just need to cancel all future reservations

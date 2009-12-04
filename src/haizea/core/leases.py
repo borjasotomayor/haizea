@@ -700,7 +700,7 @@ class Capacity(object):
     class in the slottable module. The ResourceTuple class can contain
     the same information, but uses a different internal representation
     (which is optimized for long-running simulations) and is tightly
-    coupled to the SlotTable class. The Quantity and ResourceTuple
+    coupled to the SlotTable class. The Capacity and ResourceTuple
     classes are kept separate so that the slottable module remains
     independent from the rest of Haizea (in case we want to switch
     to a different slottable implementation in the future).
