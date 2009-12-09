@@ -5,6 +5,7 @@ from haizea.core.configfile import HaizeaConfig
 from haizea.core.scheduler.slottable import ResourceReservation, SlotTable
 from haizea.core.leases import Lease, Timestamp, Duration
 from haizea.core.manager import Manager
+from haizea.common.utils import reset_lease_id_counter
 
 class BaseTest(object):
     def __init__(self, config):
@@ -21,9 +22,34 @@ class BaseTest(object):
     def _tracefile_test(self, tracefile):
         self.config.set("tracefile", "tracefile", tracefile)
         Manager.reset_singleton()
+        reset_lease_id_counter()
         self.haizea = Manager(HaizeaConfig(self.config))
         self.haizea.start()    
 
+    def _verify_done(self, ids):
+        for id in ids:
+            lease = self.haizea.scheduler.completed_leases.get_lease(id)
+            
+            print "ID: %i" % lease.id
+            print Lease.state_str[lease.get_state()]
+            print "End: %s" % lease.end
+            assert lease.get_state() == Lease.STATE_DONE
+            
+            if lease.deadline != None:
+                print "Deadline: %s" % lease.deadline
+                assert lease.end <= lease.deadline
+
+    def _verify_rejected(self, ids):
+        for id in ids:
+            lease = self.haizea.scheduler.completed_leases.get_lease(id)
+            
+            print "ID: %i" % lease.id
+            print Lease.state_str[lease.get_state()]
+            print "End: %s" % lease.end
+            
+            assert lease.get_state() == Lease.STATE_REJECTED
+            if lease.deadline != None:
+                print "Deadline: %s" % lease.deadline
 
 class BaseSimulatorTest(BaseTest):
     def __init__(self, config):

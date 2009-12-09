@@ -7,7 +7,7 @@ from common import create_tmp_slottable
 
 class SimplePolicy(PolicyManager):
     def __init__(self, slottable, preemption):
-        PolicyManager.__init__(self, None, None, None)
+        PolicyManager.__init__(self, None, None, None, None)
         self.preemption = preemption
         self.host_selection = GreedyPolicy(slottable)
     

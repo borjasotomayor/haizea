@@ -5,30 +5,6 @@ class TestSimulator(BaseTest):
     def __init__(self):
         config = BaseTest.load_configfile("base_config_simulator.conf")
         BaseTest.__init__(self, config)
-   
-    def __verify_done(self, ids):
-        for id in ids:
-            lease = self.haizea.scheduler.completed_leases.get_lease(id)
-            
-            print "ID: %i" % lease.id
-            print Lease.state_str[lease.get_state()]
-            print "End: %s" % lease.end
-            print "Deadline: %s" % lease.deadline
-            
-            assert lease.get_state() == Lease.STATE_DONE
-            assert lease.end <= lease.deadline
-
-    def __verify_rejected(self, ids):
-        for id in ids:
-            lease = self.haizea.scheduler.completed_leases.get_lease(id)
-            
-            print "ID: %i" % lease.id
-            print Lease.state_str[lease.get_state()]
-            print "End: %s" % lease.end
-            print "Deadline: %s" % lease.deadline
-            
-            assert lease.get_state() == Lease.STATE_REJECTED
-
             
     def test_deadline1(self):
         self._tracefile_test("deadline1.lwf")
