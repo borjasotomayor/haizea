@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<lease-workload name="price1">
+  <description>
+    ...
+  </description>
+
+  <site>
+    <resource-types names="CPU Memory"/>
+    <nodes>
+      <node-set numnodes="4">
+        <res type="CPU" amount="100"/>
+        <res type="Memory" amount="1024"/>
+      </node-set>
+    </nodes>
+  </site>
+  <lease-requests>
+
+    <lease-request arrival="00:00:00.00">
+      <lease id="1" preemptible="false">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="00:30:00.00"/>
+        </start>
+        <duration time="01:00:00.00"/>
+        <software>
+          <none/>
+        </software>
+        <extra>
+          <attr name="simul_pricemarkup" value="1.0"/>
+        </extra>        
+      </lease>
+    </lease-request>
+  </lease-requests>
+</lease-workload>
+    
