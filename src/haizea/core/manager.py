@@ -52,7 +52,7 @@ from haizea.core.log import HaizeaLogger
 from haizea.core.rpcserver import RPCServer
 from haizea.common.utils import abstract, round_datetime, Singleton, import_class, OpenNebulaXMLRPCClientSingleton
 from haizea.common.opennebula_xmlrpc import OpenNebulaXMLRPCClient
-from haizea.pluggable.policies import admission_class_mappings, preemption_class_mappings, host_class_mappings 
+from haizea.pluggable.policies import admission_class_mappings, preemption_class_mappings, host_class_mappings, pricing_mappings
 from haizea.pluggable.accounting import probe_class_mappings
 
 import operator
@@ -91,13 +91,16 @@ class Manager(object):
         pidfile -- When running as a daemon, file to save pid to
         """
         self.config = config
-        
-        # Create the RM components
-        
-        mode = config.get("mode")
-        
         self.daemon = daemon
         self.pidfile = pidfile
+
+    # Has to be in a separate function since some pluggable modules need to
+    # access the Manager singleton
+    def __initialize(self):
+        # Create the RM components
+        
+        mode = self.config.get("mode")
+        
 
         if mode == "simulated":
             # Simulated-time simulations always run in the foreground
@@ -157,7 +160,7 @@ class Manager(object):
             else:
                 site = Site.from_resources_string(resources)
     
-            deploy_bandwidth = config.get("imagetransfer-bandwidth")
+            deploy_bandwidth = self.config.get("imagetransfer-bandwidth")
             info_enact = SimulatedResourcePoolInfo(site)
             vm_enact = SimulatedVMEnactment()
             deploy_enact = SimulatedDeploymentEnactment(deploy_bandwidth)
@@ -205,7 +208,12 @@ class Manager(object):
         host_selection = import_class(host_selection)
         host_selection = host_selection(slottable)
 
-        self.policy = PolicyManager(admission, preemption, host_selection)
+        pricing = self.config.get("policy.pricing")
+        pricing = pricing_mappings.get(pricing, pricing)
+        pricing = import_class(pricing)
+        pricing = pricing(slottable)
+
+        self.policy = PolicyManager(admission, preemption, host_selection, pricing)
 
         # Preparation scheduler
         if preparation_type == constants.PREPARATION_UNMANAGED:
@@ -339,6 +347,9 @@ class Manager(object):
 
     def start(self):
         """Starts the resource manager"""
+        
+        self.__initialize()
+
         self.logger.info("Starting resource manager")
         
         for frontend in self.frontends:

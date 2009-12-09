@@ -29,16 +29,7 @@ class HaizeaLogger(logging.Logger):
     
     def makeRecord(self, name, lvl, fn, lno, msg, args, exc_info, func=None, extra=None):
         # Modify "extra" parameter keyword
-        try:
-            haizeatime = get_clock().get_time()
-        except:
-            # This is a kludge. Basically, calling get_clock will
-            # fail if Manager is not yet fully constructed (since it's
-            # a singleton). The more correct solution is to more cleanly
-            # separate the initialization code in the Manager from the
-            # initialization that actually involves interacting with
-            # other components (which may want to use the logger)
-            haizeatime = "                      "
+        haizeatime = get_clock().get_time()
         extra = { "haizeatime" : haizeatime}
         if sys.version_info[1] <= 4:
             name = "[%s] %s" % (haizeatime, name)
