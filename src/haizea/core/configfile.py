@@ -214,6 +214,18 @@ class HaizeaConfig(Config):
             See the Haizea documentation for details on how to write your own
             policies.
             """),
+
+     Option(name        = "policy-pricing",
+            getter      = "policy.pricing",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            default     = "free",
+            doc         = """
+            ...
+            
+            See the Haizea documentation for details on how to write your own
+            policies.
+            """),
                         
      Option(name        = "wakeup-interval",
             getter      = "wakeup-interval",

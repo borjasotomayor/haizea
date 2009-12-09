@@ -45,7 +45,7 @@ class PolicyManager(object):
     access these modules.
     
     """    
-    def __init__(self, admission, preemption, host_selection):
+    def __init__(self, admission, preemption, host_selection, pricing):
         """Constructor
         
         Expects fully-constructed policies (these are currently
@@ -55,11 +55,13 @@ class PolicyManager(object):
         admission -- A child of LeaseAdmissionPolicy
         preemption -- A child of PreemptabilityPolicy
         host_selection -- A child of HostSelectionPolicy
+        pricing -- A child of PricingPolicy
         
         """
         self.admission = admission
         self.preemption = preemption
         self.host_selection = host_selection
+        self.pricing = pricing
     
     def sort_leases(self, preemptor, preemptees, time):
         """Sorts a list of leases by their preemptability
@@ -139,6 +141,17 @@ class PolicyManager(object):
         return self.host_selection.get_host_score(node, time, lease)
     
     
+    def price_lease(self, lease, preempted_leases):
+        """Computes the price of a lease
+    
+         See documentation of PricingPolicy.price_lease for more details.
+        
+        Arguments:
+        lease -- Lease that is being scheduled.
+        preempted_leases -- Leases that would have to be preempted to support this lease.
+        """
+        return self.pricing.price_lease(lease, preempted_leases)  
+
 
 class LeaseAdmissionPolicy(object):
     """Lease Admission policy
@@ -273,6 +286,8 @@ class HostSelectionPolicy(object):
     def get_host_score(self, node, time, lease):
         """Computes the score of a host
         
+        
+        
         Given a physical host, a time, and a lease we would like to
         schedule at that time, this method returns a score indicating
         how desireable that host is for that lease at that time.
@@ -287,3 +302,28 @@ class HostSelectionPolicy(object):
         lease -- Lease that is being scheduled.
         """               
         abstract()    
+        
+        
+class PricingPolicy(object):
+    """Pricing policy
+    
+    ...
+        
+    """             
+    def __init__(self, slottable):
+        """Constructor
+        
+        Argument
+        slottable -- A fully constructed SlotTable
+        """        
+        self.slottable = slottable
+    
+
+    def price_lease(self, lease, preempted_leases):
+        """Computes the price of a lease
+        
+        Arguments:
+        lease -- Lease that is being scheduled.
+        preempted_leases -- Leases that would have to be preempted to support this lease.
+        """
+        abstract()

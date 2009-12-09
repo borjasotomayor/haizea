@@ -121,7 +121,7 @@ class Lease(object):
                 UNKNOWN: "Unknown"}
     
     def __init__(self, lease_id, submit_time, requested_resources, start, duration, 
-                 deadline, preemptible, software, state):
+                 deadline, preemptible, software, state, extras = {}):
         """Constructs a lease.
         
         The arguments are the fundamental attributes of a lease.
@@ -146,6 +146,8 @@ class Lease(object):
           preempted or not.
         software -- A SoftwareEnvironment object specifying the
           software environment required by the lease.
+        extras -- Extra attributes. Haizea will ignore them, but they
+          may be used by pluggable modules.
         """        
         # Lease ID (read only)
         self.id = lease_id
@@ -158,6 +160,8 @@ class Lease(object):
         self.deadline = deadline
         self.preemptible = preemptible
         self.software = software
+        self.price = None
+        self.extras = extras
 
         # Bookkeeping attributes:
 
@@ -280,6 +284,13 @@ class Lease(object):
         if deadline != None:
             deadline = Parser.DateTimeFromString(deadline.get("time"))
         
+        extra = element.find("extra")
+        extras = {}
+        if extra != None:
+            for attr in extra:
+                extras[attr.get("name")] = attr.get("value")
+
+        
         preemptible = element.get("preemptible").capitalize()
         if preemptible == "True":
             preemptible = True
@@ -297,7 +308,7 @@ class Lease(object):
             software = DiskImageSoftwareEnvironment(image_id, image_size)
         
         return Lease(lease_id, submit_time, requested_resources, start, duration, 
-                     deadline, preemptible, software, state)
+                     deadline, preemptible, software, state, extras)
 
 
     def to_xml(self):
@@ -411,6 +422,8 @@ class Lease(object):
         logger.log(loglevel, "State          : %s" % Lease.state_str[self.get_state()])
         logger.log(loglevel, "Resource req   : %s" % self.requested_resources)
         logger.log(loglevel, "Software       : %s" % self.software)
+        logger.log(loglevel, "Price          : %s" % self.price)
+        logger.log(loglevel, "Extras         : %s" % self.extras)
         self.print_rrs(loglevel)
         logger.log(loglevel, "--------------------------------------------------")
 

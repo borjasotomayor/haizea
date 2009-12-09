@@ -560,6 +560,25 @@ class LeaseScheduler(object):
         # exception (we don't catch it here, and it is just thrown up
         # to the calling method.
         (vmrr, preemptions) = self.vm_scheduler.schedule(lease, nexttime, earliest)
+        
+        ## BEGIN NOT-FIT-FOR-PRODUCTION CODE
+        ## Pricing shouldn't live here. Instead, it should happen before a lease is accepted
+        ## It is being done here in the interest of developing a first prototype
+        ## that incorporates pricing in simulations (but not interactively yet)
+        
+        # Call pricing policy
+        lease.price = get_policy().price_lease(lease, preemptions)
+        
+        # Determine whether to accept price or not (this in particular
+        # should happen in the lease admission step)
+        if lease.extras.has_key("simul_pricemarkup"):
+            markup = float(lease.extras["simul_pricemarkup"])
+            if get_config().get("policy.pricing") != "free":
+                fair_price = get_policy().pricing.get_fair_price(lease)
+                if lease.price > fair_price * markup:
+                    raise NotSchedulableException, "Lease priced at %.2f. User is only willing to pay %.2f" % (lease.price, fair_price * markup)
+        
+        ## END NOT-FIT-FOR-PRODUCTION CODE
                                 
         # If scheduling the lease involves preempting other leases,
         # go ahead and preempt them.
