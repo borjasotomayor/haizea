@@ -50,7 +50,7 @@ def sample_slottable_1():
     slottable.add_node(3, FULL_NODE)  
     slottable.add_node(4, FULL_NODE)  
 
-    lease1 = Lease.create_new(None,{},None,None,None,1,None)
+    lease1 = Lease.create_new(None,None,{},None,None,None,1,None)
     lease1.id = 1
     res1 = {2: HALF_NODE}
     rr1_1 = ResourceReservation(lease1, T1315, T1325, res1)
@@ -58,13 +58,13 @@ def sample_slottable_1():
     slottable.add_reservation(rr1_1)
     slottable.add_reservation(rr1_2)
 
-    lease2 = Lease.create_new(None,{},None,None,None,2,None)
+    lease2 = Lease.create_new(None,None,{},None,None,None,2,None)
     lease2.id = 2
     res2 = {2: FULL_NODE, 3: FULL_NODE}
     rr2 = ResourceReservation(lease2, T1330, T1345, res2)
     slottable.add_reservation(rr2)
 
-    lease3 = Lease.create_new(None,{},None,None,None,1,None)
+    lease3 = Lease.create_new(None,None,{},None,None,None,1,None)
     lease3.id = 3
     res3 = {4: FULL_NODE}
     rr3_1 = ResourceReservation(lease3, T1330, T1355, res3)
@@ -72,19 +72,19 @@ def sample_slottable_1():
     slottable.add_reservation(rr3_1)
     slottable.add_reservation(rr3_2)
 
-    lease4 = Lease.create_new(None,{},None,None,None,1,None)
+    lease4 = Lease.create_new(None,None,{},None,None,None,1,None)
     lease4.id = 4
     res4 = {2: QRTR_NODE, 3: HALF_NODE}
     rr4 = ResourceReservation(lease4, T1350, T1415, res4)
     slottable.add_reservation(rr4)
 
-    lease5 = Lease.create_new(None,{},None,None,None,1,None)
+    lease5 = Lease.create_new(None,None,{},None,None,None,1,None)
     lease5.id = 5
     res5 = {2: QRTR_NODE}
     rr5 = ResourceReservation(lease5, T1350, T1415, res5)
     slottable.add_reservation(rr5)
     
-    lease6 = Lease.create_new(None,{},None,None,None,1,None)
+    lease6 = Lease.create_new(None,None,{},None,None,None,1,None)
     lease6.id = 6
     res6 = {1: FULL_NODE}
     rr6 = ResourceReservation(lease6, T1255, T1305, res6)

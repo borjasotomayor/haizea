@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+from haizea.cli import annotator
+import sys
+	
+c = annotator.haizea_lwf_annotate(sys.argv)
+c.run()

@@ -701,13 +701,12 @@ class HaizeaConfig(Config):
             Path to tracefile to use.                
             """),
 
-     Option(name        = "imagefile",
-            getter      = "imagefile",
+     Option(name        = "annotationfile",
+            getter      = "annotationfile",
             type        = OPTTYPE_STRING,
             required    = False,
             doc         = """
-            Path to list of images to append to lease requests.
-            If omitted, the images in the tracefile are used.                
+            Path to lease annotation file.                
             """),
 
      Option(name        = "injectionfile",

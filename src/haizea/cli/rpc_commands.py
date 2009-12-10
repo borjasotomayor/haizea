@@ -129,6 +129,7 @@ class haizea_request_lease(RPCCommand):
             if self.opt.start == haizea_request_lease.START_NOW:
                 lease = Lease(lease_id = None,
                               submit_time = None,
+                              user_id = None,
                               requested_resources = requested_resources, 
                               start = Timestamp(Timestamp.NOW),
                               duration = Duration(duration),
@@ -140,6 +141,7 @@ class haizea_request_lease(RPCCommand):
             elif self.opt.start == haizea_request_lease.START_BESTEFFORT:
                 lease = Lease(lease_id = None,
                               submit_time = None,
+                              user_id = None,                              
                               requested_resources = requested_resources, 
                               start = Timestamp(Timestamp.UNSPECIFIED),
                               duration = Duration(duration),
@@ -152,6 +154,7 @@ class haizea_request_lease(RPCCommand):
                 start = self.__absolute_time(self.opt.start)
                 lease = Lease(lease_id = None,
                               submit_time = None,
+                              user_id = None,                              
                               requested_resources = requested_resources, 
                               start = Timestamp(start),
                               duration = Duration(duration),

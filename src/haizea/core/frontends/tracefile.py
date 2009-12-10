@@ -19,7 +19,7 @@
 import haizea.common.constants as constants
 from haizea.common.utils import get_clock
 from haizea.core.frontends import RequestFrontend
-from haizea.core.leases import LeaseWorkload, Lease, DiskImageSoftwareEnvironment
+from haizea.core.leases import LeaseWorkload, Lease, DiskImageSoftwareEnvironment, LeaseAnnotations
 import operator
 import logging
 
@@ -34,7 +34,7 @@ class TracefileFrontend(RequestFrontend):
         
         tracefile = config.get("tracefile")
         injectfile = config.get("injectionfile")
-        imagefile = config.get("imagefile")
+        annotationfile = config.get("annotationfile")
         
         # Read trace file
         # Requests is a list of lease requests
@@ -53,23 +53,11 @@ class TracefileFrontend(RequestFrontend):
             self.requests += inj_leases
             self.requests.sort(key=operator.attrgetter("submit_time"))
 
-        if imagefile != None:
-            self.logger.info("Loading image file %s" % imagefile)
-            file = open (imagefile, "r")
-            imagesizes = {}
-            images = []
-            state = 0  # 0 -> Reading image sizes  1 -> Reading image sequence
-            for line in file:
-                if line[0]=='#':
-                    state = 1
-                elif state == 0:
-                    image, size = line.split()
-                    imagesizes[image] = int(size)
-                elif state == 1:
-                    images.append(line.strip())            
-            for lease, image_id in zip(self.requests, images):
-                lease.software = DiskImageSoftwareEnvironment(image_id, imagesizes[image_id])
-        
+        if annotationfile != None:
+            self.logger.info("Loading annotation file %s" % annotationfile)
+            annotations = LeaseAnnotations.from_xml_file(annotationfile)
+            annotations.apply_to_leases(self.requests)
+            
         # Add runtime overhead, if necessary
         add_overhead = config.get("add-overhead")
         

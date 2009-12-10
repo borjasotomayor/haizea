@@ -105,6 +105,7 @@ def create_ar_lease(lease_id, submit_time, start, end, preemptible, requested_re
     start = Timestamp(start)
     duration = Duration(end - start.requested)
     lease = Lease.create_new(submit_time = submit_time, 
+                  user_id = None,
                   requested_resources = requested_resources, 
                   start = start, 
                   duration = duration,

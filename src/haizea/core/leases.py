@@ -120,7 +120,7 @@ class Lease(object):
                 DEADLINE: "Deadline",
                 UNKNOWN: "Unknown"}
     
-    def __init__(self, lease_id, submit_time, requested_resources, start, duration, 
+    def __init__(self, lease_id, submit_time, user_id, requested_resources, start, duration, 
                  deadline, preemptible, software, state, extras = {}):
         """Constructs a lease.
         
@@ -154,6 +154,7 @@ class Lease(object):
         
         # Lease attributes
         self.submit_time = submit_time
+        self.user_id = user_id
         self.requested_resources = requested_resources
         self.start = start
         self.duration = duration
@@ -194,11 +195,11 @@ class Lease(object):
         
         
     @classmethod
-    def create_new(cls, submit_time, requested_resources, start, duration, 
+    def create_new(cls, submit_time, user_id, requested_resources, start, duration, 
                  deadline, preemptible, software):
         lease_id = get_lease_id()
         state = Lease.STATE_NEW
-        return cls(lease_id, submit_time, requested_resources, start, duration, 
+        return cls(lease_id, submit_time, user_id, requested_resources, start, duration, 
                  deadline, preemptible, software, state)
         
     @classmethod
@@ -249,6 +250,12 @@ class Lease(object):
             lease_id = None
         else:
             lease_id = int(lease_id)
+
+        user_id = element.get("user")
+        if user_id == None:
+            user_id = None
+        else:
+            user_id = int(state)
 
         state = element.get("state")
         if state == None:
@@ -307,7 +314,7 @@ class Lease(object):
             image_size = int(disk_image.get("size"))
             software = DiskImageSoftwareEnvironment(image_id, image_size)
         
-        return Lease(lease_id, submit_time, requested_resources, start, duration, 
+        return Lease(lease_id, submit_time, user_id, requested_resources, start, duration, 
                      deadline, preemptible, software, state, extras)
 
 
@@ -1070,6 +1077,228 @@ class LeaseWorkload(object):
             leases.append(lease)
             
         return cls(leases)
+    
+class LeaseAnnotation(object):
+    """Reprents a lease annotation.
+    
+    ...
+    """    
+    def __init__(self, lease_id, start, deadline, software, extras):
+        """Constructor.
+        
+        Arguments:
+        ...
+        """                 
+        self.lease_id = lease_id
+        self.start = start
+        self.deadline = deadline
+        self.software = software
+        self.extras = extras
+        
+    
+    @classmethod
+    def from_xml_file(cls, xml_file):
+        """...
+        
+        ...
+        
+        Argument:
+        xml_file -- XML file containing the lease in XML format.
+        """        
+        return cls.__from_xml_element(ET.parse(xml_file).getroot())
+
+    @classmethod
+    def from_xml_element(cls, element):
+        """...
+        
+        ...
+        
+        Argument:
+        element -- Element object containing a "<lease-annotation>" element.
+        """                
+        lease_id = element.get("id")
+      
+        start = element.find("start")
+        if start != None:
+            if len(start.getchildren()) == 0:
+                start = Timestamp(Timestamp.UNSPECIFIED)
+            else:
+                child = start[0]
+                if child.tag == "now":
+                    start = Timestamp(Timestamp.NOW)
+                elif child.tag == "exact":
+                    start = Timestamp(Parser.TimeFromString(child.get("time")))
+        
+        deadline = element.find("deadline")
+        
+        if deadline != None:
+            deadline = Parser.TimeFromString(deadline.get("time"))
+        
+        extra = element.find("extra")
+        extras = {}
+        if extra != None:
+            for attr in extra:
+                extras[attr.get("name")] = attr.get("value")
+
+        
+        software = element.find("software")
+
+        if software != None:
+            if software.find("none") != None:
+                software = UnmanagedSoftwareEnvironment()
+            elif software.find("disk-image") != None:
+                disk_image = software.find("disk-image")
+                image_id = disk_image.get("id")
+                image_size = int(disk_image.get("size"))
+                software = DiskImageSoftwareEnvironment(image_id, image_size)
+        
+        return cls(lease_id, start, deadline, software, extras)
+ 
+    
+    def to_xml(self):
+        """Returns an ElementTree XML representation of the lease annotation
+        
+        ...
+        
+        """        
+        annotation = ET.Element("lease-annotation")
+        annotation.set("id", str(self.lease_id))
+        
+        start = ET.SubElement(annotation, "start")
+        if self.start.requested == Timestamp.UNSPECIFIED:
+            pass # empty start element
+        elif self.start.requested == Timestamp.NOW:
+            ET.SubElement(start, "now") #empty now element
+        else:
+            exact = ET.SubElement(start, "exact")
+            exact.set("time", "+" + str(self.start.requested))
+            
+        if self.deadline != None:
+            deadline = ET.SubElement(annotation, "deadline")
+            deadline.set("time", "+" + str(self.deadline))
+        
+        if self.software != None:
+            software = ET.SubElement(annotation, "software")
+            if isinstance(self.software, UnmanagedSoftwareEnvironment):
+                ET.SubElement(software, "none")
+            elif isinstance(self.software, DiskImageSoftwareEnvironment):
+                imagetransfer = ET.SubElement(software, "disk-image")
+                imagetransfer.set("id", self.software.image_id)
+                imagetransfer.set("size", str(self.software.image_size))
+            
+        if len(self.extras) > 0:
+            extras = ET.SubElement(annotation, "extra")
+            for name, value in self.extras.items():
+                attr = ET.SubElement(extras, "attr")
+                attr.set("name", name)
+                attr.set("value", value)
+            
+        return annotation
+
+    def to_xml_string(self):
+        """Returns a string XML representation of the lease annotation
+        
+        ...
+        
+        """   
+        return ET.tostring(self.to_xml())    
+    
+class LeaseAnnotations(object):
+    """Reprents a sequence of lease annotations.
+    
+    ...
+    """    
+    def __init__(self, annotations):
+        """Constructor.
+        
+        Arguments:
+        annotations -- A dictionary of annotations
+        """                 
+        self.annotations = annotations
+    
+    def apply_to_leases(self, leases):
+        """Apply annotations to a workload
+        
+        """
+        for lease in [l for l in leases if self.has_annotation(l.id)]:
+            annotation = self.get_annotation(lease.id)
+            
+            if annotation.start != None:
+                if annotation.start.requested in (Timestamp.NOW, Timestamp.UNSPECIFIED):
+                    lease.start.requested = annotation.start.requested
+                else:
+                    lease.start.requested = lease.submit_time + annotation.start.requested
+
+            if annotation.deadline != None:
+                lease.deadline = lease.submit_time + annotation.deadline
+
+            if annotation.software != None:
+                lease.software = annotation.software
+
+            if annotation.extras != None:
+                lease.extras.update(annotation.extras)
+
+    def get_annotation(self, lease_id):
+        """...
+        
+        """  
+        return self.annotations[lease_id]
+
+    def has_annotation(self, lease_id):
+        """...
+        
+        """  
+        return self.annotations.has_key(lease_id)
+    
+    @classmethod
+    def from_xml_file(cls, xml_file):
+        """...
+        
+        ...
+        
+        Argument:
+        xml_file -- XML file containing the lease in XML format.
+        """        
+        return cls.__from_xml_element(ET.parse(xml_file).getroot())
+
+    @classmethod
+    def __from_xml_element(cls, element):
+        """...
+        
+        ...
+        
+        Argument:
+        element -- Element object containing a "<lease-annotations>" element.
+        """                
+        annotation_elems = element.findall("lease-annotation")
+        annotations = {}
+        for annotation_elem in annotation_elems:
+            lease_id = int(annotation_elem.get("id"))
+            annotations[lease_id] = LeaseAnnotation.from_xml_element(annotation_elem)
+            
+        return cls(annotations)    
+    
+    def to_xml(self):
+        """Returns an ElementTree XML representation of the lease
+        
+        See the Haizea documentation for details on the
+        lease XML format.
+        
+        """        
+        annotations = ET.Element("lease-annotations")
+        for annotation in self.annotations.values():
+            annotations.append(annotation.to_xml())
+            
+        return annotations
+
+    def to_xml_string(self):
+        """Returns a string XML representation of the lease
+        
+        See the Haizea documentation for details on the
+        lease XML format.
+        
+        """   
+        return ET.tostring(self.to_xml())    
         
 class Site(object):
     """Represents a site containing machines ("nodes").

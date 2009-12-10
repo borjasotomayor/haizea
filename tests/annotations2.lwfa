@@ -1,0 +1,29 @@
+<lease-annotations>
+
+<lease-annotation id="1">
+	<start>
+		<exact time="+1:00:00.00" />
+	</start>
+	<software>
+	    <disk-image id="annotation1.img" size="4096"/>
+	</software>
+	<extra>
+		<attr name="five" value="5" />
+		<attr name="six" value="6" />
+	</extra>
+</lease-annotation>
+
+<lease-annotation id="2">
+	<start>
+		<exact time="+2:00:00.00" />
+	</start>
+	<software>
+	    <disk-image id="annotation2.img" size="4096"/>
+	</software>
+	<extra>
+		<attr name="seven" value="7" />
+		<attr name="eight" value="8" />
+	</extra>
+</lease-annotation>
+
+</lease-annotations>
