@@ -24,6 +24,12 @@ import sys
 from mx.DateTime import TimeDelta
 import ConfigParser
 
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    # Compatibility with Python <=2.4
+    import elementtree.ElementTree as ET 
+
 class HaizeaConfig(Config):
 
     sections = []
@@ -953,9 +959,7 @@ class HaizeaMultiConfig(Config):
     
                         # Add datafile option
                         datadir = self.config.get(self.MULTI_SEC, self.DATADIR_OPT)
-                        print profile, tracefile, annotationfile, injectfile
                         datafilename = generate_config_name(profile, tracefile, annotationfile, injectfile)
-                        print datafilename
                         datafile = datadir + "/" + datafilename + ".dat"
                         # The accounting section may have not been created
                         if not profileconfig.has_section("accounting"):
@@ -964,7 +968,18 @@ class HaizeaMultiConfig(Config):
                         
                         # Set "attributes" option (only used internally)
                         attrs = {"profile":profile,"tracefile":tracefile,"injectfile":injectfile,"annotationfile":annotationfile}
-                        # TODO: Load additional attributes from trace/injfiles
+                        
+                        trace_attrs = self.__load_attributes_from_file(tracefile)
+                        attrs.update(trace_attrs)
+                        
+                        if injectfile != None:
+                            inj_attrs = self.__load_attributes_from_file(injectfile)
+                            attrs.update(inj_attrs)
+
+                        if annotationfile != None:
+                            annot_attrs = self.__load_attributes_from_file(annotationfile)
+                            attrs.update(annot_attrs)
+
                         attrs_str = ",".join(["%s=%s" % (k,v) for (k,v) in attrs.items()])
                         if profileconfig.has_option("accounting", "attributes"):
                             attrs_str += ",%s" % profileconfig.get("general", "attributes")
@@ -979,3 +994,12 @@ class HaizeaMultiConfig(Config):
                         configs.append(c)
         
         return configs
+    
+    def __load_attributes_from_file(self, file):
+        attrs = {}
+        root = ET.parse(file).getroot()
+        attributes_elem = root.find("attributes")
+        for attr_elem in attributes_elem:
+            attrs[attr_elem.get("name")] = attr_elem.get("value")
+        return attrs
+        

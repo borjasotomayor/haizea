@@ -29,10 +29,12 @@ class haizea_lwf_annotate(Command):
     
     name = "haizea-lwf-annotate"
     
+    GENERAL_SEC = "general"
     START_DELAY_SEC = "start-delay"
     DEADLINE_STRETCH_SEC = "deadline-stretch"
     MARKUP_SEC = "user-markup"
     
+    ATTRIBUTES_OPT = "attributes"
     DISTRIBUTION_OPT = "distribution"
     MIN_OPT = "min"
     MAX_OPT = "max"
@@ -98,7 +100,14 @@ class haizea_lwf_annotate(Command):
             annotation = LeaseAnnotation(lease_id, start, deadline, software, extra)
             annotations[lease_id] = annotation
             
-        annotations = LeaseAnnotations(annotations)
+        attributes = {}
+        attrs = self.config.get(haizea_lwf_annotate.GENERAL_SEC, haizea_lwf_annotate.ATTRIBUTES_OPT)
+        attrs = attrs.split(",")
+        for attr in attrs:
+            (k,v) = attr.split("=")
+            attributes[k] = v
+        
+        annotations = LeaseAnnotations(annotations, attributes)
         
         print annotations.to_xml_string()
         

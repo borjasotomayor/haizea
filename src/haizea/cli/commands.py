@@ -181,7 +181,6 @@ class haizea_generate_configs(Command):
             tracefile = c.get("tracefile")
             injfile = c.get("injectionfile")
             annotationfile = c.get("annotationfile")
-            print annotationfile
             configname = generate_config_name(profile, tracefile, annotationfile, injfile)
             configfile = etcdir + "/%s.conf" % configname
             fc = open(configfile, "w")

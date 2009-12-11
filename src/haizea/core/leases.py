@@ -1208,13 +1208,14 @@ class LeaseAnnotations(object):
     
     ...
     """    
-    def __init__(self, annotations):
+    def __init__(self, annotations, attributes):
         """Constructor.
         
         Arguments:
         annotations -- A dictionary of annotations
         """                 
         self.annotations = annotations
+        self.attributes = attributes
     
     def apply_to_leases(self, leases):
         """Apply annotations to a workload
@@ -1276,7 +1277,12 @@ class LeaseAnnotations(object):
             lease_id = int(annotation_elem.get("id"))
             annotations[lease_id] = LeaseAnnotation.from_xml_element(annotation_elem)
             
-        return cls(annotations)    
+        attributes = {}
+        attributes_elem = element.find("attributes")
+        for attr_elem in attributes_elem:
+            attributes[attr_elem.get("name")] = attr_elem.get("value")
+            
+        return cls(annotations, attributes)    
     
     def to_xml(self):
         """Returns an ElementTree XML representation of the lease
@@ -1286,6 +1292,13 @@ class LeaseAnnotations(object):
         
         """        
         annotations = ET.Element("lease-annotations")
+
+        attributes = ET.SubElement(annotations, "attributes")
+        for name, value in self.attributes.items():
+            attr_elem = ET.SubElement(attributes, "attr")
+            attr_elem.set("name", name)
+            attr_elem.set("value", value)
+
         for annotation in self.annotations.values():
             annotations.append(annotation.to_xml())
             
