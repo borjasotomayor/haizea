@@ -30,13 +30,9 @@ class BaseTest(object):
         for id in ids:
             lease = self.haizea.scheduler.completed_leases.get_lease(id)
             
-            print "ID: %i" % lease.id
-            print Lease.state_str[lease.get_state()]
-            print "End: %s" % lease.end
             assert lease.get_state() == Lease.STATE_DONE
             
             if lease.deadline != None:
-                print "Deadline: %s" % lease.deadline
                 assert lease.end <= lease.deadline
 
     def _verify_rejected(self, ids):
