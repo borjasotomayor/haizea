@@ -1279,8 +1279,9 @@ class LeaseAnnotations(object):
             
         attributes = {}
         attributes_elem = element.find("attributes")
-        for attr_elem in attributes_elem:
-            attributes[attr_elem.get("name")] = attr_elem.get("value")
+        if attributes_elem != None:
+            for attr_elem in attributes_elem:
+                attributes[attr_elem.get("name")] = attr_elem.get("value")
             
         return cls(annotations, attributes)    
     
