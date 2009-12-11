@@ -111,7 +111,7 @@ class VMScheduler(object):
         elif lease.get_type() == Lease.IMMEDIATE:
             return self.__schedule_asap(lease, nexttime, earliest, allow_in_future = False)
         elif lease.get_type() == Lease.DEADLINE:
-            return self.__schedule_exact(lease, nexttime, earliest)
+            return self.__schedule_deadline(lease, nexttime, earliest)
 
 
     def estimate_migration_time(self, lease):
@@ -612,6 +612,22 @@ class VMScheduler(object):
         return vmrr, preemptions
 
 
+    def __schedule_deadline(self, lease, nexttime, earliest):
+        start = lease.start.requested
+        duration = lease.duration.requested
+        deadline = lease.deadline
+        
+        stretch = (deadline - start) / duration
+        if stretch <= 1.5:
+            return self.__schedule_exact(lease, nexttime, earliest)
+        else:
+            for n in earliest:
+                earliest[n].time = max(earliest[n].time, start)
+            vmrr, preemptions = self.__schedule_asap(lease, nexttime, earliest, allow_in_future = True)
+            if vmrr.end - vmrr.start != duration or vmrr.end > deadline:
+                raise NotSchedulableException, "Could not schedule before deadline"
+            return vmrr, preemptions
+
     def __find_fit_at_points(self, lease, requested_resources, changepoints, duration, min_duration):
         """ Tries to map a lease in a given list of points in time
         
@@ -657,7 +673,7 @@ class VMScheduler(object):
                                                               end, 
                                                               strictend = strictend,
                                                               onlynodes = onlynodes)
-            
+
             # We have a mapping; we still have to check if it satisfies
             # the minimum duration.
             if mapping != None:
