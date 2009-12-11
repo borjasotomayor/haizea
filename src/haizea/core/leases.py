@@ -255,7 +255,7 @@ class Lease(object):
         if user_id == None:
             user_id = None
         else:
-            user_id = int(state)
+            user_id = int(user_id)
 
         state = element.get("state")
         if state == None:

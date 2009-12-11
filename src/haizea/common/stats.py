@@ -64,17 +64,36 @@ class NormalDistribution(ContinuousDistribution):
     def get(self):
         return random.normalvariate(self.mu, self.sigma)
     
-class BoundedParetoDistribution(BoundedContinuousDistribution):
-    def __init__(self, min, max, alpha):
+class BoundedNormalDistribution(BoundedContinuousDistribution):
+    def __init__(self, min, max, mu, sigma):
         BoundedContinuousDistribution.__init__(self, min, max)
-        self.alpha = alpha
+        self.mu = float(mu)
+        self.sigma = float(sigma)
+        
+    def get(self):
+        n = random.normalvariate(self.mu, self.sigma) 
+        if n < self.min:
+            n = self.min
+        elif n > self.max:
+            n = self.max
+        return n
+        
+    
+class BoundedParetoDistribution(BoundedContinuousDistribution):
+    def __init__(self, min, max, alpha, invert = False):
+        BoundedContinuousDistribution.__init__(self, min, max)
+        self.alpha = float(alpha)
+        self.invert = invert
         
     def get(self):
         u = random.random()
         l = self.min
         h = self.max
         a = self.alpha
-        return (-((u*h**a - u*l**a - h**a)/((h**a)*(l**a))))**(-1/a)
+        p = (-((u*h**a - u*l**a - h**a)/((h**a)*(l**a))))**(-1/a)
+        if self.invert:
+            p = h - p
+        return p
                   
             
 class DiscreteDistribution(Distribution):

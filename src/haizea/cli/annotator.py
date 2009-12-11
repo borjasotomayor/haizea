@@ -16,8 +16,9 @@
 # limitations under the License.                                             #
 # -------------------------------------------------------------------------- #
 
-from haizea.common.stats import *
-from haizea.core.leases import LeaseWorkload, LeaseAnnotation, LeaseAnnotations, UnmanagedSoftwareEnvironment
+import haizea.common.stats as stats
+from haizea.core.leases import LeaseWorkload, LeaseAnnotation, LeaseAnnotations, UnmanagedSoftwareEnvironment, Timestamp
+from haizea.common.utils import round_datetime_delta
 from haizea.cli import Command
 from haizea.cli.optionparser import Option
 from mx.DateTime import DateTimeDelta
@@ -27,6 +28,19 @@ import ConfigParser
 class haizea_lwf_annotate(Command):
     
     name = "haizea-lwf-annotate"
+    
+    START_DELAY_SEC = "start-delay"
+    DEADLINE_STRETCH_SEC = "deadline-stretch"
+    MARKUP_SEC = "user-markup"
+    
+    DISTRIBUTION_OPT = "distribution"
+    MIN_OPT = "min"
+    MAX_OPT = "max"
+    MEAN_OPT = "mu"
+    STDEV_OPT = "sigma"
+    ALPHA_OPT = "alpha"
+    INVERT_OPT = "invert"
+    SEED_OPT = "seed"
     
     def __init__(self, argv):
         Command.__init__(self, argv)
@@ -43,6 +57,8 @@ class haizea_lwf_annotate(Command):
                                          ...
                                          """))
         
+        self.user_markups = {}
+        
     def run(self):
         self.parse_options()      
         
@@ -51,8 +67,12 @@ class haizea_lwf_annotate(Command):
         conffile = self.opt.conf
         
         conffile = open(conffile, "r")
-        config = ConfigParser.ConfigParser()
-        config.readfp(conffile)
+        self.config = ConfigParser.ConfigParser()
+        self.config.readfp(conffile)
+        
+        self.startdelay_dist = self.__get_dist(haizea_lwf_annotate.START_DELAY_SEC)
+        self.deadlinestretch_dist = self.__get_dist(haizea_lwf_annotate.DEADLINE_STRETCH_SEC)
+        self.markup_dist = self.__get_dist(haizea_lwf_annotate.MARKUP_SEC)
 
         lease_workload = LeaseWorkload.from_xml_file(infile)
         leases = lease_workload.get_leases()
@@ -61,10 +81,19 @@ class haizea_lwf_annotate(Command):
         for lease in leases:
             lease_id = lease.id
             
-            start = DateTimeDelta(0, 1)
-            deadline = DateTimeDelta(0, 2)
-            software = UnmanagedSoftwareEnvironment()
-            extra = {"foo":"bar"}
+            start = self.__get_start(lease)
+            if start != None:
+                start = Timestamp(start)
+                
+            deadline = self.__get_deadline(lease, start.requested)
+           
+            software = self.__get_software(lease)
+            
+            markup = self.__get_markup(lease)
+           
+            extra = {}
+            if markup != None:
+                extra["simul_pricemarkup"] = "%.2f" % markup
             
             annotation = LeaseAnnotation(lease_id, start, deadline, software, extra)
             annotations[lease_id] = annotation
@@ -73,20 +102,72 @@ class haizea_lwf_annotate(Command):
         
         print annotations.to_xml_string()
         
+    def __get_start(self, lease):
+        if self.startdelay_dist == None:
+            return None
+        else:
+            delta = self.startdelay_dist.get()
+            start = round_datetime_delta(delta * lease.duration.requested)
+            return start
+
+    def __get_deadline(self, lease, start):
+        if self.deadlinestretch_dist == None:
+            return None
+        else:
+            tau = self.deadlinestretch_dist.get()
+            deadline = round_datetime_delta(start + (1 + tau)*lease.duration.requested)
+            return deadline
+
+    def __get_software(self, lease):
+        return None # TODO
+    
+    def __get_markup(self, lease):
+        if self.markup_dist == None:
+            return None
+        else:
+            if self.user_markups.has_key(lease.user_id):
+                return self.user_markups[lease.user_id]
+            else:
+                markup = self.markup_dist.get()
+                self.user_markups[lease.user_id] = markup
+                return markup
+    
+    def __get_dist(self, section):
+        if self.config.has_section(section):
+            return self.__create_distribution_from_section(section)
+        else:
+            return None
         
-    def __createContinuousDistributionFromSection(self, section):
-        distType = self.config.get(section, DISTRIBUTION_OPT)
-        min = self.config.getfloat(section, MIN_OPT)
-        max = self.config.get(section, MAX_OPT)
+    def __create_distribution_from_section(self, section):
+        dist_type = self.config.get(section, haizea_lwf_annotate.DISTRIBUTION_OPT)
+        min = self.config.get(section, haizea_lwf_annotate.MIN_OPT)
+        max = self.config.get(section, haizea_lwf_annotate.MAX_OPT)
+        
+        if min == "unbounded":
+            min = float("inf")
+        else:
+            min = float(min)
         if max == "unbounded":
             max = float("inf")
-        if distType == "uniform":
-            dist = stats.ContinuousUniformDistribution(min, max)
-        elif distType == "normal":
-            mu = self.config.getfloat(section, MEAN_OPT)
-            sigma = self.config.getfloat(section, STDEV_OPT)
-            dist = stats.ContinuousNormalDistribution(min,max,mu,sigma)
-        elif distType == "pareto":
-            pass 
-        
+        else:
+            max = float(max)
+            
+        if dist_type == "uniform":
+            dist = stats.UniformDistribution(min, max)
+        elif dist_type == "normal":
+            mu = self.config.getfloat(section, haizea_lwf_annotate.MEAN_OPT)
+            sigma = self.config.getfloat(section, haizea_lwf_annotate.STDEV_OPT)
+            dist = stats.BoundedNormalDistribution(min,max,mu,sigma)
+        elif dist_type == "bounded-pareto":
+            alpha = self.config.getfloat(section, haizea_lwf_annotate.ALPHA_OPT)
+            if self.config.has_option(section, haizea_lwf_annotate.INVERT_OPT):
+                invert = self.config.getboolean(section, haizea_lwf_annotate.INVERT_OPT)
+            else:
+                invert = False
+            dist = stats.BoundedParetoDistribution(min,max,alpha,invert)
+            
+        if self.config.has_option(section, haizea_lwf_annotate.SEED_OPT):
+            seed = self.config.getint(section, haizea_lwf_annotate.SEED_OPT)
+            dist.seed(seed)
+
         return dist
