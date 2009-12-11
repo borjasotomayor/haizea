@@ -24,7 +24,7 @@ from docutils.core import publish_string
 import re
 import textwrap
 
-def generate_config_name(profile, tracefile, injectedfile):
+def generate_config_name(profile, tracefile, annotationfile, injectedfile):
     tracename=tracefile.split("/")[-1].split(".")[0]
     
     if injectedfile != None and injectedfile != "None":
@@ -32,6 +32,10 @@ def generate_config_name(profile, tracefile, injectedfile):
         name = tracename + "+" + injectname
     else:
         name = tracename
+        
+    if annotationfile != None and annotationfile != "None":
+        annotname=annotationfile.split("/")[-1].split(".")[0]
+        name += "+" + annotname        
             
     name = profile + "_" + name
     return name

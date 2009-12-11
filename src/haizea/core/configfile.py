@@ -856,8 +856,12 @@ class HaizeaMultiConfig(Config):
     COMMON_SEC = "common"
     TRACEDIR_OPT = "tracedir"
     TRACEFILES_OPT = "tracefiles"
+    ANNOTATIONDIR_OPT = "annotationdir"
+    ANNOTATIONFILES_OPT = "annotationfiles"
+    SKIP_NO_ANNOTATION_OPT = "skip-no-annotation"
     INJDIR_OPT = "injectiondir"
     INJFILES_OPT = "injectionfiles"
+    SKIP_NO_INJECTION_OPT = "skip-no-injection"
     DATADIR_OPT = "datadir"
     
     def __init__(self, config):
@@ -875,6 +879,16 @@ class HaizeaMultiConfig(Config):
         traces = self.config.get(self.MULTI_SEC, self.TRACEFILES_OPT).split()
         return [dir + "/" + t for t in traces]
 
+    def get_annotation_files(self):
+        if not self.config.has_option(self.MULTI_SEC, self.ANNOTATIONDIR_OPT):
+            return [None]
+        else:
+            dir = self.config.get(self.MULTI_SEC, self.ANNOTATIONDIR_OPT)
+            annot = self.config.get(self.MULTI_SEC, self.ANNOTATIONFILES_OPT).split()
+            annot = [dir + "/" + t for t in annot]
+            annot.append(None)
+            return annot
+
     def get_inject_files(self):
         dir = self.config.get(self.MULTI_SEC, self.INJDIR_OPT)
         inj = self.config.get(self.MULTI_SEC, self.INJFILES_OPT).split()
@@ -885,58 +899,83 @@ class HaizeaMultiConfig(Config):
     def get_configs(self):
         profiles = self.get_profiles()
         tracefiles = self.get_trace_files()
+        annotationfiles = self.get_annotation_files()
         injectfiles = self.get_inject_files()
+
+        if not self.config.has_option(self.MULTI_SEC, self.SKIP_NO_INJECTION_OPT):
+            skip_no_annotation = False
+        else:
+            skip_no_annotation = self.config.getboolean(self.MULTI_SEC, self.SKIP_NO_INJECTION_OPT)
+            
+        if not self.config.has_option(self.MULTI_SEC, self.SKIP_NO_ANNOTATION_OPT):
+            skip_no_injection = False
+        else:
+            skip_no_injection = self.config.getboolean(self.MULTI_SEC, self.SKIP_NO_ANNOTATION_OPT)
+        
+        no_annotations = (annotationfiles == [None])
+        no_injections = (injectfiles == [None])
 
         configs = []
         for profile in profiles:
             for tracefile in tracefiles:
-                for injectfile in injectfiles:
-                    profileconfig = ConfigParser.ConfigParser()
-                    commonsections = [s for s in self.config.sections() if s.startswith("common:")]
-                    profilesections = [s for s in self.config.sections() if s.startswith(profile +":")]
-                    sections = commonsections + profilesections
-                    for s in sections:
-                        s_noprefix = s.split(":")[1]
-                        items = self.config.items(s)
-                        if not profileconfig.has_section(s_noprefix):
-                            profileconfig.add_section(s_noprefix)
-                        for item in items:
-                            profileconfig.set(s_noprefix, item[0], item[1])
+                for annotationfile in annotationfiles:
+                    if annotationfile == None and skip_no_annotation:
+                        continue
+                    for injectfile in injectfiles:
+                        if injectfile == None and skip_no_injection:
+                            continue
+                        profileconfig = ConfigParser.ConfigParser()
+                        commonsections = [s for s in self.config.sections() if s.startswith("common:")]
+                        profilesections = [s for s in self.config.sections() if s.startswith(profile +":")]
+                        sections = commonsections + profilesections
+                        for s in sections:
+                            s_noprefix = s.split(":")[1]
+                            items = self.config.items(s)
+                            if not profileconfig.has_section(s_noprefix):
+                                profileconfig.add_section(s_noprefix)
+                            for item in items:
+                                profileconfig.set(s_noprefix, item[0], item[1])
+                                
+                        # The tracefile section may have not been created
+                        if not profileconfig.has_section("tracefile"):
+                            profileconfig.add_section("tracefile")
+    
+                        # Add tracefile option
+                        profileconfig.set("tracefile", "tracefile", tracefile)
+                        
+                        # Add injected file option
+                        if injectfile != None:
+                            profileconfig.set("tracefile", "injectionfile", injectfile)
                             
-                    # The tracefile section may have not been created
-                    if not profileconfig.has_section("tracefile"):
-                        profileconfig.add_section("tracefile")
-
-                    # Add tracefile option
-                    profileconfig.set("tracefile", "tracefile", tracefile)
-                    
-                    # Add injected file option
-                    if injectfile != None:
-                        profileconfig.set("tracefile", "injectionfile", injectfile)
-
-                    # Add datafile option
-                    datadir = self.config.get(self.MULTI_SEC, self.DATADIR_OPT)
-                    datafilename = generate_config_name(profile, tracefile, injectfile)
-                    datafile = datadir + "/" + datafilename + ".dat"
-                    # The accounting section may have not been created
-                    if not profileconfig.has_section("accounting"):
-                        profileconfig.add_section("accounting")
-                    profileconfig.set("accounting", "datafile", datafile)
-                    
-                    # Set "attributes" option (only used internally)
-                    attrs = {"profile":profile,"tracefile":tracefile,"injectfile":injectfile}
-                    # TODO: Load additional attributes from trace/injfiles
-                    attrs_str = ",".join(["%s=%s" % (k,v) for (k,v) in attrs.items()])
-                    if profileconfig.has_option("accounting", "attributes"):
-                        attrs_str += ",%s" % profileconfig.get("general", "attributes")
-                    profileconfig.set("accounting", "attributes", attrs_str)
-
-                    try:
-                        c = HaizeaConfig(profileconfig)
-                    except ConfigException, msg:
-                        print >> sys.stderr, "Error in configuration file:"
-                        print >> sys.stderr, msg
-                        exit(1)
-                    configs.append(c)
+                        # Add annotations file option
+                        if annotationfile != None:
+                            profileconfig.set("tracefile", "annotationfile", annotationfile)
+    
+                        # Add datafile option
+                        datadir = self.config.get(self.MULTI_SEC, self.DATADIR_OPT)
+                        print profile, tracefile, annotationfile, injectfile
+                        datafilename = generate_config_name(profile, tracefile, annotationfile, injectfile)
+                        print datafilename
+                        datafile = datadir + "/" + datafilename + ".dat"
+                        # The accounting section may have not been created
+                        if not profileconfig.has_section("accounting"):
+                            profileconfig.add_section("accounting")
+                        profileconfig.set("accounting", "datafile", datafile)
+                        
+                        # Set "attributes" option (only used internally)
+                        attrs = {"profile":profile,"tracefile":tracefile,"injectfile":injectfile,"annotationfile":annotationfile}
+                        # TODO: Load additional attributes from trace/injfiles
+                        attrs_str = ",".join(["%s=%s" % (k,v) for (k,v) in attrs.items()])
+                        if profileconfig.has_option("accounting", "attributes"):
+                            attrs_str += ",%s" % profileconfig.get("general", "attributes")
+                        profileconfig.set("accounting", "attributes", attrs_str)
+    
+                        try:
+                            c = HaizeaConfig(profileconfig)
+                        except ConfigException, msg:
+                            print >> sys.stderr, "Error in configuration file:"
+                            print >> sys.stderr, msg
+                            exit(1)
+                        configs.append(c)
         
         return configs

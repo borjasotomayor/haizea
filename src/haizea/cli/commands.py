@@ -180,7 +180,9 @@ class haizea_generate_configs(Command):
             profile = c.get_attr("profile")
             tracefile = c.get("tracefile")
             injfile = c.get("injectionfile")
-            configname = generate_config_name(profile, tracefile, injfile)
+            annotationfile = c.get("annotationfile")
+            print annotationfile
+            configname = generate_config_name(profile, tracefile, annotationfile, injfile)
             configfile = etcdir + "/%s.conf" % configname
             fc = open(configfile, "w")
             c.config.write(fc)
@@ -241,7 +243,8 @@ class haizea_generate_scripts(Command):
             tracefile = c.get("tracefile")
             injfile = c.get("injectionfile")
             datafile = c.get("datafile")
-            configname = generate_config_name(profile, tracefile, injfile)
+            annotationfile = c.get("annotationfile")            
+            configname = generate_config_name(profile, tracefile, annotationfile, injfile)
             if not self.opt.onlymissing or not os.path.exists(datafile):
                 configfile = etcdir + "/%s.conf" % configname
                 templatedata.append((configname, configfile))
