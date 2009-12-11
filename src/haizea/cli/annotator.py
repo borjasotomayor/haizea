@@ -82,18 +82,21 @@ class haizea_lwf_annotate(Command):
         
         for lease in leases:
             lease_id = lease.id
+            extra = {}
             
-            start = self.__get_start(lease)
+            start, delta = self.__get_start(lease)
             if start != None:
                 start = Timestamp(start)
+                extra["simul_start_delta"] = "%.2f" % delta
                 
-            deadline = self.__get_deadline(lease, start.requested)
-           
+            deadline, tau = self.__get_deadline(lease, start.requested)
+            if deadline != None:
+                extra["simul_deadline_tau"] = "%.2f" % tau
+            
             software = self.__get_software(lease)
             
             markup = self.__get_markup(lease)
-           
-            extra = {}
+
             if markup != None:
                 extra["simul_pricemarkup"] = "%.2f" % markup
             
@@ -113,19 +116,19 @@ class haizea_lwf_annotate(Command):
         
     def __get_start(self, lease):
         if self.startdelay_dist == None:
-            return None
+            return None, None
         else:
             delta = self.startdelay_dist.get()
             start = round_datetime_delta(delta * lease.duration.requested)
-            return start
+            return start, delta
 
     def __get_deadline(self, lease, start):
         if self.deadlinestretch_dist == None:
-            return None
+            return None, None
         else:
             tau = self.deadlinestretch_dist.get()
             deadline = round_datetime_delta(start + (1 + tau)*lease.duration.requested)
-            return deadline
+            return deadline, tau
 
     def __get_software(self, lease):
         return None # TODO
