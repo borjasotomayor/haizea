@@ -27,4 +27,6 @@ probe_class_mappings = {             "ar": "haizea.pluggable.accounting.leases.A
                               "immediate": "haizea.pluggable.accounting.leases.IMProbe",
                         "cpu-utilization": "haizea.pluggable.accounting.utilization.CPUUtilizationProbe",
                              "disk-usage": "haizea.pluggable.accounting.utilization.DiskUsageProbe",
+                               "deadline": "haizea.pluggable.accounting.leases.DeadlineProbe",
+                                  "price": "haizea.pluggable.accounting.leases.PriceProbe",
                         }

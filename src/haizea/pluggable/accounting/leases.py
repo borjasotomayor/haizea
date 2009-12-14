@@ -179,3 +179,81 @@ class BEProbe(AccountingProbe):
             self.accounting.set_lease_stat(BEProbe.LEASE_STAT_WAITINGTIME, lease.id, wait)
             self.accounting.set_lease_stat(BEProbe.LEASE_STAT_SLOWDOWN, lease.id, lease.get_slowdown())
             self.accounting.incr_counter(BEProbe.COUNTER_BESTEFFORTCOMPLETED, lease.id)
+
+class PriceProbe(AccountingProbe):
+    """
+    Collects information from priced leases
+    
+    """
+    COUNTER_REVENUE="Revenue"
+    COUNTER_MISSED_REVENUE="Missed revenue"
+    COUNTER_REJECTED_BY_USER="Rejected by price"
+    STAT_REVENUE="Revenue"
+    STAT_MISSED_REVENUE="Missed revenue"
+    STAT_REJECTED_BY_USER="Rejected by price"
+    
+    def __init__(self, accounting):
+        """See AccountingProbe.__init__"""        
+        AccountingProbe.__init__(self, accounting)
+        self.accounting.create_counter(PriceProbe.COUNTER_REVENUE, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(PriceProbe.COUNTER_MISSED_REVENUE, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(PriceProbe.COUNTER_REJECTED_BY_USER, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_stat(PriceProbe.STAT_REVENUE)
+        self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE)
+        self.accounting.create_stat(PriceProbe.STAT_REJECTED_BY_USER)
+
+
+    def finalize_accounting(self):
+        """See AccountingProbe.finalize_accounting"""        
+        self._set_stat_from_counter(PriceProbe.STAT_REVENUE, PriceProbe.COUNTER_REVENUE)
+        self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE, PriceProbe.COUNTER_MISSED_REVENUE)
+        self._set_stat_from_counter(PriceProbe.STAT_REJECTED_BY_USER, PriceProbe.COUNTER_REJECTED_BY_USER)
+
+
+    def at_lease_done(self, lease):
+        """See AccountingProbe.at_lease_done"""        
+        if lease.get_type() == Lease.DEADLINE:
+            if lease.get_state() == Lease.STATE_REJECTED and lease.price==-1:
+                self.accounting.incr_counter(PriceProbe.COUNTER_REJECTED_BY_USER, lease.id)
+            elif lease.get_state() == Lease.STATE_DONE:
+                self.accounting.incr_counter(PriceProbe.STAT_REVENUE, lease.id, lease.price)
+                markup = float(lease.extras["simul_pricemarkup"])
+                fair_price = float(lease.extras["fair_price"])
+                self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE, lease.id, (fair_price * markup) - lease.price)
+                
+class DeadlineProbe(AccountingProbe):
+    """
+    Collects information from Advance Reservation leases
+
+    """
+    COUNTER_ACCEPTED="Accepted Deadline"
+    COUNTER_REJECTED="Rejected Deadline"
+    STAT_ACCEPTED="Total accepted Deadline"
+    STAT_REJECTED="Total rejected Deadline"
+    
+    def __init__(self, accounting):
+        """See AccountingProbe.__init__"""
+        AccountingProbe.__init__(self, accounting)
+        self.accounting.create_counter(DeadlineProbe.COUNTER_ACCEPTED, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(DeadlineProbe.COUNTER_REJECTED, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_stat(DeadlineProbe.STAT_ACCEPTED)
+        self.accounting.create_stat(DeadlineProbe.STAT_REJECTED)
+
+    def finalize_accounting(self):
+        """See AccountingProbe.finalize_accounting"""        
+        self._set_stat_from_counter(DeadlineProbe.STAT_ACCEPTED, DeadlineProbe.COUNTER_ACCEPTED)
+        self._set_stat_from_counter(DeadlineProbe.STAT_REJECTED, DeadlineProbe.COUNTER_REJECTED)
+
+    def at_lease_request(self, lease):
+        """See AccountingProbe.at_lease_request"""                
+        if lease.get_type() == Lease.DEADLINE:
+            if lease.get_state() == Lease.STATE_PENDING:
+                self.accounting.incr_counter(DeadlineProbe.COUNTER_ACCEPTED, lease.id)
+            elif lease.get_state() == Lease.STATE_REJECTED:
+                self.accounting.incr_counter(DeadlineProbe.COUNTER_REJECTED, lease.id)
+
+    def at_lease_done(self, lease):
+        """See AccountingProbe.at_lease_done"""
+        if lease.get_type() == Lease.DEADLINE:
+            if lease.get_state() == Lease.STATE_REJECTED:
+                self.accounting.incr_counter(DeadlineProbe.COUNTER_REJECTED, lease.id)

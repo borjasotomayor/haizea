@@ -145,7 +145,7 @@ class AccountingDataCollection(object):
         self.__data.stats_names.append(stat_id)
 
 
-    def incr_counter(self, counter_id, lease_id = None):
+    def incr_counter(self, counter_id, lease_id = None, amount = 1):
         """Increment a counter
         
         @param counter_id: Name of the counter
@@ -154,10 +154,10 @@ class AccountingDataCollection(object):
         @type lease_id: C{int}
         """        
         time = get_clock().get_time()
-        self.append_to_counter(counter_id, self.__data.counters[counter_id][-1][2] + 1, lease_id)
+        self.append_to_counter(counter_id, self.__data.counters[counter_id][-1][2] + amount, lease_id)
 
 
-    def decr_counter(self, counter_id, lease_id = None):
+    def decr_counter(self, counter_id, lease_id = None, amount = 1):
         """Decrement a counter
         
         @param counter_id: Name of the counter
@@ -166,7 +166,7 @@ class AccountingDataCollection(object):
         @type lease_id: C{int}
         """        
         time = get_clock().get_time()
-        self.append_to_counter(counter_id, self.__data.counters[counter_id][-1][2] - 1, lease_id)
+        self.append_to_counter(counter_id, self.__data.counters[counter_id][-1][2] - amount, lease_id)
 
 
     def append_to_counter(self, counter_id, value, lease_id = None):
