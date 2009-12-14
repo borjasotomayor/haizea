@@ -567,7 +567,7 @@ class LeaseScheduler(object):
         ## that incorporates pricing in simulations (but not interactively yet)
         
         # Call pricing policy
-        lease.price = get_policy().price_lease(lease, preemptions)
+        lease_price = get_policy().price_lease(lease, preemptions)
         
         # Determine whether to accept price or not (this in particular
         # should happen in the lease admission step)
@@ -575,8 +575,12 @@ class LeaseScheduler(object):
             markup = float(lease.extras["simul_pricemarkup"])
             if get_config().get("policy.pricing") != "free":
                 fair_price = get_policy().pricing.get_fair_price(lease)
-                if lease.price > fair_price * markup:
-                    raise NotSchedulableException, "Lease priced at %.2f. User is only willing to pay %.2f" % (lease.price, fair_price * markup)
+                if lease_price > fair_price * markup:
+                    lease.price = -1
+                    raise NotSchedulableException, "Lease priced at %.2f. User is only willing to pay %.2f" % (lease_price, fair_price * markup)
+                else:
+                    lease.price = lease_price
+                    lease.extras["fair_price"] = fair_price
         
         ## END NOT-FIT-FOR-PRODUCTION CODE
                                 
