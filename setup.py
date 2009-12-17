@@ -1,7 +1,7 @@
 from distutils.core import setup
 
 setup(name='haizea',
-      version='0.9.2',
+      version='1.0',
       description='Haizea',
       author='University of Chicago',
       author_email='borja@cs.uchicago.edu',
@@ -37,7 +37,7 @@ setup(name='haizea',
                                                  'traces/multi/withoutprematureend.lwf']),
                   ],
       classifiers=[
-          'Development Status :: 4 - Beta',
+          'Development Status :: 5 - Production/Stable',
           'Environment :: Console',
           'Environment :: No Input/Output (Daemon)',
           'Intended Audience :: Developers',
