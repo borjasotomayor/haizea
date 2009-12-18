@@ -327,3 +327,12 @@ class PricingPolicy(object):
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
         abstract()
+        
+    def feedback(self, lease):
+        """Called after a lease has been accepted or rejected, to provide
+        feeback to the pricing policy.
+        
+        Arguments:
+        lease -- Lease that has been accepted/rejected
+        """
+        pass    

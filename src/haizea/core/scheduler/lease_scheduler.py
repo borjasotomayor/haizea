@@ -177,12 +177,20 @@ class LeaseScheduler(object):
             try:
                 self.__schedule_lease(lease, nexttime=nexttime)
                 self.logger.info("Lease #%i has been scheduled." % lease.id)
+                ## BEGIN NOT-FIT-FOR-PRODUCTION CODE
+                ## This should happen when the lease is requested.
+                get_policy().pricing.feedback(lease)
+                ## END NOT-FIT-FOR-PRODUCTION CODE
                 lease.print_contents()
             except NotSchedulableException, exc:
                 self.logger.info("Lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
                 lease.set_state(Lease.STATE_REJECTED)
                 self.completed_leases.add(lease)
                 self.accounting.at_lease_done(lease)
+                ## BEGIN NOT-FIT-FOR-PRODUCTION CODE
+                ## This should happen when the lease is requested.
+                get_policy().pricing.feedback(lease)
+                ## END NOT-FIT-FOR-PRODUCTION CODE
                 self.leases.remove(lease)            
             get_persistence().persist_lease(lease)
 
@@ -575,12 +583,13 @@ class LeaseScheduler(object):
             markup = float(lease.extras["simul_pricemarkup"])
             if get_config().get("policy.pricing") != "free":
                 fair_price = get_policy().pricing.get_fair_price(lease)
+                lease.extras["fair_price"] = fair_price
                 if lease_price > fair_price * markup:
                     lease.price = -1
+                    lease.extras["rejected_price"] = lease_price
                     raise NotSchedulableException, "Lease priced at %.2f. User is only willing to pay %.2f" % (lease_price, fair_price * markup)
                 else:
                     lease.price = lease_price
-                    lease.extras["fair_price"] = fair_price
         
         ## END NOT-FIT-FOR-PRODUCTION CODE
                                 
