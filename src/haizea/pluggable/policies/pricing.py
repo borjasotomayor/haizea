@@ -25,6 +25,8 @@ from haizea.core.leases import Lease
 from haizea.core.scheduler.policy import PricingPolicy
 from haizea.common.utils import get_config
 
+import random
+
 class FreePolicy(PricingPolicy):
     """Simple pricing policy: all leases are free (price is zero)
     """
@@ -67,7 +69,7 @@ class FairPricePolicy(PricingPolicy):
     
     
 class AlwaysFairPricePolicy(FairPricePolicy):
-    """Base class for policies that rely on the notion of a fair rate for computation
+    """...
     """    
     def __init__(self, slottable):
         """Constructor
@@ -89,3 +91,58 @@ class AlwaysFairPricePolicy(FairPricePolicy):
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
         return self.get_fair_price(lease)
+    
+class RandomMultipleOfFairPricePolicy(FairPricePolicy):
+    """Base class for policies that rely on the notion of a fair rate for computation
+    """    
+    def __init__(self, slottable):
+        """Constructor
+        
+        Argument
+        slottable -- A fully constructed SlotTable
+        """        
+        FairPricePolicy.__init__(self, slottable)
+        random.seed(get_config().config.getint("pricing", "seed"))
+        self.min_multiplier = get_config().config.getfloat("pricing", "min-multiplier")
+        self.max_multiplier = get_config().config.getfloat("pricing", "max-multiplier")
+    
+    def price_lease(self, lease, preempted_leases):
+        """Computes the price of a lease
+        
+        See class documentation for details on what policy is implemented here.
+        See documentation of PricingPolicy.price_lease
+        for more details on this function.
+        
+        Arguments:
+        lease -- Lease that is being scheduled.
+        preempted_leases -- Leases that would have to be preempted to support this lease.
+        """
+        mult = random.uniform(self.min_multiplier, self.max_multiplier)
+        fair_price = self.get_fair_price(lease)
+        return mult * fair_price
+    
+class AdaptiveFairPricePolicy(FairPricePolicy):
+    """Base class for policies that rely on the notion of a fair rate for computation
+    """    
+    def __init__(self, slottable):
+        """Constructor
+        
+        Argument
+        slottable -- A fully constructed SlotTable
+        """        
+        FairPricePolicy.__init__(self, slottable)
+        self.multiplier = 1.0
+    
+    def price_lease(self, lease, preempted_leases):
+        """Computes the price of a lease
+        
+        See class documentation for details on what policy is implemented here.
+        See documentation of PricingPolicy.price_lease
+        for more details on this function.
+        
+        Arguments:
+        lease -- Lease that is being scheduled.
+        preempted_leases -- Leases that would have to be preempted to support this lease.
+        """
+        fair_price = self.get_fair_price(lease)
+        return self.multiplier * fair_price
