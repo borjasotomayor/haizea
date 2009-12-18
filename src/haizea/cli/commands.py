@@ -21,6 +21,7 @@ from haizea.common.utils import generate_config_name, unpickle
 from haizea.core.configfile import HaizeaConfig, HaizeaMultiConfig
 from haizea.core.accounting import AccountingDataCollection
 from haizea.common.config import ConfigException
+from haizea.common.stats import percentile
 from haizea.cli.optionparser import Option
 from haizea.cli import Command
 from mx.DateTime import TimeDelta, Parser
@@ -482,6 +483,10 @@ class haizea_swf2lwf(Command):
                                          help = """
                                          Memory requested by jobs.
                                          """))
+        self.optparser.add_option(Option("-s", "--scale", action="store", type="string", dest="scale",
+                                         help = """
+                                         Scale number of processors by 1/SCALE.
+                                         """))        
                 
     def run(self):            
         self.parse_options()
@@ -502,6 +507,8 @@ class haizea_swf2lwf(Command):
         time = TimeDelta(seconds=0)
         requests = ET.SubElement(root, "lease-requests")
         
+        slowdowns = []
+        users = set()
         
         infile = open(infile, "r")
         for line in infile:
@@ -629,6 +636,9 @@ class haizea_swf2lwf(Command):
                         # Job was submitted to a queue we're filtering out
                         continue              
         
+                if self.opt.scale != None:
+                    num_processors_requested = int(num_processors_requested/int(self.opt.scale))
+                    
                 # Make submission time relative to starting time of trace
                 submit_time = submit_time - from_time
         
@@ -662,6 +672,16 @@ class haizea_swf2lwf(Command):
                 else:
                     print "Cannot convert this file. Job #%i does not specify requested memory, and --memory parameter not specified" % job_number
                     exit(-1)
+                    
+                if run_time < 10:
+                    run_time2 = 10
+                else:
+                    run_time2 = run_time
+                slowdown = wait_time + run_time2 / float(run_time2)
+                slowdowns.append(slowdown)
+                
+                if not user_id in users:
+                    users.add(user_id)
                 
                 start = ET.SubElement(lease, "start")
                 #lease.set("preemptible", self.opt.preemptible)
@@ -694,6 +714,26 @@ class haizea_swf2lwf(Command):
                 attr.set("value", `exec_number`)
                     
         tree = ET.ElementTree(root)
-        print ET.tostring(root)
+        
+        outfile = open(outfile, "w")
+        tree.write(outfile)
+        
+        infile.close()
+        outfile.close()
+        
+        slowdowns.sort()
 
+        print "SLOWDOWNS"
+        print "---------"
+        print "min: %.2f" % slowdowns[0]
+        print "10p: %.2f" % percentile(slowdowns, 0.1)
+        print "25p: %.2f" % percentile(slowdowns, 0.25)
+        print "med: %.2f" % percentile(slowdowns, 0.5)
+        print "75p: %.2f" % percentile(slowdowns, 0.75)
+        print "90p: %.2f" % percentile(slowdowns, 0.9)
+        print "max: %.2f" % slowdowns[-1]
+        print 
+        print "USERS"
+        print "-----"
+        print "Number of users: %i" % len(users)
 

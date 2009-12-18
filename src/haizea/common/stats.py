@@ -125,3 +125,7 @@ class DiscreteUniformDistribution(DiscreteDistribution):
         return self._get_from_prob(random.random())            
     
     
+def percentile(values, percent):
+    pos = int(len(values) * percent)
+    return values[pos]
+
