@@ -24,6 +24,11 @@ from haizea.cli.optionparser import Option
 from mx.DateTime import DateTimeDelta
 import ConfigParser
 
+try:
+    import xml.etree.ElementTree as ET
+except ImportError:
+    # Compatibility with Python <=2.4
+    import elementtree.ElementTree as ET 
 
 class haizea_lwf_annotate(Command):
     
@@ -112,7 +117,11 @@ class haizea_lwf_annotate(Command):
         
         annotations = LeaseAnnotations(annotations, attributes)
         
-        print annotations.to_xml_string()
+        tree = ET.ElementTree(annotations.to_xml())
+        outfile = open(outfile, "w")
+        tree.write(outfile)
+        outfile.close()
+        
         
     def __get_start(self, lease):
         if self.startdelay_dist == None:
