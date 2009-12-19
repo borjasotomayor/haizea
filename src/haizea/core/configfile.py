@@ -896,11 +896,14 @@ class HaizeaMultiConfig(Config):
             return annot
 
     def get_inject_files(self):
-        dir = self.config.get(self.MULTI_SEC, self.INJDIR_OPT)
-        inj = self.config.get(self.MULTI_SEC, self.INJFILES_OPT).split()
-        inj = [dir + "/" + i for i in inj]
-        inj.append(None)
-        return inj
+        if not self.config.has_option(self.MULTI_SEC, self.INJDIR_OPT):
+            return [None]
+        else:
+            dir = self.config.get(self.MULTI_SEC, self.INJDIR_OPT)
+            inj = self.config.get(self.MULTI_SEC, self.INJFILES_OPT).split()
+            inj = [dir + "/" + i for i in inj]
+            inj.append(None)
+            return inj
     
     def get_configs(self):
         profiles = self.get_profiles()
@@ -909,14 +912,14 @@ class HaizeaMultiConfig(Config):
         injectfiles = self.get_inject_files()
 
         if not self.config.has_option(self.MULTI_SEC, self.SKIP_NO_INJECTION_OPT):
-            skip_no_annotation = False
-        else:
-            skip_no_annotation = self.config.getboolean(self.MULTI_SEC, self.SKIP_NO_INJECTION_OPT)
-            
-        if not self.config.has_option(self.MULTI_SEC, self.SKIP_NO_ANNOTATION_OPT):
             skip_no_injection = False
         else:
-            skip_no_injection = self.config.getboolean(self.MULTI_SEC, self.SKIP_NO_ANNOTATION_OPT)
+            skip_no_injection = self.config.getboolean(self.MULTI_SEC, self.SKIP_NO_INJECTION_OPT)
+            
+        if not self.config.has_option(self.MULTI_SEC, self.SKIP_NO_ANNOTATION_OPT):
+            skip_no_annotation = False
+        else:
+            skip_no_annotation = self.config.getboolean(self.MULTI_SEC, self.SKIP_NO_ANNOTATION_OPT)
         
         no_annotations = (annotationfiles == [None])
         no_injections = (injectfiles == [None])
@@ -925,9 +928,9 @@ class HaizeaMultiConfig(Config):
         for profile in profiles:
             for tracefile in tracefiles:
                 for annotationfile in annotationfiles:
-                    if annotationfile == None and skip_no_annotation:
-                        continue
                     for injectfile in injectfiles:
+                        if annotationfile == None and skip_no_annotation:
+                            continue
                         if injectfile == None and skip_no_injection:
                             continue
                         profileconfig = ConfigParser.ConfigParser()
@@ -999,7 +1002,8 @@ class HaizeaMultiConfig(Config):
         attrs = {}
         root = ET.parse(file).getroot()
         attributes_elem = root.find("attributes")
-        for attr_elem in attributes_elem:
-            attrs[attr_elem.get("name")] = attr_elem.get("value")
+        if attributes_elem != None:
+            for attr_elem in attributes_elem:
+                attrs[attr_elem.get("name")] = attr_elem.get("value")
         return attrs
         
