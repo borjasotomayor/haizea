@@ -24,6 +24,7 @@ lease preemption policies.
 from haizea.core.leases import Lease
 from haizea.core.scheduler.policy import PricingPolicy
 from haizea.common.utils import get_config
+from haizea.common.stats import percentile
 
 import random
 
@@ -121,6 +122,15 @@ class RandomMultipleOfFairPricePolicy(FairPricePolicy):
         fair_price = self.get_fair_price(lease)
         return mult * fair_price
     
+class UserInfo(object):
+    def __init__(self):
+        self.min_markup_accept = None
+        self.max_markup_accept = None
+        self.min_markup_reject = None
+        self.max_markup_reject = None
+        self.markup_estimate = None
+        self.found = False
+    
 class AdaptiveFairPricePolicy(FairPricePolicy):
     """Base class for policies that rely on the notion of a fair rate for computation
     """    
@@ -132,6 +142,7 @@ class AdaptiveFairPricePolicy(FairPricePolicy):
         """        
         FairPricePolicy.__init__(self, slottable)
         self.multiplier = 1.0
+        self.users = {}
     
     def price_lease(self, lease, preempted_leases):
         """Computes the price of a lease
@@ -146,3 +157,55 @@ class AdaptiveFairPricePolicy(FairPricePolicy):
         """
         fair_price = self.get_fair_price(lease)
         return self.multiplier * fair_price
+    
+    def feedback(self, lease):
+        """Called after a lease has been accepted or rejected, to provide
+        feeback to the pricing policy.
+        
+        Arguments:
+        lease -- Lease that has been accepted/rejected
+        """
+        fair_price = lease.extras["fair_price"]
+        price = lease.price
+        if price == -1:
+            price = lease.extras["rejected_price"]
+
+        lease_multiplier = price / fair_price
+        
+        if not self.users.has_key(lease.user_id):
+            self.users[lease.user_id] = UserInfo()
+            
+        if lease.get_state() == Lease.STATE_REJECTED:
+            if self.users[lease.user_id].min_markup_reject == None:
+                self.users[lease.user_id].min_markup_reject = lease_multiplier
+                self.users[lease.user_id].max_markup_reject = lease_multiplier
+            else:
+                self.users[lease.user_id].min_markup_reject = min(lease_multiplier, self.users[lease.user_id].min_markup_reject)
+                self.users[lease.user_id].max_markup_reject = max(lease_multiplier, self.users[lease.user_id].max_markup_reject)
+        else:
+            if self.users[lease.user_id].min_markup_accept == None:
+                self.users[lease.user_id].min_markup_accept = lease_multiplier
+                self.users[lease.user_id].max_markup_accept = lease_multiplier
+            else:
+                if self.users[lease.user_id].min_markup_reject != None:
+                    self.users[lease.user_id].found = True
+                else:
+                    self.users[lease.user_id].min_markup_accept = min(lease_multiplier, self.users[lease.user_id].min_markup_accept)
+                    self.users[lease.user_id].max_markup_accept = max(lease_multiplier, self.users[lease.user_id].max_markup_accept)
+                
+        for user in self.users:
+            if not self.users[user].found:
+                if self.users[user].min_markup_reject == None:
+                    # All accepts
+                    estimate = self.users[user].max_markup_accept * 1.5
+                elif self.users[user].min_markup_accept == None:
+                    # All rejects
+                    estimate = self.users[user].min_markup_reject * 0.5
+                else:
+                    estimate = (self.users[user].max_markup_accept + self.users[user].min_markup_reject) / 2
+                    
+                self.users[user].markup_estimate = estimate
+            
+        estimates = sorted([u.markup_estimate for u in self.users.values()])
+        
+        self.multiplier = percentile(estimates, 0.5)
