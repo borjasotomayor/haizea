@@ -20,7 +20,6 @@ from mx import DateTime
 from math import ceil, floor
 from cPickle import dump, load, HIGHEST_PROTOCOL
 from datetime import datetime
-from docutils.core import publish_string
 import re
 import textwrap
 
@@ -116,6 +115,7 @@ def import_class(fq_name):
     return cls
     
 def rst2latex(text):
+    from docutils.core import publish_string
     latex = textwrap.dedent(text).strip()
     latex = publish_string(latex,  writer_name="latex")
     latex = re.compile("\\\\begin{document}\n\n\\\\setlength{\\\\locallinewidth}{\\\\linewidth}\n\n(.*)\\\\end{document}", flags=re.DOTALL).search(latex)

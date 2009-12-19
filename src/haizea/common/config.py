@@ -134,7 +134,7 @@ class Config(object):
                 
             if opt.valid != None:
                 if not value in opt.valid:
-                    raise ConfigException, "Invalid value specified for '%s.%s'. Valid values are %s" % (secname, optname, opt.valid)
+                    raise ConfigException, "Invalid value '%s' specified for '%s.%s'. Valid values are %s" % (value, secname, optname, opt.valid)
                   
         self._options[opt.getter] = value
         

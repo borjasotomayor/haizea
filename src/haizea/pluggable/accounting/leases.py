@@ -217,9 +217,10 @@ class PriceProbe(AccountingProbe):
                 self.accounting.incr_counter(PriceProbe.COUNTER_REJECTED_BY_USER, lease.id)
             elif lease.get_state() == Lease.STATE_DONE:
                 self.accounting.incr_counter(PriceProbe.STAT_REVENUE, lease.id, lease.price)
-                markup = float(lease.extras["simul_pricemarkup"])
-                fair_price = float(lease.extras["fair_price"])
-                self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE, lease.id, (fair_price * markup) - lease.price)
+                if lease.extras.has_key("fair_price"):
+                    markup = float(lease.extras["simul_pricemarkup"])
+                    fair_price = float(lease.extras["fair_price"])
+                    self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE, lease.id, (fair_price * markup) - lease.price)
                 
 class DeadlineProbe(AccountingProbe):
     """

@@ -674,10 +674,10 @@ class haizea_swf2lwf(Command):
                     exit(-1)
                     
                 if run_time < 10:
-                    run_time2 = 10
+                    run_time2 = 10.0
                 else:
-                    run_time2 = run_time
-                slowdown = wait_time + run_time2 / float(run_time2)
+                    run_time2 = float(run_time)
+                slowdown = wait_time + run_time2 / run_time2
                 slowdowns.append(slowdown)
                 
                 if not user_id in users:

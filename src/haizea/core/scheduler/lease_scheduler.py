@@ -443,6 +443,11 @@ class LeaseScheduler(object):
         nexttime -- The next time at which the scheduler can allocate resources.
         """        
         future = self.vm_scheduler.get_future_reschedulable_leases()
+        ## BEGIN NOT-FIT-FOR-PRODUCTION CODE
+        ## This is only necessary because we're currently using the best-effort
+        ## scheduling algorithm for many of the deadline leases
+        future = [l for l in future if l.get_type() == Lease.BEST_EFFORT]
+        ## END NOT-FIT-FOR-PRODUCTION CODE
         for l in future:
             # We can only reschedule leases in the following four states
             if l.get_state() in (Lease.STATE_PREPARING, Lease.STATE_READY, Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED):
@@ -588,9 +593,8 @@ class LeaseScheduler(object):
                     lease.price = -1
                     lease.extras["rejected_price"] = lease_price
                     raise NotSchedulableException, "Lease priced at %.2f. User is only willing to pay %.2f" % (lease_price, fair_price * markup)
-                else:
-                    lease.price = lease_price
         
+        lease.price = lease_price
         ## END NOT-FIT-FOR-PRODUCTION CODE
                                 
         # If scheduling the lease involves preempting other leases,

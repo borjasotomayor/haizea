@@ -1127,12 +1127,12 @@ class LeaseAnnotation(object):
                 if child.tag == "now":
                     start = Timestamp(Timestamp.NOW)
                 elif child.tag == "exact":
-                    start = Timestamp(Parser.TimeFromString(child.get("time")))
+                    start = Timestamp(Parser.DateTimeDeltaFromString(child.get("time")))
         
         deadline = element.find("deadline")
         
         if deadline != None:
-            deadline = Parser.TimeFromString(deadline.get("time"))
+            deadline = Parser.DateTimeDeltaFromString(deadline.get("time"))
         
         extra = element.find("extra")
         extras = {}
