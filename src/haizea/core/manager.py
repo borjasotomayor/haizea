@@ -94,6 +94,7 @@ class Manager(object):
         self.daemon = daemon
         self.pidfile = pidfile
 
+
     # Has to be in a separate function since some pluggable modules need to
     # access the Manager singleton
     def __initialize(self):
@@ -502,6 +503,11 @@ class Manager(object):
         leases = self.scheduler.leases.get_leases()
         completed_leases = self.scheduler.completed_leases.get_leases()
                     
+        types = {}
+        for l in completed_leases:
+            types[l.get_type()] = types.setdefault(l.get_type(), 0) + 1
+        types_str = " + ".join(["%i %s" % (types[t],Lease.type_str[t]) for t in types])
+                            
         self.logger.status("--- Haizea status summary ---")
         states = {}
         for l in leases:
@@ -511,11 +517,11 @@ class Manager(object):
         for state in lstates:
             state_str = Lease.state_str[state]
             self.logger.status(("%s leases:" % state_str).ljust(20) + ("%i" % states[state]).rjust(6))
-        self.logger.status("Completed leases:".ljust(20) + ("%i" % len(completed_leases)).rjust(6))
+        self.logger.status("Completed leases:".ljust(20) + ("%i" % len(completed_leases)).rjust(6) + " (%s)" % types_str)
         self.logger.status("------".rjust(26))
         self.logger.status("TOTAL:".rjust(20) + ("%i" % (len(leases) + len(completed_leases))).rjust(6))
         self.logger.status("---- End summary ----")
-        
+
 
     def __recover(self):
         """Loads persisted leases and scheduling information
