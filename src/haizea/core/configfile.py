@@ -982,7 +982,7 @@ class HaizeaMultiConfig(Config):
                         if annotationfile != None:
                             annot_attrs = self.__load_attributes_from_file(annotationfile)
                             attrs.update(annot_attrs)
-
+                        
                         attrs_str = ",".join(["%s=%s" % (k,v) for (k,v) in attrs.items()])
                         if profileconfig.has_option("accounting", "attributes"):
                             attrs_str += ",%s" % profileconfig.get("general", "attributes")
@@ -1000,10 +1000,13 @@ class HaizeaMultiConfig(Config):
     
     def __load_attributes_from_file(self, file):
         attrs = {}
-        root = ET.parse(file).getroot()
-        attributes_elem = root.find("attributes")
-        if attributes_elem != None:
-            for attr_elem in attributes_elem:
-                attrs[attr_elem.get("name")] = attr_elem.get("value")
+        context = ET.iterparse(file, events=("start", "end"))
+        for event, elem in context:
+            if event == "start" and elem.tag in ("lease-annotation", "lease-request"):
+                break                
+            if event == "end" and elem.tag == "attributes":
+                for attr_elem in elem:
+                    attrs[attr_elem.get("name")] = attr_elem.get("value")
+                break
         return attrs
         
