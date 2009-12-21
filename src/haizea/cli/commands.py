@@ -325,12 +325,12 @@ class haizea_convert_data(Command):
             attrs = [data.attrs[attr_name] for attr_name in attr_names]
                         
             if self.opt.type == "per-run":
-                fields = attrs + [`data.stats[stats_name]` for stats_name in stats_names]
+                fields = attrs + [str(data.stats[stats_name]) for stats_name in stats_names]
                 print ",".join(fields)
             elif self.opt.type == "per-lease":
                 leases = data.lease_stats
                 for lease_id, lease_stat in leases.items():
-                    fields = attrs + [`lease_id`] + [`lease_stat.get(lease_stat_name,"")` for lease_stat_name in lease_stats_names]
+                    fields = attrs + [`lease_id`] + [str(lease_stat.get(lease_stat_name,"")) for lease_stat_name in lease_stats_names]
                     print ",".join(fields)
             elif self.opt.type == "counter":
                 for (time, lease_id, value, avg) in data.counters[counter]:
@@ -487,6 +487,10 @@ class haizea_swf2lwf(Command):
                                          help = """
                                          Scale number of processors by 1/SCALE.
                                          """))        
+        self.optparser.add_option(Option("-n", "--site", action="store", type="string", dest="site",
+                                         help = """
+                                         File containing site description
+                                         """))        
                 
     def run(self):            
         self.parse_options()
@@ -504,6 +508,11 @@ class haizea_swf2lwf(Command):
         root.set("name", infile)
         description = ET.SubElement(root, "description")
         description.text = "Created with haizea-swf2lwf %s" % " ".join(self.argv[1:])
+
+        if self.opt.site != None:
+            site_elem = ET.parse(self.opt.site).getroot()
+            root.append(site_elem)
+        
         time = TimeDelta(seconds=0)
         requests = ET.SubElement(root, "lease-requests")
         
