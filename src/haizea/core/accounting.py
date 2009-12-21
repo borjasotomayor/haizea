@@ -133,7 +133,8 @@ class AccountingDataCollection(object):
         @param stat_id: Name of the stat
         @type stat_id: C{str}
         """        
-        self.__data.lease_stats_names.append(stat_id)
+        if not stat_id in self.__data.lease_stats_names:
+            self.__data.lease_stats_names.append(stat_id)
 
 
     def create_stat(self, stat_id):
