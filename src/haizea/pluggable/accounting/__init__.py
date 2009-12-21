@@ -22,7 +22,9 @@
 # The following dictionaries provide a shorthand notation to refer to
 # the accounting probes (this shorthand is used in the configuration file,
 # so the fully-qualified class name doesn't have to be written)
-probe_class_mappings = {             "ar": "haizea.pluggable.accounting.leases.ARProbe",
+probe_class_mappings = {          "lease": "haizea.pluggable.accounting.leases.LeaseProbe",
+                           "lease-extras": "haizea.pluggable.accounting.leases.LeaseExtrasProbe",
+                                     "ar": "haizea.pluggable.accounting.leases.ARProbe",
                             "best-effort": "haizea.pluggable.accounting.leases.BEProbe",
                               "immediate": "haizea.pluggable.accounting.leases.IMProbe",
                         "cpu-utilization": "haizea.pluggable.accounting.utilization.CPUUtilizationProbe",
