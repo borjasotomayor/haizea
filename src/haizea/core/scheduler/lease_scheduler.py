@@ -184,7 +184,13 @@ class LeaseScheduler(object):
                 lease.print_contents()
             except NotSchedulableException, exc:
                 self.logger.info("Lease request #%i cannot be scheduled: %s" % (lease.id, exc.reason))
-                lease.set_state(Lease.STATE_REJECTED)
+                ## BEGIN NOT-FIT-FOR-PRODUCTION CODE
+                ## This should happen when the lease is requested.
+                if lease.price == -1:
+                    lease.set_state(Lease.STATE_REJECTED_BY_USER)
+                else:
+                ## END NOT-FIT-FOR-PRODUCTION CODE
+                    lease.set_state(Lease.STATE_REJECTED)                    
                 self.completed_leases.add(lease)
                 self.accounting.at_lease_done(lease)
                 ## BEGIN NOT-FIT-FOR-PRODUCTION CODE

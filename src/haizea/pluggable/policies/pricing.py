@@ -165,6 +165,8 @@ class AdaptiveFairPricePolicy(FairPricePolicy):
         Arguments:
         lease -- Lease that has been accepted/rejected
         """
+        if lease.price == None:
+            return
         fair_price = lease.extras["fair_price"]
         price = lease.price
         if price == -1:
@@ -175,7 +177,7 @@ class AdaptiveFairPricePolicy(FairPricePolicy):
         if not self.users.has_key(lease.user_id):
             self.users[lease.user_id] = UserInfo()
             
-        if lease.get_state() == Lease.STATE_REJECTED:
+        if lease.get_state() == Lease.STATE_REJECTED_BY_USER:
             if self.users[lease.user_id].min_markup_reject == None:
                 self.users[lease.user_id].min_markup_reject = lease_multiplier
                 self.users[lease.user_id].max_markup_reject = lease_multiplier

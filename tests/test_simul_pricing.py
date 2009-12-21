@@ -22,4 +22,4 @@ class TestSimulator(BaseTest):
         self.config.set("scheduling", "policy-pricing", "always-fair")
         self.config.set("pricing", "fair-rate", "0.10")        
         self._tracefile_test("price2.lwf")
-        self._verify_rejected([1])
+        self._verify_rejected_by_user([1])
