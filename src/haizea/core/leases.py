@@ -207,7 +207,8 @@ class Lease(object):
     @classmethod
     def create_new_from_xml_element(cls, element):
         lease = cls.from_xml_element(element)
-        lease.id = get_lease_id()
+        if lease.id == None:
+            lease.id = get_lease_id()
         lease.state = LeaseStateMachine(initial_state = Lease.STATE_NEW)
         return lease
 
@@ -530,6 +531,8 @@ class Lease(object):
         (both preparation and VM)
         
         """            
+        del self.preparation_rrs 
+        del self.vm_rrs 
         self.preparation_rrs = []
         self.vm_rrs = []
 
