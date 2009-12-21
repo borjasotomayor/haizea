@@ -85,6 +85,7 @@ class Lease(object):
     STATE_RESUMED_READY = 15
     STATE_DONE = 16
     STATE_FAIL = 17
+    STATE_REJECTED_BY_USER = 18
     
     # String representation of lease states
     state_str = {STATE_NEW : "New",
@@ -104,7 +105,8 @@ class Lease(object):
                  STATE_RESUMING : "Resuming",
                  STATE_RESUMED_READY: "Resumed-Ready",
                  STATE_DONE : "Done",
-                 STATE_FAIL : "Fail"}
+                 STATE_FAIL : "Fail",
+                 STATE_REJECTED_BY_USER : "Rejected by user"}
     
     # Lease types
     BEST_EFFORT = 1
@@ -629,7 +631,8 @@ class LeaseStateMachine(StateMachine):
                    Lease.STATE_PENDING:             [(Lease.STATE_SCHEDULED,  ""),
                                                      (Lease.STATE_QUEUED,     ""),
                                                      (Lease.STATE_CANCELLED,  ""),
-                                                     (Lease.STATE_REJECTED,   "")],
+                                                     (Lease.STATE_REJECTED,   ""),
+                                                     (Lease.STATE_REJECTED_BY_USER,   "")],
                                                      
                    Lease.STATE_SCHEDULED:           [(Lease.STATE_PREPARING,  ""),
                                                      (Lease.STATE_QUEUED,     ""),
