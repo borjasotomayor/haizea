@@ -288,7 +288,6 @@ class AccountingDataCollection(object):
         # Add lease data
         # Remove some data that won't be necessary in the reporting tools
         for l in leases.values():
-            l.clear_rrs()
             l.logger = None
             self.__data.leases[l.id] = l
 
@@ -324,6 +323,7 @@ class AccountingDataCollection(object):
         """        
         for probe in self.__probes:
             probe.at_lease_done(lease)
+        lease.clear_rrs()
                 
                 
     def __normalize_times(self, counter):
