@@ -501,10 +501,21 @@ class Manager(object):
         
         leases = self.scheduler.leases.get_leases()
         completed_leases = self.scheduler.completed_leases.get_leases()
+                    
         self.logger.status("--- Haizea status summary ---")
-        self.logger.status("Number of leases (not including completed): %i" % len(leases))
-        self.logger.status("Completed leases: %i" % len(completed_leases))
-        self.logger.status("---- End summary ----")        
+        states = {}
+        for l in leases:
+            state = l.get_state()
+            states[state] = states.setdefault(state, 0) + 1
+        lstates = sorted(states.keys())
+        for state in lstates:
+            state_str = Lease.state_str[state]
+            self.logger.status(("%s leases:" % state_str).ljust(20) + ("%i" % states[state]).rjust(6))
+        self.logger.status("Completed leases:".ljust(20) + ("%i" % len(completed_leases)).rjust(6))
+        self.logger.status("------".rjust(26))
+        self.logger.status("TOTAL:".rjust(20) + ("%i" % (len(leases) + len(completed_leases))).rjust(6))
+        self.logger.status("---- End summary ----")
+        
 
     def __recover(self):
         """Loads persisted leases and scheduling information
