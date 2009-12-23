@@ -503,21 +503,18 @@ class Manager(object):
         leases = self.scheduler.leases.get_leases()
         completed_leases = self.scheduler.completed_leases.get_leases()
                     
-        types = {}
-        for l in completed_leases:
-            types[l.get_type()] = types.setdefault(l.get_type(), 0) + 1
-        types_str = " + ".join(["%i %s" % (types[t],Lease.type_str[t]) for t in types])
-                            
         self.logger.status("--- Haizea status summary ---")
         states = {}
-        for l in leases:
+        for l in leases + completed_leases:
             state = l.get_state()
-            states[state] = states.setdefault(state, 0) + 1
+            ltype = l.get_type()
+            states[state][ltype] = states.setdefault(state, {}).setdefault(ltype, 0) + 1
         lstates = sorted(states.keys())
         for state in lstates:
             state_str = Lease.state_str[state]
-            self.logger.status(("%s leases:" % state_str).ljust(20) + ("%i" % states[state]).rjust(6))
-        self.logger.status("Completed leases:".ljust(20) + ("%i" % len(completed_leases)).rjust(6) + " (%s)" % types_str)
+            num_leases = sum(states[state].values())
+            types_str = " + ".join(["%i %s" % (num,Lease.type_str[ltype]) for ltype, num in states[state].items()])
+            self.logger.status(("%s:" % state_str).ljust(20) + ("%i" % num_leases).rjust(6) + " (%s)" % types_str)
         self.logger.status("------".rjust(26))
         self.logger.status("TOTAL:".rjust(20) + ("%i" % (len(leases) + len(completed_leases))).rjust(6))
         self.logger.status("---- End summary ----")
