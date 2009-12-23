@@ -20,6 +20,8 @@
 
 from haizea.core.accounting import AccountingProbe, AccountingDataCollection
 from haizea.core.leases import Lease
+
+from mx.DateTime import TimeDelta
           
 class LeaseProbe(AccountingProbe):
     """
@@ -255,58 +257,79 @@ class PriceProbe(AccountingProbe):
     
     """
     COUNTER_REVENUE="Revenue"
-    COUNTER_MISSED_REVENUE="Missed revenue"
+    COUNTER_MISSED_REVENUE_UNDERCHARGE="Missed revenue (undercharging)"
+    COUNTER_MISSED_REVENUE_REJECT="Missed revenue (reject)"
+    COUNTER_MISSED_REVENUE_REJECT_BY_USER="Missed revenue (reject by user)"
     STAT_REVENUE="Revenue"
-    STAT_MISSED_REVENUE="Missed revenue"
+    STAT_MISSED_REVENUE_UNDERCHARGE="Missed revenue (undercharging)"
+    STAT_MISSED_REVENUE_REJECT="Missed revenue (reject)"
+    STAT_MISSED_REVENUE_REJECT_BY_USER="Missed revenue (reject by user)"
+    STAT_MISSED_REVENUE="Missed revenue (total)"
     
     def __init__(self, accounting):
         """See AccountingProbe.__init__"""        
         AccountingProbe.__init__(self, accounting)
         self.accounting.create_counter(PriceProbe.COUNTER_REVENUE, AccountingDataCollection.AVERAGE_NONE)
-        self.accounting.create_counter(PriceProbe.COUNTER_MISSED_REVENUE, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(PriceProbe.COUNTER_MISSED_REVENUE_REJECT, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(PriceProbe.COUNTER_MISSED_REVENUE_REJECT_BY_USER, AccountingDataCollection.AVERAGE_NONE)
         self.accounting.create_stat(PriceProbe.STAT_REVENUE)
+        self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE_UNDERCHARGE)
+        self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE_REJECT)
+        self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE_REJECT_BY_USER)
         self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE)
 
 
     def finalize_accounting(self):
         """See AccountingProbe.finalize_accounting"""        
         self._set_stat_from_counter(PriceProbe.STAT_REVENUE, PriceProbe.COUNTER_REVENUE)
-        self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE, PriceProbe.COUNTER_MISSED_REVENUE)
+        self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_UNDERCHARGE, PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE)
+        self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT, PriceProbe.COUNTER_MISSED_REVENUE_REJECT)
+        self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT_BY_USER, PriceProbe.COUNTER_MISSED_REVENUE_REJECT_BY_USER)
+        
+        r1 = self.accounting.get_last_counter_value(PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE)
+        r2 = self.accounting.get_last_counter_value(PriceProbe.COUNTER_MISSED_REVENUE_REJECT)
+        r3 = self.accounting.get_last_counter_value(PriceProbe.COUNTER_MISSED_REVENUE_REJECT_BY_USER)
+        self.accounting.set_stat(PriceProbe.STAT_MISSED_REVENUE, r1+r2+r3)
 
 
     def at_lease_done(self, lease):
         """See AccountingProbe.at_lease_done"""        
         if lease.get_state() == Lease.STATE_DONE:
             self.accounting.incr_counter(PriceProbe.STAT_REVENUE, lease.id, lease.price)
-            if lease.extras.has_key("fair_price"):
-                markup = float(lease.extras["simul_pricemarkup"])
-                fair_price = float(lease.extras["fair_price"])
-                self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE, lease.id, (fair_price * markup) - lease.price)
+
+        if lease.extras.has_key("fair_price"):
+            markup = float(lease.extras["simul_pricemarkup"])
+            fair_price = float(lease.extras["fair_price"])
+            user_price = markup * fair_price
+        if lease.get_state() == Lease.STATE_DONE:
+                self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE_UNDERCHARGE, lease.id, user_price - lease.price)
+        elif lease.get_state() == Lease.STATE_REJECTED:
+            self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT, lease.id, user_price)
+        elif lease.get_state() == Lease.STATE_REJECTED_BY_USER:
+            self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT_BY_USER, lease.id, user_price)
+            
                 
 class DeadlineProbe(AccountingProbe):
     """
     Collects information from deadline leases
 
     """
-    COUNTER_REJECTED="Rejected by deadline"
-    STAT_REJECTED="Total rejected by deadline"
+    LEASE_STAT_SLOWDOWN="Slowdown"
     
     def __init__(self, accounting):
         """See AccountingProbe.__init__"""
         AccountingProbe.__init__(self, accounting)
-        self.accounting.create_counter(DeadlineProbe.COUNTER_REJECTED, AccountingDataCollection.AVERAGE_NONE)
-        self.accounting.create_stat(DeadlineProbe.STAT_REJECTED)
-
-    def finalize_accounting(self):
-        """See AccountingProbe.finalize_accounting"""        
-        self._set_stat_from_counter(DeadlineProbe.STAT_REJECTED, DeadlineProbe.COUNTER_REJECTED)
-
-    def at_lease_request(self, lease):
-        """See AccountingProbe.at_lease_request"""                
-        pass
+        self.accounting.create_lease_stat(DeadlineProbe.LEASE_STAT_SLOWDOWN)
 
     def at_lease_done(self, lease):
         """See AccountingProbe.at_lease_done"""
         if lease.get_type() == Lease.DEADLINE:
-            if lease.get_state() == Lease.STATE_REJECTED:
-                self.accounting.incr_counter(DeadlineProbe.COUNTER_REJECTED, lease.id)
+            if lease.get_state() == Lease.STATE_DONE:
+                time_on_dedicated = lease.duration.original
+                time_on_loaded = lease.end - lease.start.requested
+                bound = TimeDelta(seconds=10)
+                if time_on_dedicated < bound:
+                    time_on_dedicated = bound         
+                slowdown = time_on_loaded / time_on_dedicated       
+                self.accounting.set_lease_stat(DeadlineProbe.LEASE_STAT_SLOWDOWN, lease.id, slowdown)
