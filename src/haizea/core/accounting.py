@@ -20,7 +20,9 @@
 
 import os
 import os.path
+import logging
 from haizea.common.utils import pickle, get_clock
+from haizea.common.constants import LOGLEVEL_VDEBUG
 from errno import EEXIST
 
 class AccountingData(object):
@@ -323,7 +325,8 @@ class AccountingDataCollection(object):
         """        
         for probe in self.__probes:
             probe.at_lease_done(lease)
-        lease.clear_rrs()
+        if logging.getLogger().getEffectiveLevel() != LOGLEVEL_VDEBUG:
+            lease.clear_rrs()
                 
                 
     def __normalize_times(self, counter):
