@@ -1434,6 +1434,14 @@ class VMResourceReservation(ResourceReservation):
 
     def is_shutting_down(self):
         return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], ShutdownResourceReservation)
+    
+    def clear_rrs(self):
+        for rr in self.pre_rrs:
+            rr.clear_rrs()
+        for rr in self.post_rrs:
+            rr.clear_rrs()
+        self.pre_rrs = None
+        self.post_rrs = None
 
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
         logger = logging.getLogger("LEASES")
@@ -1468,6 +1476,8 @@ class SuspensionResourceReservation(ResourceReservation):
     def is_last(self):
         return (self == self.vmrr.post_rrs[-1])   
         
+    def clear_rrs(self):
+        self.vmrr = None
         
 class ResumptionResourceReservation(ResourceReservation):
     def __init__(self, lease, start, end, res, vnodes, vmrr):
@@ -1489,6 +1499,8 @@ class ResumptionResourceReservation(ResourceReservation):
         resm_rrs = [r for r in self.vmrr.pre_rrs if isinstance(r, ResumptionResourceReservation)]
         return (self == resm_rrs[-1])
     
+    def clear_rrs(self):
+        self.vmrr = None
     
 class ShutdownResourceReservation(ResourceReservation):
     def __init__(self, lease, start, end, res, vnodes, vmrr):
@@ -1501,6 +1513,8 @@ class ShutdownResourceReservation(ResourceReservation):
         logger.log(loglevel, "Type           : SHUTDOWN")
         ResourceReservation.print_contents(self, loglevel)
 
+    def clear_rrs(self):
+        self.vmrr = None
 
 class MemImageMigrationResourceReservation(MigrationResourceReservation):
     def __init__(self, lease, start, end, res, vmrr, transfers):

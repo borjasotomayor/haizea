@@ -101,3 +101,7 @@ class MigrationResourceReservation(ResourceReservation):
         self.vmrr = vmrr
         self.transfers = transfers
         
+    def clear_rrs(self):
+        self.vmrr = None
+        
+        

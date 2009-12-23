@@ -873,8 +873,8 @@ class SlotTable(object):
             end = rr.end
         posstart = self.__get_reservation_index(self.reservations_by_start, rr, start)
         posend = self.__get_reservation_index(self.reservations_by_end, rr, end)
-        self.reservations_by_start.pop(posstart)
-        self.reservations_by_end.pop(posend)
+        del self.reservations_by_start[posstart]
+        del self.reservations_by_end[posend]
         self.__dirty()
 
 

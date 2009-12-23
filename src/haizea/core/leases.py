@@ -531,9 +531,10 @@ class Lease(object):
         (both preparation and VM)
         
         """            
-        del self.preparation_rrs 
-        del self.vm_rrs 
         self.preparation_rrs = []
+
+        for rr in self.vm_rrs: 
+            rr.clear_rrs()
         self.vm_rrs = []
 
     def get_waiting_time(self):
