@@ -21,7 +21,7 @@ from haizea.core.leases import LeaseWorkload, LeaseAnnotation, LeaseAnnotations,
 from haizea.common.utils import round_datetime_delta
 from haizea.cli import Command
 from haizea.cli.optionparser import Option
-from mx.DateTime import DateTimeDelta
+from mx.DateTime import TimeDelta, DateTimeDelta
 import ConfigParser
 
 try:
@@ -40,14 +40,22 @@ class haizea_lwf_annotate(Command):
     MARKUP_SEC = "user-markup"
     
     ATTRIBUTES_OPT = "attributes"
+    TYPE_OPT = "type"
     DISTRIBUTION_OPT = "distribution"
     MIN_OPT = "min"
     MAX_OPT = "max"
     MEAN_OPT = "mu"
     STDEV_OPT = "sigma"
     ALPHA_OPT = "alpha"
+    SCALE_OPT = "scale"
     INVERT_OPT = "invert"
     SEED_OPT = "seed"
+    
+    START_ABSOLUTE = "absolute"
+    START_DURATION = "multiple-of-duration"
+
+    DEADLINE_DURATION = "multiple-of-duration"
+    DEADLINE_SLOWDOWN = "original-slowdown"
     
     def __init__(self, argv):
         Command.__init__(self, argv)
@@ -81,6 +89,9 @@ class haizea_lwf_annotate(Command):
         self.deadlinestretch_dist = self.__get_dist(haizea_lwf_annotate.DEADLINE_STRETCH_SEC)
         self.markup_dist = self.__get_dist(haizea_lwf_annotate.MARKUP_SEC)
 
+        start_type = self.config.get(haizea_lwf_annotate.START_DELAY_SEC, haizea_lwf_annotate.TYPE_OPT)
+        deadline_type = self.config.get(haizea_lwf_annotate.DEADLINE_STRETCH_SEC, haizea_lwf_annotate.TYPE_OPT)
+
         lease_workload = LeaseWorkload.from_xml_file(infile)
         leases = lease_workload.get_leases()
         annotations = {}
@@ -89,12 +100,12 @@ class haizea_lwf_annotate(Command):
             lease_id = lease.id
             extra = {}
             
-            start, delta = self.__get_start(lease)
+            start, delta = self.__get_start(start_type, lease)
             if start != None:
                 start = Timestamp(start)
                 extra["simul_start_delta"] = "%.2f" % delta
                 
-            deadline, tau = self.__get_deadline(lease, start.requested)
+            deadline, tau = self.__get_deadline(deadline_type, lease, start.requested)
             if deadline != None:
                 extra["simul_deadline_tau"] = "%.2f" % tau
             
@@ -123,20 +134,39 @@ class haizea_lwf_annotate(Command):
         outfile.close()
         
         
-    def __get_start(self, lease):
+    def __get_start(self, type, lease):
         if self.startdelay_dist == None:
             return None, None
         else:
             delta = self.startdelay_dist.get()
-            start = round_datetime_delta(delta * lease.duration.requested)
+            if type == haizea_lwf_annotate.START_ABSOLUTE:
+                start = round_datetime_delta(TimeDelta(seconds=delta))
+            elif type == haizea_lwf_annotate.START_DURATION:
+                start = round_datetime_delta(delta * lease.duration.requested)
             return start, delta
 
-    def __get_deadline(self, lease, start):
+    def __get_deadline(self, type, lease, start):
         if self.deadlinestretch_dist == None:
             return None, None
         else:
-            tau = self.deadlinestretch_dist.get()
-            deadline = round_datetime_delta(start + (1 + tau)*lease.duration.requested)
+            if type == haizea_lwf_annotate.DEADLINE_DURATION:
+                tau = self.deadlinestretch_dist.get()
+                deadline = round_datetime_delta(start + (1 + tau)*lease.duration.requested)
+            elif type == haizea_lwf_annotate.DEADLINE_SLOWDOWN:
+                runtime = int(lease.extras["SWF_runtime"])
+                waittime = int(lease.extras["SWF_waittime"])
+                if runtime < 10: runtime = 10
+                slowdown = (waittime + runtime) / runtime
+
+                min = self.deadlinestretch_dist.min
+                max = self.deadlinestretch_dist.max
+                tau = self.deadlinestretch_dist.get()
+                
+                tau = (tau-min) / (max-min)
+                
+                stretch = round_datetime_delta(TimeDelta(seconds=runtime) * (1 + (slowdown - 1)*tau))
+                print tau, stretch
+                deadline = round_datetime_delta(start + stretch)
             return deadline, tau
 
     def __get_software(self, lease):
@@ -179,13 +209,18 @@ class haizea_lwf_annotate(Command):
             mu = self.config.getfloat(section, haizea_lwf_annotate.MEAN_OPT)
             sigma = self.config.getfloat(section, haizea_lwf_annotate.STDEV_OPT)
             dist = stats.BoundedNormalDistribution(min,max,mu,sigma)
-        elif dist_type == "bounded-pareto":
+        elif dist_type == "bounded-pareto" or dist_type == "truncated-pareto":
             alpha = self.config.getfloat(section, haizea_lwf_annotate.ALPHA_OPT)
             if self.config.has_option(section, haizea_lwf_annotate.INVERT_OPT):
                 invert = self.config.getboolean(section, haizea_lwf_annotate.INVERT_OPT)
             else:
                 invert = False
-            dist = stats.BoundedParetoDistribution(min,max,alpha,invert)
+            if dist_type == "bounded-pareto":
+                dist = stats.BoundedParetoDistribution(min,max,alpha,invert)
+            else:
+                scale = self.config.getfloat(section, haizea_lwf_annotate.SCALE_OPT)
+                dist = stats.TruncatedParetoDistribution(min,max,scale,alpha,invert)
+                
             
         if self.config.has_option(section, haizea_lwf_annotate.SEED_OPT):
             seed = self.config.getint(section, haizea_lwf_annotate.SEED_OPT)
