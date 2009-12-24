@@ -189,7 +189,10 @@ class LeaseScheduler(object):
                 if lease.price == -1:
                     lease.set_state(Lease.STATE_REJECTED_BY_USER)
                 else:
-                ## END NOT-FIT-FOR-PRODUCTION CODE
+                    # We still want to record the fair price
+                    if get_config().get("policy.pricing") != "free":
+                        fair_price = get_policy().pricing.get_fair_price(lease)
+                        lease.extras["fair_price"] = fair_price
                     lease.set_state(Lease.STATE_REJECTED)                    
                 self.completed_leases.add(lease)
                 self.accounting.at_lease_done(lease)
