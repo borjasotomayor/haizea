@@ -22,14 +22,14 @@ import operator
 
 class Distribution(object):
     def __init__(self):
-        pass
+        self.random = random.Random()
     
     def seed(self, x):
-        random.seed(x)
+        self.random.seed(x)
 
 class ContinuousDistribution(Distribution):
     def __init__(self):
-        pass
+        Distribution.__init__(self)
         
     def get(self): 
         abstract()
@@ -53,7 +53,7 @@ class UniformDistribution(BoundedContinuousDistribution):
         BoundedContinuousDistribution.__init__(self, min, max)
         
     def get(self):
-        return random.uniform(self.min, self.max)
+        return self.random.uniform(self.min, self.max)
                     
 class NormalDistribution(ContinuousDistribution):
     def __init__(self, mu, sigma):
@@ -62,7 +62,7 @@ class NormalDistribution(ContinuousDistribution):
         self.sigma = sigma
         
     def get(self):
-        return random.normalvariate(self.mu, self.sigma)
+        return self.random.normalvariate(self.mu, self.sigma)
     
 class BoundedNormalDistribution(BoundedContinuousDistribution):
     def __init__(self, min, max, mu, sigma):
@@ -71,7 +71,7 @@ class BoundedNormalDistribution(BoundedContinuousDistribution):
         self.sigma = float(sigma)
         
     def get(self):
-        n = random.normalvariate(self.mu, self.sigma) 
+        n = self.random.normalvariate(self.mu, self.sigma) 
         if n < self.min:
             n = self.min
         elif n > self.max:
@@ -86,7 +86,7 @@ class BoundedParetoDistribution(BoundedContinuousDistribution):
         self.invert = invert
         
     def get(self):
-        u = random.random()
+        u = self.random.random()
         l = self.min
         h = self.max
         a = self.alpha
@@ -94,7 +94,32 @@ class BoundedParetoDistribution(BoundedContinuousDistribution):
         if self.invert:
             p = h - p
         return p
-                  
+           
+class TruncatedParetoDistribution(BoundedContinuousDistribution):
+    def __init__(self, min, max, scale, alpha, invert = False):
+        BoundedContinuousDistribution.__init__(self, min, max)
+        self.alpha = float(alpha)
+        self.scale = float(scale)
+        self.invert = invert
+        
+    def get(self):
+        # Temporary kludge. This just happens to be a range
+        # that, with shape and scale both 1.0, yields a roughly
+        # 80-20 distribution
+        min2 = 0.0
+        max2 = 10.0
+        v = max2 + 1
+        while v > max2: 
+            u = self.random.random()
+            pareto = self.scale/u**(1/self.alpha)
+            v = pareto - (self.scale - min2)
+            
+        v = self.min + (v/10.0)*(self.max - self.min)
+        
+        if self.invert:
+            v = self.max - (v - self.min)
+        return v
+                                    
             
 class DiscreteDistribution(Distribution):
     def __init__(self, values, probabilities):
@@ -122,7 +147,7 @@ class DiscreteUniformDistribution(DiscreteDistribution):
         DiscreteDistributionBase.__init__(self, values, probabilities)
         
     def get(self):
-        return self._get_from_prob(random.random())            
+        return self._get_from_prob(self.random.random())            
     
     
 def percentile(values, percent):
