@@ -612,21 +612,74 @@ class VMScheduler(object):
         return vmrr, preemptions
 
 
-    def __schedule_deadline(self, lease, nexttime, earliest):
-        start = lease.start.requested
-        duration = lease.duration.requested
-        deadline = lease.deadline
+    def __schedule_deadline(self, lease, nexttime, earliest):   
         
-        stretch = (deadline - start) / duration
-        if stretch <= 1.5:
-            return self.__schedule_exact(lease, nexttime, earliest)
+        for n in earliest:
+            earliest[n].time = lease.start.requested     
+               
+        vmrr, preemptions = self.__schedule_asap(lease, nexttime, earliest, allow_in_future = True)
+
+        if vmrr.end - vmrr.start != lease.duration.requested or vmrr.end > lease.deadline:
+            self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
+
+            self.slottable.push()
+                   
+            future_vmrrs = self.slottable.get_reservations_on_or_after(lease.start.requested)
+            future_vmrrs = [rr for rr in future_vmrrs if isinstance(rr, VMResourceReservation) and rr.state==ResourceReservation.STATE_SCHEDULED]
+            
+            for vmrr in future_vmrrs:
+                for rr in vmrr.pre_rrs:
+                    if rr.state == ResourceReservation.STATE_SCHEDULED:
+                         self.slottable.remove_reservation(rr)
+        
+                for rr in vmrr.post_rrs:
+                    self.slottable.remove_reservation(rr)
+    
+                self.slottable.remove_reservation(vmrr)            
+            
+            leases = [vmrr.lease for vmrr in future_vmrrs]
+            leases.append(lease)
+            leases.sort(key=attrgetter("deadline"))
+
+            new_vmrrs = {}
+
+            self.logger.debug("Attempting to reschedule leases %s" % [l.id for l in leases])
+
+            for lease2 in leases:
+                for n in earliest:
+                    earliest[n].time = lease2.start.requested
+                self.logger.debug("Rescheduling lease %s" % lease2.id)
+                vmrr, preemptions = self.__schedule_asap(lease2, nexttime, earliest, allow_in_future = True)
+                if vmrr.end - vmrr.start != lease2.duration.requested or vmrr.end > lease2.deadline or len(preemptions) != 0:
+                    self.logger.debug("Lease %s could not be rescheduled, undoing changes." % lease2.id)
+                    self.slottable.pop()
+                    raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
+                for rr in vmrr.pre_rrs:
+                    self.slottable.add_reservation(rr)                
+                self.slottable.add_reservation(vmrr)
+                for rr in vmrr.post_rrs:
+                    self.slottable.add_reservation(rr)                    
+                if lease2 == lease:
+                    return_vmrr = vmrr
+                else:
+                    new_vmrrs[lease2] = vmrr
+                    
+            for vmrr in future_vmrrs:
+                vmrr.lease.remove_vmrr(vmrr)
+                
+            for lease2, vmrr in new_vmrrs.items():
+                lease2.append_vmrr(vmrr)
+                    
+            for rr in return_vmrr.pre_rrs:
+                self.slottable.remove_reservation(rr)                
+            self.slottable.remove_reservation(return_vmrr)
+            for rr in return_vmrr.post_rrs:
+                self.slottable.remove_reservation(rr)             
+            
+            return return_vmrr, []
         else:
-            for n in earliest:
-                earliest[n].time = max(earliest[n].time, start)
-            vmrr, preemptions = self.__schedule_asap(lease, nexttime, earliest, allow_in_future = True)
-            if vmrr.end - vmrr.start != duration or vmrr.end > deadline:
-                raise NotSchedulableException, "Could not schedule before deadline"
             return vmrr, preemptions
+
 
     def __find_fit_at_points(self, lease, requested_resources, changepoints, duration, min_duration):
         """ Tries to map a lease in a given list of points in time
@@ -652,6 +705,7 @@ class VMScheduler(object):
         (if no mapping is found, all these values are set to None)
         """                 
         found = False
+        print "BAR"
         
         for time, onlynodes in changepoints:
             start = time
