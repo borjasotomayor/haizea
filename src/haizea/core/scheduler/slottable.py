@@ -855,6 +855,15 @@ class SlotTable(object):
         from haizea.core.scheduler.vm_scheduler import VMResourceReservation
         return [i.value for i in self.reservations_by_end if isinstance(i.value, VMResourceReservation) and i.value.prematureend == time]
 
+    def push(self):
+        self.reservations_by_start2 = self.reservations_by_start[:]
+        self.reservations_by_end2 = self.reservations_by_end[:]
+
+    def pop(self):
+        self.reservations_by_start = self.reservations_by_start2
+        self.reservations_by_end = self.reservations_by_end2
+        self.__dirty()
+
 
     def __remove_reservation(self, rr, start=None, end=None):
         """Remove a L{ResourceReservation} from the slot table.
