@@ -639,7 +639,7 @@ class VMScheduler(object):
             
             leases = [vmrr.lease for vmrr in future_vmrrs]
             leases.append(lease)
-            leases.sort(key=attrgetter("deadline"))
+            leases.sort(key= lambda l: (l.deadline - l.start.requested) / l.duration.requested)
 
             new_vmrrs = {}
 
@@ -647,7 +647,7 @@ class VMScheduler(object):
 
             for lease2 in leases:
                 for n in earliest:
-                    earliest[n].time = lease2.start.requested
+                    earliest[n].time = max(lease2.start.requested, nexttime)                    
                 self.logger.debug("Rescheduling lease %s" % lease2.id)
                 vmrr, preemptions = self.__schedule_asap(lease2, nexttime, earliest, allow_in_future = True)
                 if vmrr.end - vmrr.start != lease2.duration.requested or vmrr.end > lease2.deadline or len(preemptions) != 0:
@@ -705,7 +705,6 @@ class VMScheduler(object):
         (if no mapping is found, all these values are set to None)
         """                 
         found = False
-        print "BAR"
         
         for time, onlynodes in changepoints:
             start = time
