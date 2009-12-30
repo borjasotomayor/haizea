@@ -153,8 +153,8 @@ class haizea_lwf_annotate(Command):
                 tau = self.deadlinestretch_dist.get()
                 deadline = round_datetime_delta(start + (1 + tau)*lease.duration.requested)
             elif type == haizea_lwf_annotate.DEADLINE_SLOWDOWN:
-                runtime = int(lease.extras["SWF_runtime"])
-                waittime = int(lease.extras["SWF_waittime"])
+                runtime = float(lease.extras["SWF_runtime"])
+                waittime = float(lease.extras["SWF_waittime"])
                 if runtime < 10: runtime = 10
                 slowdown = (waittime + runtime) / runtime
 
@@ -164,8 +164,8 @@ class haizea_lwf_annotate(Command):
                 
                 tau = (tau-min) / (max-min)
                 
-                stretch = round_datetime_delta(TimeDelta(seconds=runtime) * (1 + (slowdown - 1)*tau))
-                print tau, stretch
+                stretch = round_datetime_delta(lease.duration.requested * (1 + (slowdown - 1)*tau))
+
                 deadline = round_datetime_delta(start + stretch)
             return deadline, tau
 
