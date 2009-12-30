@@ -27,7 +27,7 @@ class TestSimulator(BaseTest):
                 
     def test_deadline5(self):
         self._tracefile_test("deadline5.lwf")
-        self._verify_done([1,2,3])          
+        self._verify_done([1,2])          
 
     def test_deadline6(self):
         self._tracefile_test("deadline6.lwf")
@@ -38,7 +38,7 @@ class TestSimulator(BaseTest):
         self._verify_done([1,2,3])          
         
     def test_deadline8(self):
-        self._tracefile_test("deadline1.lwf")
+        self._tracefile_test("deadline8.lwf")
         self._verify_done([1,2])          
         self._verify_rejected([3])
                                 
