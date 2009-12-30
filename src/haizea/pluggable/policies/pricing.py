@@ -122,6 +122,32 @@ class RandomMultipleOfFairPricePolicy(FairPricePolicy):
         fair_price = self.get_fair_price(lease)
         return mult * fair_price
     
+class MaxMultipleOfFairPricePolicy(FairPricePolicy):
+    """Base class for policies that rely on the notion of a fair rate for computation
+    """    
+    def __init__(self, slottable):
+        """Constructor
+        
+        Argument
+        slottable -- A fully constructed SlotTable
+        """        
+        FairPricePolicy.__init__(self, slottable)
+    
+    def price_lease(self, lease, preempted_leases):
+        """Computes the price of a lease
+        
+        See class documentation for details on what policy is implemented here.
+        See documentation of PricingPolicy.price_lease
+        for more details on this function.
+        
+        Arguments:
+        lease -- Lease that is being scheduled.
+        preempted_leases -- Leases that would have to be preempted to support this lease.
+        """
+        mult = float(lease.extras["simul_pricemarkup"])
+        fair_price = self.get_fair_price(lease)
+        return mult * fair_price    
+    
 class UserInfo(object):
     def __init__(self):
         self.min_markup_accept = None

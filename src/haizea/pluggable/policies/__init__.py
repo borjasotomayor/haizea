@@ -34,4 +34,5 @@ host_class_mappings = {"no-policy": "haizea.pluggable.policies.host_selection.No
 pricing_mappings = {"free": "haizea.pluggable.policies.pricing.FreePolicy",
                     "always-fair": "haizea.pluggable.policies.pricing.AlwaysFairPricePolicy",
                     "random": "haizea.pluggable.policies.pricing.RandomMultipleOfFairPricePolicy",
+                    "maximum": "haizea.pluggable.policies.pricing.MaxMultipleOfFairPricePolicy",
                     "adaptive": "haizea.pluggable.policies.pricing.AdaptiveFairPricePolicy"}
