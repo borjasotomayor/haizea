@@ -298,7 +298,7 @@ class PriceProbe(AccountingProbe):
         if lease.get_state() == Lease.STATE_DONE:
             self.accounting.incr_counter(PriceProbe.STAT_REVENUE, lease.id, lease.price)
 
-        if get_config().get("policy.pricing") != "free":
+        if lease.extras.has_key("fair_price"):
             markup = float(lease.extras["simul_pricemarkup"])
             fair_price = float(lease.extras["fair_price"])
             user_price = markup * fair_price
