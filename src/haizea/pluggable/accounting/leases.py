@@ -265,6 +265,7 @@ class PriceProbe(AccountingProbe):
     STAT_MISSED_REVENUE_REJECT="Missed revenue (reject)"
     STAT_MISSED_REVENUE_REJECT_BY_USER="Missed revenue (reject by user)"
     STAT_MISSED_REVENUE="Missed revenue (total)"
+    LEASE_STAT_PRICE="Price"    
     
     def __init__(self, accounting):
         """See AccountingProbe.__init__"""        
@@ -278,6 +279,7 @@ class PriceProbe(AccountingProbe):
         self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE_REJECT)
         self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE_REJECT_BY_USER)
         self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE)
+        self.accounting.create_lease_stat(PriceProbe.LEASE_STAT_PRICE)
 
 
     def finalize_accounting(self):
@@ -297,6 +299,7 @@ class PriceProbe(AccountingProbe):
         """See AccountingProbe.at_lease_done"""        
         if lease.get_state() == Lease.STATE_DONE:
             self.accounting.incr_counter(PriceProbe.STAT_REVENUE, lease.id, lease.price)
+            self.accounting.set_lease_stat(PriceProbe.LEASE_STAT_PRICE, lease.id, lease.price)
 
         if lease.extras.has_key("fair_price"):
             markup = float(lease.extras["simul_pricemarkup"])
