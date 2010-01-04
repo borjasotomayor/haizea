@@ -80,3 +80,38 @@ class ARPreemptsEverythingPolicy(PreemptabilityPolicy):
             return self._get_aging_factor(preemptee, time)
         else:
             return -1
+        
+class DeadlinePolicy(PreemptabilityPolicy):
+    """Only leases that will still meet their deadline after preemption can
+    be preempted. Furthermore, leases with the most slack time are preferred.
+    """    
+    def __init__(self, slottable):
+        """Constructor
+        
+        Argument
+        slottable -- A fully constructed SlotTable
+        """        
+        PreemptabilityPolicy.__init__(self, slottable)
+    
+    def get_lease_preemptability_score(self, preemptor, preemptee, time):
+        """Computes the lease preemptability score
+        
+        See class documentation for details on what policy is implemented here.
+        See documentation of PreemptabilityPolicy.get_lease_preemptability_score
+        for more details on this function.
+        
+        Arguments:
+        preemptor -- Preemptor lease
+        preemptee -- Preemptee lease
+        time -- Time at which preemption would take place
+        """        
+        if preemptee.get_type() == Lease.DEADLINE:
+            deadline = preemptee.deadline
+            vmrr = preemptee.get_last_vmrr()
+            remaining_duration = vmrr.end - time
+            slack = remaining_duration / (deadline - time)
+            delay = preemptee.estimate_suspend_time() + preemptor.duration.requested + preemptee.estimate_resume_time()
+            if time + delay < deadline:
+                return slack
+            else:
+                return -1

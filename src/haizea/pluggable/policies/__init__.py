@@ -26,7 +26,8 @@ admission_class_mappings = {"accept-all": "haizea.pluggable.policies.admission.A
                             "no-ARs": "haizea.pluggable.policies.admission.NoARsPolicy"}
 
 preemption_class_mappings = {"no-preemption": "haizea.pluggable.policies.preemption.NoPreemptionPolicy",
-                             "ar-preempts-everything": "haizea.pluggable.policies.preemption.ARPreemptsEverythingPolicy"}
+                             "ar-preempts-everything": "haizea.pluggable.policies.preemption.ARPreemptsEverythingPolicy",
+                             "deadline":"haizea.pluggable.policies.preemption.DeadlinePolicy"}
 
 host_class_mappings = {"no-policy": "haizea.pluggable.policies.host_selection.NoPolicy",
                        "greedy": "haizea.pluggable.policies.host_selection.GreedyPolicy"}
