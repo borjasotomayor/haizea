@@ -126,7 +126,7 @@ class GreedyMapper(Mapper):
         """        
         Mapper.__init__(self, slottable, policy)
         
-    def map(self, lease, requested_resources, start, end, strictend, onlynodes=None):
+    def map(self, lease, requested_resources, start, end, strictend, allow_preemption=False, onlynodes=None):
         """The mapping function
         
         See documentation in Mapper for more details
@@ -145,13 +145,17 @@ class GreedyMapper(Mapper):
         # Get an ordered list of lease nodes
         vnodes = self.__sort_vnodes(requested_resources)
         
-        # Get the leases that intersect with the requested interval.
-        leases = aw.get_leases_between(start, end)
-        # Ask the policy engine to sort the leases based on their
-        # preemptability
-        leases = self.policy.sort_leases(lease, leases, start)
-        
-        preemptable_leases = leases
+        if allow_preemption:
+            # Get the leases that intersect with the requested interval.
+            leases = aw.get_leases_between(start, end)
+            # Ask the policy engine to sort the leases based on their
+            # preemptability
+            leases = self.policy.sort_leases(lease, leases, start)
+            
+            preemptable_leases = leases
+        else:
+            preemptable_leases = []
+
         preempting = []
         
         # Try to find a mapping. Each iteration of this loop goes through

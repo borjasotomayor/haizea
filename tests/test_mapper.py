@@ -36,7 +36,8 @@ class TestMapper(object):
         
         mapping, actualend, preemptions = self.mapper.map(lease, requested_resources,
                                                      start, end, 
-                                                     strictend = strictend)
+                                                     strictend = strictend,
+                                                     allow_preemption = True)
         
         if mustmap:
             assert(mapping != None and actualend != None and preemptions != None)
