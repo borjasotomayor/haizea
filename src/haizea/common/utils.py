@@ -20,6 +20,7 @@ from mx import DateTime
 from math import ceil, floor
 from cPickle import dump, load, HIGHEST_PROTOCOL
 from datetime import datetime
+from mx.DateTime import TimeDelta
 import re
 import textwrap
 
@@ -121,6 +122,18 @@ def rst2latex(text):
     latex = re.compile("\\\\begin{document}\n\n\\\\setlength{\\\\locallinewidth}{\\\\linewidth}\n\n(.*)\\\\end{document}", flags=re.DOTALL).search(latex)
     latex = latex.group(1)
     return latex
+
+def compute_suspend_resume_time(mem, rate):
+    """ Compute the time to suspend/resume a single VM
+                        
+    Arguments:
+    mem -- Amount of memory used by the VM
+    rate -- The rate at which an individual VM is suspended/resumed
+    
+    """            
+    time = float(mem) / rate
+    time = round_datetime_delta(TimeDelta(seconds = time))
+    return time
     
 class Singleton(type):
     """ 

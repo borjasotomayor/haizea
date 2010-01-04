@@ -25,7 +25,7 @@ reservations that will be placed in the slot table and correspond to VMs.
 """
 
 import haizea.common.constants as constants
-from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_clock, get_persistence
+from haizea.common.utils import round_datetime_delta, round_datetime, estimate_transfer_time, pretty_nodemap, get_config, get_clock, get_persistence, compute_suspend_resume_time
 from haizea.core.leases import Lease, Capacity
 from haizea.core.scheduler.slottable import ResourceReservation, ResourceTuple
 from haizea.core.scheduler import ReservationEventHandler, RescheduleLeaseException, NormalEndLeaseException, EnactmentError, NotSchedulableException, InconsistentScheduleError, InconsistentLeaseStateError, MigrationResourceReservation
@@ -366,7 +366,8 @@ class VMScheduler(object):
                                                           requested_resources,
                                                           start, 
                                                           end, 
-                                                          strictend = True)
+                                                          strictend = True,
+                                                          allow_preemption = True)
         
         # If no mapping was found, tell the lease scheduler about it
         if mapping == None:
@@ -436,7 +437,7 @@ class VMScheduler(object):
         
         lease_id = lease.id
         remaining_duration = lease.duration.get_remaining_duration()
-        shutdown_time = self.__estimate_shutdown_time(lease)
+        shutdown_time = lease.estimate_shutdown_time()
         
         # We might be scheduling a suspended lease. If so, we will
         # also have to schedule its resumption. Right now, just 
@@ -521,7 +522,7 @@ class VMScheduler(object):
         
         # If resuming, we also have to allocate enough time for the resumption
         if mustresume:
-            duration = remaining_duration + self.__estimate_resume_time(lease)
+            duration = remaining_duration + lease.estimate_resume_time()
         else:
             duration = remaining_duration
 
@@ -619,7 +620,7 @@ class VMScheduler(object):
                
         vmrr, preemptions = self.__schedule_asap(lease, nexttime, earliest, allow_in_future = True)
 
-        if vmrr.end - vmrr.start != lease.duration.requested or vmrr.end > lease.deadline:
+        if vmrr.end - vmrr.start != lease.duration.requested or vmrr.end > lease.deadline or len(preemptions)>0:
             self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
 
             self.slottable.push()
@@ -714,7 +715,9 @@ class VMScheduler(object):
             # If suspension is disabled, we will only accept mappings that go
             # from "start" strictly until "end".
             susptype = get_config().get("suspension")
-            if susptype == constants.SUSPENSION_NONE or (lease.numnodes > 1 and susptype == constants.SUSPENSION_SERIAL):
+            # TODO: Remove the "if is deadline lease" condition and replace it
+            # with something cleaner
+            if susptype == constants.SUSPENSION_NONE or (lease.numnodes > 1 and susptype == constants.SUSPENSION_SERIAL) or lease.get_type() == Lease.DEADLINE: 
                 strictend = True
             else:
                 strictend = False
@@ -725,7 +728,8 @@ class VMScheduler(object):
                                                               start, 
                                                               end, 
                                                               strictend = strictend,
-                                                              onlynodes = onlynodes)
+                                                              onlynodes = onlynodes,
+                                                              allow_preemption = False)
 
             # We have a mapping; we still have to check if it satisfies
             # the minimum duration.
@@ -791,7 +795,7 @@ class VMScheduler(object):
             for (vnode,pnode) in vmrr.nodes.items():
                 if override == None:
                     mem = vmrr.lease.requested_resources[vnode].get_quantity(constants.RES_MEM)
-                    op_time = self.__compute_suspend_resume_time(mem, rate)
+                    op_time = compute_suspend_resume_time(mem, rate)
                 else:
                     op_time = override
 
@@ -820,7 +824,7 @@ class VMScheduler(object):
                 for vnode in vnodes_in_pnode[pnode]:
                     if override == None:
                         mem = vmrr.lease.requested_resources[vnode].get_quantity(constants.RES_MEM)
-                        op_time = self.__compute_suspend_resume_time(mem, rate)
+                        op_time = compute_suspend_resume_time(mem, rate)
                     else:
                         op_time = override                    
                     
@@ -888,7 +892,7 @@ class VMScheduler(object):
         vmrr -- The VM reservation that will be shutdown
         
         """                 
-        shutdown_time = self.__estimate_shutdown_time(vmrr.lease)
+        shutdown_time = vmrr.lease.estimate_shutdown_time()
 
         start = vmrr.end - shutdown_time
         end = vmrr.end
@@ -1018,90 +1022,6 @@ class VMScheduler(object):
         # Add the resumption RRs to the VM RR
         for resmrr in resume_rrs:
             vmrr.pre_rrs.append(resmrr)        
-           
-           
-    def __compute_suspend_resume_time(self, mem, rate):
-        """ Compute the time to suspend/resume a single VM
-                            
-        Arguments:
-        mem -- Amount of memory used by the VM
-        rate -- The rate at which an individual VM is suspended/resumed
-        
-        """            
-        time = float(mem) / rate
-        time = round_datetime_delta(TimeDelta(seconds = time))
-        return time
-    
-    
-    def __estimate_suspend_time(self, lease):
-        """ Estimate the time to suspend an entire lease
-                            
-        Most of the work is done in __estimate_suspend_resume_time. See
-        that method's documentation for more details.
-        
-        Arguments:
-        lease -- Lease that is going to be suspended
-        
-        """               
-        rate = get_config().get("suspend-rate")
-        override = get_config().get("override-suspend-time")
-        if override != None:
-            return override
-        else:
-            return self.__estimate_suspend_resume_time(lease, rate)
-
-
-    def __estimate_resume_time(self, lease):
-        """ Estimate the time to resume an entire lease
-                            
-        Most of the work is done in __estimate_suspend_resume_time. See
-        that method's documentation for more details.
-        
-        Arguments:
-        lease -- Lease that is going to be resumed
-        
-        """           
-        rate = get_config().get("resume-rate") 
-        override = get_config().get("override-resume-time")
-        if override != None:
-            return override
-        else:
-            return self.__estimate_suspend_resume_time(lease, rate)    
-    
-    
-    def __estimate_suspend_resume_time(self, lease, rate):
-        """ Estimate the time to suspend/resume an entire lease
-                            
-        Note that, unlike __compute_suspend_resume_time, this estimates
-        the time to suspend/resume an entire lease (which may involve
-        suspending several VMs)
-        
-        Arguments:
-        lease -- Lease that is going to be suspended/resumed
-        rate -- The rate at which an individual VM is suspended/resumed
-        
-        """              
-        susp_exclusion = get_config().get("suspendresume-exclusion")        
-        enactment_overhead = get_config().get("enactment-overhead") 
-        mem = 0
-        for vnode in lease.requested_resources:
-            mem += lease.requested_resources[vnode].get_quantity(constants.RES_MEM)
-        if susp_exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
-            return lease.numnodes * (self.__compute_suspend_resume_time(mem, rate) + enactment_overhead)
-        elif susp_exclusion == constants.SUSPRES_EXCLUSION_LOCAL:
-            # Overestimating
-            return lease.numnodes * (self.__compute_suspend_resume_time(mem, rate) + enactment_overhead)
-
-
-    def __estimate_shutdown_time(self, lease):
-        """ Estimate the time to shutdown an entire lease
-                            
-        Arguments:
-        lease -- Lease that is going to be shutdown
-        
-        """            
-        enactment_overhead = get_config().get("enactment-overhead").seconds
-        return get_config().get("shutdown-time") + (enactment_overhead * lease.numnodes)
 
 
     def __compute_scheduling_threshold(self, lease):
@@ -1141,11 +1061,11 @@ class VMScheduler(object):
             # First, figure out the "safe duration" (the minimum duration
             # so that we at least allocate enough time for all the
             # overheads).
-            susp_overhead = self.__estimate_suspend_time(lease)
+            susp_overhead = lease.estimate_suspend_time()
             safe_duration = susp_overhead
             
             if lease.get_state() == Lease.STATE_SUSPENDED_QUEUED:
-                resm_overhead = self.__estimate_resume_time(lease)
+                resm_overhead = lease.estimate_resume_time()
                 safe_duration += resm_overhead
             
             # TODO: Incorporate other overheads into the minimum duration

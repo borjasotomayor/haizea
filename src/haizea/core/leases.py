@@ -33,8 +33,8 @@
   needed by a leases.
 """
 
-from haizea.common.constants import LOGLEVEL_VDEBUG
-from haizea.common.utils import StateMachine, round_datetime_delta, get_lease_id
+from haizea.common.constants import LOGLEVEL_VDEBUG, RES_MEM, SUSPRES_EXCLUSION_GLOBAL, SUSPRES_EXCLUSION_LOCAL
+from haizea.common.utils import StateMachine, round_datetime_delta, get_lease_id, compute_suspend_resume_time, get_config
 from haizea.core.scheduler.slottable import ResourceReservation
 
 from mx.DateTime import DateTime, TimeDelta, Parser
@@ -581,7 +581,53 @@ class Lease(object):
         if time_on_dedicated < bound:
             time_on_dedicated = bound
         return time_on_loaded / time_on_dedicated
+ 
+    
+    def estimate_suspend_time(self):
+        """ Estimate the time to suspend an entire lease
+                            
+        Most of the work is done in __estimate_suspend_resume_time. See
+        that method's documentation for more details.
         
+        Arguments:
+        lease -- Lease that is going to be suspended
+        
+        """               
+        rate = get_config().get("suspend-rate")
+        override = get_config().get("override-suspend-time")
+        if override != None:
+            return override
+        else:
+            return self.__estimate_suspend_resume_time(rate)
+
+
+    def estimate_resume_time(self):
+        """ Estimate the time to resume an entire lease
+                            
+        Most of the work is done in __estimate_suspend_resume_time. See
+        that method's documentation for more details.
+        
+        Arguments:
+        lease -- Lease that is going to be resumed
+        
+        """           
+        rate = get_config().get("resume-rate") 
+        override = get_config().get("override-resume-time")
+        if override != None:
+            return override
+        else:
+            return self.__estimate_suspend_resume_time(rate)    
+
+    def estimate_shutdown_time(self):
+        """ Estimate the time to shutdown an entire lease
+                            
+        Arguments:
+        lease -- Lease that is going to be shutdown
+        
+        """            
+        enactment_overhead = get_config().get("enactment-overhead").seconds
+        return get_config().get("shutdown-time") + (enactment_overhead * self.numnodes)
+
     def add_boot_overhead(self, t):
         """Adds a boot overhead to the lease.
         
@@ -591,7 +637,7 @@ class Lease(object):
         Argument:
         t -- Time to add
         """          
-        self.duration.incr(t)        
+        self.duration.incr(t)   
 
     def add_runtime_overhead(self, percent):
         """Adds a runtime overhead to the lease.
@@ -618,6 +664,29 @@ class Lease(object):
         """            
         self.duration.incr_by_percent(percent)
             
+            
+    def __estimate_suspend_resume_time(self, rate):
+        """ Estimate the time to suspend/resume an entire lease
+                            
+        Note that, unlike __compute_suspend_resume_time, this estimates
+        the time to suspend/resume an entire lease (which may involve
+        suspending several VMs)
+        
+        Arguments:
+        lease -- Lease that is going to be suspended/resumed
+        rate -- The rate at which an individual VM is suspended/resumed
+        
+        """              
+        susp_exclusion = get_config().get("suspendresume-exclusion")        
+        enactment_overhead = get_config().get("enactment-overhead") 
+        mem = 0
+        for vnode in self.requested_resources:
+            mem += self.requested_resources[vnode].get_quantity(RES_MEM)
+        if susp_exclusion == SUSPRES_EXCLUSION_GLOBAL:
+            return self.numnodes * (compute_suspend_resume_time(mem, rate) + enactment_overhead)
+        elif susp_exclusion == SUSPRES_EXCLUSION_LOCAL:
+            # Overestimating
+            return self.numnodes * (compute_suspend_resume_time(mem, rate) + enactment_overhead)            
         
 class LeaseStateMachine(StateMachine):
     """A lease state machine
