@@ -511,6 +511,7 @@ class haizea_swf2lwf(Command):
 
         if self.opt.site != None:
             site_elem = ET.parse(self.opt.site).getroot()
+            site_num_nodes = int(site_elem.find("nodes").find("node-set").get("numnodes"))
             root.append(site_elem)
         
         time = TimeDelta(seconds=0)
@@ -518,6 +519,9 @@ class haizea_swf2lwf(Command):
         
         slowdowns = []
         users = set()
+        utilization = 0
+        utilization_no_ramp = 0
+        no_ramp_cutoff = from_time + ((to_time - from_time) * 0.05)
         
         infile = open(infile, "r")
         for line in infile:
@@ -648,11 +652,9 @@ class haizea_swf2lwf(Command):
                 if self.opt.scale != None:
                     num_processors_requested = int(num_processors_requested/int(self.opt.scale))
                     
-                # Make submission time relative to starting time of trace
-                submit_time = submit_time - from_time
-        
                 lease_request = ET.SubElement(requests, "lease-request")
-                lease_request.set("arrival", str(submit_time))
+                # Make submission time relative to starting time of trace
+                lease_request.set("arrival", str(submit_time - from_time))
 
                 if run_time == 0:
                     # As specified in the SWF documentation, a runtime of 0 means
@@ -691,6 +693,13 @@ class haizea_swf2lwf(Command):
                 
                 if not user_id in users:
                     users.add(user_id)
+                    
+                if submit_time + wait_time < to_time:
+                    time_to_end = to_time - (submit_time + wait_time)
+                    time_in_interval = min(run_time, time_to_end.seconds)
+                    utilization += time_in_interval * num_processors_requested
+                    if submit_time + wait_time > no_ramp_cutoff:
+                        utilization_no_ramp += time_in_interval * num_processors_requested
                 
                 start = ET.SubElement(lease, "start")
                 #lease.set("preemptible", self.opt.preemptible)
@@ -735,6 +744,10 @@ class haizea_swf2lwf(Command):
         
         slowdowns.sort()
 
+        total_capacity = site_num_nodes * (to_time - from_time).seconds
+        utilization = float(utilization) / float(total_capacity)
+        utilization_no_ramp = float(utilization_no_ramp) / float(total_capacity)
+
         print "SLOWDOWNS"
         print "---------"
         print "min: %.2f" % slowdowns[0]
@@ -748,4 +761,9 @@ class haizea_swf2lwf(Command):
         print "USERS"
         print "-----"
         print "Number of users: %i" % len(users)
+        print 
+        print "UTILIZATION"
+        print "-----------"
+        print "Utilization: %.2f%%" % (utilization * 100)
+        print "Utilization (no ramp-up): %.2f%%" % (utilization_no_ramp * 100)
 
