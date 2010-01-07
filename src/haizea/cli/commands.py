@@ -521,8 +521,15 @@ class haizea_swf2lwf(Command):
         users = set()
         utilization = 0
         utilization_no_ramp = 0
+        if to_time == None:
+            swf = open(infile, 'r')
+            lines = swf.readlines()
+            lastline = lines[-1]
+            to_time = TimeDelta(seconds=int(lastline.split()[1]))
+            swf.close()
+
         no_ramp_cutoff = from_time + ((to_time - from_time) * 0.05)
-        
+
         infile = open(infile, "r")
         for line in infile:
             if line[0]!=';' and len(line.strip()) != 0:
@@ -648,9 +655,14 @@ class haizea_swf2lwf(Command):
                     if queue not in queues:
                         # Job was submitted to a queue we're filtering out
                         continue              
+                    
+                if num_processors_requested == -1:
+                    num_processors = num_processors_allocated
+                else:
+                    num_processors = num_processors_requested
         
                 if self.opt.scale != None:
-                    num_processors_requested = int(num_processors_requested/int(self.opt.scale))
+                    num_processors = int(num_processors/int(self.opt.scale))
                     
                 lease_request = ET.SubElement(requests, "lease-request")
                 # Make submission time relative to starting time of trace
@@ -669,7 +681,7 @@ class haizea_swf2lwf(Command):
                 
                 nodes = ET.SubElement(lease, "nodes")
                 node_set = ET.SubElement(nodes, "node-set")
-                node_set.set("numnodes", `num_processors_requested`)
+                node_set.set("numnodes", `num_processors`)
                 res = ET.SubElement(node_set, "res")
                 res.set("type", "CPU")
                 res.set("amount", "100")
@@ -684,23 +696,27 @@ class haizea_swf2lwf(Command):
                     print "Cannot convert this file. Job #%i does not specify requested memory, and --memory parameter not specified" % job_number
                     exit(-1)
                     
-                if run_time < 10:
-                    run_time2 = 10.0
-                else:
-                    run_time2 = float(run_time)
-                slowdown = (wait_time + run_time2) / run_time2
-                slowdowns.append(slowdown)
+                if wait_time != -1:
+                    if run_time < 10:
+                        run_time2 = 10.0
+                    else:
+                        run_time2 = float(run_time)
+                    slowdown = (wait_time + run_time2) / run_time2
+                    slowdowns.append(slowdown)
                 
                 if not user_id in users:
                     users.add(user_id)
-                    
-                if submit_time + wait_time < to_time:
+
+                # Total utilization
+                utilization += run_time * num_processors
+
+                # Removing ramp-up and ramp-down effects
+                if wait_time != -1 and submit_time + wait_time < to_time:
                     time_to_end = to_time - (submit_time + wait_time)
                     time_in_interval = min(run_time, time_to_end.seconds)
-                    utilization += time_in_interval * num_processors_requested
                     if submit_time + wait_time > no_ramp_cutoff:
-                        utilization_no_ramp += time_in_interval * num_processors_requested
-                
+                        utilization_no_ramp += time_in_interval * num_processors
+
                 start = ET.SubElement(lease, "start")
                 #lease.set("preemptible", self.opt.preemptible)
                 lease.set("user", `user_id`)
@@ -748,16 +764,17 @@ class haizea_swf2lwf(Command):
         utilization = float(utilization) / float(total_capacity)
         utilization_no_ramp = float(utilization_no_ramp) / float(total_capacity)
 
-        print "SLOWDOWNS"
-        print "---------"
-        print "min: %.2f" % slowdowns[0]
-        print "10p: %.2f" % percentile(slowdowns, 0.1)
-        print "25p: %.2f" % percentile(slowdowns, 0.25)
-        print "med: %.2f" % percentile(slowdowns, 0.5)
-        print "75p: %.2f" % percentile(slowdowns, 0.75)
-        print "90p: %.2f" % percentile(slowdowns, 0.9)
-        print "max: %.2f" % slowdowns[-1]
-        print 
+        if len(slowdowns) > 0:
+            print "SLOWDOWNS"
+            print "---------"
+            print "min: %.2f" % slowdowns[0]
+            print "10p: %.2f" % percentile(slowdowns, 0.1)
+            print "25p: %.2f" % percentile(slowdowns, 0.25)
+            print "med: %.2f" % percentile(slowdowns, 0.5)
+            print "75p: %.2f" % percentile(slowdowns, 0.75)
+            print "90p: %.2f" % percentile(slowdowns, 0.9)
+            print "max: %.2f" % slowdowns[-1]
+            print 
         print "USERS"
         print "-----"
         print "Number of users: %i" % len(users)
@@ -765,5 +782,6 @@ class haizea_swf2lwf(Command):
         print "UTILIZATION"
         print "-----------"
         print "Utilization: %.2f%%" % (utilization * 100)
-        print "Utilization (no ramp-up): %.2f%%" % (utilization_no_ramp * 100)
+        if utilization_no_ramp != 0:
+            print "Utilization (no ramp-up): %.2f%%" % (utilization_no_ramp * 100)
 
