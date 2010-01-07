@@ -56,6 +56,7 @@ class haizea_lwf_annotate(Command):
 
     DEADLINE_DURATION = "multiple-of-duration"
     DEADLINE_SLOWDOWN = "original-slowdown"
+    DEADLINE_ABSOLUTE = "absolute"
     
     def __init__(self, argv):
         Command.__init__(self, argv)
@@ -149,22 +150,29 @@ class haizea_lwf_annotate(Command):
         if self.deadlinestretch_dist == None:
             return None, None
         else:
-            if type == haizea_lwf_annotate.DEADLINE_DURATION:
-                tau = self.deadlinestretch_dist.get()
+            if type in (haizea_lwf_annotate.DEADLINE_DURATION, haizea_lwf_annotate.DEADLINE_SLOWDOWN):
+                if type == haizea_lwf_annotate.DEADLINE_DURATION:
+                    tau = self.deadlinestretch_dist.get()
+                    
+                elif type == haizea_lwf_annotate.DEADLINE_SLOWDOWN:
+                    runtime = float(lease.extras["SWF_runtime"])
+                    waittime = float(lease.extras["SWF_waittime"])
+                    if runtime < 10: runtime = 10
+                    slowdown = (waittime + runtime) / runtime
+    
+                    min = self.deadlinestretch_dist.min
+                    max = self.deadlinestretch_dist.max
+                    tau = self.deadlinestretch_dist.get()
+                    
+                    tau = (slowdown - 1)*((tau-min) / (max-min))
+    
+                deadline = round_datetime_delta(start + (1 + tau)*lease.duration.requested)                
+            elif type == haizea_lwf_annotate.DEADLINE_ABSOLUTE:
+                wait = self.deadlinestretch_dist.get()
+                deadline = round_datetime_delta(start + TimeDelta(seconds=wait) + lease.duration.requested)  
                 
-            elif type == haizea_lwf_annotate.DEADLINE_SLOWDOWN:
-                runtime = float(lease.extras["SWF_runtime"])
-                waittime = float(lease.extras["SWF_waittime"])
-                if runtime < 10: runtime = 10
-                slowdown = (waittime + runtime) / runtime
-
-                min = self.deadlinestretch_dist.min
-                max = self.deadlinestretch_dist.max
-                tau = self.deadlinestretch_dist.get()
-                
-                tau = (slowdown - 1)*((tau-min) / (max-min))
-
-            deadline = round_datetime_delta(start + (1 + tau)*lease.duration.requested)                
+                tau = ((deadline - start) / lease.duration.requested) - 1                    
+                    
             return deadline, tau
 
     def __get_software(self, lease):
@@ -174,12 +182,15 @@ class haizea_lwf_annotate(Command):
         if self.markup_dist == None:
             return None
         else:
-            if self.user_markups.has_key(lease.user_id):
-                return self.user_markups[lease.user_id]
+            if lease.user_id == -1:
+                return self.markup_dist.get()
             else:
-                markup = self.markup_dist.get()
-                self.user_markups[lease.user_id] = markup
-                return markup
+                if self.user_markups.has_key(lease.user_id):
+                    return self.user_markups[lease.user_id]
+                else:
+                    markup = self.markup_dist.get()
+                    self.user_markups[lease.user_id] = markup
+                    return markup
     
     def __get_dist(self, section):
         if self.config.has_section(section):
