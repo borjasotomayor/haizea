@@ -281,7 +281,7 @@ class VMScheduler(object):
         self.__schedule_suspension(vmrr, t)
         
         # Update the VMRR in the slot table
-        #self.slottable.update_reservation(vmrr, old_start, old_end)
+        self.slottable.update_reservation(vmrr, old_start, old_end)
         
         # Add the suspension RRs to the VM's post-RRs
         for susprr in vmrr.post_rrs:
@@ -621,14 +621,31 @@ class VMScheduler(object):
         for n in earliest:
             earliest[n].time = max(lease.start.requested, earliest[n].time)
 
-        vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+        slack = (lease.deadline - lease.start.requested) / lease.duration.requested
+        if slack <= 2.0:
+            try:
+                vmrr, preemptions = self.__schedule_exact(lease, duration, nexttime, earliest)
+                if lease.duration.known != None:
+                    print "LEASE %i - %.2f - %i" % (lease.id, slack, lease.duration.known.seconds * lease.numnodes)
+                else:
+                    print "LEASE %i - %.2f - %i" % (lease.id, slack, lease.duration.requested.seconds * lease.numnodes)
+                return vmrr, preemptions
+            except:
+                vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+                if vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
+                    self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
+                    raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
+                else:
+                    return vmrr, preemptions
+        else:
+            vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
 
-        if vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
+        if vmrr == None or vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
             self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
             
             self.slottable.push()
-                   
-            future_vmrrs = self.slottable.get_reservations_on_or_after(lease.start.requested)
+            print min([e.time for e in earliest.values()])
+            future_vmrrs = self.slottable.get_reservations_on_or_after(min([e.time for e in earliest.values()]))
             future_vmrrs = [rr for rr in future_vmrrs if isinstance(rr, VMResourceReservation) and rr.state==ResourceReservation.STATE_SCHEDULED]
             
             for vmrr in future_vmrrs:
@@ -658,17 +675,6 @@ class VMScheduler(object):
                     self.logger.debug("Lease %s could not be rescheduled, undoing changes." % lease2.id)
                     self.slottable.pop()
 
-                    slack = (lease.deadline - lease.start.requested) / lease.duration.requested
-                    if slack <= 2.0:
-                        try:
-                            vmrr, preemptions = self.__schedule_exact(lease, duration, nexttime, earliest)
-                            if lease.duration.known != None:
-                                print "LEASE %i - %.2f - %i" % (lease.id, slack, lease.duration.known.seconds * lease.numnodes)
-                            else:
-                                print "LEASE %i - %.2f - %i" % (lease.id, slack, lease.duration.requested.seconds * lease.numnodes)
-                            return vmrr, preemptions
-                        except:
-                            raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
                     raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
                     
                 for rr in vmrr.pre_rrs:
@@ -697,6 +703,17 @@ class VMScheduler(object):
         else:
             return vmrr, preemptions
 
+    def reschedule_deadline(self, lease, duration, nexttime, earliest, override_state = None):
+        for n in earliest:
+            earliest[n].time = max(lease.start.requested, earliest[n].time)
+        vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+        if vmrr == None or vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
+            self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
+            raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
+        else:
+            return vmrr, preemptions
+        
+        
 
     def __find_fit_at_points(self, lease, requested_resources, changepoints, duration, min_duration):
         """ Tries to map a lease in a given list of points in time
@@ -977,8 +994,8 @@ class VMScheduler(object):
         vmrr.update_end(susp_start)
         
         # If there are any post RRs, remove them
-        #for rr in vmrr.post_rrs:
-        #    self.slottable.remove_reservation(rr)
+        for rr in vmrr.post_rrs:
+            self.slottable.remove_reservation(rr)
         vmrr.post_rrs = []
 
         # Add the suspension RRs to the VM RR

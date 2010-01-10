@@ -111,7 +111,7 @@ class DeadlinePolicy(PreemptabilityPolicy):
             remaining_duration = vmrr.end - time
             slack = (deadline - time) / remaining_duration
             delay = preemptee.estimate_suspend_time() + preemptor.duration.requested + preemptee.estimate_resume_time()
-            if time + delay + remaining_duration < deadline:
+            if time + delay + remaining_duration < deadline and not vmrr.is_suspending():
                 return slack
             else:
                 return -1
