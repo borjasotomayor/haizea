@@ -93,7 +93,7 @@ class VMScheduler(object):
         self.future_leases = set()
 
 
-    def schedule(self, lease, nexttime, earliest):
+    def schedule(self, lease, duration, nexttime, earliest, override_state = None):
         """ The scheduling function
         
         This particular function doesn't do much except call __schedule_asap
@@ -105,13 +105,13 @@ class VMScheduler(object):
         earliest -- The earliest possible starting times on each physical node
         """        
         if lease.get_type() == Lease.BEST_EFFORT:
-            return self.__schedule_asap(lease, nexttime, earliest, allow_in_future = self.can_schedule_in_future())
+            return self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = self.can_schedule_in_future())
         elif lease.get_type() == Lease.ADVANCE_RESERVATION:
-            return self.__schedule_exact(lease, nexttime, earliest)
+            return self.__schedule_exact(lease, duration, nexttime, earliest)
         elif lease.get_type() == Lease.IMMEDIATE:
-            return self.__schedule_asap(lease, nexttime, earliest, allow_in_future = False)
+            return self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = False)
         elif lease.get_type() == Lease.DEADLINE:
-            return self.__schedule_deadline(lease, nexttime, earliest)
+            return self.__schedule_deadline(lease, duration, nexttime, earliest, override_state)
 
 
     def estimate_migration_time(self, lease):
@@ -281,7 +281,7 @@ class VMScheduler(object):
         self.__schedule_suspension(vmrr, t)
         
         # Update the VMRR in the slot table
-        self.slottable.update_reservation(vmrr, old_start, old_end)
+        #self.slottable.update_reservation(vmrr, old_start, old_end)
         
         # Add the suspension RRs to the VM's post-RRs
         for susprr in vmrr.post_rrs:
@@ -340,7 +340,7 @@ class VMScheduler(object):
         return util              
         
 
-    def __schedule_exact(self, lease, nexttime, earliest):
+    def __schedule_exact(self, lease, duration, nexttime, earliest):
         """ Schedules VMs that must start at an exact time
         
         This type of lease is "easy" to schedule because we know the exact
@@ -352,7 +352,7 @@ class VMScheduler(object):
         nexttime -- The next time at which the scheduler can allocate resources.
         earliest -- The earliest possible starting times on each physical node
         """             
-        
+
         # Determine the start and end time
         start = lease.start.requested
         end = start + lease.duration.requested
@@ -368,7 +368,7 @@ class VMScheduler(object):
                                                           end, 
                                                           strictend = True,
                                                           allow_preemption = True)
-        
+
         # If no mapping was found, tell the lease scheduler about it
         if mapping == None:
             raise NotSchedulableException, "Not enough resources in specified interval"
@@ -388,11 +388,11 @@ class VMScheduler(object):
 
         # Schedule shutdown for the VM
         self.__schedule_shutdown(vmrr)
-        
+
         return vmrr, preemptions
 
 
-    def __schedule_asap(self, lease, nexttime, earliest, allow_in_future = None):
+    def __schedule_asap(self, lease, duration, nexttime, earliest, allow_in_future = None, override_state = None):
         """ Schedules VMs as soon as possible
         
         This method is a bit more complex that __schedule_exact because
@@ -429,20 +429,23 @@ class VMScheduler(object):
         allowed to schedule the VMs in the future.
         """                
         
-
-
         #
         # STEP 1: PROLEGOMENA
         #
         
         lease_id = lease.id
-        remaining_duration = lease.duration.get_remaining_duration()
+        remaining_duration = duration
         shutdown_time = lease.estimate_shutdown_time()
+        
+        if override_state != None:
+            state = override_state
+        else:
+            state = lease.get_state()
         
         # We might be scheduling a suspended lease. If so, we will
         # also have to schedule its resumption. Right now, just 
         # figure out if this is such a lease.
-        mustresume = (lease.get_state() in (Lease.STATE_SUSPENDED_PENDING, Lease.STATE_SUSPENDED_QUEUED, Lease.STATE_SUSPENDED_SCHEDULED))
+        mustresume = (state in (Lease.STATE_SUSPENDED_PENDING, Lease.STATE_SUSPENDED_QUEUED, Lease.STATE_SUSPENDED_SCHEDULED))
 
         # This is the minimum duration that we must be able to schedule.
         # See __compute_scheduling_threshold for more details.
@@ -613,16 +616,16 @@ class VMScheduler(object):
         return vmrr, preemptions
 
 
-    def __schedule_deadline(self, lease, nexttime, earliest):   
+    def __schedule_deadline(self, lease, duration, nexttime, earliest, override_state):   
         
         for n in earliest:
-            earliest[n].time = lease.start.requested     
-               
-        vmrr, preemptions = self.__schedule_asap(lease, nexttime, earliest, allow_in_future = True)
+            earliest[n].time = max(lease.start.requested, earliest[n].time)
 
-        if vmrr.end - vmrr.start != lease.duration.requested or vmrr.end > lease.deadline or len(preemptions)>0:
+        vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+
+        if vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
             self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
-
+            
             self.slottable.push()
                    
             future_vmrrs = self.slottable.get_reservations_on_or_after(lease.start.requested)
@@ -650,11 +653,24 @@ class VMScheduler(object):
                 for n in earliest:
                     earliest[n].time = max(lease2.start.requested, nexttime)                    
                 self.logger.debug("Rescheduling lease %s" % lease2.id)
-                vmrr, preemptions = self.__schedule_asap(lease2, nexttime, earliest, allow_in_future = True)
+                vmrr, preemptions = self.__schedule_asap(lease2, lease2.duration.get_remaining_duration(), nexttime, earliest, allow_in_future = True)
                 if vmrr.end - vmrr.start != lease2.duration.requested or vmrr.end > lease2.deadline or len(preemptions) != 0:
                     self.logger.debug("Lease %s could not be rescheduled, undoing changes." % lease2.id)
                     self.slottable.pop()
+
+                    slack = (lease.deadline - lease.start.requested) / lease.duration.requested
+                    if slack <= 2.0:
+                        try:
+                            vmrr, preemptions = self.__schedule_exact(lease, duration, nexttime, earliest)
+                            if lease.duration.known != None:
+                                print "LEASE %i - %.2f - %i" % (lease.id, slack, lease.duration.known.seconds * lease.numnodes)
+                            else:
+                                print "LEASE %i - %.2f - %i" % (lease.id, slack, lease.duration.requested.seconds * lease.numnodes)
+                            return vmrr, preemptions
+                        except:
+                            raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
                     raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
+                    
                 for rr in vmrr.pre_rrs:
                     self.slottable.add_reservation(rr)                
                 self.slottable.add_reservation(vmrr)
@@ -961,8 +977,8 @@ class VMScheduler(object):
         vmrr.update_end(susp_start)
         
         # If there are any post RRs, remove them
-        for rr in vmrr.post_rrs:
-            self.slottable.remove_reservation(rr)
+        #for rr in vmrr.post_rrs:
+        #    self.slottable.remove_reservation(rr)
         vmrr.post_rrs = []
 
         # Add the suspension RRs to the VM RR
@@ -1214,7 +1230,11 @@ class VMScheduler(object):
         self.resourcepool.verify_suspend(l, rr)
         rr.state = ResourceReservation.STATE_DONE
         if rr.is_last():
-            l.set_state(Lease.STATE_SUSPENDED_PENDING)
+            if l.get_type() == Lease.DEADLINE:
+                l.set_state(Lease.STATE_SUSPENDED_PENDING)
+                l.set_state(Lease.STATE_SUSPENDED_SCHEDULED)
+            else:
+                l.set_state(Lease.STATE_SUSPENDED_PENDING)
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleEndSuspend" % l.id)
         self.logger.info("Lease %i suspended." % (l.id))
