@@ -611,7 +611,7 @@ class VMScheduler(object):
             res_str = " (resuming)"
         if mustsuspend:
             susp_str = " (suspending)"
-        self.logger.info("Lease #%i has been scheduled on nodes %s from %s%s to %s%s" % (lease.id, mapping.values(), start, res_str, end, susp_str))
+        self.logger.info("Lease #%i can be scheduled on nodes %s from %s%s to %s%s" % (lease.id, mapping.values(), start, res_str, end, susp_str))
 
         return vmrr, preemptions
 
@@ -624,13 +624,11 @@ class VMScheduler(object):
         slack = (lease.deadline - lease.start.requested) / lease.duration.requested
         if slack <= 2.0:
             try:
+                self.logger.debug("Trying to schedule lease #%i as an advance reservation..." % lease.id)
                 vmrr, preemptions = self.__schedule_exact(lease, duration, nexttime, earliest)
-                if lease.duration.known != None:
-                    print "LEASE %i - %.2f - %i" % (lease.id, slack, lease.duration.known.seconds * lease.numnodes)
-                else:
-                    print "LEASE %i - %.2f - %i" % (lease.id, slack, lease.duration.requested.seconds * lease.numnodes)
                 return vmrr, preemptions
             except:
+                self.logger.debug("Lease #%i cannot be scheduled as an advance reservation, trying as best-effort..." % lease.id)
                 vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
                 if vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
                     self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)

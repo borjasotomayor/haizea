@@ -257,10 +257,12 @@ class PriceProbe(AccountingProbe):
     
     """
     COUNTER_REVENUE="Revenue"
+    COUNTER_SURCHARGE="Surcharge"
     COUNTER_MISSED_REVENUE_UNDERCHARGE="Missed revenue (undercharging)"
     COUNTER_MISSED_REVENUE_REJECT="Missed revenue (reject)"
     COUNTER_MISSED_REVENUE_REJECT_BY_USER="Missed revenue (reject by user)"
     STAT_REVENUE="Revenue"
+    STAT_SURCHARGE="Revenue"
     STAT_MISSED_REVENUE_UNDERCHARGE="Missed revenue (undercharging)"
     STAT_MISSED_REVENUE_REJECT="Missed revenue (reject)"
     STAT_MISSED_REVENUE_REJECT_BY_USER="Missed revenue (reject by user)"
@@ -271,10 +273,12 @@ class PriceProbe(AccountingProbe):
         """See AccountingProbe.__init__"""        
         AccountingProbe.__init__(self, accounting)
         self.accounting.create_counter(PriceProbe.COUNTER_REVENUE, AccountingDataCollection.AVERAGE_NONE)
+        self.accounting.create_counter(PriceProbe.COUNTER_SURCHARGE, AccountingDataCollection.AVERAGE_NONE)
         self.accounting.create_counter(PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE, AccountingDataCollection.AVERAGE_NONE)
         self.accounting.create_counter(PriceProbe.COUNTER_MISSED_REVENUE_REJECT, AccountingDataCollection.AVERAGE_NONE)
         self.accounting.create_counter(PriceProbe.COUNTER_MISSED_REVENUE_REJECT_BY_USER, AccountingDataCollection.AVERAGE_NONE)
         self.accounting.create_stat(PriceProbe.STAT_REVENUE)
+        self.accounting.create_stat(PriceProbe.STAT_SURCHARGE)
         self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE_UNDERCHARGE)
         self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE_REJECT)
         self.accounting.create_stat(PriceProbe.STAT_MISSED_REVENUE_REJECT_BY_USER)
@@ -285,6 +289,7 @@ class PriceProbe(AccountingProbe):
     def finalize_accounting(self):
         """See AccountingProbe.finalize_accounting"""        
         self._set_stat_from_counter(PriceProbe.STAT_REVENUE, PriceProbe.COUNTER_REVENUE)
+        self._set_stat_from_counter(PriceProbe.STAT_SURCHARGE, PriceProbe.COUNTER_SURCHARGE)
         self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_UNDERCHARGE, PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE)
         self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT, PriceProbe.COUNTER_MISSED_REVENUE_REJECT)
         self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT_BY_USER, PriceProbe.COUNTER_MISSED_REVENUE_REJECT_BY_USER)

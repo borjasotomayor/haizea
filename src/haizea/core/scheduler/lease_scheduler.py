@@ -778,6 +778,12 @@ class LeaseScheduler(object):
 
         if feasible:
             for lease_to_preempt in preempted_leases:
+                if lease.id in cancelled:
+                    dur = lease_to_preempt.duration.requested - lease_to_preempt.duration.accumulated
+                else:
+                    preempt_vmrr = lease_to_preempt.get_last_vmrr()
+                    dur = lease_to_preempt.duration.requested - lease_to_preempt.duration.accumulated - (preempt_vmrr.end - preempt_vmrr.start)
+                
                 node_ids = self.slottable.nodes.keys()
                 earliest = {}
    

@@ -65,9 +65,19 @@ class FairPricePolicy(PricingPolicy):
         self.fair_rate = get_config().config.getfloat("pricing", "fair-rate")
     
     def get_fair_price(self, lease):
-        fair_price = (lease.duration.requested.seconds / 3600) * lease.numnodes * self.fair_rate
-        return fair_price
+        return (lease.duration.requested.seconds / 3600.0) * lease.numnodes * self.fair_rate 
     
+    def get_surcharge(self, preempted_leases):
+        surcharge = 0
+        for l in preempted_leases:
+            suspend_time = l.estimate_suspend_time()
+            resume_time = l.estimate_resume_time()
+            surcharge += ((suspend_time + resume_time).seconds / 3600.0) * l.numnodes * self.fair_rate 
+
+        return surcharge    
+    
+    def get_price(self, lease, preempted_leases):
+        return self.get_fair_price(lease) + self.get_surcharge(preempted_leases)
     
 class AlwaysFairPricePolicy(FairPricePolicy):
     """...
@@ -91,7 +101,7 @@ class AlwaysFairPricePolicy(FairPricePolicy):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        return self.get_fair_price(lease)
+        return self.get_price(lease, preempted_leases)
     
 class RandomMultipleOfFairPricePolicy(FairPricePolicy):
     """Base class for policies that rely on the notion of a fair rate for computation
