@@ -24,7 +24,7 @@
           </node-set>
         </nodes>
         <start>
-          <exact time="00:30:00.00"/>
+          <exact time="01:00:00.00"/>
         </start>
         <duration time="00:30:00.00"/>
         <deadline time="01:30:00.00"/>

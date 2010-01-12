@@ -34,6 +34,13 @@ class BaseTest(object):
             
             if lease.deadline != None:
                 assert lease.end <= lease.deadline
+                
+            if lease.duration.known != None:
+                duration = lease.duration.known
+            else:
+                duration = lease.duration.requested
+                
+            assert duration == lease.duration.actual
 
     def _verify_rejected(self, ids):
         for id in ids:

@@ -23,3 +23,11 @@ class TestSimulator(BaseTest):
         self.config.set("pricing", "fair-rate", "0.10")        
         self._tracefile_test("price2.lwf")
         self._verify_rejected_by_user([1])
+        
+    def test_pricing_surcharge(self):
+        self.config.set("scheduling", "policy-preemption", "deadline")
+        self.config.set("scheduling", "suspension", "all")
+        self.config.set("scheduling", "policy-pricing", "always-fair")
+        self.config.set("pricing", "fair-rate", "0.10")        
+        self._tracefile_test("pricedeadline.lwf")
+        self._verify_done([1])        

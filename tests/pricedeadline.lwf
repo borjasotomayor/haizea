@@ -31,6 +31,9 @@
         <software>
           <disk-image id="foobar1.img" size="1024"/>
         </software>
+        <extra>
+          <attr name="simul_pricemarkup" value="10.0"/>
+        </extra>        
       </lease>
     </lease-request>
     <lease-request arrival="00:45:00.00">
@@ -49,6 +52,9 @@
         <software>
           <disk-image id="foobar1.img" size="1024"/>
         </software>
+        <extra>
+          <attr name="simul_pricemarkup" value="10.0"/>
+        </extra>        
       </lease>
     </lease-request>
   </lease-requests>

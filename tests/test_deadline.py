@@ -5,8 +5,8 @@ class TestSimulator(BaseTest):
     def __init__(self):
         config = BaseTest.load_configfile("base_config_simulator.conf")
         BaseTest.__init__(self, config)
-        self.config.set("scheduling", "policy-preemption", "no-preemption")
-        self.config.set("scheduling", "suspension", "none")
+        self.config.set("scheduling", "policy-preemption", "deadline")
+        self.config.set("scheduling", "suspension", "all")
             
     def test_deadline1(self):
         self._tracefile_test("deadline1.lwf")
