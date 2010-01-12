@@ -683,10 +683,10 @@ class Lease(object):
         for vnode in self.requested_resources:
             mem += self.requested_resources[vnode].get_quantity(RES_MEM)
         if susp_exclusion == SUSPRES_EXCLUSION_GLOBAL:
-            return self.numnodes * (compute_suspend_resume_time(mem, rate) + enactment_overhead)
+            return self.numnodes * enactment_overhead + compute_suspend_resume_time(mem, rate)
         elif susp_exclusion == SUSPRES_EXCLUSION_LOCAL:
             # Overestimating
-            return self.numnodes * (compute_suspend_resume_time(mem, rate) + enactment_overhead)            
+            return self.numnodes * enactment_overhead + compute_suspend_resume_time(mem, rate)
         
 class LeaseStateMachine(StateMachine):
     """A lease state machine
