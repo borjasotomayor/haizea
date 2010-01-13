@@ -116,8 +116,8 @@ class RandomRatePricePolicy(RatePricePolicy):
         """        
         RatePricePolicy.__init__(self, slottable)
         random.seed(get_config().config.getint("pricing", "seed"))
-        self.min_multiplier = get_config().config.getfloat("pricing", "min-multiplier")
-        self.max_multiplier = get_config().config.getfloat("pricing", "max-multiplier")
+        self.min_rate = get_config().config.getfloat("pricing", "min-rate")
+        self.max_rate = get_config().config.getfloat("pricing", "max-rate")
     
     def price_lease(self, lease, preempted_leases):
         """Computes the price of a lease
@@ -130,7 +130,7 @@ class RandomRatePricePolicy(RatePricePolicy):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        rate = random.uniform(self.min_multiplier, self.max_multiplier)
+        rate = random.uniform(self.min_rate, self.max_rate)
         return self.get_price(lease, rate)
     
 class MaximumPricePolicy(RatePricePolicy):
@@ -209,21 +209,21 @@ class AdaptiveRatePricePolicy(RatePricePolicy):
             
         if lease.get_state() == Lease.STATE_REJECTED_BY_USER:
             if self.users[lease.user_id].min_rate_reject == None:
-                self.users[lease.user_id].min_rate_reject = lease_multiplier
-                self.users[lease.user_id].max_rate_reject = lease_multiplier
+                self.users[lease.user_id].min_rate_reject = rate
+                self.users[lease.user_id].max_rate_reject = rate
             else:
-                self.users[lease.user_id].min_rate_reject = min(lease_multiplier, self.users[lease.user_id].min_rate_reject)
-                self.users[lease.user_id].max_rate_reject = max(lease_multiplier, self.users[lease.user_id].max_rate_reject)
+                self.users[lease.user_id].min_rate_reject = min(rate, self.users[lease.user_id].min_rate_reject)
+                self.users[lease.user_id].max_rate_reject = max(rate, self.users[lease.user_id].max_rate_reject)
         else:
             if self.users[lease.user_id].min_rate_accept == None:
-                self.users[lease.user_id].min_rate_accept = lease_multiplier
-                self.users[lease.user_id].max_rate_accept = lease_multiplier
+                self.users[lease.user_id].min_rate_accept = rate
+                self.users[lease.user_id].max_rate_accept = rate
             else:
                 if self.users[lease.user_id].min_rate_reject != None:
                     self.users[lease.user_id].found = True
                 else:
-                    self.users[lease.user_id].min_rate_accept = min(lease_multiplier, self.users[lease.user_id].min_rate_accept)
-                    self.users[lease.user_id].max_rate_accept = max(lease_multiplier, self.users[lease.user_id].max_rate_accept)
+                    self.users[lease.user_id].min_rate_accept = min(rate, self.users[lease.user_id].min_rate_accept)
+                    self.users[lease.user_id].max_rate_accept = max(rate, self.users[lease.user_id].max_rate_accept)
                 
         for user in self.users:
             if not self.users[user].found:
@@ -240,4 +240,4 @@ class AdaptiveRatePricePolicy(RatePricePolicy):
             
         estimates = sorted([u.rate_estimate for u in self.users.values()])
         
-        self.multiplier = percentile(estimates, 0.5)
+        self.rate = percentile(estimates, 0.5)
