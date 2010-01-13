@@ -133,8 +133,8 @@ class RandomRatePricePolicy(RatePricePolicy):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        rate = random.uniform(self.min_rate, self.max_rate)
-        return self.get_price(lease, rate)
+        self.rate = random.uniform(self.min_rate, self.max_rate)
+        return self.get_price(lease, preempted_leases)
     
 class MaximumPricePolicy(RatePricePolicy):
     """...

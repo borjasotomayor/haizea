@@ -781,9 +781,10 @@ class LeaseScheduler(object):
                 self.vm_scheduler.cancel_vm(preempt_vmrr)       
                 cancelled.append(lease_to_preempt.id)
                 
-                if lease_to_preempt.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
+                lease_state = lease_to_preempt.get_state()
+                if lease_state == Lease.STATE_SUSPENDED_SCHEDULED:
                     lease.set_state(Lease.STATE_SUSPENDED_READY)
-                else:
+                elif lease_state != Lease.STATE_READY:
                     lease.set_state(Lease.STATE_READY)                
 
         for lease_to_preempt in preempted_leases:
