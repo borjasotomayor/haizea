@@ -20,6 +20,7 @@
 
 from haizea.core.accounting import AccountingProbe, AccountingDataCollection
 from haizea.core.leases import Lease
+from haizea.common.utils import get_policy
 
 from mx.DateTime import TimeDelta
           
@@ -262,7 +263,7 @@ class PriceProbe(AccountingProbe):
     COUNTER_MISSED_REVENUE_REJECT="Missed revenue (reject)"
     COUNTER_MISSED_REVENUE_REJECT_BY_USER="Missed revenue (reject by user)"
     STAT_REVENUE="Revenue"
-    STAT_SURCHARGE="Revenue"
+    STAT_SURCHARGE="Surcharge"
     STAT_MISSED_REVENUE_UNDERCHARGE="Missed revenue (undercharging)"
     STAT_MISSED_REVENUE_REJECT="Missed revenue (reject)"
     STAT_MISSED_REVENUE_REJECT_BY_USER="Missed revenue (reject by user)"
@@ -293,7 +294,7 @@ class PriceProbe(AccountingProbe):
         self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_UNDERCHARGE, PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE)
         self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT, PriceProbe.COUNTER_MISSED_REVENUE_REJECT)
         self._set_stat_from_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT_BY_USER, PriceProbe.COUNTER_MISSED_REVENUE_REJECT_BY_USER)
-        
+     
         r1 = self.accounting.get_last_counter_value(PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE)
         r2 = self.accounting.get_last_counter_value(PriceProbe.COUNTER_MISSED_REVENUE_REJECT)
         r3 = self.accounting.get_last_counter_value(PriceProbe.COUNTER_MISSED_REVENUE_REJECT_BY_USER)
@@ -303,15 +304,17 @@ class PriceProbe(AccountingProbe):
     def at_lease_done(self, lease):
         """See AccountingProbe.at_lease_done"""        
         if lease.get_state() == Lease.STATE_DONE:
-            self.accounting.incr_counter(PriceProbe.STAT_REVENUE, lease.id, lease.price)
+            self.accounting.incr_counter(PriceProbe.COUNTER_REVENUE, lease.id, lease.price)
             self.accounting.set_lease_stat(PriceProbe.LEASE_STAT_PRICE, lease.id, lease.price)
 
-        if lease.extras.has_key("fair_price"):
-            markup = float(lease.extras["simul_pricemarkup"])
-            fair_price = float(lease.extras["fair_price"])
-            user_price = markup * fair_price
+        if lease.extras.has_key("rate") and lease.extras.has_key("simul_userrate"):
+            user_rate = float(lease.extras["simul_userrate"])
+            user_price = get_policy().pricing.get_base_price(lease, user_rate)
+            
             if lease.get_state() == Lease.STATE_DONE:
+                surcharge = lease.price - get_policy().pricing.get_base_price(lease, lease.extras["rate"])
                 self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE_UNDERCHARGE, lease.id, user_price - lease.price)
+                self.accounting.incr_counter(PriceProbe.STAT_SURCHARGE, lease.id, surcharge)
             elif lease.get_state() == Lease.STATE_REJECTED:
                 self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT, lease.id, user_price)
             elif lease.get_state() == Lease.STATE_REJECTED_BY_USER:

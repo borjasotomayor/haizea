@@ -52,8 +52,8 @@ class FreePolicy(PricingPolicy):
         """                    
         return 0.0
 
-class FairPricePolicy(PricingPolicy):
-    """Base class for policies that rely on the notion of a fair rate for computation
+class RatePricePolicy(PricingPolicy):
+    """Base class for policies that rely on the notion of a rate for computation
     """    
     def __init__(self, slottable):
         """Constructor
@@ -62,24 +62,26 @@ class FairPricePolicy(PricingPolicy):
         slottable -- A fully constructed SlotTable
         """        
         PricingPolicy.__init__(self, slottable)
-        self.fair_rate = get_config().config.getfloat("pricing", "fair-rate")
+        self.rate = get_config().config.getfloat("pricing", "rate")
     
-    def get_fair_price(self, lease):
-        return (lease.duration.requested.seconds / 3600.0) * lease.numnodes * self.fair_rate 
-    
+    def get_base_price(self, lease, rate = None):
+        if rate == None:
+            rate = self.rate
+        return (lease.duration.requested.seconds / 3600.0) * lease.numnodes * rate 
+   
     def get_surcharge(self, preempted_leases):
         surcharge = 0
         for l in preempted_leases:
             suspend_time = l.estimate_suspend_time()
             resume_time = l.estimate_resume_time()
-            surcharge += ((suspend_time + resume_time).seconds / 3600.0) * l.numnodes * self.fair_rate 
+            surcharge += ((suspend_time + resume_time).seconds / 3600.0) * l.numnodes * self.rate 
 
         return surcharge    
     
     def get_price(self, lease, preempted_leases):
-        return self.get_fair_price(lease) + self.get_surcharge(preempted_leases)
+        return self.get_base_price(lease) + self.get_surcharge(preempted_leases)
     
-class AlwaysFairPricePolicy(FairPricePolicy):
+class ConstantRatePricePolicy(RatePricePolicy):
     """...
     """    
     def __init__(self, slottable):
@@ -88,7 +90,7 @@ class AlwaysFairPricePolicy(FairPricePolicy):
         Argument
         slottable -- A fully constructed SlotTable
         """        
-        FairPricePolicy.__init__(self, slottable)
+        RatePricePolicy.__init__(self, slottable)
     
     def price_lease(self, lease, preempted_leases):
         """Computes the price of a lease
@@ -103,8 +105,8 @@ class AlwaysFairPricePolicy(FairPricePolicy):
         """
         return self.get_price(lease, preempted_leases)
     
-class RandomMultipleOfFairPricePolicy(FairPricePolicy):
-    """Base class for policies that rely on the notion of a fair rate for computation
+class RandomRatePricePolicy(RatePricePolicy):
+    """...
     """    
     def __init__(self, slottable):
         """Constructor
@@ -112,7 +114,7 @@ class RandomMultipleOfFairPricePolicy(FairPricePolicy):
         Argument
         slottable -- A fully constructed SlotTable
         """        
-        FairPricePolicy.__init__(self, slottable)
+        RatePricePolicy.__init__(self, slottable)
         random.seed(get_config().config.getint("pricing", "seed"))
         self.min_multiplier = get_config().config.getfloat("pricing", "min-multiplier")
         self.max_multiplier = get_config().config.getfloat("pricing", "max-multiplier")
@@ -128,12 +130,11 @@ class RandomMultipleOfFairPricePolicy(FairPricePolicy):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        mult = random.uniform(self.min_multiplier, self.max_multiplier)
-        fair_price = self.get_fair_price(lease)
-        return mult * fair_price
+        rate = random.uniform(self.min_multiplier, self.max_multiplier)
+        return self.get_price(lease, rate)
     
-class MaxMultipleOfFairPricePolicy(FairPricePolicy):
-    """Base class for policies that rely on the notion of a fair rate for computation
+class MaximumPricePolicy(RatePricePolicy):
+    """...
     """    
     def __init__(self, slottable):
         """Constructor
@@ -141,7 +142,7 @@ class MaxMultipleOfFairPricePolicy(FairPricePolicy):
         Argument
         slottable -- A fully constructed SlotTable
         """        
-        FairPricePolicy.__init__(self, slottable)
+        RatePricePolicy.__init__(self, slottable)
     
     def price_lease(self, lease, preempted_leases):
         """Computes the price of a lease
@@ -154,21 +155,20 @@ class MaxMultipleOfFairPricePolicy(FairPricePolicy):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        mult = float(lease.extras["simul_pricemarkup"])
-        fair_price = self.get_fair_price(lease)
-        return mult * fair_price    
+        rate = float(lease.extras["simul_userrate"])
+        return self.get_base_price(lease, rate)
     
 class UserInfo(object):
     def __init__(self):
-        self.min_markup_accept = None
-        self.max_markup_accept = None
-        self.min_markup_reject = None
-        self.max_markup_reject = None
-        self.markup_estimate = None
+        self.min_rate_accept = None
+        self.max_rate_accept = None
+        self.min_rate_reject = None
+        self.max_rate_reject = None
+        self.rate_estimate = None
         self.found = False
     
-class AdaptiveFairPricePolicy(FairPricePolicy):
-    """Base class for policies that rely on the notion of a fair rate for computation
+class AdaptiveRatePricePolicy(RatePricePolicy):
+    """...
     """    
     def __init__(self, slottable):
         """Constructor
@@ -176,8 +176,7 @@ class AdaptiveFairPricePolicy(FairPricePolicy):
         Argument
         slottable -- A fully constructed SlotTable
         """        
-        FairPricePolicy.__init__(self, slottable)
-        self.multiplier = 1.0
+        RatePricePolicy.__init__(self, slottable)
         self.users = {}
     
     def price_lease(self, lease, preempted_leases):
@@ -191,8 +190,7 @@ class AdaptiveFairPricePolicy(FairPricePolicy):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        fair_price = self.get_fair_price(lease)
-        return self.multiplier * fair_price
+        return self.get_price(lease)
     
     def feedback(self, lease):
         """Called after a lease has been accepted or rejected, to provide
@@ -203,47 +201,43 @@ class AdaptiveFairPricePolicy(FairPricePolicy):
         """
         if lease.price == None:
             return
-        fair_price = lease.extras["fair_price"]
-        price = lease.price
-        if price == -1:
-            price = lease.extras["rejected_price"]
 
-        lease_multiplier = price / fair_price
+        rate = lease.extras["rate"]
         
         if not self.users.has_key(lease.user_id):
             self.users[lease.user_id] = UserInfo()
             
         if lease.get_state() == Lease.STATE_REJECTED_BY_USER:
-            if self.users[lease.user_id].min_markup_reject == None:
-                self.users[lease.user_id].min_markup_reject = lease_multiplier
-                self.users[lease.user_id].max_markup_reject = lease_multiplier
+            if self.users[lease.user_id].min_rate_reject == None:
+                self.users[lease.user_id].min_rate_reject = lease_multiplier
+                self.users[lease.user_id].max_rate_reject = lease_multiplier
             else:
-                self.users[lease.user_id].min_markup_reject = min(lease_multiplier, self.users[lease.user_id].min_markup_reject)
-                self.users[lease.user_id].max_markup_reject = max(lease_multiplier, self.users[lease.user_id].max_markup_reject)
+                self.users[lease.user_id].min_rate_reject = min(lease_multiplier, self.users[lease.user_id].min_rate_reject)
+                self.users[lease.user_id].max_rate_reject = max(lease_multiplier, self.users[lease.user_id].max_rate_reject)
         else:
-            if self.users[lease.user_id].min_markup_accept == None:
-                self.users[lease.user_id].min_markup_accept = lease_multiplier
-                self.users[lease.user_id].max_markup_accept = lease_multiplier
+            if self.users[lease.user_id].min_rate_accept == None:
+                self.users[lease.user_id].min_rate_accept = lease_multiplier
+                self.users[lease.user_id].max_rate_accept = lease_multiplier
             else:
-                if self.users[lease.user_id].min_markup_reject != None:
+                if self.users[lease.user_id].min_rate_reject != None:
                     self.users[lease.user_id].found = True
                 else:
-                    self.users[lease.user_id].min_markup_accept = min(lease_multiplier, self.users[lease.user_id].min_markup_accept)
-                    self.users[lease.user_id].max_markup_accept = max(lease_multiplier, self.users[lease.user_id].max_markup_accept)
+                    self.users[lease.user_id].min_rate_accept = min(lease_multiplier, self.users[lease.user_id].min_rate_accept)
+                    self.users[lease.user_id].max_rate_accept = max(lease_multiplier, self.users[lease.user_id].max_rate_accept)
                 
         for user in self.users:
             if not self.users[user].found:
-                if self.users[user].min_markup_reject == None:
+                if self.users[user].min_rate_reject == None:
                     # All accepts
-                    estimate = self.users[user].max_markup_accept * 1.5
-                elif self.users[user].min_markup_accept == None:
+                    estimate = self.users[user].max_rate_accept * 1.5
+                elif self.users[user].min_rate_accept == None:
                     # All rejects
-                    estimate = self.users[user].min_markup_reject * 0.5
+                    estimate = self.users[user].min_rate_reject * 0.5
                 else:
-                    estimate = (self.users[user].max_markup_accept + self.users[user].min_markup_reject) / 2
+                    estimate = (self.users[user].max_rate_accept + self.users[user].min_rate_reject) / 2
                     
-                self.users[user].markup_estimate = estimate
+                self.users[user].rate_estimate = estimate
             
-        estimates = sorted([u.markup_estimate for u in self.users.values()])
+        estimates = sorted([u.rate_estimate for u in self.users.values()])
         
         self.multiplier = percentile(estimates, 0.5)

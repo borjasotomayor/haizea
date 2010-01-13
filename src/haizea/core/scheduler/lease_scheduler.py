@@ -189,10 +189,6 @@ class LeaseScheduler(object):
                 if lease.price == -1:
                     lease.set_state(Lease.STATE_REJECTED_BY_USER)
                 else:
-                    # We still want to record the fair price
-                    if get_config().get("policy.pricing") != "free":
-                        fair_price = get_policy().pricing.get_fair_price(lease)
-                        lease.extras["fair_price"] = fair_price
                     lease.set_state(Lease.STATE_REJECTED)                    
                 self.completed_leases.add(lease)
                 self.accounting.at_lease_done(lease)
@@ -593,15 +589,16 @@ class LeaseScheduler(object):
         
         # Determine whether to accept price or not (this in particular
         # should happen in the lease admission step)
-        if lease.extras.has_key("simul_pricemarkup"):
-            markup = float(lease.extras["simul_pricemarkup"])
+        if lease.extras.has_key("simul_userrate"):
+            user_rate = float(lease.extras["simul_userrate"])
             if get_config().get("policy.pricing") != "free":
-                fair_price = get_policy().pricing.get_fair_price(lease)
-                lease.extras["fair_price"] = fair_price
-                if lease_price > fair_price * markup:
+                user_price = get_policy().pricing.get_base_price(lease, user_rate)
+                # We want to record the rate at which the lease was priced
+                lease.extras["rate"] = get_policy().pricing.rate
+                if lease_price > user_price:
                     lease.price = -1
                     lease.extras["rejected_price"] = lease_price
-                    raise NotSchedulableException, "Lease priced at %.2f. User is only willing to pay %.2f" % (lease_price, fair_price * markup)
+                    raise NotSchedulableException, "Lease priced at %.2f. User is only willing to pay %.2f" % (lease_price, user_price)
         
         lease.price = lease_price
         ## END NOT-FIT-FOR-PRODUCTION CODE

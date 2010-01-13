@@ -37,7 +37,7 @@ class haizea_lwf_annotate(Command):
     GENERAL_SEC = "general"
     START_DELAY_SEC = "start-delay"
     DEADLINE_STRETCH_SEC = "deadline-stretch"
-    MARKUP_SEC = "user-markup"
+    RATE_SEC = "user-rate"
     
     ATTRIBUTES_OPT = "attributes"
     TYPE_OPT = "type"
@@ -73,7 +73,7 @@ class haizea_lwf_annotate(Command):
                                          ...
                                          """))
         
-        self.user_markups = {}
+        self.user_rates = {}
         
     def run(self):
         self.parse_options()      
@@ -88,7 +88,7 @@ class haizea_lwf_annotate(Command):
         
         self.startdelay_dist = self.__get_dist(haizea_lwf_annotate.START_DELAY_SEC)
         self.deadlinestretch_dist = self.__get_dist(haizea_lwf_annotate.DEADLINE_STRETCH_SEC)
-        self.markup_dist = self.__get_dist(haizea_lwf_annotate.MARKUP_SEC)
+        self.rate_dist = self.__get_dist(haizea_lwf_annotate.RATE_SEC)
 
         start_type = self.config.get(haizea_lwf_annotate.START_DELAY_SEC, haizea_lwf_annotate.TYPE_OPT)
         deadline_type = self.config.get(haizea_lwf_annotate.DEADLINE_STRETCH_SEC, haizea_lwf_annotate.TYPE_OPT)
@@ -112,10 +112,10 @@ class haizea_lwf_annotate(Command):
             
             software = self.__get_software(lease)
             
-            markup = self.__get_markup(lease)
+            rate = self.__get_rate(lease)
 
-            if markup != None:
-                extra["simul_pricemarkup"] = "%.2f" % markup
+            if rate != None:
+                extra["simul_userrate"] = "%.2f" % rate
             
             annotation = LeaseAnnotation(lease_id, start, deadline, software, extra)
             annotations[lease_id] = annotation
@@ -178,19 +178,19 @@ class haizea_lwf_annotate(Command):
     def __get_software(self, lease):
         return None # TODO
     
-    def __get_markup(self, lease):
-        if self.markup_dist == None:
+    def __get_rate(self, lease):
+        if self.rate_dist == None:
             return None
         else:
             if lease.user_id == -1:
-                return self.markup_dist.get()
+                return self.rate_dist.get()
             else:
-                if self.user_markups.has_key(lease.user_id):
-                    return self.user_markups[lease.user_id]
+                if self.user_rates.has_key(lease.user_id):
+                    return self.user_rates[lease.user_id]
                 else:
-                    markup = self.markup_dist.get()
-                    self.user_markups[lease.user_id] = markup
-                    return markup
+                    rate = self.rate_dist.get()
+                    self.user_rates[lease.user_id] = rate
+                    return rate
     
     def __get_dist(self, section):
         if self.config.has_section(section):

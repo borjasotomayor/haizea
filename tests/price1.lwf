@@ -31,7 +31,7 @@
           <none/>
         </software>
         <extra>
-          <attr name="simul_pricemarkup" value="1.0"/>
+          <attr name="simul_userrate" value="1.0"/>
         </extra>        
       </lease>
     </lease-request>

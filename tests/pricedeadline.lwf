@@ -32,7 +32,7 @@
           <disk-image id="foobar1.img" size="1024"/>
         </software>
         <extra>
-          <attr name="simul_pricemarkup" value="10.0"/>
+          <attr name="simul_userrate" value="10.0"/>
         </extra>        
       </lease>
     </lease-request>
@@ -53,7 +53,7 @@
           <disk-image id="foobar1.img" size="1024"/>
         </software>
         <extra>
-          <attr name="simul_pricemarkup" value="10.0"/>
+          <attr name="simul_userrate" value="10.0"/>
         </extra>        
       </lease>
     </lease-request>
