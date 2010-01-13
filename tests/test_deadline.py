@@ -42,3 +42,11 @@ class TestSimulator(BaseTest):
         self._verify_done([1,2])          
         self._verify_rejected([3])
                                 
+    def test_deadline9_1(self):
+        self._tracefile_test("deadline9.lwf")
+        self._verify_done([1,2,3])
+        
+    def test_deadline9_2(self):
+        self.config.set("scheduling", "suspension", "none")        
+        self._tracefile_test("deadline9.lwf")
+        self._verify_done([1,2,3])        
