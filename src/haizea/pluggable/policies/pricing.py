@@ -25,6 +25,7 @@ from haizea.core.leases import Lease
 from haizea.core.scheduler.policy import PricingPolicy
 from haizea.common.utils import get_config
 from haizea.common.stats import percentile
+import haizea.common.constants as constants
 
 import random
 
@@ -70,6 +71,8 @@ class RatePricePolicy(PricingPolicy):
         return (lease.duration.requested.seconds / 3600.0) * lease.numnodes * rate 
    
     def get_surcharge(self, preempted_leases):
+        if get_config().get("suspension") == constants.SUSPENSION_NONE:
+            return 0
         surcharge = 0
         for l in preempted_leases:
             suspend_time = l.estimate_suspend_time()
@@ -155,8 +158,8 @@ class MaximumPricePolicy(RatePricePolicy):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        rate = float(lease.extras["simul_userrate"])
-        return self.get_base_price(lease, rate)
+        self.rate = float(lease.extras["simul_userrate"])
+        return self.get_base_price(lease)
     
 class UserInfo(object):
     def __init__(self):
@@ -190,7 +193,7 @@ class AdaptiveRatePricePolicy(RatePricePolicy):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        return self.get_price(lease)
+        return self.get_price(lease, preempted_leases)
     
     def feedback(self, lease):
         """Called after a lease has been accepted or rejected, to provide
