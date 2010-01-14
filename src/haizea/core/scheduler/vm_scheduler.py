@@ -642,9 +642,12 @@ class VMScheduler(object):
             self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
             
             self.slottable.push()
-            print min([e.time for e in earliest.values()])
             future_vmrrs = self.slottable.get_reservations_on_or_after(min([e.time for e in earliest.values()]))
-            future_vmrrs = [rr for rr in future_vmrrs if isinstance(rr, VMResourceReservation) and rr.state==ResourceReservation.STATE_SCHEDULED]
+            future_vmrrs = [rr for rr in future_vmrrs 
+                            if isinstance(rr, VMResourceReservation) 
+                            and rr.state==ResourceReservation.STATE_SCHEDULED
+                            and not rr.is_resuming()
+                            and not rr.is_suspending()]
             
             for vmrr in future_vmrrs:
                 for rr in vmrr.pre_rrs:
@@ -1193,7 +1196,7 @@ class VMScheduler(object):
         Arguments:
         l -- Lease the VMResourceReservation belongs to
         rr -- THe VMResourceReservation
-        """        
+        """  
         
         self.logger.info("LEASE-%i The VM has ended prematurely." % l.id)
         for rr in vmrr.post_rrs:
@@ -1436,6 +1439,9 @@ class VMResourceReservation(ResourceReservation):
             return self.end
         else:
             return self.post_rrs[-1].end
+
+    def is_resuming(self):
+        return len(self.pre_rrs) > 0 and isinstance(self.pre_rrs[0], ResumptionResourceReservation)
 
     def is_suspending(self):
         return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], SuspensionResourceReservation)

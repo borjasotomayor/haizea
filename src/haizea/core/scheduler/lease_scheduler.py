@@ -418,7 +418,17 @@ class LeaseScheduler(object):
         """
         time = get_clock().get_time()
         if event == constants.EVENT_END_VM:
-            vmrr = lease.get_last_vmrr()
+            vmrr = lease.get_vmrr_at(time)
+            vmrrs_after = lease.get_vmrr_after(time)
+            
+            for vmrr_after in vmrrs_after:
+                for rr in vmrr_after.pre_rrs:
+                    self.slottable.remove_reservation(rr)
+                for rr in vmrr_after.post_rrs:
+                    self.slottable.remove_reservation(rr)
+                self.slottable.remove_reservation(vmrr_after)
+                lease.remove_vmrr(vmrr_after)
+            
             self._handle_end_rr(vmrr)
             # TODO: Exception handling
             self.vm_scheduler._handle_unscheduled_end_vm(lease, vmrr)
@@ -737,6 +747,10 @@ class LeaseScheduler(object):
                 
     def __preempt_leases_deadline(self, lease, vmrr, preempted_leases, preemption_time, nexttime):
         orig_vmrrs = dict([(l.id,l.vm_rrs[:]) for l in preempted_leases])
+        orig_vmrrs_data = {}
+        for orig_vmrr in orig_vmrrs.values():
+            for vmrr2 in orig_vmrr:
+                orig_vmrrs_data[vmrr2] = (vmrr2.start, vmrr2.end, vmrr2.pre_rrs[:], vmrr2.post_rrs[:])
 
         self.slottable.push()        
         
@@ -753,6 +767,7 @@ class LeaseScheduler(object):
              
         feasible = True
         cancelled = []
+        new_state = {}
         for lease_to_preempt in preempted_leases:
             preempt_vmrr = lease_to_preempt.get_last_vmrr()
             dur = preempt_vmrr.end - preemption_time
@@ -783,12 +798,12 @@ class LeaseScheduler(object):
                 
                 lease_state = lease_to_preempt.get_state()
                 if lease_state == Lease.STATE_SUSPENDED_SCHEDULED:
-                    lease.set_state(Lease.STATE_SUSPENDED_READY)
+                    new_state[lease_to_preempt] = Lease.STATE_SUSPENDED_READY
                 elif lease_state != Lease.STATE_READY:
-                    lease.set_state(Lease.STATE_READY)                
+                    new_state[lease_to_preempt] = Lease.STATE_READY             
 
         for lease_to_preempt in preempted_leases:
-            if lease.id in cancelled:
+            if lease_to_preempt.id in cancelled:
                 dur = lease_to_preempt.duration.requested - lease_to_preempt.duration.accumulated
             else:
                 preempt_vmrr = lease_to_preempt.get_last_vmrr()
@@ -830,7 +845,13 @@ class LeaseScheduler(object):
         if not feasible:
             for l in preempted_leases:
                 l.vm_rrs = orig_vmrrs[l.id]
-            self.slottable.pop() 
+                for vm_rr in l.vm_rrs:
+                    vm_rr.start = orig_vmrrs_data[vm_rr][0]
+                    vm_rr.end = orig_vmrrs_data[vm_rr][1]
+                    vm_rr.pre_rrs = orig_vmrrs_data[vm_rr][2]
+                    vm_rr.post_rrs = orig_vmrrs_data[vm_rr][3]
+            self.slottable.pop()
+            raise NotSchedulableException, "Unable to preempt leases to make room for lease."
         else:
             # Pre-VM RRs (if any)
             for rr in vmrr.pre_rrs:
@@ -843,7 +864,12 @@ class LeaseScheduler(object):
             for rr in vmrr.post_rrs:
                 self.slottable.remove_reservation(rr)     
 
-            # commit to slottable
+            for l in new_state:
+                l.set_state(new_state[l])
+
+            for l in preempted_leases:
+                self.logger.vdebug("Lease %i after preemption:" % l.id)
+                l.print_contents()                
             
   
     def __enqueue(self, lease):

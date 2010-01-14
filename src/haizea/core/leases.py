@@ -475,6 +475,27 @@ class Lease(object):
                         
         """            
         return self.vm_rrs[-1]    
+    
+    def get_vmrr_at(self, time):
+        """...
+                        
+        """
+        vmrr_at = None
+        for vmrr in self.vm_rrs:
+            if time >= vmrr.start and time < vmrr.end:
+                vmrr_at = vmrr
+                break
+        return vmrr_at
+    
+    def get_vmrr_after(self, time):
+        """...
+                        
+        """
+        vmrr_after = []
+        for vmrr in self.vm_rrs:
+            if vmrr.start > time:
+                vmrr_after.append(vmrr)
+        return vmrr_after    
 
     def get_endtime(self):
         """Returns the time at which the last VM reservation 
