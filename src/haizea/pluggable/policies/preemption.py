@@ -118,6 +118,12 @@ class DeadlinePolicy(PreemptabilityPolicy):
             if preempt_vmrr.is_suspending():
                 return -1
             
+            # We can only preempt leases in these states
+            if not preemptee.get_state() in (Lease.STATE_SCHEDULED, Lease.STATE_READY,
+                                             Lease.STATE_ACTIVE, Lease.STATE_SUSPENDING, Lease.STATE_SUSPENDED_PENDING,
+                                             Lease.STATE_SUSPENDED_SCHEDULED):
+                return -1
+
             deadline = preemptee.deadline
             remaining_duration = preempt_vmrr.end - time
             slack = (deadline - time) / remaining_duration

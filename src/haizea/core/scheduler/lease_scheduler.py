@@ -750,7 +750,7 @@ class LeaseScheduler(object):
         orig_vmrrs_data = {}
         for orig_vmrr in orig_vmrrs.values():
             for vmrr2 in orig_vmrr:
-                orig_vmrrs_data[vmrr2] = (vmrr2.start, vmrr2.end, vmrr2.pre_rrs[:], vmrr2.post_rrs[:])
+                orig_vmrrs_data[vmrr2] = (vmrr2.start, vmrr2.end, vmrr2.prematureend, vmrr2.pre_rrs[:], vmrr2.post_rrs[:])
 
         self.slottable.push()        
         
@@ -768,9 +768,9 @@ class LeaseScheduler(object):
         feasible = True
         cancelled = []
         new_state = {}
+        durs = {}
         for lease_to_preempt in preempted_leases:
             preempt_vmrr = lease_to_preempt.get_last_vmrr()
-            dur = preempt_vmrr.end - preemption_time
             
             susptype = get_config().get("suspension")
             
@@ -789,30 +789,52 @@ class LeaseScheduler(object):
                         self.logger.debug("Suspending the lease does not meet scheduling threshold.")
                         cancel = True
                     else:
+                        orig_end = preempt_vmrr.end
+                        orig_prematureend = preempt_vmrr.prematureend
+
                         self.vm_scheduler.preempt_vm(preempt_vmrr, preemption_time)
+                        
+                        durs[lease_to_preempt] = orig_end - preempt_vmrr.end                  
+                        
             if cancel:
                 self.preparation_scheduler.cancel_preparation(lease_to_preempt)
+                durs[lease_to_preempt] = preempt_vmrr.end - preempt_vmrr.start
+
+                active_vmrrs = lease_to_preempt.get_active_vmrrs(preemption_time)
+                                
                 lease_to_preempt.remove_vmrr(preempt_vmrr)
                 self.vm_scheduler.cancel_vm(preempt_vmrr)       
                 cancelled.append(lease_to_preempt.id)
                 
                 lease_state = lease_to_preempt.get_state()
-                if lease_state == Lease.STATE_SUSPENDED_SCHEDULED:
-                    new_state[lease_to_preempt] = Lease.STATE_SUSPENDED_READY
-                elif lease_state != Lease.STATE_READY:
-                    new_state[lease_to_preempt] = Lease.STATE_READY             
+                if preempt_vmrr in active_vmrrs:
+                    # The VMRR we're preempting is the active one
+                    new_state[lease_to_preempt] = Lease.STATE_READY
+                else:
+                    if lease_state == Lease.STATE_ACTIVE:
+                        # Don't do anything. The lease is active, but not in the VMs
+                        # we're preempting.
+                        new_state[lease_to_preempt] = None
+                    elif lease_state in (Lease.STATE_SUSPENDING, Lease.STATE_SUSPENDED_PENDING, Lease.STATE_SUSPENDED_SCHEDULED):
+                        # Don't do anything. The lease is suspending or suspended. 
+                        # Must stay that way.
+                        new_state[lease_to_preempt] = None
+                    elif lease_state != Lease.STATE_READY:
+                        new_state[lease_to_preempt] = Lease.STATE_READY   
+                
+          
 
         for lease_to_preempt in preempted_leases:
-            if lease_to_preempt.id in cancelled:
-                dur = lease_to_preempt.duration.requested - lease_to_preempt.duration.accumulated
-            else:
-                preempt_vmrr = lease_to_preempt.get_last_vmrr()
-                dur = lease_to_preempt.duration.requested - lease_to_preempt.duration.accumulated - (preempt_vmrr.end - preempt_vmrr.start)
-            
+            dur = durs[lease_to_preempt]
             node_ids = self.slottable.nodes.keys()
             earliest = {}
    
             try:
+                # Kludge: so scheduler will schedule taking into account the remaining
+                # duration at the time of the preempt, not right now.
+                orig_accduration = lease.duration.accumulated
+                lease.duration.accumulated = lease.duration.requested - dur
+                
                 if lease_to_preempt.id in cancelled:
                     for node in node_ids:
                         earliest[node] = EarliestStartingTime(nexttime, EarliestStartingTime.EARLIEST_NOPREPARATION)                
@@ -821,6 +843,8 @@ class LeaseScheduler(object):
                     for node in node_ids:
                         earliest[node] = EarliestStartingTime(preemption_time, EarliestStartingTime.EARLIEST_NOPREPARATION)                
                     (new_vmrr, preemptions) = self.vm_scheduler.reschedule_deadline(lease_to_preempt, dur, nexttime, earliest, override_state = Lease.STATE_SUSPENDED_PENDING)
+
+                lease.duration.accumulated = orig_accduration
     
                 # Add VMRR to lease
                 lease_to_preempt.append_vmrr(new_vmrr)
@@ -848,8 +872,9 @@ class LeaseScheduler(object):
                 for vm_rr in l.vm_rrs:
                     vm_rr.start = orig_vmrrs_data[vm_rr][0]
                     vm_rr.end = orig_vmrrs_data[vm_rr][1]
-                    vm_rr.pre_rrs = orig_vmrrs_data[vm_rr][2]
-                    vm_rr.post_rrs = orig_vmrrs_data[vm_rr][3]
+                    vm_rr.prematureend = orig_vmrrs_data[vm_rr][2]
+                    vm_rr.pre_rrs = orig_vmrrs_data[vm_rr][3]
+                    vm_rr.post_rrs = orig_vmrrs_data[vm_rr][4]
             self.slottable.pop()
             raise NotSchedulableException, "Unable to preempt leases to make room for lease."
         else:
@@ -865,7 +890,8 @@ class LeaseScheduler(object):
                 self.slottable.remove_reservation(rr)     
 
             for l in new_state:
-                l.set_state(new_state[l])
+                if new_state[l] != None:
+                    l.set_state(new_state[l])
 
             for l in preempted_leases:
                 self.logger.vdebug("Lease %i after preemption:" % l.id)
