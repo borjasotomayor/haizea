@@ -474,7 +474,10 @@ class Lease(object):
         """Returns the last VM reservation for this lease.
                         
         """            
-        return self.vm_rrs[-1]    
+        if len(self.vm_rrs) > 0:
+            return self.vm_rrs[-1]
+        else:
+            return None
     
     def get_vmrr_at(self, time):
         """...
@@ -508,6 +511,30 @@ class Lease(object):
         """        
         vmrr = self.get_last_vmrr()
         return vmrr.end
+    
+    def get_accumulated_duration_at(self, time):
+        """Returns the amount of time required to fulfil the entire
+        requested duration of the lease at a given time.
+                        
+        """
+        t = TimeDelta(0)
+        for vmrr in self.vm_rrs:
+            if time >= vmrr.end:
+                t += vmrr.end - vmrr.start
+            elif time >= vmrr.start and time < vmrr.end:
+                t += time -vmrr.start
+                break
+            else:
+                break
+        return t
+
+    
+    def get_remaining_duration_at(self, time):
+        """Returns the amount of time required to fulfil the entire
+        requested duration of the lease at a given time.
+                        
+        """
+        return self.duration.requested - self.get_accumulated_duration_at(time)    
     
     def append_vmrr(self, vmrr):
         """Adds a VM resource reservation to the lease.
@@ -1038,7 +1065,7 @@ class Duration(object):
         known duration of the lease.
               
         ONLY for simulations.
-        """           
+        """
         return self.known - self.accumulated
             
     def __repr__(self):

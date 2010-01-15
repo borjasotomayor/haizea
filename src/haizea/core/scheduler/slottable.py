@@ -569,7 +569,7 @@ class SlotTable(object):
         
         @param rr: Resource reservation
         @type rr: L{ResourceReservation}
-        """        
+        """
         startitem = KeyValueWrapper(rr.start, rr)
         enditem = KeyValueWrapper(rr.end, rr)
         bisect.insort(self.reservations_by_start, startitem)
@@ -855,13 +855,30 @@ class SlotTable(object):
         from haizea.core.scheduler.vm_scheduler import VMResourceReservation
         return [i.value for i in self.reservations_by_end if isinstance(i.value, VMResourceReservation) and i.value.prematureend == time]
 
-    def push(self):
+    def save(self, leases = []):
         self.reservations_by_start2 = self.reservations_by_start[:]
         self.reservations_by_end2 = self.reservations_by_end[:]
+        
+        self.orig_vmrrs = dict([(l,l.vm_rrs[:]) for l in leases])
+        self.orig_vmrrs_data = {}
+        for orig_vmrr in self.orig_vmrrs.values():
+            for vmrr in orig_vmrr:
+                self.orig_vmrrs_data[vmrr] = (vmrr.start, vmrr.end, vmrr.prematureend, vmrr.pre_rrs[:], vmrr.post_rrs[:])
 
-    def pop(self):
+
+    def restore(self):
         self.reservations_by_start = self.reservations_by_start2
         self.reservations_by_end = self.reservations_by_end2
+        
+        for l in self.orig_vmrrs:
+            l.vm_rrs = self.orig_vmrrs[l]
+            for vm_rr in l.vm_rrs:
+                vm_rr.start = self.orig_vmrrs_data[vm_rr][0]
+                vm_rr.end = self.orig_vmrrs_data[vm_rr][1]
+                vm_rr.prematureend = self.orig_vmrrs_data[vm_rr][2]
+                vm_rr.pre_rrs = self.orig_vmrrs_data[vm_rr][3]
+                vm_rr.post_rrs = self.orig_vmrrs_data[vm_rr][4]
+   
         self.__dirty()
 
 
