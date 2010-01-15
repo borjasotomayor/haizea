@@ -975,7 +975,7 @@ class SlotTable(object):
                 pos += 1
         return pos
 
-    def sanity_check(self):
+    def sanity_check(self, only_at = None):
         """Verifies the slot table is consistent. Used by unit tests.
         
         @return: Returns a tuple, the first item being True if the slot table
@@ -986,12 +986,15 @@ class SlotTable(object):
         @rtype: (C{bool}, 
         """        
         # Get checkpoints
-        changepoints = set()
-        for rr in [x.value for x in self.reservations_by_start]:
-            changepoints.add(rr.start)
-            changepoints.add(rr.end)
-        changepoints = list(changepoints)
-        changepoints.sort()
+        if only_at != None:
+            changepoints = [only_at]
+        else:
+            changepoints = set()
+            for rr in [x.value for x in self.reservations_by_start]:
+                changepoints.add(rr.start)
+                changepoints.add(rr.end)
+            changepoints = list(changepoints)
+            changepoints.sort()
       
         for cp in changepoints:
             avail = self.get_availability(cp)

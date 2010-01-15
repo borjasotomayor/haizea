@@ -796,6 +796,17 @@ class SimulatedClock(Clock):
             
             self.manager.accounting.at_timestep(self.manager.scheduler)
             
+            if self.manager.config.get("sanity-check"):
+                passed, node, time, capacity = self.manager.scheduler.slottable.sanity_check(only_at=self.time)
+                assert passed == True
+                
+                util = self.manager.accounting.get_last_counter_value("CPU utilization")
+                assert util <= 1.0
+                    
+                for l in self.manager.scheduler.leases.get_leases():
+                    l.sanity_check()
+                    
+            
             # Print a status message
             if self.statusinterval != None and (self.time - prevstatustime).minutes >= self.statusinterval:
                 self.manager.print_status()

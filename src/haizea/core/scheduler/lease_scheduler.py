@@ -992,6 +992,15 @@ class LeaseScheduler(object):
         self.completed_leases.add(l)
         self.leases.remove(l)
         self.accounting.at_lease_done(l)
+        
+        if get_config().get("sanity-check"):
+            if l.duration.known != None and l.duration.known < l.duration.requested:
+                duration = l.duration.known
+            else:
+                duration = l.duration.requested
+                
+            assert duration == l.duration.actual
+        
 
         
 

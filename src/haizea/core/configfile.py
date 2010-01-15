@@ -546,7 +546,16 @@ class HaizeaConfig(Config):
             If specified, the simulated clock will print a status
             message with some basic statistics. This is useful to keep track
             of long simulations. The interval is specified in minutes.                
-            """)
+            """),
+
+     Option(name        = "sanity-check",
+            getter      = "sanity-check",
+            type        = OPTTYPE_BOOLEAN,
+            required    = False,
+            default     = True,
+            doc         = """
+            Perform a sanity check at every timestep (only for debugging)
+            """),     
 
     ]
     sections.append(simulation)
