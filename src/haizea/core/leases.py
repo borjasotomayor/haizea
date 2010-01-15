@@ -171,7 +171,7 @@ class Lease(object):
         # Lease state
         if state == None:
             state = Lease.STATE_NEW
-        self.state = LeaseStateMachine(initial_state = state)
+        self.state_machine = LeaseStateMachine(initial_state = state)
 
         # End of lease (recorded when the lease ends)
         self.end = None
@@ -209,7 +209,7 @@ class Lease(object):
         lease = cls.from_xml_element(element)
         if lease.id == None:
             lease.id = get_lease_id()
-        lease.state = LeaseStateMachine(initial_state = Lease.STATE_NEW)
+        lease.state_machine = LeaseStateMachine(initial_state = Lease.STATE_NEW)
         return lease
 
     @classmethod
@@ -402,7 +402,7 @@ class Lease(object):
         """Returns the lease's state.
                 
         """        
-        return self.state.get_state()
+        return self.state_machine.get_state()
     
     def set_state(self, state):
         """Changes the lease's state.
@@ -413,7 +413,7 @@ class Lease(object):
         Argument:
         state -- The new state
         """        
-        self.state.change_state(state)
+        self.state_machine.change_state(state)
         
     def print_contents(self, loglevel=LOGLEVEL_VDEBUG):
         """Prints the lease's attributes to the log.

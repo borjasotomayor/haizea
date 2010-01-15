@@ -825,7 +825,7 @@ class LeaseScheduler(object):
                     self.logger.debug("Lease %i was set to start in the middle of the preempting lease." % lease_to_preempt.id)
                     cancel = True
                 else:
-                    can_suspend = self.vm_scheduler.can_suspend_at(lease_to_preempt, preemption_time)
+                    can_suspend = self.vm_scheduler.can_suspend_at(lease_to_preempt, preemption_time, nexttime)
                     
                     if not can_suspend:
                         self.logger.debug("Suspending lease %i does not meet scheduling threshold." % lease_to_preempt.id)
@@ -849,11 +849,16 @@ class LeaseScheduler(object):
                 if preempt_vmrr != None:
                     durs[lease_to_preempt] = lease_to_preempt.get_remaining_duration_at(preempt_vmrr.start)             
                     
-                    if preempt_vmrr.state == ResourceReservation.STATE_ACTIVE:
-                        # The VMRR we're preempting is the active one
-                        new_state[lease_to_preempt] = Lease.STATE_READY
-
                     lease_to_preempt.remove_vmrr(preempt_vmrr)
+
+                    if preempt_vmrr.state == ResourceReservation.STATE_ACTIVE:
+                        last_vmrr = lease_to_preempt.get_last_vmrr()
+                        if last_vmrr != None and last_vmrr.is_suspending():
+                            new_state[lease_to_preempt] = Lease.STATE_SUSPENDED_SCHEDULED
+                        else:
+                            # The VMRR we're preempting is the active one
+                            new_state[lease_to_preempt] = Lease.STATE_READY
+
                     self.vm_scheduler.cancel_vm(preempt_vmrr)
                 else:
                     durs[lease_to_preempt] = lease_to_preempt.get_remaining_duration_at(preemption_time)             
@@ -940,7 +945,7 @@ class LeaseScheduler(object):
 
             for l in new_state:
                 if new_state[l] != None:
-                    l.set_state(new_state[l])
+                    l.state_machine.state = new_state[l]
 
             for l in preempted_leases:
                 self.logger.vdebug("Lease %i after preemption:" % l.id)
