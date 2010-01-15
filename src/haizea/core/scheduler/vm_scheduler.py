@@ -675,7 +675,7 @@ class VMScheduler(object):
                 last_vmrr = lease2.get_last_vmrr()
                 if last_vmrr != None and last_vmrr.is_suspending():
                     override_state = Lease.STATE_SUSPENDED_PENDING
-                    l_earliest_time = last_vmrr.post_rrs[-1].end
+                    l_earliest_time = max(last_vmrr.post_rrs[-1].end, earliest_time)
                 else:
                     override_state = None
                     l_earliest_time = earliest_time
@@ -815,7 +815,7 @@ class VMScheduler(object):
             last_vmrr = l.get_last_vmrr()
             if last_vmrr != None and last_vmrr.is_suspending():
                 override_state = Lease.STATE_SUSPENDED_PENDING
-                l_earliest_time = last_vmrr.post_rrs[-1].end
+                l_earliest_time = max(last_vmrr.post_rrs[-1].end, earliest_time)
             else:
                 override_state = None
                 l_earliest_time = earliest_time

@@ -889,7 +889,7 @@ class LeaseScheduler(object):
                     last_vmrr = lease_to_preempt.get_last_vmrr()
                     if last_vmrr != None and last_vmrr.is_suspending():
                         override_state = Lease.STATE_SUSPENDED_PENDING
-                        earliest_time = last_vmrr.post_rrs[-1].end
+                        earliest_time = max(last_vmrr.post_rrs[-1].end, nexttime)
                     else:
                         override_state = None
                         earliest_time = nexttime
