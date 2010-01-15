@@ -307,18 +307,18 @@ class PriceProbe(AccountingProbe):
             self.accounting.incr_counter(PriceProbe.COUNTER_REVENUE, lease.id, lease.price)
             self.accounting.set_lease_stat(PriceProbe.LEASE_STAT_PRICE, lease.id, lease.price)
 
-        if lease.extras.has_key("rate") and lease.extras.has_key("simul_userrate"):
+        if lease.extras.has_key("simul_userrate"):
             user_rate = float(lease.extras["simul_userrate"])
             user_price = get_policy().pricing.get_base_price(lease, user_rate)
             
             if lease.get_state() == Lease.STATE_DONE:
                 surcharge = lease.price - get_policy().pricing.get_base_price(lease, lease.extras["rate"])
-                self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE_UNDERCHARGE, lease.id, user_price - lease.price)
-                self.accounting.incr_counter(PriceProbe.STAT_SURCHARGE, lease.id, surcharge)
+                self.accounting.incr_counter(PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE, lease.id, user_price - lease.price)
+                self.accounting.incr_counter(PriceProbe.COUNTER_SURCHARGE, lease.id, surcharge)
             elif lease.get_state() == Lease.STATE_REJECTED:
-                self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT, lease.id, user_price)
+                self.accounting.incr_counter(PriceProbe.COUNTER_MISSED_REVENUE_REJECT, lease.id, user_price)
             elif lease.get_state() == Lease.STATE_REJECTED_BY_USER:
-                self.accounting.incr_counter(PriceProbe.STAT_MISSED_REVENUE_REJECT_BY_USER, lease.id, user_price)
+                self.accounting.incr_counter(PriceProbe.COUNTER_MISSED_REVENUE_REJECT_BY_USER, lease.id, user_price)
             
                 
 class DeadlineProbe(AccountingProbe):
