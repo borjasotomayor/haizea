@@ -33,6 +33,7 @@ from operator import attrgetter, itemgetter
 from mx.DateTime import TimeDelta
 
 import logging
+import operator
 
 
 class VMScheduler(object):
@@ -641,21 +642,22 @@ class VMScheduler(object):
         if vmrr == None or vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
             self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
             
-            self.slottable.save()
-            
             dirtynodes = set()
             dirtytime = earliest_time
 
             future_vmrrs = self.slottable.get_reservations_on_or_after(earliest_time)
             future_vmrrs = [rr for rr in future_vmrrs 
                             if isinstance(rr, VMResourceReservation) 
-                            and rr.lease.get_state() in (Lease.STATE_SCHEDULED, Lease.STATE_READY, Lease.STATE_SUSPENDED_SCHEDULED)]
+                            and rr.state == ResourceReservation.STATE_SCHEDULED
+                            and reduce(operator.and_, [(prerr.state == ResourceReservation.STATE_SCHEDULED) for prerr in rr.pre_rrs], True)]
+
+            leases = list(set([future_vmrr.lease for future_vmrr in future_vmrrs]))
+
+            self.slottable.save(leases)
             
             for future_vmrr in future_vmrrs:
                 future_vmrr.lease.remove_vmrr(future_vmrr)
                 self.cancel_vm(future_vmrr)
-            
-            leases = list(set([future_vmrr.lease for future_vmrr in future_vmrrs]))
             
             orig_vmrrs = dict([(l,[rr for rr in future_vmrrs if rr.lease == l]) for l in leases])
             
@@ -669,11 +671,22 @@ class VMScheduler(object):
             # First pass
             scheduled = set()
             for lease2 in leases:
+                
+                last_vmrr = lease2.get_last_vmrr()
+                if last_vmrr != None and last_vmrr.is_suspending():
+                    override_state = Lease.STATE_SUSPENDED_PENDING
+                    l_earliest_time = last_vmrr.post_rrs[-1].end
+                else:
+                    override_state = None
+                    l_earliest_time = earliest_time
+                    
                 for n in earliest:
-                    earliest[n].time = max(lease2.start.requested, nexttime)                    
+                    earliest[n].time = l_earliest_time
+                    
                 self.logger.debug("Rescheduling lease %s" % lease2.id)
-                dur = lease2.get_remaining_duration_at(nexttime)
-                vmrr, preemptions = self.__schedule_asap(lease2, dur, nexttime, earliest, allow_in_future = True)
+                dur = lease2.get_remaining_duration_at(l_earliest_time)                
+                
+                vmrr, preemptions = self.__schedule_asap(lease2, dur, nexttime, earliest, allow_in_future = True, override_state=override_state)
                 if vmrr.end - vmrr.start != dur or vmrr.end > lease2.deadline or len(preemptions) != 0:
                     self.logger.debug("Lease %s could not be rescheduled, undoing changes." % lease2.id)
                     self.slottable.restore()
