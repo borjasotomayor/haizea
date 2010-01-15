@@ -715,11 +715,18 @@ class Lease(object):
             
     def sanity_check(self):
         prev_time = None
+        prev_vmrr = None
         for vmrr in self.vm_rrs:
             if len(vmrr.pre_rrs) > 0:
                 prev_time = vmrr.pre_rrs[0].start - 1
             else:
                 prev_time = vmrr.start - 1
+                
+            if prev_vmrr != None:
+                if vmrr.is_resuming():
+                    assert prev_vmrr.is_suspending()
+            else:
+                assert not vmrr.is_resuming()
                 
             for pre_rr in vmrr.pre_rrs:
                 assert pre_rr.start >= prev_time
@@ -737,6 +744,9 @@ class Lease(object):
                 assert post_rr.start >= prev_time
                 assert post_rr.end >= post_rr.start
                 prev_time = post_rr.end
+                
+            prev_vmrr = vmrr
+            
             
     def __estimate_suspend_resume_time(self, rate):
         """ Estimate the time to suspend/resume an entire lease
