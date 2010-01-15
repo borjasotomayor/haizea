@@ -244,7 +244,7 @@ class VMScheduler(object):
         self.slottable.remove_reservation(vmrr)
 
 
-    def can_suspend_at(self, lease, t):
+    def can_suspend_at(self, lease, t, nexttime=None):
         """ Determines if it is possible to suspend a lease before a given time
 
         Arguments:
@@ -252,7 +252,10 @@ class VMScheduler(object):
         t -- Time by which the VM must be preempted
         """
         vmrr = lease.get_vmrr_at(t)
-        time_until_suspend = t - vmrr.start
+        if nexttime == None:
+            time_until_suspend = t - vmrr.start
+        else:
+            time_until_suspend = min( (t - vmrr.start, t - nexttime))
         min_duration = self.__compute_scheduling_threshold(lease)
         can_suspend = time_until_suspend >= min_duration        
         return can_suspend
