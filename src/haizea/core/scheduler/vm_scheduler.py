@@ -731,6 +731,7 @@ class VMScheduler(object):
                         self.slottable.add_reservation(l_vmrr)
                         for rr in l_vmrr.post_rrs:
                             self.slottable.add_reservation(rr)   
+                        l.append_vmrr(l_vmrr)
                         scheduled.add(l)
                         restored_leases.add(l)
                             
@@ -751,7 +752,8 @@ class VMScheduler(object):
                             self.slottable.add_reservation(rr)                
                         self.slottable.add_reservation(l_vmrr)
                         for rr in l_vmrr.post_rrs:
-                            self.slottable.add_reservation(rr)   
+                            self.slottable.add_reservation(rr)
+                        l.append_vmrr(l_vmrr)
                         restored_leases.add(l)
     
             print "Skipped re-scheduling %i leases (out of %i)" % (len(restored_leases), len(leases))
@@ -1539,38 +1541,18 @@ class VMResourceReservation(ResourceReservation):
         self.nodes = nodes # { vnode -> pnode }
         self.pre_rrs = []
         self.post_rrs = []
-
-        # ONLY for simulation
-        self.__update_prematureend()
+        self.prematureend = None
 
     def update_start(self, time):
         self.start = time
         # ONLY for simulation
-        self.__update_prematureend()
+        self.lease._update_prematureend()
 
     def update_end(self, time):
         self.end = time
         # ONLY for simulation
-        self.__update_prematureend()
+        self.lease._update_prematureend()
         
-    # ONLY for simulation
-    def __update_prematureend(self):
-        if self.lease.duration.known != None:
-            remdur = self.lease.duration.get_remaining_known_duration()
-            rrdur = self.end - self.start
-            if remdur < rrdur:
-                self.prematureend = self.start + remdur
-                # Kludgy, but this corner case actually does happen
-                # (because of preemptions, it may turn out that
-                # the premature end time coincides with the
-                # starting time of the VMRR)
-                if self.prematureend == self.start:
-                    self.prematureend += 1 
-            else:
-                self.prematureend = None
-        else:
-            self.prematureend = None 
-
     def get_final_end(self):
         if len(self.post_rrs) == 0:
             return self.end

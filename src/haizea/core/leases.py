@@ -543,6 +543,7 @@ class Lease(object):
         vmrr -- The VM RR to add.
         """             
         self.vm_rrs.append(vmrr)
+        self._update_prematureend()
         
     def remove_vmrr(self, vmrr):
         """Removes a VM resource reservation from the lease.
@@ -735,6 +736,29 @@ class Lease(object):
         elif susp_exclusion == SUSPRES_EXCLUSION_LOCAL:
             # Overestimating
             return self.numnodes * enactment_overhead + compute_suspend_resume_time(mem, rate)
+        
+    # ONLY for simulation
+    def _update_prematureend(self):
+        known = self.duration.known
+        acc = TimeDelta(0)
+        for vmrr in self.vm_rrs:
+            if known != None:
+                rrdur = vmrr.end - vmrr.start
+                if known - acc < rrdur:
+                    vmrr.prematureend = vmrr.start + (known-acc)
+                    # Kludgy, but this corner case actually does happen
+                    # (because of preemptions, it may turn out that
+                    # the premature end time coincides with the
+                    # starting time of the VMRR)
+                    if vmrr.prematureend == vmrr.start:
+                        vmrr.prematureend += 1    
+                    break                 
+                else:
+                    vmrr.prematureend = None
+                    acc += rrdur
+            else:
+                vmrr.prematureend = None
+        
         
 class LeaseStateMachine(StateMachine):
     """A lease state machine
