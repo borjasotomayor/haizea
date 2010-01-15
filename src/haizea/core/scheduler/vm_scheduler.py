@@ -652,6 +652,7 @@ class VMScheduler(object):
                             and rr.lease.get_state() in (Lease.STATE_SCHEDULED, Lease.STATE_READY, Lease.STATE_SUSPENDED_SCHEDULED)]
             
             for future_vmrr in future_vmrrs:
+                future_vmrr.lease.remove_vmrr(future_vmrr)
                 self.cancel_vm(future_vmrr)
             
             leases = list(set([future_vmrr.lease for future_vmrr in future_vmrrs]))
@@ -741,10 +742,6 @@ class VMScheduler(object):
                         restored_leases.add(l)
     
             print "Skipped re-scheduling %i leases (out of %i)" % (len(restored_leases), len(leases))
-            
-            for l in [l2 for l2 in orig_vmrrs if l2 in scheduled - restored_leases]:
-                for vmrr in orig_vmrrs[l]:
-                    vmrr.lease.remove_vmrr(vmrr)
                 
             for lease2, vmrr in new_vmrrs.items():
                 lease2.append_vmrr(vmrr)
@@ -756,6 +753,11 @@ class VMScheduler(object):
             self.slottable.remove_reservation(return_vmrr)
             for rr in return_vmrr.post_rrs:
                 self.slottable.remove_reservation(rr)             
+            
+            for l in leases:
+                if l in scheduled:
+                    self.logger.vdebug("Lease %i after rescheduling:" % l.id)
+                    l.print_contents()                   
             
             return return_vmrr, []
         else:
@@ -794,11 +796,21 @@ class VMScheduler(object):
                 if min_future_start > dirtytime:
                     print "Ignoring after %s" % dirtytime
                     break
+                
+            last_vmrr = l.get_last_vmrr()
+            if last_vmrr != None and last_vmrr.is_suspending():
+                override_state = Lease.STATE_SUSPENDED_PENDING
+                l_earliest_time = last_vmrr.post_rrs[-1].end
+            else:
+                override_state = None
+                l_earliest_time = earliest_time
+                
             for n in earliest:
-                earliest[n].time = max(l.start.requested, nexttime)                    
+                earliest[n].time = l_earliest_time
+                
             self.logger.debug("Rescheduling lease %s" % l.id)
-            dur = l.get_remaining_duration_at(earliest_time)
-            vmrr, preemptions = self.__schedule_asap(l, dur, nexttime, earliest, allow_in_future = True)
+            dur = l.get_remaining_duration_at(l_earliest_time)
+            vmrr, preemptions = self.__schedule_asap(l, dur, nexttime, earliest, allow_in_future = True, override_state=override_state)
             if vmrr.end - vmrr.start != dur or vmrr.end > l.deadline or len(preemptions) != 0:
                 raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
             

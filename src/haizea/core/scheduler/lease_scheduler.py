@@ -818,6 +818,7 @@ class LeaseScheduler(object):
             cancel = False
             
             if susptype == constants.SUSPENSION_NONE:
+                self.logger.debug("Lease %i will be cancelled because suspension is not supported." % lease_to_preempt.id)
                 cancel = True
             else:
                 if preempt_vmrr == None:
@@ -829,6 +830,9 @@ class LeaseScheduler(object):
                     if not can_suspend:
                         self.logger.debug("Suspending lease %i does not meet scheduling threshold." % lease_to_preempt.id)
                         cancel = True
+                    else:
+                        self.logger.debug("Lease %i will be suspended." % lease_to_preempt.id)
+
                         
             after_vmrrs = lease_to_preempt.get_vmrr_after(preemption_time)
 
