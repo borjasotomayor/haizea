@@ -821,13 +821,13 @@ class LeaseScheduler(object):
                 cancel = True
             else:
                 if preempt_vmrr == None:
-                    self.logger.debug("Lease was set to start in the middle of the preempting lease.")
+                    self.logger.debug("Lease %i was set to start in the middle of the preempting lease." % lease_to_preempt.id)
                     cancel = True
                 else:
                     can_suspend = self.vm_scheduler.can_suspend_at(lease_to_preempt, preemption_time)
                     
                     if not can_suspend:
-                        self.logger.debug("Suspending the lease does not meet scheduling threshold.")
+                        self.logger.debug("Suspending lease %i does not meet scheduling threshold." % lease_to_preempt.id)
                         cancel = True
                         
             after_vmrrs = lease_to_preempt.get_vmrr_after(preemption_time)
@@ -885,10 +885,12 @@ class LeaseScheduler(object):
                     last_vmrr = lease_to_preempt.get_last_vmrr()
                     if last_vmrr != None and last_vmrr.is_suspending():
                         override_state = Lease.STATE_SUSPENDED_PENDING
+                        earliest_time = last_vmrr.post_rrs[-1].end
                     else:
                         override_state = None
+                        earliest_time = nexttime
                     for node in node_ids:
-                        earliest[node] = EarliestStartingTime(nexttime, EarliestStartingTime.EARLIEST_NOPREPARATION)                
+                        earliest[node] = EarliestStartingTime(earliest_time, EarliestStartingTime.EARLIEST_NOPREPARATION)                
                     (new_vmrr, preemptions) = self.vm_scheduler.reschedule_deadline(lease_to_preempt, dur, nexttime, earliest, override_state)
                 else:
                     for node in node_ids:
@@ -913,7 +915,7 @@ class LeaseScheduler(object):
                 # Post-VM RRs (if any)
                 for rr in new_vmrr.post_rrs:
                     self.slottable.add_reservation(rr)                    
-            except:
+            except NotSchedulableException:
                 feasible = False
                 break
 

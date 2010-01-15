@@ -626,12 +626,13 @@ class VMScheduler(object):
                 self.logger.debug("Trying to schedule lease #%i as an advance reservation..." % lease.id)
                 vmrr, preemptions = self.__schedule_exact(lease, duration, nexttime, earliest)
                 return vmrr, preemptions
-            except:
+            except NotSchedulableException:
                 self.logger.debug("Lease #%i cannot be scheduled as an advance reservation, trying as best-effort..." % lease.id)
                 vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
                 if vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
+                    vmrr = None
                     self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
-                    raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
+                    #raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
                 else:
                     return vmrr, preemptions
         else:
