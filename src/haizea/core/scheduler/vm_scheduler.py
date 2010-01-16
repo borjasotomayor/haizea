@@ -514,6 +514,7 @@ class VMScheduler(object):
         else:
             futurecp = []
             
+        futurecp.sort()
 
         #
         # STEP 3: FIND A MAPPING
@@ -649,6 +650,7 @@ class VMScheduler(object):
             dirtytime = earliest_time
 
             future_vmrrs = self.slottable.get_reservations_on_or_after(earliest_time)
+            future_vmrrs.sort(key=operator.attrgetter("start"))
             future_vmrrs = [rr for rr in future_vmrrs 
                             if isinstance(rr, VMResourceReservation) 
                             and rr.state == ResourceReservation.STATE_SCHEDULED
@@ -713,13 +715,13 @@ class VMScheduler(object):
             
             # We've scheduled the lease. Now we try to schedule the rest of the leases but,
             # since now we know the nodes the new lease is in, we can do a few optimizations
-            
             # Restore the leases in nodes we haven't used, and that would not be
             # affected by the new lease. We need to find what this set of nodes is.
             
             to_schedule = [l for l in leases if l not in scheduled]
             dirtynodes, cleanleases = self.find_dirty_nodes(to_schedule, dirtynodes, orig_vmrrs)
-            
+            self.logger.debug("Rescheduling only leases on nodes %s" % dirtynodes)
+            self.logger.debug("Leases %s can be skipped" % [l.id for l in cleanleases])
             
             print "Ignoring %i nodes" % (len(set(self.slottable.nodes.keys()) - dirtynodes) - 1)
 

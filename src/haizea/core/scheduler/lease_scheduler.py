@@ -491,6 +491,7 @@ class LeaseScheduler(object):
                 self.__schedule_lease(l, nexttime)
 
         future_vmrrs = self.slottable.get_reservations_on_or_after(nexttime)
+        future_vmrrs.sort(key=attrgetter("start"))        
         future_vmrrs = [rr for rr in future_vmrrs 
                         if isinstance(rr, VMResourceReservation) 
                         and rr.lease.get_type() == Lease.DEADLINE
@@ -887,8 +888,8 @@ class LeaseScheduler(object):
             try:
                 # Kludge: so scheduler will schedule taking into account the remaining
                 # duration at the time of the preempt, not right now.
-                orig_accduration = lease.duration.accumulated
-                lease.duration.accumulated = lease.duration.requested - dur
+                #orig_accduration = lease.duration.accumulated
+                #lease.duration.accumulated = lease.duration.requested - dur
                 
                 if lease_to_preempt.id in cancelled:
                     last_vmrr = lease_to_preempt.get_last_vmrr()
@@ -906,7 +907,7 @@ class LeaseScheduler(object):
                         earliest[node] = EarliestStartingTime(preemption_time, EarliestStartingTime.EARLIEST_NOPREPARATION)                
                     (new_vmrr, preemptions) = self.vm_scheduler.reschedule_deadline(lease_to_preempt, dur, nexttime, earliest, override_state = Lease.STATE_SUSPENDED_PENDING)
 
-                lease.duration.accumulated = orig_accduration
+                #lease.duration.accumulated = orig_accduration
     
                 # Add VMRR to lease
                 lease_to_preempt.append_vmrr(new_vmrr)
