@@ -851,6 +851,13 @@ class LeaseScheduler(object):
                     durs[lease_to_preempt] = lease_to_preempt.get_remaining_duration_at(preempt_vmrr.start)             
                     
                     lease_to_preempt.remove_vmrr(preempt_vmrr)
+                    self.vm_scheduler.cancel_vm(preempt_vmrr)
+
+                    # Cancel future VMs
+                    for after_vmrr in after_vmrrs:
+                        lease_to_preempt.remove_vmrr(after_vmrr)
+                        self.vm_scheduler.cancel_vm(after_vmrr)                   
+                    after_vmrrs=[]
 
                     if preempt_vmrr.state == ResourceReservation.STATE_ACTIVE:
                         last_vmrr = lease_to_preempt.get_last_vmrr()
