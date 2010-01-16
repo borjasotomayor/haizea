@@ -893,11 +893,6 @@ class LeaseScheduler(object):
             earliest = {}
    
             try:
-                # Kludge: so scheduler will schedule taking into account the remaining
-                # duration at the time of the preempt, not right now.
-                #orig_accduration = lease.duration.accumulated
-                #lease.duration.accumulated = lease.duration.requested - dur
-                
                 if lease_to_preempt.id in cancelled:
                     last_vmrr = lease_to_preempt.get_last_vmrr()
                     if last_vmrr != None and last_vmrr.is_suspending():
@@ -913,8 +908,6 @@ class LeaseScheduler(object):
                     for node in node_ids:
                         earliest[node] = EarliestStartingTime(preemption_time, EarliestStartingTime.EARLIEST_NOPREPARATION)                
                     (new_vmrr, preemptions) = self.vm_scheduler.reschedule_deadline(lease_to_preempt, dur, nexttime, earliest, override_state = Lease.STATE_SUSPENDED_PENDING)
-
-                #lease.duration.accumulated = orig_accduration
     
                 # Add VMRR to lease
                 lease_to_preempt.append_vmrr(new_vmrr)
