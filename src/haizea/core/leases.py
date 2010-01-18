@@ -1046,6 +1046,9 @@ class Timestamp(object):
     def __repr__(self):
         """Returns a string representation of the Duration"""
         return "REQ: %s  |  SCH: %s  |  ACT: %s" % (self.requested, self.scheduled, self.actual)
+    
+    def is_requested_exact(self):
+        return self.requested != Timestamp.UNSPECIFIED and self.requested != Timestamp.NOW
         
 class Duration(object):
     """A duration

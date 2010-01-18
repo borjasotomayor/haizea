@@ -22,7 +22,7 @@ from haizea.core.accounting import AccountingProbe, AccountingDataCollection
 from haizea.core.leases import Lease
 from haizea.common.utils import get_policy
 
-from mx.DateTime import TimeDelta
+from mx.DateTime import TimeDelta, DateTime
           
 class LeaseProbe(AccountingProbe):
     """
@@ -77,16 +77,34 @@ class LeaseExtrasProbe(AccountingProbe):
     """
     
     LEASE_STAT_STATE="State"
+    LEASE_STAT_NUMNODES="Number of nodes"
+    LEASE_STAT_REQDURATION="Requested duration"
+    LEASE_STAT_DURATION="Actual duration"
+    LEASE_STAT_START="Start"
+    LEASE_STAT_DEADLINE="Deadline"
     
     def __init__(self, accounting):
         """See AccountingProbe.__init__"""
         AccountingProbe.__init__(self, accounting)
         self.accounting.create_lease_stat(LeaseExtrasProbe.LEASE_STAT_STATE)
+        self.accounting.create_lease_stat(LeaseExtrasProbe.LEASE_STAT_NUMNODES)
+        self.accounting.create_lease_stat(LeaseExtrasProbe.LEASE_STAT_REQDURATION)
+        self.accounting.create_lease_stat(LeaseExtrasProbe.LEASE_STAT_DURATION)
+        self.accounting.create_lease_stat(LeaseExtrasProbe.LEASE_STAT_START)
+        self.accounting.create_lease_stat(LeaseExtrasProbe.LEASE_STAT_DEADLINE)
         
 
     def at_lease_done(self, lease):
         """See AccountingProbe.at_lease_done"""
         self.accounting.set_lease_stat(LeaseExtrasProbe.LEASE_STAT_STATE, lease.id, Lease.state_str[lease.get_state()])
+        self.accounting.set_lease_stat(LeaseExtrasProbe.LEASE_STAT_NUMNODES, lease.id, lease.numnodes)
+        self.accounting.set_lease_stat(LeaseExtrasProbe.LEASE_STAT_REQDURATION, lease.id, lease.duration.requested.seconds)
+        if lease.duration.actual != None:
+            self.accounting.set_lease_stat(LeaseExtrasProbe.LEASE_STAT_DURATION, lease.id, lease.duration.actual.seconds)
+        if lease.start.is_requested_exact():
+            self.accounting.set_lease_stat(LeaseExtrasProbe.LEASE_STAT_START, lease.id, (lease.start.requested - lease.submit_time).seconds)
+            if lease.deadline != None:
+                self.accounting.set_lease_stat(LeaseExtrasProbe.LEASE_STAT_DEADLINE, lease.id, (lease.deadline - lease.start.requested).seconds)
         for name, value in lease.extras.items():
             self.accounting.create_lease_stat(name)
             self.accounting.set_lease_stat(name, lease.id, value)
@@ -311,7 +329,7 @@ class PriceProbe(AccountingProbe):
             user_rate = float(lease.extras["simul_userrate"])
             user_price = get_policy().pricing.get_base_price(lease, user_rate)
             
-            if lease.get_state() == Lease.STATE_DONE:
+            if lease.get_state() == Lease.STATE_DONE and lease.extras.has_key("rate"):
                 surcharge = lease.price - get_policy().pricing.get_base_price(lease, lease.extras["rate"])
                 self.accounting.incr_counter(PriceProbe.COUNTER_MISSED_REVENUE_UNDERCHARGE, lease.id, user_price - lease.price)
                 self.accounting.incr_counter(PriceProbe.COUNTER_SURCHARGE, lease.id, surcharge)
