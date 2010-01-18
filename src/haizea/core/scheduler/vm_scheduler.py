@@ -252,14 +252,17 @@ class VMScheduler(object):
         t -- Time by which the VM must be preempted
         """
         vmrr = lease.get_vmrr_at(t)
+        if t < vmrr.start:
+            return False # t could be during a resume
+        by_t = min(vmrr.end, t) # t could be during a suspend
         if nexttime == None:
             time_until_suspend = t - vmrr.start
         else:
             time_until_suspend = min( (t - vmrr.start, t - nexttime))
         min_duration = self.__compute_scheduling_threshold(lease)
-        can_suspend = time_until_suspend >= min_duration        
+        can_suspend = time_until_suspend >= min_duration       
         return can_suspend
-    
+ 
     
     def preempt_vm(self, vmrr, t):
         """ Preempts a VM reservation at a given time
@@ -645,7 +648,7 @@ class VMScheduler(object):
 
         if vmrr == None or vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
             self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
-            
+            print "BAR1"            
             dirtynodes = set()
             dirtytime = earliest_time
 
@@ -661,6 +664,7 @@ class VMScheduler(object):
             self.slottable.save(leases)
             
             for future_vmrr in future_vmrrs:
+                #print "REMOVE", future_vmrr.lease.id, future_vmrr.start, future_vmrr.end
                 future_vmrr.lease.remove_vmrr(future_vmrr)
                 self.cancel_vm(future_vmrr)
             
@@ -778,7 +782,7 @@ class VMScheduler(object):
                 if l in scheduled:
                     self.logger.vdebug("Lease %i after rescheduling:" % l.id)
                     l.print_contents()                   
-            
+            print "BAR2"
             return return_vmrr, []
         else:
             return vmrr, preemptions
@@ -1558,6 +1562,12 @@ class VMResourceReservation(ResourceReservation):
         # ONLY for simulation
         self.lease._update_prematureend()
         
+    def get_first_start(self):
+        if len(self.pre_rrs) == 0:
+            return self.start
+        else:
+            return self.pre_rrs[0].start
+
     def get_final_end(self):
         if len(self.post_rrs) == 0:
             return self.end

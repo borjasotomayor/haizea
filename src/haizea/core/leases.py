@@ -485,7 +485,7 @@ class Lease(object):
         """
         vmrr_at = None
         for vmrr in self.vm_rrs:
-            if time >= vmrr.start and time < vmrr.end:
+            if time >= vmrr.get_first_start() and time < vmrr.get_final_end():
                 vmrr_at = vmrr
                 break
         return vmrr_at
@@ -496,7 +496,7 @@ class Lease(object):
         """
         vmrr_after = []
         for vmrr in self.vm_rrs:
-            if vmrr.start > time:
+            if vmrr.get_first_start() > time:
                 vmrr_after.append(vmrr)
         return vmrr_after    
 
@@ -785,7 +785,7 @@ class Lease(object):
                     # the premature end time coincides with the
                     # starting time of the VMRR)
                     if vmrr.prematureend == vmrr.start:
-                        vmrr.prematureend += 1    
+                        vmrr.prematureend += TimeDelta(seconds=1)    
                     break                 
                 else:
                     vmrr.prematureend = None
