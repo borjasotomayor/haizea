@@ -499,6 +499,8 @@ class VMScheduler(object):
             changepoints.sort()
             changepoints = [(x, onlynodes) for x in changepoints]
 
+        if lease.deadline != None:
+            changepoints = [cp for cp in changepoints if cp[0] <= lease.deadline - duration]
 
         # If we can schedule VMs in the future,
         # we also consider future changepoints
@@ -518,6 +520,9 @@ class VMScheduler(object):
             futurecp = []
             
         futurecp.sort()
+
+        if lease.deadline != None:
+            futurecp = [cp for cp in futurecp if cp[0] <= lease.deadline - duration]
 
         #
         # STEP 3: FIND A MAPPING
@@ -567,7 +572,10 @@ class VMScheduler(object):
             # makes a request that could *never* be satisfied with the
             # current resources.
             if start == None:
-                raise InconsistentScheduleError, "Could not find a mapping in the future (this should not happen)"
+                if lease.deadline != None:
+                    raise NotSchedulableException, "Could not find enough resources for this request before deadline"
+                else:
+                    raise InconsistentScheduleError, "Could not find a mapping in the future (this should not happen)"
 
             in_future = True
 
@@ -644,7 +652,11 @@ class VMScheduler(object):
                 else:
                     return vmrr, preemptions
         else:
-            vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+            try:
+                vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+            except NotSchedulableException:
+                vmrr = None
+                preemptions = []
 
         if vmrr == None or vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
             self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
