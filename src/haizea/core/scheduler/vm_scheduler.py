@@ -499,9 +499,6 @@ class VMScheduler(object):
             changepoints.sort()
             changepoints = [(x, onlynodes) for x in changepoints]
 
-        if lease.deadline != None:
-            changepoints = [cp for cp in changepoints if cp[0] <= lease.deadline - duration]
-
         # If we can schedule VMs in the future,
         # we also consider future changepoints
         if allow_in_future:
@@ -522,6 +519,7 @@ class VMScheduler(object):
         futurecp.sort()
 
         if lease.deadline != None:
+            changepoints = [cp for cp in changepoints if cp[0] <= lease.deadline - duration]
             futurecp = [cp for cp in futurecp if cp[0] <= lease.deadline - duration]
 
         #
@@ -644,9 +642,12 @@ class VMScheduler(object):
                 return vmrr, preemptions
             except NotSchedulableException:
                 self.logger.debug("Lease #%i cannot be scheduled as an advance reservation, trying as best-effort..." % lease.id)
-                vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
-                if vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
+                try:
+                    vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+                except NotSchedulableException:
                     vmrr = None
+                    preemptions = []
+                if vmrr == None or vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
                     self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
                     #raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
                 else:
@@ -706,9 +707,13 @@ class VMScheduler(object):
                     
                 self.logger.debug("Rescheduling lease %s" % lease2.id)
                 dur = lease2.get_remaining_duration_at(l_earliest_time)                
-                
-                vmrr, preemptions = self.__schedule_asap(lease2, dur, nexttime, earliest, allow_in_future = True, override_state=override_state)
-                if vmrr.end - vmrr.start != dur or vmrr.end > lease2.deadline or len(preemptions) != 0:
+
+                try:
+                    vmrr, preemptions = self.__schedule_asap(lease2, dur, nexttime, earliest, allow_in_future = True, override_state=override_state)
+                except NotSchedulableException:
+                    vmrr = None
+                    preemptions = []
+                if vmrr == None or vmrr.end - vmrr.start != dur or vmrr.end > lease2.deadline or len(preemptions) != 0:
                     self.logger.debug("Lease %s could not be rescheduled, undoing changes." % lease2.id)
                     self.slottable.restore()
 
@@ -846,8 +851,14 @@ class VMScheduler(object):
                 
             self.logger.debug("Rescheduling lease %s" % l.id)
             dur = l.get_remaining_duration_at(l_earliest_time)
-            vmrr, preemptions = self.__schedule_asap(l, dur, nexttime, earliest, allow_in_future = True, override_state=override_state)
-            if vmrr.end - vmrr.start != dur or vmrr.end > l.deadline or len(preemptions) != 0:
+            
+            try:
+                vmrr, preemptions = self.__schedule_asap(l, dur, nexttime, earliest, allow_in_future = True, override_state=override_state)
+            except NotSchedulableException:
+                vmrr = None
+                preemptions = []
+            
+            if vmrr == None or vmrr.end - vmrr.start != dur or vmrr.end > l.deadline or len(preemptions) != 0:
                 raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
             
             if dirtytime != None:
@@ -867,7 +878,13 @@ class VMScheduler(object):
     def reschedule_deadline(self, lease, duration, nexttime, earliest, override_state = None):
         for n in earliest:
             earliest[n].time = max(lease.start.requested, earliest[n].time)
-        vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+        
+        try:
+            vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
+        except NotSchedulableException:
+            vmrr = None
+            preemptions = []
+            
         if vmrr == None or vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
             self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
             raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
