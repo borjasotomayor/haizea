@@ -639,7 +639,8 @@ class VMScheduler(object):
             try:
                 self.logger.debug("Trying to schedule lease #%i as an advance reservation..." % lease.id)
                 vmrr, preemptions = self.__schedule_exact(lease, duration, nexttime, earliest)
-                return vmrr, preemptions
+                # Don't return preemptions. They have already been preempted by the deadline mapper
+                return vmrr, []
             except NotSchedulableException:
                 self.logger.debug("Lease #%i cannot be scheduled as an advance reservation, trying as best-effort..." % lease.id)
                 try:
@@ -653,6 +654,7 @@ class VMScheduler(object):
                 else:
                     return vmrr, preemptions
         else:
+            self.logger.debug("Trying to schedule lease #%i as best-effort..." % lease.id)
             try:
                 vmrr, preemptions = self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = True, override_state=override_state)
             except NotSchedulableException:
@@ -660,8 +662,7 @@ class VMScheduler(object):
                 preemptions = []
 
         if vmrr == None or vmrr.end - vmrr.start != duration or vmrr.end > lease.deadline or len(preemptions)>0:
-            self.logger.debug("Lease #%i cannot be scheduled before deadline using best-effort." % lease.id)
-            print "BAR1"            
+            self.logger.debug("Trying to schedule lease #%i by rescheduling other leases..." % lease.id)
             dirtynodes = set()
             dirtytime = earliest_time
 
@@ -674,7 +675,7 @@ class VMScheduler(object):
 
             leases = list(set([future_vmrr.lease for future_vmrr in future_vmrrs]))
 
-            self.slottable.save(leases)
+            self.slottable.push_state(leases)
             
             for future_vmrr in future_vmrrs:
                 #print "REMOVE", future_vmrr.lease.id, future_vmrr.start, future_vmrr.end
@@ -715,7 +716,7 @@ class VMScheduler(object):
                     preemptions = []
                 if vmrr == None or vmrr.end - vmrr.start != dur or vmrr.end > lease2.deadline or len(preemptions) != 0:
                     self.logger.debug("Lease %s could not be rescheduled, undoing changes." % lease2.id)
-                    self.slottable.restore()
+                    self.slottable.pop_state()
 
                     raise NotSchedulableException, "Could not schedule before deadline without making other leases miss deadline"
                     
@@ -768,9 +769,11 @@ class VMScheduler(object):
                 new_vmrrs.update(add_vmrrs)
             except NotSchedulableException:
                 self.logger.debug("Lease %s could not be rescheduled, undoing changes." % l.id)
-                self.slottable.restore()
+                self.slottable.pop_state()
                 raise
                                 
+            self.slottable.pop_state(discard=True)
+
             for l in leases:
                 if l not in scheduled:
                     for l_vmrr in orig_vmrrs[l]:
@@ -799,7 +802,7 @@ class VMScheduler(object):
                 if l in scheduled:
                     self.logger.vdebug("Lease %i after rescheduling:" % l.id)
                     l.print_contents()                   
-            print "BAR2"
+
             return return_vmrr, []
         else:
             return vmrr, preemptions

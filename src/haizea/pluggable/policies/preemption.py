@@ -23,7 +23,8 @@ lease preemption policies.
 
 from haizea.core.leases import Lease
 from haizea.core.scheduler.policy import PreemptabilityPolicy
-
+from haizea.common.utils import get_config
+import haizea.common.constants as constants
 
 class NoPreemptionPolicy(PreemptabilityPolicy):
     """Simple preemption policy: preemption is never allowed.
@@ -105,6 +106,8 @@ class DeadlinePolicy(PreemptabilityPolicy):
         preemptee -- Preemptee lease
         time -- Time at which preemption would take place
         """
+        susptype = get_config().get("suspension")
+        
         if preemptee.get_type() == Lease.DEADLINE:
             # We can only preempt leases in these states
             if not preemptee.get_state() in (Lease.STATE_SCHEDULED, Lease.STATE_READY,
@@ -113,8 +116,12 @@ class DeadlinePolicy(PreemptabilityPolicy):
                 return -1
 
             deadline = preemptee.deadline
-            remaining_duration = preemptee.get_remaining_duration_at(time)
-            delay = preemptee.estimate_suspend_time() + preemptor.duration.requested + preemptee.estimate_resume_time()
+            if susptype == constants.SUSPENSION_NONE:
+                remaining_duration = preemptee.duration.requested
+                delay =  preemptor.duration.requested
+            else:
+                remaining_duration = preemptee.get_remaining_duration_at(time)
+                delay = preemptee.estimate_suspend_time() + preemptor.duration.requested + preemptee.estimate_resume_time()
             if time + delay + remaining_duration < deadline:
                 slack = (deadline - (time+delay)) / remaining_duration
                 return slack

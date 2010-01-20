@@ -223,10 +223,10 @@ class Manager(object):
             preparation_scheduler = ImageTransferPreparationScheduler(slottable, resourcepool, deploy_enact)    
     
         # VM mapper and scheduler
-        mapper = self.config.get("mapper")
-        mapper = mapper_mappings.get(mapper, mapper)
-        mapper = import_class(mapper)
-        mapper = mapper(slottable, self.policy)
+        mapper_name = self.config.get("mapper")
+        mapper_cls = mapper_mappings.get(mapper_name, mapper_name)
+        mapper_cls = import_class(mapper_cls)
+        mapper = mapper_cls(slottable, self.policy)
         
         # When using backfilling, set the number of leases that can be
         # scheduled in the future.
@@ -241,7 +241,10 @@ class Manager(object):
             max_in_future = self.config.get("backfilling-reservations")
         
         vm_scheduler = VMScheduler(slottable, resourcepool, mapper, max_in_future)
-    
+        
+        if mapper_name == "deadline":  # Kludge
+            mapper.set_vm_scheduler(vm_scheduler)
+
         # Statistics collection 
         attrs = dict([(attr, self.config.get_attr(attr)) for attr in self.config.get_attrs()])    
         
