@@ -422,7 +422,9 @@ class SlotTable(object):
         self.availabilitycache = {}
         self.awcache_time = None
         self.awcache = None
+        self.state_stack = []
         self.__dirty()
+        
 
         # Resource tuple fields
         res_singleinstance = [rt for rt,ninst in resource_types if ninst == ResourceTuple.SINGLE_INSTANCE]
@@ -855,31 +857,41 @@ class SlotTable(object):
         from haizea.core.scheduler.vm_scheduler import VMResourceReservation
         return [i.value for i in self.reservations_by_end if isinstance(i.value, VMResourceReservation) and i.value.prematureend == time]
 
-    def save(self, leases = []):
-        self.reservations_by_start2 = self.reservations_by_start[:]
-        self.reservations_by_end2 = self.reservations_by_end[:]
-        
-        self.orig_vmrrs = dict([(l,l.vm_rrs[:]) for l in leases])
-        self.orig_vmrrs_data = {}
-        for orig_vmrr in self.orig_vmrrs.values():
+    def push_state(self, leases = []):
+        self.logger.debug("Saving slottable state, and leases %s" % [l.id for l in leases])
+        reservations_by_start = self.reservations_by_start[:]
+        reservations_by_end = self.reservations_by_end[:]
+
+        orig_vmrrs = dict([(l,l.vm_rrs[:]) for l in leases])
+        orig_vmrrs_data = {}
+        for orig_vmrr in orig_vmrrs.values():
             for vmrr in orig_vmrr:
-                self.orig_vmrrs_data[vmrr] = (vmrr.start, vmrr.end, vmrr.prematureend, vmrr.pre_rrs[:], vmrr.post_rrs[:])
+                orig_vmrrs_data[vmrr] = (vmrr.start, vmrr.end, vmrr.prematureend, vmrr.pre_rrs[:], vmrr.post_rrs[:])
+                
+        self.state_stack.append((reservations_by_start, reservations_by_end, orig_vmrrs, orig_vmrrs_data))
 
 
-    def restore(self):
-        self.reservations_by_start = self.reservations_by_start2
-        self.reservations_by_end = self.reservations_by_end2
-        
-        for l in self.orig_vmrrs:
-            l.vm_rrs = self.orig_vmrrs[l]
-            for vm_rr in l.vm_rrs:
-                vm_rr.start = self.orig_vmrrs_data[vm_rr][0]
-                vm_rr.end = self.orig_vmrrs_data[vm_rr][1]
-                vm_rr.prematureend = self.orig_vmrrs_data[vm_rr][2]
-                vm_rr.pre_rrs = self.orig_vmrrs_data[vm_rr][3]
-                vm_rr.post_rrs = self.orig_vmrrs_data[vm_rr][4]
-   
-        self.__dirty()
+    def pop_state(self, discard = False):
+        reservations_by_start, reservations_by_end, orig_vmrrs, orig_vmrrs_data = self.state_stack.pop()
+
+        if not discard:
+            self.logger.debug("Popping slottable state, and leases %s" % [l.id for l in orig_vmrrs.keys()])
+            self.reservations_by_start = reservations_by_start
+            self.reservations_by_end = reservations_by_end
+            
+            for l in orig_vmrrs:
+                l.vm_rrs = orig_vmrrs[l]
+                for vm_rr in l.vm_rrs:
+                    vm_rr.start = orig_vmrrs_data[vm_rr][0]
+                    vm_rr.end = orig_vmrrs_data[vm_rr][1]
+                    vm_rr.prematureend = orig_vmrrs_data[vm_rr][2]
+                    vm_rr.pre_rrs = orig_vmrrs_data[vm_rr][3]
+                    vm_rr.post_rrs = orig_vmrrs_data[vm_rr][4]
+       
+            self.__dirty()
+        else:
+            self.logger.debug("Popping (but NOT restoring) slottable state, and leases %s" % [l.id for l in orig_vmrrs.keys()])
+            
 
 
     def __remove_reservation(self, rr, start=None, end=None):
