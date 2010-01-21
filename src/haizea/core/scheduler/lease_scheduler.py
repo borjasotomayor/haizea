@@ -38,6 +38,7 @@ from haizea.core.scheduler.slottable import ResourceReservation
 from operator import attrgetter
 
 import logging
+from mx.DateTime import DateTimeDelta
 
 class LeaseScheduler(object):
     """The Haizea Lease Scheduler
@@ -490,57 +491,78 @@ class LeaseScheduler(object):
                 # scenario is that it simply replicates the previous schedule)
                 self.__schedule_lease(l, nexttime)
 
+        numnodes = ending_lease.numnodes
+        freetime = ending_lease.duration.requested - ending_lease.duration.accumulated
+        until = nexttime + freetime
+        freecapacity = numnodes * freetime
+        print "Freeing up %i nodes for %s from lease %i" % (numnodes, freetime, ending_lease.id)
+
         future_vmrrs = self.slottable.get_reservations_on_or_after(nexttime)
         future_vmrrs.sort(key=attrgetter("start"))        
         future_vmrrs = [rr for rr in future_vmrrs 
                         if isinstance(rr, VMResourceReservation) 
                         and rr.lease.get_type() == Lease.DEADLINE
-                        and rr.lease.get_state() in (Lease.STATE_SCHEDULED, Lease.STATE_READY, Lease.STATE_SUSPENDED_SCHEDULED)]
+                        and rr.lease.get_state() in (Lease.STATE_SCHEDULED, Lease.STATE_READY)
+                        and not rr.is_suspending() and not rr.is_resuming()]
 
         leases = list(set([future_vmrr.lease for future_vmrr in future_vmrrs]))
+        leases = [l for l in leases if l.numnodes <= numnodes 
+                  and l.start.requested <= until 
+                  and l.duration.requested <= min(freetime, until - l.start.requested)]
+        leases.sort(key= lambda l: (l.deadline - nexttime) / l.duration.requested)
+        self.logger.debug("Rescheduling future deadline leases")
 
-        leases.sort(key= lambda l: (l.deadline - nexttime) / l.get_remaining_duration_at(nexttime))
-        if len(leases) > 0:
-            self.logger.debug("Rescheduling future deadline leases")
-            #self.slottable.push_state(leases)
-            feasible = True
-            node_ids = self.slottable.nodes.keys()
-            earliest = {}
-            for node in node_ids:
-                earliest[node] = EarliestStartingTime(nexttime, EarliestStartingTime.EARLIEST_NOPREPARATION)
-                        
-            orig_vmrrs = dict([(l,[rr for rr in future_vmrrs if rr.lease == l]) for l in leases])            
-            dirtynodes = ending_lease.get_last_vmrr().resources_in_pnode.keys()
-
-            dirtynodes, cleanleases = self.vm_scheduler.find_dirty_nodes(leases, dirtynodes, orig_vmrrs)
-
-            dirtyleases = [l for l in leases if l not in cleanleases]
-
-            print "Would have to reschedule %i leases" % len(dirtyleases)
-            return
-
-            for vmrr in [vmrr2 for vmrr2 in future_vmrrs if vmrr2.lease not in cleanleases]:
-                self.vm_scheduler.cancel_vm(vmrr)
-    
-
-            try:
-                (scheduled, add_vmrrs, dirtytime) = self.vm_scheduler.reschedule_deadline_leases(dirtyleases, orig_vmrrs, nexttime, earliest, nexttime, dirtytime=None)
-            except NotSchedulableException:
-                self.logger.debug("Future leases could not be rescheduled, undoing changes.")
-                feasible = False
+        filled = DateTimeDelta(0)        
+        for l in leases:
+            dur = min(until - l.start.requested, l.duration.requested)
+            capacity = l.numnodes * dur
             
-            if feasible:
-                self.slottable.pop_state(discard=True)
-                for l in [l2 for l2 in orig_vmrrs if l2 in scheduled]:
-                    for vmrr in orig_vmrrs[l]:
-                        vmrr.lease.remove_vmrr(vmrr)
+            if filled + capacity <= freecapacity:
+                # This lease might fit
+                self.logger.debug("Trying to reschedule lease %i" % l.id)
+                self.slottable.push_state([l])
+                node_ids = self.slottable.nodes.keys()
+                earliest = {}
+                for node in node_ids:
+                    earliest[node] = EarliestStartingTime(nexttime, EarliestStartingTime.EARLIEST_NOPREPARATION)
+    
+                for vmrr in [vmrr2 for vmrr2 in future_vmrrs if vmrr2.lease == l]:
+                    vmrr.lease.remove_vmrr(vmrr)
+                    self.vm_scheduler.cancel_vm(vmrr)            
+
+                try:
+                    origd = l.deadline
+                    l.deadline = until                    
+                    (new_vmrr, preemptions) = self.vm_scheduler.reschedule_deadline(l, dur, nexttime, earliest)
+                    l.deadline = origd
                     
-                for lease2, vmrr in add_vmrrs.items():
-                    lease2.append_vmrr(vmrr)            
-            else:
-                self.slottable.pop_state()
-
-
+                    # Add VMRR to lease
+                    l.append_vmrr(new_vmrr)
+                    
+                    # Add resource reservations to slottable
+                    
+                    # Pre-VM RRs (if any)
+                    for rr in new_vmrr.pre_rrs:
+                        self.slottable.add_reservation(rr)
+                        
+                    # VM
+                    self.slottable.add_reservation(new_vmrr)
+                    
+                    # Post-VM RRs (if any)
+                    for rr in new_vmrr.post_rrs:
+                        self.slottable.add_reservation(rr)             
+    
+                    self.logger.debug("Rescheduled lease %i" % l.id)
+                    self.logger.vdebug("Lease after rescheduling:")
+                    l.print_contents()
+                                               
+                    filled += capacity
+                                               
+                    self.slottable.pop_state(discard=True)
+                except NotSchedulableException:
+                    l.deadline = origd                    
+                    self.logger.debug("Lease %i could not be rescheduled" % l.id)
+                    self.slottable.pop_state()
 
     def is_queue_empty(self):
         """Return True is the queue is empty, False otherwise"""
@@ -831,11 +853,7 @@ class LeaseScheduler(object):
         l.set_state(Lease.STATE_DONE)
         l.duration.actual = l.duration.accumulated
         l.end = round_datetime(get_clock().get_time())
-        self.preparation_scheduler.cleanup(l)
-        self.completed_leases.add(l)
-        self.leases.remove(l)
-        self.accounting.at_lease_done(l)
-        
+
         if get_config().get("sanity-check"):
             if l.duration.known != None and l.duration.known < l.duration.requested:
                 duration = l.duration.known
@@ -843,6 +861,17 @@ class LeaseScheduler(object):
                 duration = l.duration.requested
                 
             assert duration == l.duration.actual
+
+            if l.start.is_requested_exact():
+                assert l.vm_rrs[0].start >= l.start.requested
+            if l.deadline != None:
+                assert l.end <= l.deadline
+
+        self.preparation_scheduler.cleanup(l)
+        self.completed_leases.add(l)
+        self.leases.remove(l)
+        self.accounting.at_lease_done(l)
+        
         
 
         
