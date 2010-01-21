@@ -704,7 +704,7 @@ class VMScheduler(object):
                     l_earliest_time = earliest_time
                     
                 for n in earliest:
-                    earliest[n].time = l_earliest_time
+                    earliest[n].time = max(lease2.start.requested, l_earliest_time)
                     
                 self.logger.debug("Rescheduling lease %s" % lease2.id)
                 dur = lease2.get_remaining_duration_at(l_earliest_time)                
@@ -850,7 +850,7 @@ class VMScheduler(object):
                 l_earliest_time = earliest_time
                 
             for n in earliest:
-                earliest[n].time = l_earliest_time
+                earliest[n].time = max(l.start.requested, l_earliest_time)
                 
             self.logger.debug("Rescheduling lease %s" % l.id)
             dur = l.get_remaining_duration_at(l_earliest_time)
