@@ -738,7 +738,7 @@ class Lease(object):
             prev_time = vmrr.end
             
             if vmrr.prematureend != None:
-                assert vmrr.prematureend >= vmrr.start and vmrr.prematureend < vmrr.end
+                assert vmrr.prematureend >= vmrr.start and vmrr.prematureend <= vmrr.end
 
             for post_rr in vmrr.post_rrs:
                 assert post_rr.start >= prev_time
@@ -778,14 +778,8 @@ class Lease(object):
         for vmrr in self.vm_rrs:
             if known != None:
                 rrdur = vmrr.end - vmrr.start
-                if known - acc < rrdur:
+                if known - acc <= rrdur:
                     vmrr.prematureend = vmrr.start + (known-acc)
-                    # Kludgy, but this corner case actually does happen
-                    # (because of preemptions, it may turn out that
-                    # the premature end time coincides with the
-                    # starting time of the VMRR)
-                    if vmrr.prematureend == vmrr.start:
-                        vmrr.prematureend += TimeDelta(seconds=1)    
                     break                 
                 else:
                     vmrr.prematureend = None
