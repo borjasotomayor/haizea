@@ -453,7 +453,6 @@ class DeadlineMapper(Mapper):
     def __preempt_lease_deadline(self, lease_to_preempt, preemption_start_time, preemption_end_time, nexttime):
         self.logger.debug("Attempting to preempt lease %i" % lease_to_preempt.id)
         self.slottable.push_state([lease_to_preempt])  
-        print "PREEMPTING..."
          
         feasible = True
         cancelled = []
@@ -570,13 +569,11 @@ class DeadlineMapper(Mapper):
             feasible = False
 
         if not feasible:
-            print "UNABLE TO PREEMPT"
             self.logger.debug("Unable to preempt lease %i" % lease_to_preempt.id)
             self.slottable.pop_state()
             raise NotSchedulableException, "Unable to preempt leases to make room for lease."
         else:
             self.logger.debug("Was able to preempt lease %i" % lease_to_preempt.id)
-            print "PREEMPTED"
             self.slottable.pop_state(discard = True)
 
             for l in new_state:

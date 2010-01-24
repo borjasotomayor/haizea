@@ -745,8 +745,6 @@ class VMScheduler(object):
             self.logger.debug("Rescheduling only leases on nodes %s" % dirtynodes)
             self.logger.debug("Leases %s can be skipped" % [l.id for l in cleanleases])
             
-            print "Ignoring %i nodes" % (len(set(self.slottable.nodes.keys()) - dirtynodes) - 1)
-
             # Restore the leases
             restored_leases = set()
             for l in leases:
@@ -785,8 +783,6 @@ class VMScheduler(object):
                         l.append_vmrr(l_vmrr)
                         restored_leases.add(l)
     
-            print "Skipped re-scheduling %i leases (out of %i)" % (len(restored_leases), len(leases))
-                
             for lease2, vmrr in new_vmrrs.items():
                 lease2.append_vmrr(vmrr)
                     
@@ -838,7 +834,6 @@ class VMScheduler(object):
             if len(scheduled) < len(leases) and dirtytime != None:
                 min_future_start = min([min([rr.start for rr in lrr]) for l2, lrr in orig_vmrrs.items() if l2 in leases and l2 not in scheduled])
                 if min_future_start > dirtytime:
-                    print "Ignoring after %s" % dirtytime
                     break
                 
             last_vmrr = l.get_last_vmrr()
@@ -997,6 +992,9 @@ class VMScheduler(object):
         """         
         times = [] # (start, end, {pnode -> vnodes})
         enactment_overhead = get_config().get("enactment-overhead") 
+
+        if override != None:
+            override = TimeDelta(seconds=override)
 
         if exclusion == constants.SUSPRES_EXCLUSION_GLOBAL:
             # Global exclusion (which represents, e.g., reading/writing the memory image files

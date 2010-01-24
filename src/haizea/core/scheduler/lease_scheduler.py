@@ -495,15 +495,15 @@ class LeaseScheduler(object):
         freetime = ending_lease.duration.requested - ending_lease.duration.accumulated
         until = nexttime + freetime
         freecapacity = numnodes * freetime
-        print "Freeing up %i nodes for %s from lease %i" % (numnodes, freetime, ending_lease.id)
 
-        future_vmrrs = self.slottable.get_reservations_on_or_after(nexttime)
+        future_vmrrs = self.slottable.get_reservations_starting_after(nexttime)
         future_vmrrs.sort(key=attrgetter("start"))        
         future_vmrrs = [rr for rr in future_vmrrs 
                         if isinstance(rr, VMResourceReservation) 
                         and rr.lease.get_type() == Lease.DEADLINE
                         and rr.lease.get_state() in (Lease.STATE_SCHEDULED, Lease.STATE_READY)
-                        and not rr.is_suspending() and not rr.is_resuming()]
+                        and not rr.is_suspending() and not rr.is_resuming()
+                        and rr.start != rr.lease.start.requested]
 
         leases = list(set([future_vmrr.lease for future_vmrr in future_vmrrs]))
         leases = [l for l in leases if l.numnodes <= numnodes 

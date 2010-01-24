@@ -39,6 +39,9 @@ class FreePolicy(PricingPolicy):
         slottable -- A fully constructed SlotTable
         """        
         PricingPolicy.__init__(self, slottable)
+
+    def get_base_price(self, lease, rate = None):
+        return 0.0
     
     def price_lease(self, lease, preempted_leases):
         """Computes the price of a lease

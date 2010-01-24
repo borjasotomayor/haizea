@@ -862,22 +862,26 @@ class SlotTable(object):
         reservations_by_start = self.reservations_by_start[:]
         reservations_by_end = self.reservations_by_end[:]
 
+        orig_lease_data = dict([(l,l.get_state()) for l in leases])
         orig_vmrrs = dict([(l,l.vm_rrs[:]) for l in leases])
         orig_vmrrs_data = {}
         for orig_vmrr in orig_vmrrs.values():
             for vmrr in orig_vmrr:
                 orig_vmrrs_data[vmrr] = (vmrr.start, vmrr.end, vmrr.prematureend, vmrr.pre_rrs[:], vmrr.post_rrs[:])
                 
-        self.state_stack.append((reservations_by_start, reservations_by_end, orig_vmrrs, orig_vmrrs_data))
+        self.state_stack.append((reservations_by_start, reservations_by_end, orig_lease_data, orig_vmrrs, orig_vmrrs_data))
 
 
     def pop_state(self, discard = False):
-        reservations_by_start, reservations_by_end, orig_vmrrs, orig_vmrrs_data = self.state_stack.pop()
+        reservations_by_start, reservations_by_end, orig_lease_data, orig_vmrrs, orig_vmrrs_data = self.state_stack.pop()
 
         if not discard:
             self.logger.debug("Popping slottable state, and leases %s" % [l.id for l in orig_vmrrs.keys()])
             self.reservations_by_start = reservations_by_start
             self.reservations_by_end = reservations_by_end
+            
+            for l in orig_lease_data:
+                l.state_machine.state = orig_lease_data[l]
             
             for l in orig_vmrrs:
                 l.vm_rrs = orig_vmrrs[l]

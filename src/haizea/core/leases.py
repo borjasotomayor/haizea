@@ -1252,7 +1252,9 @@ class LeaseWorkload(object):
             
             realduration = r.find("realduration")
             if realduration != None:
-                lease.duration.known = Parser.DateTimeDeltaFromString(realduration.get("time"))
+                realduration = Parser.DateTimeDeltaFromString(realduration.get("time"))
+                if realduration < lease.duration.requested:
+                    lease.duration.known = realduration
 
             leases.append(lease)
             

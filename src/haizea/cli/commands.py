@@ -320,25 +320,27 @@ class haizea_convert_data(Command):
         print header
         
         for datafile in datafiles:
-            data = unpickle(datafile)
-        
-            attrs = [data.attrs[attr_name] for attr_name in attr_names]
-                        
-            if self.opt.type == "per-run":
-                fields = attrs + [str(data.stats[stats_name]) for stats_name in stats_names]
-                print ",".join(fields)
-            elif self.opt.type == "per-lease":
-                leases = data.lease_stats
-                for lease_id, lease_stat in leases.items():
-                    fields = attrs + [`lease_id`] + [str(lease_stat.get(lease_stat_name,"")) for lease_stat_name in lease_stats_names]
+            try:
+                data = unpickle(datafile)
+            
+                attrs = [data.attrs[attr_name] for attr_name in attr_names]
+                            
+                if self.opt.type == "per-run":
+                    fields = attrs + [str(data.stats[stats_name]) for stats_name in stats_names]
                     print ",".join(fields)
-            elif self.opt.type == "counter":
-                for (time, lease_id, value, avg) in data.counters[counter]:
-                    fields = attrs + [`time`, `value`]
-                    if data.counter_avg_type[counter] != AccountingDataCollection.AVERAGE_NONE:
-                        fields.append(`avg`)
-                    print ",".join(fields)
-                    
+                elif self.opt.type == "per-lease":
+                    leases = data.lease_stats
+                    for lease_id, lease_stat in leases.items():
+                        fields = attrs + [`lease_id`] + [str(lease_stat.get(lease_stat_name,"")) for lease_stat_name in lease_stats_names]
+                        print ",".join(fields)
+                elif self.opt.type == "counter":
+                    for (time, lease_id, value, avg) in data.counters[counter]:
+                        fields = attrs + [`time`, `value`]
+                        if data.counter_avg_type[counter] != AccountingDataCollection.AVERAGE_NONE:
+                            fields.append(`avg`)
+                        print ",".join(fields)
+            except:
+                print >> sys.stderr, "Error reading file %s" % (datafile)
 
 
 class haizea_lwf2xml(Command):
@@ -718,7 +720,7 @@ class haizea_swf2lwf(Command):
                         utilization_no_ramp += time_in_interval * num_processors
 
                 start = ET.SubElement(lease, "start")
-                #lease.set("preemptible", self.opt.preemptible)
+                lease.set("preemptible", self.opt.preemptible)
                 lease.set("user", `user_id`)
 
                 duration_elem = ET.SubElement(lease, "duration")
