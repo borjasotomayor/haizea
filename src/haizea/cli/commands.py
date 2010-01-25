@@ -724,11 +724,11 @@ class haizea_swf2lwf(Command):
                 utilization += run_time * num_processors
 
                 # Removing ramp-up and ramp-down effects
-                if wait_time != -1 and submit_time + wait_time < to_time:
-                    time_to_end = to_time - (submit_time + wait_time)
-                    time_in_interval = min(run_time, time_to_end.seconds)
-                    if submit_time + wait_time > no_ramp_cutoff:
-                        utilization_no_ramp += time_in_interval * num_processors
+                if wait_time != -1 and submit_time + run_time >= no_ramp_cutoff:
+                    start_in_interval = max(no_ramp_cutoff, submit_time)
+                    end_in_interval = min(to_time, submit_time + run_time)
+                    time_in_interval = end_in_interval - start_in_interval
+                    utilization_no_ramp += time_in_interval * num_processors
 
                 start = ET.SubElement(lease, "start")
                 lease.set("preemptible", self.opt.preemptible)
@@ -796,5 +796,5 @@ class haizea_swf2lwf(Command):
         print "-----------"
         print "Utilization: %.2f%%" % (utilization * 100)
         if utilization_no_ramp != 0:
-            print "Utilization (no ramp-up): %.2f%%" % (utilization_no_ramp * 100)
+            print "Utilization (no ramp-up/ramp-down): %.2f%%" % (utilization_no_ramp * 100)
 
