@@ -217,6 +217,12 @@ class haizea_generate_scripts(Command):
                                          that have not already produced a datafile. This is useful when some simulations
                                          fail, and you don't want to have to rerun them all.
                                          """))
+
+        self.optparser.add_option(Option("-x", "--exclude", action="store", type="string", dest="exclude",
+                                         help = """
+                                         ...
+                                         """))
+
                 
     def run(self):        
         self.parse_options()
@@ -236,6 +242,11 @@ class haizea_generate_scripts(Command):
         etcdir = os.path.abspath(self.opt.confdir)    
         if not os.path.exists(etcdir):
             os.makedirs(etcdir)
+
+        if self.opt.exclude != None:
+            exclude = self.opt.exclude.split()
+        else:
+            exclude = []
             
         templatedata = []    
         for c in configs:
@@ -245,8 +256,8 @@ class haizea_generate_scripts(Command):
             datafile = c.get("datafile")
             annotationfile = c.get("annotationfile")            
             configname = generate_config_name(profile, tracefile, annotationfile, injfile)
-            if not self.opt.onlymissing or not os.path.exists(datafile):
-                configfile = etcdir + "/%s.conf" % configname
+            configfile = etcdir + "/%s.conf" % configname
+            if (not self.opt.onlymissing or not os.path.exists(datafile)) and not configfile in exclude:
                 templatedata.append((configname, configfile))
     
         template = Template(filename=self.opt.template)
