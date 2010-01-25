@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<lease-workload name="deadline10">
+  <description>
+  
+First lease does not end prematurely.
+Second and third lease end prematurely.
+Second and third lease start at 00:15:00.00 and 00:20:00.00
+
+  </description>
+
+  <site>
+    <resource-types names="CPU Memory"/>
+    <nodes>
+      <node-set numnodes="4">
+        <res type="CPU" amount="100"/>
+        <res type="Memory" amount="1024"/>
+      </node-set>
+    </nodes>
+  </site>
+  <lease-requests>
+
+    <lease-request arrival="00:00:00.00">
+
+      <lease id="1" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="00:30:00.00"/>
+        </start>
+        <duration time="02:00:00.00"/>
+        <deadline time="10:00:00.00"/>
+        <software>
+          <disk-image id="foobar1.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:35:00.00">
+      <lease id="2" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="00:45:00.00"/>
+        </start>
+        <duration time="00:15:00.00"/>
+        <deadline time="01:00:00.00"/>
+        <software>
+          <disk-image id="foobar1.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:40:00.00">
+      <lease id="3" preemptible="true">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="01:15:00.00"/>
+        </start>
+        <duration time="00:15:00.00"/>
+        <deadline time="02:00:00.00"/>
+        <software>
+          <disk-image id="foobar1.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+  </lease-requests>
+</lease-workload>

@@ -25,6 +25,7 @@ class TestSimulator(BaseTest):
         self._verify_rejected_by_user([1])
         
     def test_pricing_surcharge(self):
+        self.config.set("scheduling", "mapper", "deadline")
         self.config.set("scheduling", "policy-preemption", "deadline")
         self.config.set("scheduling", "suspension", "all")
         self.config.set("scheduling", "policy-pricing", "constant")

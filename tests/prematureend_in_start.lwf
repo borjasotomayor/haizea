@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<lease-workload name="preemption_prematureend">
+  <description>
+	Same as preempt.lwf, but with premature end time for the best-effort lease.
+  </description>
+
+  <site>
+    <resource-types names="CPU Memory"/>
+    <nodes>
+      <node-set numnodes="4">
+        <res type="CPU" amount="100"/>
+        <res type="Memory" amount="1024"/>
+      </node-set>
+    </nodes>
+  </site>
+    
+  <lease-requests>
+    <lease-request arrival="00:00:00.00">
+      <realduration time="00:29:30.00"/>
+      <lease id="1" preemptible="true">
+        <nodes>
+          <node-set numnodes="1">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start/>
+        <duration time="01:00:00.00"/>
+        <software>
+          <disk-image id="foobar1.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+    <lease-request arrival="00:15:00.00">
+      <lease id="2" preemptible="false">
+        <nodes>
+          <node-set numnodes="4">
+            <res amount="100" type="CPU"/>
+            <res amount="1024" type="Memory"/>
+          </node-set>
+        </nodes>
+        <start>
+          <exact time="00:30:00.00"/>
+        </start>
+        <duration time="00:15:00.00"/>
+        <software>
+          <disk-image id="foobar2.img" size="1024"/>
+        </software>
+      </lease>
+    </lease-request>
+  </lease-requests>
+</lease-workload>

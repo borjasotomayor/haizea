@@ -7,7 +7,7 @@ class TestSimulator(BaseTest):
         BaseTest.__init__(self, config)
         self.config.set("scheduling", "mapper", "deadline")
         self.config.set("scheduling", "policy-preemption", "deadline")
-        self.config.set("scheduling", "suspension", "all")
+        self.config.set("scheduling", "suspension", "none")
             
     def test_deadline1(self):
         self._tracefile_test("deadline1.lwf")
@@ -42,10 +42,10 @@ class TestSimulator(BaseTest):
         self._tracefile_test("deadline8.lwf")
         self._verify_done([1,2])          
         self._verify_rejected([3])
-                                
+       
     def test_deadline9(self):
         self._tracefile_test("deadline9.lwf")
-        self._verify_done([1,2,3])
+        self._verify_done([1,2,3])      
         
     def test_deadline10_1(self):
         self._tracefile_test("deadline10-1.lwf")
@@ -102,24 +102,3 @@ class TestSimulator(BaseTest):
     def test_deadline11_2(self):
         self._tracefile_test("deadline11-2.lwf")
         self._verify_done([1,2,3])
-
-    def test_deadline12(self):
-        self._tracefile_test("deadline12.lwf")
-        self._verify_done([1,2,3,4,5,6,7,8])
-        
-    def test_deadline13(self):
-        self._tracefile_test("deadline13.lwf")
-        self._verify_done([1,2,3])        
-        
-    def test_deadline14(self):
-        self._tracefile_test("deadline14.lwf")
-        self._verify_done([1,2,3])            
-
-    def test_deadline15(self):
-        self._tracefile_test("deadline15.lwf")
-        self._verify_done([1,2,3])            
-        self._verify_rejected([4])
-
-    def test_deadline16(self):
-        self._tracefile_test("deadline16.lwf")
-        self._verify_done([1,2,3,4,5,6])
