@@ -23,7 +23,7 @@ from haizea.cli.optionparser import Option
 from haizea.cli import Command
 import xmlrpclib
 import sys
-from mx.DateTime import ISO, now, DateTimeDelta, Parser
+from mx.DateTime import now, DateTimeDelta, Parser
 
 try:
     import xml.etree.ElementTree as ET
@@ -80,9 +80,9 @@ class haizea_request_lease(RPCCommand):
                                          help = """
                                          Specifies a non-preemptible lease.
                                          """))
-        self.optparser.add_option(Option("-c", "--cpu", action="store", type="int", dest="cpu",
+        self.optparser.add_option(Option("-c", "--cpu", action="store", type="float", dest="cpu",
                                          help = """
-                                         Percentage of CPU (must be 0 < c <= 100)
+                                         Percentage of CPU (must be 0 < c <= 1.0)
                                          """))
         self.optparser.add_option(Option("-m", "--mem", action="store", type="int", dest="mem",
                                          help = """
@@ -104,7 +104,7 @@ class haizea_request_lease(RPCCommand):
             lease_elem = ET.parse(self.opt.file).getroot()
             # If a relative starting time is used, replace for an
             # absolute starting time.
-            exact = lease.find("start/exact")
+            exact = lease_elem.find("start/exact")
             if exact != None:
                 exact_time = exact.get("time")
                 exact.set("time", str(self.__absolute_time(exact_time)))            
@@ -116,7 +116,7 @@ class haizea_request_lease(RPCCommand):
                 preemptible = self.opt.preemptible
             
             capacity = Capacity([constants.RES_CPU, constants.RES_MEM])
-            capacity.set_quantity(constants.RES_CPU, int(self.opt.cpu) * 100)
+            capacity.set_quantity(constants.RES_CPU, int(self.opt.cpu * 100))
             capacity.set_quantity(constants.RES_MEM, int(self.opt.mem))    
             requested_resources = dict([(i+1, capacity) for i in range(self.opt.numnodes)])    
             if self.opt.duration == haizea_request_lease.DURATION_UNLIMITED:
@@ -124,7 +124,7 @@ class haizea_request_lease(RPCCommand):
                 # TODO: Integrate concept of unlimited duration in the lease datastruct
                 duration = DateTimeDelta(36500)
             else:
-                duration = ISO.ParseTimeDelta(self.opt.duration)
+                duration = Parser.TimeDeltaFromString(self.opt.duration)
     
             if self.opt.start == haizea_request_lease.START_NOW:
                 lease = Lease(lease_id = None,
@@ -184,9 +184,9 @@ class haizea_request_lease(RPCCommand):
     def __absolute_time(self, time_str):
         if time_str[0] == "+":
             # Relative time
-            time = round_datetime(now() + ISO.ParseTime(time_str[1:]))
+            time = round_datetime(now() + Parser.TimeDeltaFromString(time_str[1:]))
         else:
-            time = Parser.ParseDateTime(time_str)
+            time = Parser.DateTimeFromString(time_str)
             
         return time
         
