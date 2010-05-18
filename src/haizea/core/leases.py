@@ -1701,7 +1701,7 @@ class Nodes(object):
                     r.set_ninstances(type, len(instances))
                     for i, instance in enumerate(instances):
                         amount = int(instance.get("amount"))
-                        r.set_quantity_instance(type, i+1, amount)
+                        r.set_quantity_instance(res_type, i+1, amount)
                                      
             numnodes = int(nodeset_elem.get("numnodes"))
 

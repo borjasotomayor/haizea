@@ -157,7 +157,7 @@ class Manager(object):
                 site = Site.from_lwf_file(tracefile)
             elif resources.startswith("file:"):
                 sitefile = resources.split(":")
-                site = Site.from_xml_file(sitefile)
+                site = Site.from_xml_file(sitefile[1])
             else:
                 site = Site.from_resources_string(resources)
     
