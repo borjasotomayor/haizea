@@ -466,7 +466,7 @@ class SlotTable(object):
         @rtype: L{ResourceTuple}        
         """    
         single_instance = [0] * self.rtuple_nsingle
-        multi_instance = {}
+        multi_instance = dict([(pos,[]) for pos in xrange(self.rtuple_nsingle, self.rtuple_nsingle+self.rtuple_nmultiple)])
         for restype in capacity.get_resource_types():
             pos = self.rtuple_restype2pos[restype]
             ninst = capacity.ninstances[restype]

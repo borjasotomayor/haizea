@@ -1698,7 +1698,7 @@ class Nodes(object):
                     r.set_quantity(res_type, amount)
                 else:
                     instances = res.findall("instance")
-                    r.set_ninstances(type, len(instances))
+                    r.set_ninstances(res_type, len(instances))
                     for i, instance in enumerate(instances):
                         amount = int(instance.get("amount"))
                         r.set_quantity_instance(res_type, i+1, amount)
