@@ -17,7 +17,7 @@
 # -------------------------------------------------------------------------- #
 
 import random
-import operator 
+import math
 
 
 class Distribution(object):
@@ -121,33 +121,25 @@ class TruncatedParetoDistribution(BoundedContinuousDistribution):
         return v
                                     
             
-class DiscreteDistribution(Distribution):
-    def __init__(self, values, probabilities):
+class DiscreteDistribution(object):
+    def __init__(self, values):
         self.values = values
-        self.probabilities = probabilities[:]
-        self.accumprobabilities = probabilities[:]
-        accum = 0.0
-        for i, prob in enumerate(self.probabilities):
-            accum += prob
-            self.accumprobabilities[i] = accum
         self.num_values = len(self.values)
 
     # Expects value in [0,1)
     def _get_from_prob(self, prob):
-        pos = None
-        for i, p in enumerate(self.accumprobabilities):
-            if prob < p:
-                pos = i
-                break
+        pos = int(math.floor(prob * self.num_values))
         return self.values[pos]
+    
+    def get(self):
+        return self._get_from_prob(self.__distribution.get())            
+    
     
 class DiscreteUniformDistribution(DiscreteDistribution):
     def __init__(self, values):
-        probabilities= [1.0/len(values)] * len(values)
-        DiscreteDistributionBase.__init__(self, values, probabilities)
+        DiscreteDistribution.__init__(self, values)
+        self.__distribution = UniformDistribution(0,1)
         
-    def get(self):
-        return self._get_from_prob(self.random.random())            
     
     
 def percentile(values, percent):

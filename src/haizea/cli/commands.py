@@ -24,6 +24,7 @@ from haizea.common.config import ConfigException
 from haizea.common.stats import percentile
 from haizea.cli.optionparser import Option
 from haizea.cli import Command
+from haizea.lwf.generators import LWFGenerator, LWFAnnotationGenerator
 from mx.DateTime import TimeDelta, Parser
 import haizea.common.defaults as defaults
 import sys
@@ -353,7 +354,64 @@ class haizea_convert_data(Command):
             except:
                 print >> sys.stderr, "Error reading file %s" % (datafile)
 
+class haizea_lwf_generate(Command):
+    
+    name = "haizea-lwf-generate"
+    
+    def __init__(self, argv):
+        Command.__init__(self, argv)
+        self.optparser.add_option(Option("-o", "--out", action="store", type="string", dest="outf", required=True,
+                                         help = """
+                                         LWF file
+                                         """))
+        self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf",
+                                         help = """
+                                         ...
+                                         """))
+        
+    def run(self):
+        self.parse_options()      
+        
+        outfile = self.opt.outf
+        conffile = self.opt.conf    
 
+        generator = LWFGenerator(outfile, conffile)
+        
+        generator.generate()
+
+class haizea_lwf_annotate(Command):
+    
+    name = "haizea-lwf-annotate"
+    
+    def __init__(self, argv):
+        Command.__init__(self, argv)
+        self.optparser.add_option(Option("-i", "--in", action="store",  type="string", dest="inf", required=True,
+                                         help = """
+                                         LWF file
+                                         """))
+        self.optparser.add_option(Option("-o", "--out", action="store", type="string", dest="outf", required=True,
+                                         help = """
+                                         Annotation file
+                                         """))
+        self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf",
+                                         help = """
+                                         ...
+                                         """))
+        
+    def run(self):
+        self.parse_options()      
+        
+        infile = self.opt.inf
+        outfile = self.opt.outf
+        conffile = self.opt.conf    
+        
+        generator = LWFAnnotationGenerator(infile, outfile, conffile)
+        
+        generator.generate()
+        
+
+# TODO: Has to be moved to the haizea.lwf package, or removed altogether,
+# given that this was a one-time thing to convert the old ad hoc LWF files
 class haizea_lwf2xml(Command):
     """
     Converts old Haizea LWF file into new XML-based LWF format
@@ -449,7 +507,9 @@ class haizea_lwf2xml(Command):
         print ET.tostring(root)
 
 
-        
+
+
+# TODO: Has to be moved to the haizea.lwf package
 class haizea_swf2lwf(Command):
     """
     Converts Standard Workload Format (SWF, used in the Parallel Workloads Archive at
