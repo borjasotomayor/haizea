@@ -18,6 +18,7 @@
 
 import random
 import math
+from haizea.common.utils import abstract
 
 
 class Distribution(object):
@@ -131,16 +132,13 @@ class DiscreteDistribution(object):
         pos = int(math.floor(prob * self.num_values))
         return self.values[pos]
     
-    def get(self):
-        return self._get_from_prob(self.__distribution.get())            
-    
-    
 class DiscreteUniformDistribution(DiscreteDistribution):
     def __init__(self, values):
         DiscreteDistribution.__init__(self, values)
         self.__distribution = UniformDistribution(0,1)
         
-    
+    def get(self):
+        return self._get_from_prob(self.__distribution.get())      
     
 def percentile(values, percent):
     pos = int(len(values) * percent)

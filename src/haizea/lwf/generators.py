@@ -17,10 +17,12 @@
 # -------------------------------------------------------------------------- #
 
 import haizea.common.stats as stats
-from haizea.core.leases import LeaseWorkload, LeaseAnnotation, LeaseAnnotations, Timestamp
+from haizea.core.leases import LeaseWorkload, LeaseAnnotation, LeaseAnnotations, Timestamp, Lease,\
+    Capacity, Duration, UnmanagedSoftwareEnvironment,\
+    DiskImageSoftwareEnvironment
 from haizea.common.utils import round_datetime_delta
-from mx.DateTime import TimeDelta
-import ConfigParser
+from mx.DateTime import DateTimeDelta, TimeDelta, Parser
+import ConfigParser 
 
 try:
     import xml.etree.ElementTree as ET
@@ -34,8 +36,10 @@ class FileGenerator(object):
 
     TYPE_OPT = "type"
     DISTRIBUTION_OPT = "distribution"
+    DISCRETE_OPT = "discrete"
     MIN_OPT = "min"
     MAX_OPT = "max"
+    VALUES_OPT = "values"
     MEAN_OPT = "mu"
     STDEV_OPT = "sigma"
     ALPHA_OPT = "alpha"
@@ -56,6 +60,8 @@ class FileGenerator(object):
     
     NODES_SEC = "nodes"
     RESOURCES_OPT = "resources"
+
+    DURATION_SEC = "duration"
     
     SOFTWARE_SEC = "software"
 
@@ -71,12 +77,15 @@ class FileGenerator(object):
         self.startdelay_dist = self._get_dist(FileGenerator.START_DELAY_SEC)
         self.deadlinestretch_dist = self._get_dist(FileGenerator.DEADLINE_STRETCH_SEC)
         self.rate_dist = self._get_dist(FileGenerator.RATE_SEC)
+        self.duration_dist = self._get_dist(FileGenerator.DURATION_SEC)
+        self.numnodes_dist = self._get_dist(FileGenerator.NODES_SEC)
+        self.software_dist = self._get_dist(FileGenerator.SOFTWARE_SEC)
 
         self.start_type = self.config.get(FileGenerator.START_DELAY_SEC, FileGenerator.TYPE_OPT)
         self.deadline_type = self.config.get(FileGenerator.DEADLINE_STRETCH_SEC, FileGenerator.TYPE_OPT)
         
         
-    def _get_start(self, type, lease):
+    def _get_start(self, type, lease = None):
         if self.startdelay_dist == None:
             return None, None
         else:
@@ -86,6 +95,20 @@ class FileGenerator(object):
             elif type == FileGenerator.START_DURATION:
                 start = round_datetime_delta(delta * lease.duration.requested)
             return start, delta
+        
+    def _get_numnodes(self, lease = None):
+        if self.numnodes_dist == None:
+            return None
+        else:
+            numnodes = int(self.numnodes_dist.get())
+            return numnodes      
+        
+    def _get_duration(self, lease = None):
+        if self.duration_dist == None:
+            return None
+        else:
+            numnodes = int(self.duration_dist.get())
+            return numnodes              
 
     def _get_deadline(self, type, lease, start):
         if self.deadlinestretch_dist == None:
@@ -115,9 +138,15 @@ class FileGenerator(object):
                 tau = ((deadline - start) / lease.duration.requested) - 1                    
                     
             return deadline, tau
-
-    def _get_software(self, lease):
-        return None # TODO
+    
+    def _get_software(self, lease = None):
+        if self.software_dist == None:
+            return UnmanagedSoftwareEnvironment()
+        else:
+            software = self.software_dist.get()
+            image_id, image_size = software.split("|")
+            return DiskImageSoftwareEnvironment(image_id, int(image_size))
+        
     
     def _get_rate(self, lease):
         if self.rate_dist == None:
@@ -151,35 +180,51 @@ class FileGenerator(object):
         
     def __create_distribution_from_section(self, section):
         dist_type = self.config.get(section, FileGenerator.DISTRIBUTION_OPT)
-        min = self.config.get(section, FileGenerator.MIN_OPT)
-        max = self.config.get(section, FileGenerator.MAX_OPT)
+        if self.config.has_option(section, FileGenerator.DISCRETE_OPT):
+            discrete = self.config.getboolean(section, FileGenerator.DISCRETE_OPT)
+        else:
+            discrete = False
         
-        if min == "unbounded":
-            min = float("inf")
-        else:
-            min = float(min)
-        if max == "unbounded":
-            max = float("inf")
-        else:
-            max = float(max)
+        if self.config.has_option(section, FileGenerator.MIN_OPT) and self.config.has_option(section, FileGenerator.MAX_OPT):
+            min = self.config.get(section, FileGenerator.MIN_OPT)
+            max = self.config.get(section, FileGenerator.MAX_OPT)
             
-        if dist_type == "uniform":
-            dist = stats.UniformDistribution(min, max)
-        elif dist_type == "normal":
-            mu = self.config.getfloat(section, FileGenerator.MEAN_OPT)
-            sigma = self.config.getfloat(section, FileGenerator.STDEV_OPT)
-            dist = stats.BoundedNormalDistribution(min,max,mu,sigma)
-        elif dist_type == "bounded-pareto" or dist_type == "truncated-pareto":
-            alpha = self.config.getfloat(section, FileGenerator.ALPHA_OPT)
-            if self.config.has_option(section, FileGenerator.INVERT_OPT):
-                invert = self.config.getboolean(section, FileGenerator.INVERT_OPT)
+            if min == "unbounded":
+                min = float("inf")
             else:
-                invert = False
-            if dist_type == "bounded-pareto":
-                dist = stats.BoundedParetoDistribution(min,max,alpha,invert)
+                min = float(min)
+            if max == "unbounded":
+                max = float("inf")
             else:
-                scale = self.config.getfloat(section, FileGenerator.SCALE_OPT)
-                dist = stats.TruncatedParetoDistribution(min,max,scale,alpha,invert)
+                max = float(max)
+        else:
+            min = max = None
+            
+        if discrete:
+            if dist_type == "uniform":
+                if min != None:
+                    values = range(int(min), int(max) + 1)
+                else:
+                    values = self.config.get(section, FileGenerator.VALUES_OPT).split()
+                dist = stats.DiscreteUniformDistribution(values)
+        else:
+            if dist_type == "uniform":
+                dist = stats.UniformDistribution(min, max)
+            elif dist_type == "normal":
+                mu = self.config.getfloat(section, FileGenerator.MEAN_OPT)
+                sigma = self.config.getfloat(section, FileGenerator.STDEV_OPT)
+                dist = stats.BoundedNormalDistribution(min,max,mu,sigma)
+            elif dist_type == "bounded-pareto" or dist_type == "truncated-pareto":
+                alpha = self.config.getfloat(section, FileGenerator.ALPHA_OPT)
+                if self.config.has_option(section, FileGenerator.INVERT_OPT):
+                    invert = self.config.getboolean(section, FileGenerator.INVERT_OPT)
+                else:
+                    invert = False
+                if dist_type == "bounded-pareto":
+                    dist = stats.BoundedParetoDistribution(min,max,alpha,invert)
+                else:
+                    scale = self.config.getfloat(section, FileGenerator.SCALE_OPT)
+                    dist = stats.TruncatedParetoDistribution(min,max,scale,alpha,invert)
                 
             
         if self.config.has_option(section, FileGenerator.SEED_OPT):
@@ -196,13 +241,101 @@ class LWFGenerator(FileGenerator):
     NUMLEASES_UTILIZATION_OPT = "utilization"    
     NUMLEASES_LAST_REQUEST_OPT = "last-request"
         
-    NUMLEASES_TYPE_ABSOLUTE = "absolute"    
+    NUMLEASES_TYPE_INTERVAL = "interval"    
+    NUMLEASES_OPT = "numleases"    
     
     def __init__(self, outfile, conffile):
-        FileGenerator.__init__(self, outfile, conffile)    
+        FileGenerator.__init__(self, outfile, conffile)
+
+        self.numleases_type = self.config.get(LWFGenerator.NUMLEASES_SEC, LWFGenerator.TYPE_OPT)
+        
+        if self.numleases_type == LWFGenerator.NUMLEASES_TYPE_INTERVAL:
+            self.interval_dist = self._get_dist(LWFGenerator.NUMLEASES_SEC)
+        else:
+            self.interval_dist = None
+            
+    def _get_interval(self):
+        if self.interval_dist == None:
+            return None
+        else:
+            interval = int(self.interval_dist.get())
+            return interval    
+    
+    def __gen_lease(self):
+        submit_time = None
+        user_id = None
+        
+        res = self.config.get(LWFGenerator.NODES_SEC, LWFGenerator.RESOURCES_OPT)
+        res = Capacity.from_resources_string(res)        
+        numnodes = self._get_numnodes(None)
+        requested_resources = dict([(i+1,res) for i in xrange(numnodes)])
+        
+        start, delta = self._get_start(self.start_type, None)
+        start = Timestamp(TimeDelta(seconds=start))
+        
+        duration = self._get_duration()
+        duration = Duration(TimeDelta(seconds=duration))
+        deadline = None
+        preemptible = False
+        software = self._get_software()
+        
+        l = Lease.create_new(submit_time, user_id, requested_resources, 
+                             start, duration, deadline, preemptible, software)
+        
+        return l
     
     def generate(self):
-        print "Hello, LWF generator"
+        lwf = ET.Element("lease-workload")
+        lwf.set("name", self.outfile)
+        description = ET.SubElement(lwf, "description")
+        description.text = "Created with haizea-generate"
+
+        #if self.opt.site != None:
+        #    site_elem = ET.parse(self.opt.site).getroot()
+        #    site_num_nodes = int(site_elem.find("nodes").find("node-set").get("numnodes"))
+        #    lwf.append(site_elem)
+            
+        time = TimeDelta(seconds=0)
+        requests = ET.SubElement(lwf, "lease-requests")            
+        
+        if self.numleases_type == LWFGenerator.NUMLEASES_TYPE_INTERVAL:
+            leases = []            
+            
+            numleases = self.config.getint(LWFGenerator.NUMLEASES_SEC, LWFGenerator.NUMLEASES_OPT)
+            for i in xrange(numleases):
+                leases.append(self.__gen_lease())
+    
+            for l in leases:
+                interval = TimeDelta(seconds=self._get_interval())
+                time += interval
+                print interval, time
+                l.start.requested += time
+                lease_request = ET.SubElement(requests, "lease-request")
+                lease_request.set("arrival", str(time))            
+                lease_request.append(l.to_xml())
+        elif self.numleases_type == LWFGenerator.NUMLEASES_TYPE_UTILIZATION:
+            utilization = self.config.getfloat(LWFGenerator.NUMLEASES_SEC, LWFGenerator.NUMLEASES_UTILIZATION_OPT)
+            last_request = self.config.get(LWFGenerator.NUMLEASES_SEC, LWFGenerator.NUMLEASES_LAST_REQUEST_OPT)
+            last_request = Parser.DateTimeDeltaFromString(last_request)
+            
+            # TODO
+            target_utilization = utilization
+            accum_utilization = None
+            
+            leases = []            
+
+            while accum_utilization < target_utilization:
+                pass
+                self.__gen_lease()
+                
+            # TODO: Set arrival times so they are evenly spaced
+            for l in leases:
+                lease_request = ET.SubElement(requests, "lease-request")
+                lease_request.set("arrival", str(time))            
+                lease_request.append(l.to_xml())            
+        
+            
+        print ET.tostring(lwf)
     
 class LWFAnnotationGenerator(FileGenerator):
     

@@ -989,6 +989,31 @@ class Capacity(object):
         """            
         return self.quantity.keys()
     
+    @classmethod
+    def from_resources_string(cls, resource_str):
+        """Constructs a site from a "resources string"
+        
+        A "resources string" is a shorthand way of specifying a capacity:
+        
+        <resource_type>:<resource_quantity>[,<resource_type>:<resource_quantity>]*
+        
+        For example: CPU:100,Memory:1024
+        
+        Argument:
+        resource_str -- resources string
+        """    
+        res = {}
+        resources = resource_str.split(",")
+        for r in resources:
+            res_type, amount = r.split(":")
+            res[res_type] = int(amount)
+            
+        capacity = cls(res.keys())
+        for (res_type, amount) in res.items():
+            capacity.set_quantity(res_type, amount)
+
+        return capacity
+    
     def __eq__(self, other):
         """Tests if two capacities are the same
                         
@@ -1261,7 +1286,7 @@ class LeaseWorkload(object):
         return cls(leases)
     
 class LeaseAnnotation(object):
-    """Reprents a lease annotation.
+    """Represents a lease annotation.
     
     ...
     """    
@@ -1386,7 +1411,7 @@ class LeaseAnnotation(object):
         return ET.tostring(self.to_xml())    
     
 class LeaseAnnotations(object):
-    """Reprents a sequence of lease annotations.
+    """Represents a sequence of lease annotations.
     
     ...
     """    
@@ -1596,19 +1621,11 @@ class Site(object):
         resource_str = resource_str.split()
         numnodes = int(resource_str[0])
         resources = resource_str[1:]
-        res = {}
-        
-        for r in resources:
-            res_type, amount = r.split(":")
-            res[res_type] = int(amount)
-            
-        capacity = Capacity(res.keys())
-        for (res_type, amount) in res.items():
-            capacity.set_quantity(res_type, amount)
+        capacity = Capacity.from_resources_string(resources)
         
         nodes = Nodes([(numnodes,capacity)])
 
-        return cls(nodes, res.keys(), [])
+        return cls(nodes, capacity.get_resource_types(), [])
             
     def add_resource(self, name, amounts):
         """Adds a new resource to all nodes in the site.
