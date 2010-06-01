@@ -137,6 +137,9 @@ class DiscreteUniformDistribution(DiscreteDistribution):
         DiscreteDistribution.__init__(self, values)
         self.__distribution = UniformDistribution(0,1)
         
+    def seed(self, x):
+        self.__distribution.seed(x)
+        
     def get(self):
         return self._get_from_prob(self.__distribution.get())      
     

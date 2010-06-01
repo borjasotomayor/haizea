@@ -25,6 +25,7 @@ from haizea.common.stats import percentile
 from haizea.cli.optionparser import Option
 from haizea.cli import Command
 from haizea.lwf.generators import LWFGenerator, LWFAnnotationGenerator
+from haizea.lwf.analysis import LWFAnalyser
 from mx.DateTime import TimeDelta, Parser
 import haizea.common.defaults as defaults
 import sys
@@ -367,7 +368,7 @@ class haizea_lwf_generate(Command):
         self.optparser.add_option(Option("-c", "--conf", action="store", type="string", dest="conf",
                                          help = """
                                          ...
-                                         """))
+                                         """))      
         
     def run(self):
         self.parse_options()      
@@ -378,6 +379,34 @@ class haizea_lwf_generate(Command):
         generator = LWFGenerator(outfile, conffile)
         
         generator.generate()
+
+class haizea_lwf_stats(Command):
+    
+    name = "haizea-lwf-stats"
+    
+    def __init__(self, argv):
+        Command.__init__(self, argv)
+        self.optparser.add_option(Option("-i", "--in", action="store",  type="string", dest="inf", required=True,
+                                         help = """
+                                         Input file
+                                         """))
+        self.optparser.add_option(Option("-l", "--utilization-length", action="store", type="string", dest="utilization_length",
+                                         help = """
+                                         Length of the utilization interval in format DD:HH:MM:SS. Default is until
+                                         the time the last lease is requested.
+                                         """))          
+        
+    def run(self):
+        self.parse_options()      
+        
+        infile = self.opt.inf
+        utilization_length = self.opt.utilization_length
+        if utilization_length != None:
+            utilization_length = Parser.DateTimeDeltaFromString(utilization_length)
+
+        analyser = LWFAnalyser(infile, utilization_length)
+        
+        analyser.analyse()
 
 class haizea_lwf_annotate(Command):
     

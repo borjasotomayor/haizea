@@ -3,5 +3,5 @@
 from haizea.cli import commands
 import sys
 	
-c = commands.haizea_lwf_generate(sys.argv)
+c = commands.haizea_lwf_stats(sys.argv)
 c.run()

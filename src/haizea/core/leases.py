@@ -1573,7 +1573,11 @@ class Site(object):
         Argument:
         lwf_file -- LWF file.
         """                
-        return cls.__from_xml_element(ET.parse(lwf_file).getroot().find("site"))        
+        site_elem = ET.parse(lwf_file).getroot().find("site")
+        if site_elem == None:
+            return None # LWF file does not contain a <site> element
+        else:
+            return cls.__from_xml_element(site_elem)        
         
     @classmethod
     def __from_xml_element(cls, element):     
@@ -1620,7 +1624,7 @@ class Site(object):
 
         resource_str = resource_str.split()
         numnodes = int(resource_str[0])
-        resources = resource_str[1:]
+        resources = resource_str[1]
         capacity = Capacity.from_resources_string(resources)
         
         nodes = Nodes([(numnodes,capacity)])
@@ -1659,6 +1663,19 @@ class Site(object):
 
         return max_ninstances
     
+    def to_xml(self):
+        """Returns an ElementTree XML representation of the nodes
+        
+        See the Haizea documentation for details on the
+        lease XML format.
+        
+        """   
+        site = ET.Element("site")
+        resource_types = ET.SubElement(site, "resource-types")
+        resource_types.set("names", " ".join(self.resource_types))
+        site.append(self.nodes.to_xml())
+            
+        return site    
 
 
 class Nodes(object):

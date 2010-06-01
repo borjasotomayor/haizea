@@ -40,11 +40,8 @@ class TracefileFrontend(RequestFrontend):
         # Requests is a list of lease requests
         self.logger.info("Loading tracefile %s" % tracefile)
         self.requests = None
-        if tracefile.endswith(".swf"):
-            self.requests = LeaseWorkload.from_swf_file(tracefile, self.starttime)
-        elif tracefile.endswith(".lwf") or tracefile.endswith(".xml"):
-            lease_workload = LeaseWorkload.from_xml_file(tracefile, self.starttime)
-            self.requests = lease_workload.get_leases()
+        lease_workload = LeaseWorkload.from_xml_file(tracefile, self.starttime)
+        self.requests = lease_workload.get_leases()
     
         if injectfile != None:
             self.logger.info("Loading injection file %s" % injectfile)

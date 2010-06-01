@@ -19,7 +19,7 @@
 import haizea.common.stats as stats
 from haizea.core.leases import LeaseWorkload, LeaseAnnotation, LeaseAnnotations, Timestamp, Lease,\
     Capacity, Duration, UnmanagedSoftwareEnvironment,\
-    DiskImageSoftwareEnvironment
+    DiskImageSoftwareEnvironment, Site
 from haizea.common.utils import round_datetime_delta
 from mx.DateTime import DateTimeDelta, TimeDelta, Parser
 import ConfigParser 
@@ -235,6 +235,8 @@ class FileGenerator(object):
 
 class LWFGenerator(FileGenerator):
     
+    SITE_OPT = "site"    
+
     NUMLEASES_SEC = "numleases"    
     
     NUMLEASES_TYPE_UTILIZATION = "utilization"    
@@ -249,11 +251,8 @@ class LWFGenerator(FileGenerator):
 
         self.numleases_type = self.config.get(LWFGenerator.NUMLEASES_SEC, LWFGenerator.TYPE_OPT)
         
-        if self.numleases_type == LWFGenerator.NUMLEASES_TYPE_INTERVAL:
-            self.interval_dist = self._get_dist(LWFGenerator.NUMLEASES_SEC)
-        else:
-            self.interval_dist = None
-            
+        self.interval_dist = self._get_dist(LWFGenerator.NUMLEASES_SEC)
+
     def _get_interval(self):
         if self.interval_dist == None:
             return None
@@ -290,13 +289,17 @@ class LWFGenerator(FileGenerator):
         description = ET.SubElement(lwf, "description")
         description.text = "Created with haizea-generate"
 
-        #if self.opt.site != None:
-        #    site_elem = ET.parse(self.opt.site).getroot()
-        #    site_num_nodes = int(site_elem.find("nodes").find("node-set").get("numnodes"))
-        #    lwf.append(site_elem)
+        site = self.config.get(LWFGenerator.GENERAL_SEC, LWFGenerator.SITE_OPT)
+        if site.startswith("file:"):
+            sitefile = site.split(":")
+            site = Site.from_xml_file(sitefile[1])
+        else:
+            site = Site.from_resources_string(site)
+
+        lwf.append(site.to_xml())
             
         time = TimeDelta(seconds=0)
-        requests = ET.SubElement(lwf, "lease-requests")            
+        requests = ET.SubElement(lwf, "lease-requests")   
         
         if self.numleases_type == LWFGenerator.NUMLEASES_TYPE_INTERVAL:
             leases = []            
@@ -308,7 +311,6 @@ class LWFGenerator(FileGenerator):
             for l in leases:
                 interval = TimeDelta(seconds=self._get_interval())
                 time += interval
-                print interval, time
                 l.start.requested += time
                 lease_request = ET.SubElement(requests, "lease-request")
                 lease_request.set("arrival", str(time))            
@@ -318,24 +320,41 @@ class LWFGenerator(FileGenerator):
             last_request = self.config.get(LWFGenerator.NUMLEASES_SEC, LWFGenerator.NUMLEASES_LAST_REQUEST_OPT)
             last_request = Parser.DateTimeDeltaFromString(last_request)
             
-            # TODO
-            target_utilization = utilization
-            accum_utilization = None
+            max_utilization = 0
+            for res in site.nodes.get_all_nodes().values():
+                for i in range(1,res.get_ninstances("CPU") + 1):
+                    max_utilization += res.get_quantity_instance("CPU", i) * last_request.seconds
+            target_utilization = int(max_utilization * utilization)
+            
+            accum_utilization = 0
             
             leases = []            
 
             while accum_utilization < target_utilization:
-                pass
-                self.__gen_lease()
+                lease = self.__gen_lease()
+                leases.append(lease)
+                duration = lease.duration.requested.seconds
+                lease_utilization = 0
+                for res in lease.requested_resources.values():
+                    for i in range(1,res.get_ninstances("CPU") + 1):
+                        lease_utilization += res.get_quantity_instance("CPU", i) * duration                
+                accum_utilization += lease_utilization
                 
-            # TODO: Set arrival times so they are evenly spaced
+            time = TimeDelta(seconds=0)            
+            avg_interval = int(last_request.seconds / len(leases))
             for l in leases:
+                interval = avg_interval + TimeDelta(seconds=self._get_interval())
+                time = max(time + interval, TimeDelta(seconds=0))
+                l.start.requested += time
                 lease_request = ET.SubElement(requests, "lease-request")
                 lease_request.set("arrival", str(time))            
-                lease_request.append(l.to_xml())            
+                lease_request.append(l.to_xml())                            
         
-            
-        print ET.tostring(lwf)
+        tree = ET.ElementTree(lwf)
+        
+        outfile = open(self.outfile, "w")
+        tree.write(outfile)
+        outfile.close()
     
 class LWFAnnotationGenerator(FileGenerator):
     
