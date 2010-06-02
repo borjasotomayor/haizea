@@ -390,6 +390,10 @@ class haizea_lwf_stats(Command):
                                          help = """
                                          Input file
                                          """))
+        self.optparser.add_option(Option("-a", "--annotation", action="store",  type="string", dest="annotationf",
+                                         help = """
+                                         Annotation file
+                                         """))
         self.optparser.add_option(Option("-l", "--utilization-length", action="store", type="string", dest="utilization_length",
                                          help = """
                                          Length of the utilization interval in format DD:HH:MM:SS. Default is until
@@ -400,11 +404,12 @@ class haizea_lwf_stats(Command):
         self.parse_options()      
         
         infile = self.opt.inf
+        annotationfile = self.opt.annotationf
         utilization_length = self.opt.utilization_length
         if utilization_length != None:
             utilization_length = Parser.DateTimeDeltaFromString(utilization_length)
 
-        analyser = LWFAnalyser(infile, utilization_length)
+        analyser = LWFAnalyser(infile, utilization_length, annotationfile)
         
         analyser.analyse()
 
@@ -414,10 +419,14 @@ class haizea_lwf_annotate(Command):
     
     def __init__(self, argv):
         Command.__init__(self, argv)
-        self.optparser.add_option(Option("-i", "--in", action="store",  type="string", dest="inf", required=True,
+        self.optparser.add_option(Option("-i", "--in", action="store",  type="string", dest="inf",
                                          help = """
                                          LWF file
                                          """))
+        self.optparser.add_option(Option("-n", "--num-annotations", action="store",  type="int", dest="nleases",
+                                         help = """
+                                         Number of annotations
+                                         """))        
         self.optparser.add_option(Option("-o", "--out", action="store", type="string", dest="outf", required=True,
                                          help = """
                                          Annotation file
@@ -431,10 +440,11 @@ class haizea_lwf_annotate(Command):
         self.parse_options()      
         
         infile = self.opt.inf
+        nleases = self.opt.nleases
         outfile = self.opt.outf
         conffile = self.opt.conf    
         
-        generator = LWFAnnotationGenerator(infile, outfile, conffile)
+        generator = LWFAnnotationGenerator(infile, nleases, outfile, conffile)
         
         generator.generate()
         

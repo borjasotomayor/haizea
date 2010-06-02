@@ -33,7 +33,8 @@ except ImportError:
 class FileGenerator(object):
     
     GENERAL_SEC = "general"
-
+    ATTRIBUTES_OPT = "attributes"
+    
     TYPE_OPT = "type"
     DISTRIBUTION_OPT = "distribution"
     DISCRETE_OPT = "discrete"
@@ -75,14 +76,22 @@ class FileGenerator(object):
         self.config.readfp(conffile)
         
         self.startdelay_dist = self._get_dist(FileGenerator.START_DELAY_SEC)
+        if self.startdelay_dist != None:
+            self.start_type = self.config.get(FileGenerator.START_DELAY_SEC, FileGenerator.TYPE_OPT)
+        else:
+            self.start_type = None
+            
         self.deadlinestretch_dist = self._get_dist(FileGenerator.DEADLINE_STRETCH_SEC)
+        if self.deadlinestretch_dist != None:
+            self.deadline_type = self.config.get(FileGenerator.DEADLINE_STRETCH_SEC, FileGenerator.TYPE_OPT)
+        else:
+            self.deadline_type = None
+
         self.rate_dist = self._get_dist(FileGenerator.RATE_SEC)
         self.duration_dist = self._get_dist(FileGenerator.DURATION_SEC)
         self.numnodes_dist = self._get_dist(FileGenerator.NODES_SEC)
         self.software_dist = self._get_dist(FileGenerator.SOFTWARE_SEC)
 
-        self.start_type = self.config.get(FileGenerator.START_DELAY_SEC, FileGenerator.TYPE_OPT)
-        self.deadline_type = self.config.get(FileGenerator.DEADLINE_STRETCH_SEC, FileGenerator.TYPE_OPT)
         
         
     def _get_start(self, type, lease = None):
@@ -199,31 +208,35 @@ class FileGenerator(object):
                 max = float(max)
         else:
             min = max = None
-            
+  
         if discrete:
-            if dist_type == "uniform":
-                if min != None:
-                    values = range(int(min), int(max) + 1)
-                else:
-                    values = self.config.get(section, FileGenerator.VALUES_OPT).split()
+            if min != None:
+                values = range(int(min), int(max) + 1)
+            else:
+                values = self.config.get(section, FileGenerator.VALUES_OPT).split()
+
+        if dist_type == "uniform":
+            if discrete:
                 dist = stats.DiscreteUniformDistribution(values)
-        else:
-            if dist_type == "uniform":
+            else:
                 dist = stats.UniformDistribution(min, max)
-            elif dist_type == "normal":
-                mu = self.config.getfloat(section, FileGenerator.MEAN_OPT)
-                sigma = self.config.getfloat(section, FileGenerator.STDEV_OPT)
-                dist = stats.BoundedNormalDistribution(min,max,mu,sigma)
-            elif dist_type == "bounded-pareto" or dist_type == "truncated-pareto":
-                alpha = self.config.getfloat(section, FileGenerator.ALPHA_OPT)
-                if self.config.has_option(section, FileGenerator.INVERT_OPT):
-                    invert = self.config.getboolean(section, FileGenerator.INVERT_OPT)
+        elif dist_type == "normal":
+            mu = self.config.getfloat(section, FileGenerator.MEAN_OPT)
+            sigma = self.config.getfloat(section, FileGenerator.STDEV_OPT)
+            dist = stats.BoundedNormalDistribution(min,max,mu,sigma)
+        elif dist_type == "bounded-pareto" or dist_type == "truncated-pareto":
+            alpha = self.config.getfloat(section, FileGenerator.ALPHA_OPT)
+            if self.config.has_option(section, FileGenerator.INVERT_OPT):
+                invert = self.config.getboolean(section, FileGenerator.INVERT_OPT)
+            else:
+                invert = False
+            if dist_type == "bounded-pareto":
+                dist = stats.BoundedParetoDistribution(min,max,alpha,invert)
+            else:
+                scale = self.config.getfloat(section, FileGenerator.SCALE_OPT)
+                if discrete:
+                    dist = stats.DiscreteTruncatedParetoDistribution(values,scale,alpha,invert)
                 else:
-                    invert = False
-                if dist_type == "bounded-pareto":
-                    dist = stats.BoundedParetoDistribution(min,max,alpha,invert)
-                else:
-                    scale = self.config.getfloat(section, FileGenerator.SCALE_OPT)
                     dist = stats.TruncatedParetoDistribution(min,max,scale,alpha,invert)
                 
             
@@ -358,37 +371,54 @@ class LWFGenerator(FileGenerator):
     
 class LWFAnnotationGenerator(FileGenerator):
     
-    def __init__(self, lwffile, outfile, conffile):
+    def __init__(self, lwffile, nleases, outfile, conffile):
         FileGenerator.__init__(self, outfile, conffile)
         self.lwffile = lwffile
+        self.nleases = nleases
         
-    def generate(self):
-        lease_workload = LeaseWorkload.from_xml_file(self.lwffile)
-        leases = lease_workload.get_leases()
-        annotations = {}
+    def __gen_annotation(self, lease = None):    
+        extra = {}
         
-        for lease in leases:
-            lease_id = lease.id
-            extra = {}
+        start, delta = self._get_start(self.start_type, lease)
+        if start != None:
+            start = Timestamp(start)
+            extra["simul_start_delta"] = "%.2f" % delta
             
-            start, delta = self._get_start(self.start_type, lease)
-            if start != None:
-                start = Timestamp(start)
-                extra["simul_start_delta"] = "%.2f" % delta
-                
             deadline, tau = self._get_deadline(self.deadline_type, lease, start.requested)
             if deadline != None:
                 extra["simul_deadline_tau"] = "%.2f" % tau
-            
-            software = self._get_software(lease)
-            
-            rate = self._get_rate(lease)
+        else:
+            deadline = None
+        
+        software = self._get_software(lease)
+        
+        rate = self._get_rate(lease)
 
-            if rate != None:
-                extra["simul_userrate"] = "%.2f" % rate
-            
-            annotation = LeaseAnnotation(lease_id, start, deadline, software, extra)
-            annotations[lease_id] = annotation
+        if rate != None:
+            extra["simul_userrate"] = "%.2f" % rate
+        
+        if lease == None:
+            lease_id = None
+        else:
+            lease_id = lease.id
+        
+        annotation = LeaseAnnotation(lease_id, start, deadline, software, extra)
+    
+        return annotation
+    
+    def generate(self):
+        if self.lwffile == None:
+            annotations = []
+            for i in xrange(1, self.nleases + 1):
+                annotation = self.__gen_annotation()
+                annotations.append(annotation)
+        else:
+            annotations = {}
+            lease_workload = LeaseWorkload.from_xml_file(self.lwffile)
+            leases = lease_workload.get_leases()
+            for lease in leases:
+                annotations = self.__gen_annotation(lease)
+                annotations[lease.id] = annotation
             
         attributes = self._get_attributes()
         

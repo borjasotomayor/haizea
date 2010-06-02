@@ -126,23 +126,33 @@ class DiscreteDistribution(object):
     def __init__(self, values):
         self.values = values
         self.num_values = len(self.values)
+        self.__distribution = None
+    
+    def _set_distribution(self, dis):
+        self.__distribution = dis
 
     # Expects value in [0,1)
     def _get_from_prob(self, prob):
         pos = int(math.floor(prob * self.num_values))
         return self.values[pos]
-    
-class DiscreteUniformDistribution(DiscreteDistribution):
-    def __init__(self, values):
-        DiscreteDistribution.__init__(self, values)
-        self.__distribution = UniformDistribution(0,1)
-        
+
     def seed(self, x):
         self.__distribution.seed(x)
         
     def get(self):
         return self._get_from_prob(self.__distribution.get())      
+
     
+class DiscreteUniformDistribution(DiscreteDistribution):
+    def __init__(self, values):
+        DiscreteDistribution.__init__(self, values)
+        self._set_distribution(UniformDistribution(0,1))
+
+class DiscreteTruncatedParetoDistribution(DiscreteDistribution):    
+    def __init__(self, values, scale, alpha, invert = False):
+        DiscreteDistribution.__init__(self, values)
+        self._set_distribution(TruncatedParetoDistribution(0,1,scale,alpha,invert))
+            
 def percentile(values, percent):
     pos = int(len(values) * percent)
     return values[pos]

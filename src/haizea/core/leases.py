@@ -1369,16 +1369,18 @@ class LeaseAnnotation(object):
         
         """        
         annotation = ET.Element("lease-annotation")
-        annotation.set("id", str(self.lease_id))
+        if self.lease_id != None:
+            annotation.set("id", str(self.lease_id))
         
-        start = ET.SubElement(annotation, "start")
-        if self.start.requested == Timestamp.UNSPECIFIED:
-            pass # empty start element
-        elif self.start.requested == Timestamp.NOW:
-            ET.SubElement(start, "now") #empty now element
-        else:
-            exact = ET.SubElement(start, "exact")
-            exact.set("time", "+" + str(self.start.requested))
+        if self.start != None:
+            start = ET.SubElement(annotation, "start")
+            if self.start.requested == Timestamp.UNSPECIFIED:
+                pass # empty start element
+            elif self.start.requested == Timestamp.NOW:
+                ET.SubElement(start, "now") #empty now element
+            else:
+                exact = ET.SubElement(start, "exact")
+                exact.set("time", "+" + str(self.start.requested))
             
         if self.deadline != None:
             deadline = ET.SubElement(annotation, "deadline")
@@ -1420,17 +1422,15 @@ class LeaseAnnotations(object):
         
         Arguments:
         annotations -- A dictionary of annotations
-        """                 
+        """
+        if isinstance(annotations, list):
+            self.lease_specific_annotations = False
+        elif isinstance(annotations, dict):
+            self.lease_specific_annotations = True
         self.annotations = annotations
         self.attributes = attributes
     
-    def apply_to_leases(self, leases):
-        """Apply annotations to a workload
-        
-        """
-        for lease in [l for l in leases if self.has_annotation(l.id)]:
-            annotation = self.get_annotation(lease.id)
-            
+    def __apply_to_lease(self, lease, annotation):
             if annotation.start != None:
                 if annotation.start.requested in (Timestamp.NOW, Timestamp.UNSPECIFIED):
                     lease.start.requested = annotation.start.requested
@@ -1445,18 +1445,18 @@ class LeaseAnnotations(object):
 
             if annotation.extras != None:
                 lease.extras.update(annotation.extras)
-
-    def get_annotation(self, lease_id):
-        """...
+    
+    def apply_to_leases(self, leases):
+        """Apply annotations to a workload
         
-        """  
-        return self.annotations[lease_id]
-
-    def has_annotation(self, lease_id):
-        """...
-        
-        """  
-        return self.annotations.has_key(lease_id)
+        """
+        if self.lease_specific_annotations:
+            for lease in [l for l in leases if self.annotations.has_key(l.id)]:
+                annotation = self.annotations[lease.id]
+                self.__apply_to_lease(lease, annotation)
+        else:
+            for lease, annotation in zip(leases, self.annotations):
+                self.__apply_to_lease(lease, annotation)            
     
     @classmethod
     def from_xml_file(cls, xml_file):
@@ -1479,16 +1479,27 @@ class LeaseAnnotations(object):
         element -- Element object containing a "<lease-annotations>" element.
         """                
         annotation_elems = element.findall("lease-annotation")
-        annotations = {}
+        annotations_dict = {}
+        annotations_list = []
         for annotation_elem in annotation_elems:
-            lease_id = int(annotation_elem.get("id"))
-            annotations[lease_id] = LeaseAnnotation.from_xml_element(annotation_elem)
+            annotation = LeaseAnnotation.from_xml_element(annotation_elem)
+            if annotation.lease_id == None:
+                annotations_list.append(annotation)
+            else:
+                annotations_dict[annotation.lease_id] = annotation
             
         attributes = {}
         attributes_elem = element.find("attributes")
         if attributes_elem != None:
             for attr_elem in attributes_elem:
                 attributes[attr_elem.get("name")] = attr_elem.get("value")
+
+        if len(annotations_list) != 0 and len(annotations_dict) != 0:
+            raise Exception #TODO: raise something more meaningful
+        elif len(annotations_list) == 0:
+            annotations = annotations_dict
+        elif len(annotations_dict) == 0:
+            annotations = annotations_list
             
         return cls(annotations, attributes)    
     
@@ -1499,18 +1510,23 @@ class LeaseAnnotations(object):
         lease XML format.
         
         """        
-        annotations = ET.Element("lease-annotations")
+        annotations_elem = ET.Element("lease-annotations")
 
-        attributes = ET.SubElement(annotations, "attributes")
+        attributes = ET.SubElement(annotations_elem, "attributes")
         for name, value in self.attributes.items():
             attr_elem = ET.SubElement(attributes, "attr")
             attr_elem.set("name", name)
             attr_elem.set("value", value)
 
-        for annotation in self.annotations.values():
-            annotations.append(annotation.to_xml())
+        if self.lease_specific_annotations:
+            annotations = self.annotations.values()
+        else:
+            annotations = self.annotations
+
+        for annotation in annotations:
+            annotations_elem.append(annotation.to_xml())
             
-        return annotations
+        return annotations_elem
 
     def to_xml_string(self):
         """Returns a string XML representation of the lease
