@@ -552,7 +552,7 @@ class HaizeaConfig(Config):
             getter      = "sanity-check",
             type        = OPTTYPE_BOOLEAN,
             required    = False,
-            default     = True,
+            default     = False,
             doc         = """
             Perform a sanity check at every timestep (only for debugging)
             """),     

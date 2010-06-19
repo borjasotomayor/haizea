@@ -46,12 +46,12 @@ class LWFAnalyser(object):
         nleases = len(self.workload.get_leases())
         for lease in self.workload.get_leases():
             if lease.start.requested + lease.duration.requested > self.starttime + self.utilization_length:
-                duration = self.starttime + self.utilization_length - lease.start.requested
+                duration = (self.starttime + self.utilization_length - lease.start.requested).seconds
             else: 
                 duration = lease.duration.requested.seconds
             for res in lease.requested_resources.values():
                 for i in range(1,res.get_ninstances("CPU") + 1):
-                    utilization += res.get_quantity_instance("CPU", i) * duration
+                    utilization += (res.get_quantity_instance("CPU", i) / 100.0) * duration
             if isinstance(lease.software, UnmanagedSoftwareEnvironment):
                 software["Unmanaged"] += 1
             elif isinstance(lease.software, DiskImageSoftwareEnvironment):
@@ -63,10 +63,9 @@ class LWFAnalyser(object):
             duration = self.utilization_length.seconds
             for res in self.site.nodes.get_all_nodes().values():
                 for i in range(1,res.get_ninstances("CPU") + 1):
-                    max_utilization += res.get_quantity_instance("CPU", i) * duration
-            
+                    max_utilization += (res.get_quantity_instance("CPU", i)/100.0) * duration
         
-        print "Utilization: %.2f%%" % (utilization / max_utilization)
+        print "Utilization: %.2f%%" % ((utilization / max_utilization) * 100.0)
         print
         sorted_images = sorted(software.iteritems(), key=operator.itemgetter(1), reverse=True)
         for image, count in sorted_images:

@@ -301,7 +301,14 @@ class LWFGenerator(FileGenerator):
         lwf.set("name", self.outfile)
         description = ET.SubElement(lwf, "description")
         description.text = "Created with haizea-generate"
-
+        
+        attributes_elem = ET.SubElement(lwf, "attributes")
+        attributes = self._get_attributes()
+        for name, value in attributes.items():
+            attr_elem = ET.SubElement(attributes_elem, "attr")
+            attr_elem.set("name", name)
+            attr_elem.set("value", value)
+        
         site = self.config.get(LWFGenerator.GENERAL_SEC, LWFGenerator.SITE_OPT)
         if site.startswith("file:"):
             sitefile = site.split(":")
@@ -330,13 +337,14 @@ class LWFGenerator(FileGenerator):
                 lease_request.append(l.to_xml())
         elif self.numleases_type == LWFGenerator.NUMLEASES_TYPE_UTILIZATION:
             utilization = self.config.getfloat(LWFGenerator.NUMLEASES_SEC, LWFGenerator.NUMLEASES_UTILIZATION_OPT)
+            utilization /= 100.0
             last_request = self.config.get(LWFGenerator.NUMLEASES_SEC, LWFGenerator.NUMLEASES_LAST_REQUEST_OPT)
             last_request = Parser.DateTimeDeltaFromString(last_request)
             
             max_utilization = 0
             for res in site.nodes.get_all_nodes().values():
                 for i in range(1,res.get_ninstances("CPU") + 1):
-                    max_utilization += res.get_quantity_instance("CPU", i) * last_request.seconds
+                    max_utilization += (res.get_quantity_instance("CPU", i)/100.0) * last_request.seconds
             target_utilization = int(max_utilization * utilization)
             
             accum_utilization = 0
@@ -350,9 +358,9 @@ class LWFGenerator(FileGenerator):
                 lease_utilization = 0
                 for res in lease.requested_resources.values():
                     for i in range(1,res.get_ninstances("CPU") + 1):
-                        lease_utilization += res.get_quantity_instance("CPU", i) * duration                
+                        lease_utilization += (res.get_quantity_instance("CPU", i) / 100.0) * duration                
                 accum_utilization += lease_utilization
-                
+
             time = TimeDelta(seconds=0)            
             avg_interval = int(last_request.seconds / len(leases))
             for l in leases:

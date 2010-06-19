@@ -605,6 +605,7 @@ class SlotTable(object):
         @param rr: Resource reservation
         @type rr: L{ResourceReservation}
         """        
+        #print rr.lease.id, rr.start, rr.end
         self.__remove_reservation(rr, rr.start, rr.end)
 
 
@@ -985,7 +986,7 @@ class SlotTable(object):
         pos = bisect.bisect_left(rlist, item)
         found = False
         while not found:
-            if rlist[pos].value == rr:
+            if id(rlist[pos].value) == id(rr):
                 found = True
             else:
                 pos += 1

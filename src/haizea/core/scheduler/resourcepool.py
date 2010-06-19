@@ -20,6 +20,7 @@ from haizea.common.utils import vnodemapstr
 import haizea.common.constants as constants
 import haizea.core.enact.actions as actions
 from haizea.core.scheduler import EnactmentError
+from haizea.core.leases import UnmanagedSoftwareEnvironment, DiskImageSoftwareEnvironment
 import logging 
 
 
@@ -61,6 +62,16 @@ class ResourcePool(object):
         except EnactmentError, exc:
             self.logger.error("Enactment of end VM failed: %s" % exc.message)
             raise
+
+    def verify_deploy(self, lease, rr):
+        if isinstance(lease.software, UnmanagedSoftwareEnvironment):
+            return True
+        elif isinstance(lease.software, DiskImageSoftwareEnvironment):
+            for (vnode, pnode) in rr.nodes.items():
+                img = self.get_node(pnode).get_diskimage(lease.id, vnode, lease.software.image_id)
+                if img == None:
+                    return False
+            return True
          
     def suspend_vms(self, lease, rr):
         # Add memory image files

@@ -138,7 +138,7 @@ class VMScheduler(object):
             for pnode in vmrr.nodes.values():
                 mem = vmrr.resources_in_pnode[pnode].get_by_type(constants.RES_MEM)
                 mem_in_pnode[pnode] += mem
-            max_mem_to_transfer = max(mem_in_pnode.values())
+            max_mem_to_transfer = max(mem_in_pnode.values()) * 2 # Kludge
             bandwidth = self.resourcepool.info.get_migration_bandwidth()
             return estimate_transfer_time(max_mem_to_transfer, bandwidth)
         elif migration == constants.MIGRATE_YES_NOTRANSFER:
@@ -358,8 +358,9 @@ class VMScheduler(object):
         """             
 
         # Determine the start and end time
+        shutdown_time = lease.estimate_shutdown_time()
         start = lease.start.requested
-        end = start + lease.duration.requested
+        end = start + lease.duration.requested + shutdown_time
         
         # Convert Capacity objects in lease object into ResourceTuples that
         # we can hand over to the mapper.
@@ -1311,7 +1312,19 @@ class VMScheduler(object):
         """        
         self.logger.debug("LEASE-%i Start of handleStartVM" % l.id)
         l.print_contents()
+
         lease_state = l.get_state()
+
+        if not self.resourcepool.verify_deploy(l, rr):
+            self.logger.error("Deployment was not complete.")
+            raise # TODO raise something better
+
+        # Kludge: Should be done by the preparations scheduler
+        if l.get_state() == Lease.STATE_SCHEDULED:
+            # Piggybacking
+            l.set_state(Lease.STATE_READY)
+            lease_state = l.get_state()
+            
         if lease_state == Lease.STATE_READY:
             l.set_state(Lease.STATE_ACTIVE)
             rr.state = ResourceReservation.STATE_ACTIVE
