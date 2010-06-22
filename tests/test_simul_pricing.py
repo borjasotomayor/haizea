@@ -31,6 +31,7 @@ def test_pricing3():
     
 def test_pricing_surcharge():
     c = get_config()
+    c.set("scheduling", "mapper", "deadline")
     c.set("scheduling", "policy-preemption", "deadline")
     c.set("scheduling", "suspension", "all")
     c.set("scheduling", "policy-pricing", "constant")
