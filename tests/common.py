@@ -7,101 +7,65 @@ from haizea.core.leases import Lease, Timestamp, Duration
 from haizea.core.manager import Manager
 from haizea.common.utils import reset_lease_id_counter
 
-class BaseTest(object):
-    def __init__(self, config):
-        self.config = config
-        self.haizea = None
+PREEMPTION_TRACE = "preemption.lwf"
+PREEMPTION_PREMATUREEND_TRACE = "preemption_prematureend.lwf"
+PREEMPTION_PREMATUREEND2_TRACE = "preemption_prematureend2.lwf"
+RESERVATION_TRACE = "reservation.lwf"
+RESERVATION_PREMATUREEND_TRACE = "reservation_prematureend.lwf"
+MIGRATE_TRACE = "migrate.lwf"
+REUSE1_TRACE = "reuse1.lwf"
+REUSE2_TRACE = "reuse2.lwf"
+PIGGYBACKING_TRACE = "piggybacking.lwf"
+WAIT_TRACE = "wait.lwf"
 
-    @staticmethod
-    def load_configfile(configfile):
-        f = open (configfile, "r")
-        c = ConfigParser.ConfigParser()
-        c.readfp(f)
-        return c
+def load_configfile(configfile):
+    f = open (configfile, "r")
+    c = ConfigParser.ConfigParser()
+    c.readfp(f)
+    return c
+
+def load_tracefile(config, tracefile):
+    config.set("tracefile", "tracefile", tracefile)
+    Manager.reset_singleton()
+    reset_lease_id_counter()
+    return Manager(HaizeaConfig(config))
+
+def verify_done(haizea, ids):
+    for id in ids:
+        lease = haizea.scheduler.completed_leases.get_lease(id)
+        
+        assert lease.get_state() == Lease.STATE_DONE
+        
+        if lease.deadline != None:
+            assert lease.end <= lease.deadline
+            
+        if lease.duration.known != None:
+            duration = lease.duration.known
+        else:
+            duration = lease.duration.requested
+            
+        assert duration == lease.duration.actual
+
+def verify_rejected(haizea, ids):
+    for id in ids:
+        lease = haizea.scheduler.completed_leases.get_lease(id)
+        
+        assert lease.get_state() == Lease.STATE_REJECTED
+            
+def verify_rejected_by_user(haizea, ids):
+    for id in ids:
+        lease = haizea.scheduler.completed_leases.get_lease(id)
+        
+        assert lease.get_state() == Lease.STATE_REJECTED_BY_USER
     
-    def _tracefile_test(self, tracefile):
-        self.config.set("tracefile", "tracefile", tracefile)
-        Manager.reset_singleton()
-        reset_lease_id_counter()
-        self.haizea = Manager(HaizeaConfig(self.config))
-        self.haizea.start()    
-
-    def _verify_done(self, ids):
-        for id in ids:
-            lease = self.haizea.scheduler.completed_leases.get_lease(id)
-            
-            assert lease.get_state() == Lease.STATE_DONE
-            
-            if lease.deadline != None:
-                assert lease.end <= lease.deadline
-                
-            if lease.duration.known != None:
-                duration = lease.duration.known
-            else:
-                duration = lease.duration.requested
-                
-            assert duration == lease.duration.actual
-
-    def _verify_rejected(self, ids):
-        for id in ids:
-            lease = self.haizea.scheduler.completed_leases.get_lease(id)
-            
-            assert lease.get_state() == Lease.STATE_REJECTED
-                
-    def _verify_rejected_by_user(self, ids):
-        for id in ids:
-            lease = self.haizea.scheduler.completed_leases.get_lease(id)
-            
-            assert lease.get_state() == Lease.STATE_REJECTED_BY_USER
-
-class BaseSimulatorTest(BaseTest):
-    def __init__(self, config):
-        BaseTest.__init__(self, config)
-
-    def test_preemption(self):
-        self._tracefile_test("preemption.lwf")
+def create_haizea_thread(config):
+    Manager.reset_singleton()
+    haizea = Manager(HaizeaConfig(self.config))
+    return haizea, threading.Thread(target=self.haizea.start)
         
-    def test_preemption_prematureend(self):
-        self._tracefile_test("preemption_prematureend.lwf")
-        
-    def test_preemption_prematureend2(self):
-        self._tracefile_test("preemption_prematureend2.lwf")
-
-    def test_reservation(self):
-        self._tracefile_test("reservation.lwf")
-        
-    def test_reservation_prematureend(self):
-        self._tracefile_test("reservation_prematureend.lwf")
-        
-    def test_migrate(self):
-        self._tracefile_test("migrate.lwf")
-        
-    def test_reuse1(self):
-        self._tracefile_test("reuse1.lwf")
-        
-    def test_reuse2(self):
-        self._tracefile_test("reuse2.lwf")
-        
-    def test_wait(self):
-        self._tracefile_test("wait.lwf")
-
-    
-
-class BaseXMLRPCTest(BaseTest):
-    def __init__(self, config):
-        BaseTest.__init__(self, config)
-        self.haizea = None
-        self.haizea_thread = None
-
-    def start(self):
-        Manager.reset_singleton()
-        self.haizea = Manager(HaizeaConfig(self.config))
-        self.haizea_thread = threading.Thread(target=self.haizea.start)
-        self.haizea_thread.start()
-        
-    def stop(self):
-        self.haizea.stop()
-        self.haizea_thread.join()
+#def stop(self):
+#    self.haizea.stop()
+#    self.haizea_thread.join()
         
         
 def create_ar_lease(lease_id, submit_time, start, end, preemptible, requested_resources):
