@@ -105,8 +105,11 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         bandwidth = self.resourcepool.info.get_migration_bandwidth()
         migr_rrs = []
         for m in migrations:
-            mb_to_migrate = lease.software.image_size * len(m.keys())
-            migr_time = estimate_transfer_time(mb_to_migrate, bandwidth)
+            mb_per_physnode = {}
+            for vnode, (pnode_from, pnode_to) in m.items():
+                mb_per_physnode[pnode_from] = mb_per_physnode.setdefault(pnode_from, 0) + lease.software.image_size
+            max_mb_to_migrate = max(mb_per_physnode.values())
+            migr_time = estimate_transfer_time(max_mb_to_migrate, bandwidth)
             end = start + migr_time
             res = {}
             for (origin,dest) in m.values():
@@ -130,7 +133,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             images_in_pnode = dict([(pnode,0) for pnode in set(vmrr.nodes.values())])
             for (vnode,pnode) in vmrr.nodes.items():
                 images_in_pnode[pnode] += lease.software.image_size
-            max_to_transfer = max(images_in_pnode.values())
+            max_to_transfer = max(images_in_pnode.values()) * 2 # Kludge
             bandwidth = self.resourcepool.info.get_migration_bandwidth()
             return estimate_transfer_time(max_to_transfer, bandwidth)
         elif migration == constants.MIGRATE_YES_NOTRANSFER:

@@ -468,7 +468,9 @@ class LeaseScheduler(object):
         ## END NOT-FIT-FOR-PRODUCTION CODE
         for l in future_best_effort:
             # We can only reschedule leases in the following four states
-            if l.get_state() in (Lease.STATE_PREPARING, Lease.STATE_READY, Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED):
+            # TODO: Leases in PREPARING state should be rescheduleable.
+            if l.get_state() in (Lease.STATE_READY, Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED):
+            #if l.get_state() in (Lease.STATE_PREPARING, Lease.STATE_READY, Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED):
                 # For each reschedulable lease already scheduled in the
                 # future, we cancel the lease's preparation and
                 # the last scheduled VM.
