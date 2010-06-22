@@ -762,14 +762,12 @@ class Lease(object):
         """              
         susp_exclusion = get_config().get("suspendresume-exclusion")        
         enactment_overhead = get_config().get("enactment-overhead") 
-        mem = 0
+        time = 0
         for vnode in self.requested_resources:
-            mem += self.requested_resources[vnode].get_quantity(RES_MEM)
-        if susp_exclusion == SUSPRES_EXCLUSION_GLOBAL:
-            return self.numnodes * enactment_overhead + compute_suspend_resume_time(mem, rate)
-        elif susp_exclusion == SUSPRES_EXCLUSION_LOCAL:
-            # Overestimating
-            return self.numnodes * enactment_overhead + compute_suspend_resume_time(mem, rate)
+            mem = self.requested_resources[vnode].get_quantity(RES_MEM)
+            # Overestimating when susp_exclusion == SUSPRES_EXCLUSION_LOCAL
+            time += compute_suspend_resume_time(mem, rate) + enactment_overhead
+        return time
         
     # ONLY for simulation
     def _update_prematureend(self):
