@@ -402,8 +402,8 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         for t in self.transfers:
             for pnode in t.transfers:
                 leases = [l for l, v in t.transfers[pnode]]
-                if lease in leases:
-                    newtransfers = [(l, v) for l, v in t.transfers[pnode] if l!=lease]
+                if lease.id in leases:
+                    newtransfers = [(l, v) for l, v in t.transfers[pnode] if l!=lease.id]
                     t.transfers[pnode] = newtransfers
             # Check if the transfer has to be cancelled
             a = sum([len(l) for l in t.transfers.values()])
