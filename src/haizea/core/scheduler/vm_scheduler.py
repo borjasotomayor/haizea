@@ -133,16 +133,14 @@ class VMScheduler(object):
         """                
         migration = get_config().get("migration")
         if migration == constants.MIGRATE_YES:
+            bandwidth = self.resourcepool.info.get_migration_bandwidth()            
             vmrr = lease.get_last_vmrr()
             #mem_in_pnode = dict([(pnode,0) for pnode in set(vmrr.nodes.values())])
-            max_mem_to_transfer = 0
+            transfer_time = 0
             for pnode in vmrr.nodes.values():
                 mem = vmrr.resources_in_pnode[pnode].get_by_type(constants.RES_MEM)
-                max_mem_to_transfer += mem
-                #mem_in_pnode[pnode] += mem
-            #max_mem_to_transfer = max(mem_in_pnode.values()) * 2 # Kludge
-            bandwidth = self.resourcepool.info.get_migration_bandwidth()
-            return estimate_transfer_time(max_mem_to_transfer, bandwidth)
+                transfer_time += estimate_transfer_time(mem, bandwidth)
+            return transfer_time
         elif migration == constants.MIGRATE_YES_NOTRANSFER:
             return TimeDelta(seconds=0)        
 

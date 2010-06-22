@@ -19,6 +19,7 @@
 from haizea.core.leases import Capacity
 from haizea.core.scheduler.resourcepool import ResourcePoolNode
 from haizea.core.enact import ResourcePoolInfo, VMEnactment, DeploymentEnactment
+from haizea.common.utils import get_config
 import haizea.common.constants as constants
 import logging
 
@@ -61,7 +62,7 @@ class SimulatedResourcePoolInfo(ResourcePoolInfo):
         return self.resource_types
 
     def get_migration_bandwidth(self):
-        return 100 # TODO: Get from config file
+        return get_config().get("imagetransfer-bandwidth")
 
 class SimulatedVMEnactment(VMEnactment):
     def __init__(self):
