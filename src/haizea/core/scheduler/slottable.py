@@ -254,7 +254,7 @@ class ResourceTuple(object):
         
         if self.slottable.rtuple_has_multiinst:
             for (pos, l) in self._multi_instance.items():
-                for i, x in l:
+                for i, x in enumerate(l):
                     if l[i] < rt._multi_instance[pos][i]:
                         return True
                     
@@ -275,7 +275,7 @@ class ResourceTuple(object):
             
         if self.slottable.rtuple_has_multiinst:
             for (pos, l) in self._multi_instance.items():
-                for i, x in l:
+                for i, x in enumerate(l):
                     l[i] = min(l[i], rt._multi_instance[pos][i])
                     
     
@@ -424,11 +424,10 @@ class SlotTable(object):
         self.awcache = None
         self.state_stack = []
         self.__dirty()
-        
 
         # Resource tuple fields
         res_singleinstance = [rt for rt,ninst in resource_types if ninst == ResourceTuple.SINGLE_INSTANCE]
-        res_multiinstance = [(rt,ninst) for rt,ninst in resource_types if ninst == ResourceTuple.MULTI_INSTANCE]
+        res_multiinstance = [(rt,ResourceTuple.MULTI_INSTANCE) for rt,ninst in resource_types if ninst > 1 ]
         self.rtuple_nsingle = len(res_singleinstance)
         self.rtuple_nmultiple = len(res_multiinstance)
         self.rtuple_has_multiinst = self.rtuple_nmultiple > 0

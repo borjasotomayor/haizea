@@ -71,7 +71,8 @@ class TracefileFrontend(RequestFrontend):
         memory = config.get("override-memory")
         if memory != constants.NO_MEMORY_OVERRIDE:
             for r in self.requests:
-                r.requested_resources.set_by_type(constants.RES_MEM, memory)            
+                for n in r.requested_resources:
+                    r.requested_resources[n].set_quantity(constants.RES_MEM, memory)            
             
         types = {}
         for r in self.requests:

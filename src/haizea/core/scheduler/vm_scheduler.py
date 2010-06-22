@@ -336,14 +336,15 @@ class VMScheduler(object):
                     util[type(r)] = use + util.setdefault(type(r),0.0)
                 elif isinstance(r, SuspensionResourceReservation) or isinstance(r, ResumptionResourceReservation) or isinstance(r, ShutdownResourceReservation):
                     use = r.vmrr.resources_in_pnode[node].get_by_type(constants.RES_CPU)
-                    util[type(r)] = use + util.setdefault(type(r),0.0)
+                    util[type(r)] = 0.0
+                    #util[type(r)] = use + util.setdefault(type(r),0.0)
         util[None] = total - sum(util.values())
-        
+
         if total != 0:
             for k in util:
                 util[k] /= total
-            
-        return util              
+
+        return util
         
 
     def __schedule_exact(self, lease, duration, nexttime, earliest):

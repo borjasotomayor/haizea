@@ -240,8 +240,8 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         # to add entries to the pools
         if reusealg == constants.REUSE_IMAGECACHES:
             for (vnode, pnode) in mustpool.items():
-                self.resourcepool.add_mapping_to_existing_reusable_image(pnode, lease.diskimage_id, lease.id, vnode, start)
-                self.resourcepool.add_diskimage(pnode, lease.diskimage_id, lease.diskimage_size, lease.id, vnode)
+                self.resourcepool.add_mapping_to_existing_reusable_image(pnode, lease.software.image_id, lease.id, vnode, start)
+                self.resourcepool.add_diskimage(pnode, lease.software.image_id, lease.software.image_size, lease.id, vnode)
                 
         return transfer_rrs, is_ready
 
