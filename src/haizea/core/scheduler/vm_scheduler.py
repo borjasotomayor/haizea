@@ -1318,9 +1318,10 @@ class VMScheduler(object):
 
         lease_state = l.get_state()
 
-        if not self.resourcepool.verify_deploy(l, rr):
-            self.logger.error("Deployment was not complete.")
-            raise # TODO raise something better
+        if get_config().get("lease-preparation") == "imagetransfer":
+            if not self.resourcepool.verify_deploy(l, rr):
+                self.logger.error("Deployment was not complete.")
+                raise # TODO raise something better
 
         # Kludge: Should be done by the preparations scheduler
         if l.get_state() == Lease.STATE_SCHEDULED:

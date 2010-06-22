@@ -1431,20 +1431,20 @@ class LeaseAnnotations(object):
         self.attributes = attributes
     
     def __apply_to_lease(self, lease, annotation):
-            if annotation.start != None:
-                if annotation.start.requested in (Timestamp.NOW, Timestamp.UNSPECIFIED):
-                    lease.start.requested = annotation.start.requested
-                else:
-                    lease.start.requested = lease.submit_time + annotation.start.requested
+        if annotation.start != None:
+            if annotation.start.requested in (Timestamp.NOW, Timestamp.UNSPECIFIED):
+                lease.start.requested = annotation.start.requested
+            else:
+                lease.start.requested = lease.submit_time + annotation.start.requested
 
-            if annotation.deadline != None:
-                lease.deadline = lease.submit_time + annotation.deadline
+        if annotation.deadline != None:
+            lease.deadline = lease.submit_time + annotation.deadline
 
-            if annotation.software != None:
-                lease.software = annotation.software
+        if annotation.software != None:
+            lease.software = annotation.software
 
-            if annotation.extras != None:
-                lease.extras.update(annotation.extras)
+        if annotation.extras != None:
+            lease.extras.update(annotation.extras)
     
     def apply_to_leases(self, leases):
         """Apply annotations to a workload
@@ -1486,7 +1486,7 @@ class LeaseAnnotations(object):
             if annotation.lease_id == None:
                 annotations_list.append(annotation)
             else:
-                annotations_dict[annotation.lease_id] = annotation
+                annotations_dict[int(annotation.lease_id)] = annotation
             
         attributes = {}
         attributes_elem = element.find("attributes")
@@ -1500,7 +1500,7 @@ class LeaseAnnotations(object):
             annotations = annotations_dict
         elif len(annotations_dict) == 0:
             annotations = annotations_list
-            
+
         return cls(annotations, attributes)    
     
     def to_xml(self):

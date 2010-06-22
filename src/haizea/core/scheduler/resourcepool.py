@@ -154,7 +154,6 @@ class ResourcePool(object):
     def remove_diskimage(self, pnode, lease, vnode):
         node = self.get_node(pnode)
         node.print_files()
-
         self.logger.debug("Removing disk image for L%iV%i in node %i" % (lease, vnode, pnode))
         node.remove_diskimage(lease, vnode)
 
