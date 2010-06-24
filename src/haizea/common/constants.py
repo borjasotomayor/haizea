@@ -52,6 +52,7 @@ TRANSFER_MULTICAST="multicast"
 STOPWHEN_ALLDONE = "all-leases-done"
 STOPWHEN_BESUBMITTED="besteffort-submitted"
 STOPWHEN_BEDONE="besteffort-done"
+STOPWHEN_EXACT="exact"
 
 REUSE_NONE="none"
 REUSE_IMAGECACHES="image-caches"

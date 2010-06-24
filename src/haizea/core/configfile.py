@@ -524,7 +524,8 @@ class HaizeaConfig(Config):
             default     = constants.STOPWHEN_ALLDONE,
             valid       = [constants.STOPWHEN_ALLDONE,
                            constants.STOPWHEN_BESUBMITTED,
-                           constants.STOPWHEN_BEDONE],
+                           constants.STOPWHEN_BEDONE,
+                           constants.STOPWHEN_EXACT],
             doc         = """
             When using the simulated clock, this specifies when the
             simulation must end. Valid options are:
@@ -534,7 +535,18 @@ class HaizeaConfig(Config):
              - besteffort-submitted: When all best-effort leases have been
                submitted.
              - besteffort-done: When all best-effort leases have been
-               completed.                
+               completed.    
+             - exact: Stop at a specific time (use option stop-when-time)            
+            """),
+
+     Option(name        = "stop-when-time",
+            getter      = "stop-when-time",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            required_if = [(("simulation","stop-when"),constants.STOPWHEN_EXACT)],
+            doc         = """
+            A time in format DD:HH:MM:SS at which the simulation should be
+            stopped (useful for debugging)            
             """),
 
      Option(name        = "status-message-interval",

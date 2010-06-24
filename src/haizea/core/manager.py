@@ -64,7 +64,7 @@ import shelve
 import socket
 from time import sleep
 from math import ceil
-from mx.DateTime import now, TimeDelta
+from mx.DateTime import now, TimeDelta, Parser
 
 DAEMON_STDOUT = DAEMON_STDIN = "/dev/null"
 DAEMON_STDERR = "/var/tmp/haizea.err"
@@ -868,6 +868,7 @@ class SimulatedClock(Clock):
         # We can also be done if we've specified that we want to stop when
         # the best-effort requests are all done or when they've all been submitted.
         stopwhen = self.manager.config.get("stop-when")
+
         besteffort = self.manager.scheduler.leases.get_leases(type = Lease.BEST_EFFORT)
         pendingbesteffort = [r for r in tracefrontend.requests if r.get_type() == Lease.BEST_EFFORT]
         if stopwhen == constants.STOPWHEN_BEDONE:
@@ -875,6 +876,12 @@ class SimulatedClock(Clock):
                 self.done = True
         elif stopwhen == constants.STOPWHEN_BESUBMITTED:
             if len(pendingbesteffort) == 0:
+                self.done = True
+        elif stopwhen == constants.STOPWHEN_ALLDONE:
+            pass
+        elif stopwhen == constants.STOPWHEN_EXACT:
+            t = Parser.DateTimeDeltaFromString(self.manager.config.get("stop-when-time"))
+            if self.time >= self.starttime + t:
                 self.done = True
                 
         # If we didn't arrive at a new time, and we're not done, we've fallen into
