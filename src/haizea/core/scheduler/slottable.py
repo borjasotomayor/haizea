@@ -1393,13 +1393,15 @@ class ChangepointAvail(object):
 class ChangepointNodeAvail(object):
     def __init__(self, capacity):
         self.capacity = capacity     
-        self.available = ResourceTuple.copy(capacity)
+        self.available = capacity
         self.leases = set()
         self.available_if_preempting = {}
         self.next_cp = None
         self.next_nodeavail = None
 
     def decr(self, capacity):
+        if self.capacity == self.available:
+            self.available = ResourceTuple.copy(self.capacity)
         self.available.decr(capacity)
 
     def add_lease(self, lease, capacity):
