@@ -231,6 +231,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
 
         if len(musttransfer) == 0:
             is_ready = True
+            transfer_rrs = []
         else:
             try:
                 transfer_rrs = self.__schedule_imagetransfer_edf(lease, musttransfer, earliest)
