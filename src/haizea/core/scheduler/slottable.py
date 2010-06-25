@@ -20,7 +20,9 @@ import haizea.common.constants as constants
 from haizea.common.utils import xmlrpc_marshall_singlevalue
 import bisect
 import logging
-from operator import itemgetter
+from operator import itemgetter, attrgetter
+
+VMRR_ONLY = False
 
 """This module provides an in-memory slot table data structure. 
 
@@ -779,32 +781,28 @@ class SlotTable(object):
         @return: Changepoints
         @rtype: C{list} of L{DateTime}s
         """        
-        from haizea.core.scheduler.vm_scheduler import VMResourceReservation
-        
         changepoints = set()
         res = self.get_reservations_after(after)
-        res = [r for r in res if isinstance(r, VMResourceReservation)]
+        if VMRR_ONLY:
+            from haizea.core.scheduler.vm_scheduler import VMResourceReservation
+            res = [r for r in res if isinstance(r, VMResourceReservation)]
         for rr in res:
+            if VMRR_ONLY:
+                start = rr.get_first_start()
+                end = rr.get_final_end()
+            else:
+                start = rr.start
+                end = rr.end
             if nodes == None or (nodes != None and len(set(rr.resources_in_pnode.keys()) & set(nodes)) > 0):
-                if rr.get_first_start() > after:
-                    changepoints.add(rr.start)
-                if rr.get_final_end() > after:
-                    changepoints.add(rr.end)
+                if start > after:
+                    changepoints.add(start)
+                if end > after:
+                    changepoints.add(end)
         changepoints = list(changepoints)
         if until != None:
             changepoints =  [c for c in changepoints if c < until]
         changepoints.sort()
         return changepoints
-    
-    def filter_rrs(self, rrs):
-        from haizea.core.scheduler.vm_scheduler import VMResourceReservation, SuspensionResourceReservation, ResumptionResourceReservation, ShutdownResourceReservation
-
-        res = [r for r in rrs if isinstance(r, VMResourceReservation) or
-               (isinstance(r, ResumptionResourceReservation) and (r.is_first() or r.is_last())) or
-               (isinstance(r, SuspensionResourceReservation) and (r.is_first() or r.is_last())) or
-               isinstance(r, ShutdownResourceReservation)]
-        
-        return res
     
     def get_next_changepoint(self, time):
         """Get the first changepoint after a given time.
@@ -1122,12 +1120,15 @@ class AvailabilityWindow(object):
             for node_id, node in self.slottable.nodes.items():
                 cp.add_node(node_id, node.capacity)
                 
-        from haizea.core.scheduler.vm_scheduler import VMResourceReservation
         # Get reservations that will affect the availability window.
         rrs = self.slottable.get_reservations_after(time)
-        rrs = [(r.get_first_start(), r) for r in rrs if isinstance(r, VMResourceReservation)]
-        rrs.sort(key=itemgetter(0))
-        rrs = [r for s, r in rrs]
+        if VMRR_ONLY:
+            from haizea.core.scheduler.vm_scheduler import VMResourceReservation
+            rrs = [(r.get_first_start(), r) for r in rrs if isinstance(r, VMResourceReservation)]
+            rrs.sort(key=itemgetter(0))
+            rrs = [r for s, r in rrs]
+        else:
+            rrs.sort(key=attrgetter("start"))
         
         # This is an index into cp_list. We start at the first changepoint.
         pos = 0
@@ -1141,8 +1142,12 @@ class AvailabilityWindow(object):
             if rr.start == rr.end:
                 continue
             
-            start = rr.get_first_start()
-            end = rr.get_final_end()
+            if VMRR_ONLY:
+                start = rr.get_first_start()
+                end = rr.get_final_end()
+            else:
+                start = rr.start
+                end = rr.end
             
             # Advance pos to the changepoint corresponding to the RR's starting time.
             while start >= self.time and self.cp_list[pos] != start:
@@ -1171,7 +1176,7 @@ class AvailabilityWindow(object):
             # Process the other changepoints covered by this RR.
             pos2 = pos + 1
 
-            while self.cp_list[pos2] < rr.end:
+            while self.cp_list[pos2] < end:
                 cp = self.changepoints[self.cp_list[pos2]]
                 cp.leases.add(lease)
                 for node in rr.resources_in_pnode:
