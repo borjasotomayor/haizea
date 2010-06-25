@@ -20,7 +20,7 @@ import haizea.common.constants as constants
 from haizea.common.utils import xmlrpc_marshall_singlevalue
 import bisect
 import logging
-from operator import attrgetter
+from operator import itemgetter
 
 """This module provides an in-memory slot table data structure. 
 
@@ -125,7 +125,10 @@ class ResourceTuple(object):
         @return: Copy of resource tuple
         @rtype: L{ResourceTuple}
         """        
-        return cls(rt.slottable, rt._single_instance[:], dict([(pos,l[:]) for pos, l in rt._multi_instance.items()]))
+        if rt.slottable.rtuple_has_multiinst:
+            return cls(rt.slottable, rt._single_instance[:], dict([(pos,l[:]) for pos, l in rt._multi_instance.items()]))
+        else:
+            return cls(rt.slottable, rt._single_instance[:], {})
 
         
     def fits_in(self, rt):
@@ -776,19 +779,32 @@ class SlotTable(object):
         @return: Changepoints
         @rtype: C{list} of L{DateTime}s
         """        
+        from haizea.core.scheduler.vm_scheduler import VMResourceReservation
+        
         changepoints = set()
         res = self.get_reservations_after(after)
+        res = [r for r in res if isinstance(r, VMResourceReservation)]
         for rr in res:
             if nodes == None or (nodes != None and len(set(rr.resources_in_pnode.keys()) & set(nodes)) > 0):
-                if rr.start > after:
+                if rr.get_first_start() > after:
                     changepoints.add(rr.start)
-                if rr.end > after:
+                if rr.get_final_end() > after:
                     changepoints.add(rr.end)
         changepoints = list(changepoints)
         if until != None:
             changepoints =  [c for c in changepoints if c < until]
         changepoints.sort()
         return changepoints
+    
+    def filter_rrs(self, rrs):
+        from haizea.core.scheduler.vm_scheduler import VMResourceReservation, SuspensionResourceReservation, ResumptionResourceReservation, ShutdownResourceReservation
+
+        res = [r for r in rrs if isinstance(r, VMResourceReservation) or
+               (isinstance(r, ResumptionResourceReservation) and (r.is_first() or r.is_last())) or
+               (isinstance(r, SuspensionResourceReservation) and (r.is_first() or r.is_last())) or
+               isinstance(r, ShutdownResourceReservation)]
+        
+        return res
     
     def get_next_changepoint(self, time):
         """Get the first changepoint after a given time.
@@ -1085,7 +1101,7 @@ class AvailabilityWindow(object):
         self.leases = set()
 
         self.cp_list = [self.time] + self.slottable.get_changepoints_after(time)
-
+        
         # The availability window is stored using a sparse data structure that
         # allows quick access to information related to a specific changepoint in
         # the slottable.
@@ -1105,10 +1121,13 @@ class AvailabilityWindow(object):
         for cp in self.changepoints.values():
             for node_id, node in self.slottable.nodes.items():
                 cp.add_node(node_id, node.capacity)
-        
+                
+        from haizea.core.scheduler.vm_scheduler import VMResourceReservation
         # Get reservations that will affect the availability window.
         rrs = self.slottable.get_reservations_after(time)
-        rrs.sort(key=attrgetter("start"))
+        rrs = [(r.get_first_start(), r) for r in rrs if isinstance(r, VMResourceReservation)]
+        rrs.sort(key=itemgetter(0))
+        rrs = [r for s, r in rrs]
         
         # This is an index into cp_list. We start at the first changepoint.
         pos = 0
@@ -1122,8 +1141,11 @@ class AvailabilityWindow(object):
             if rr.start == rr.end:
                 continue
             
+            start = rr.get_first_start()
+            end = rr.get_final_end()
+            
             # Advance pos to the changepoint corresponding to the RR's starting time.
-            while rr.start >= self.time and self.cp_list[pos] != rr.start:
+            while start >= self.time and self.cp_list[pos] != start:
                 pos += 1
                 
             # Add the lease to the set of leases included in the availability window
@@ -1133,8 +1155,8 @@ class AvailabilityWindow(object):
             # Get the ChangepointAvail object for the starting changepoint. Note
             # that the RRs starting time might be before the start of the availability
             # window, in which case we just take the first ChangepointAvail.
-            if rr.start >= self.time:
-                start_cp = self.changepoints[rr.start]
+            if start >= self.time:
+                start_cp = self.changepoints[start]
             else:
                 start_cp = self.changepoints[self.time]
 
