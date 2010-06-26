@@ -784,8 +784,13 @@ class SlotTable(object):
         changepoints = set()
         res = self.get_reservations_after(after)
         if VMRR_ONLY:
-            from haizea.core.scheduler.vm_scheduler import VMResourceReservation
-            res = [r for r in res if isinstance(r, VMResourceReservation)]
+            from haizea.core.scheduler.vm_scheduler import VMResourceReservation, SuspensionResourceReservation, ResumptionResourceReservation, ShutdownResourceReservation
+            vmrrs = set([r for r in res if isinstance(r, VMResourceReservation)])
+            vmrrs = vmrrs.union([r.vmrr for r in res if isinstance(r, SuspensionResourceReservation)
+                          or isinstance(r, ResumptionResourceReservation) 
+                          or isinstance(r, ShutdownResourceReservation) 
+                          ])
+            res = list(vmrrs)
         for rr in res:
             if VMRR_ONLY:
                 start = rr.get_first_start()
@@ -1123,8 +1128,14 @@ class AvailabilityWindow(object):
         # Get reservations that will affect the availability window.
         rrs = self.slottable.get_reservations_after(time)
         if VMRR_ONLY:
-            from haizea.core.scheduler.vm_scheduler import VMResourceReservation
-            rrs = [(r.get_first_start(), r) for r in rrs if isinstance(r, VMResourceReservation)]
+            from haizea.core.scheduler.vm_scheduler import VMResourceReservation, SuspensionResourceReservation, ResumptionResourceReservation, ShutdownResourceReservation
+            vmrrs = set([r for r in rrs if isinstance(r, VMResourceReservation)])
+            vmrrs = vmrrs.union([r.vmrr for r in rrs if isinstance(r, SuspensionResourceReservation)
+                          or isinstance(r, ResumptionResourceReservation) 
+                          or isinstance(r, ShutdownResourceReservation) 
+                          ])
+            rrs = list(vmrrs)            
+            rrs = [(r.get_first_start(), r) for r in rrs]
             rrs.sort(key=itemgetter(0))
             rrs = [r for s, r in rrs]
         else:
