@@ -1153,11 +1153,11 @@ class VMScheduler(object):
             all_vnodes = []
             for (pnode,vnodes) in node_mappings.items():
                 num_vnodes = len(vnodes)
-                r = Capacity([constants.RES_CPU,constants.RES_MEM,constants.RES_DISK])
+                r = Capacity([constants.RES_MEM,constants.RES_DISK])
                 mem = 0
                 for vnode in vnodes:
                     mem += vmrr.lease.requested_resources[vnode].get_quantity(constants.RES_MEM)
-                r.set_quantity(constants.RES_CPU, 100) # TODO: Need to get the same quantity as pnode
+                #r.set_quantity(constants.RES_CPU, 100) # TODO: Need to get the same quantity as pnode
                 r.set_quantity(constants.RES_MEM, mem * num_vnodes)
                 r.set_quantity(constants.RES_DISK, mem * num_vnodes)
                 suspres[pnode] = self.slottable.create_resource_tuple_from_capacity(r)          
@@ -1214,11 +1214,11 @@ class VMScheduler(object):
             all_vnodes = []
             for (pnode,vnodes) in node_mappings.items():
                 num_vnodes = len(vnodes)
-                r = Capacity([constants.RES_CPU,constants.RES_MEM,constants.RES_DISK])
+                r = Capacity([constants.RES_MEM,constants.RES_DISK])
                 mem = 0
                 for vnode in vnodes:
                     mem += vmrr.lease.requested_resources[vnode].get_quantity(constants.RES_MEM)
-                r.set_quantity(constants.RES_CPU, 100) # TODO: Need to get the same quantity as pnode                    
+                #r.set_quantity(constants.RES_CPU, 100) # TODO: Need to get the same quantity as pnode                    
                 r.set_quantity(constants.RES_MEM, mem * num_vnodes)
                 r.set_quantity(constants.RES_DISK, mem * num_vnodes)
                 resmres[pnode] = self.slottable.create_resource_tuple_from_capacity(r)
@@ -1613,7 +1613,7 @@ class VMResourceReservation(ResourceReservation):
         if len(self.pre_rrs) == 0:
             return self.start
         else:
-            return self.pre_rrs[0].start
+            return [rr for rr in self.pre_rrs if not isinstance(rr, MemImageMigrationResourceReservation)][0].start
 
     def get_final_end(self):
         if len(self.post_rrs) == 0:
@@ -1622,7 +1622,7 @@ class VMResourceReservation(ResourceReservation):
             return self.post_rrs[-1].end
 
     def is_resuming(self):
-        return len(self.pre_rrs) > 0 and isinstance(self.pre_rrs[0], ResumptionResourceReservation)
+        return len(self.pre_rrs) > 0 and (isinstance(self.pre_rrs[0], ResumptionResourceReservation) or isinstance(self.pre_rrs[0], MemImageMigrationResourceReservation))
 
     def is_suspending(self):
         return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], SuspensionResourceReservation)
