@@ -366,9 +366,10 @@ class LWFGenerator(FileGenerator):
             for l in leases:
                 interval = avg_interval + TimeDelta(seconds=self._get_interval())
                 time = max(time + interval, TimeDelta(seconds=0))
-                l.start.requested += time
+                arrival = max(time - l.start.requested, TimeDelta(seconds=0))
+                l.start.requested = time
                 lease_request = ET.SubElement(requests, "lease-request")
-                lease_request.set("arrival", str(time))            
+                lease_request.set("arrival", str(arrival))            
                 lease_request.append(l.to_xml())                            
         
         tree = ET.ElementTree(lwf)

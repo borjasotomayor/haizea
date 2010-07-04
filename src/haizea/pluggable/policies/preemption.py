@@ -82,6 +82,37 @@ class ARPreemptsEverythingPolicy(PreemptabilityPolicy):
         else:
             return -1
         
+class ARPreemptsBEPolicy(PreemptabilityPolicy):
+    """A simple preemption policy where AR leases can always preempt
+    every other type of lease. Given two possible leases to preempt,
+    the "youngest" one is preferred (i.e., the one that was most recently
+    submitted).
+    """    
+    def __init__(self, slottable):
+        """Constructor
+        
+        Argument
+        slottable -- A fully constructed SlotTable
+        """        
+        PreemptabilityPolicy.__init__(self, slottable)
+    
+    def get_lease_preemptability_score(self, preemptor, preemptee, time):
+        """Computes the lease preemptability score
+        
+        See class documentation for details on what policy is implemented here.
+        See documentation of PreemptabilityPolicy.get_lease_preemptability_score
+        for more details on this function.
+        
+        Arguments:
+        preemptor -- Preemptor lease
+        preemptee -- Preemptee lease
+        time -- Time at which preemption would take place
+        """        
+        if preemptor.get_type() == Lease.ADVANCE_RESERVATION and preemptee.get_type() == Lease.BEST_EFFORT:
+            return self._get_aging_factor(preemptee, time)
+        else:
+            return -1        
+        
 class DeadlinePolicy(PreemptabilityPolicy):
     """Only leases that will still meet their deadline after preemption can
     be preempted. Furthermore, leases with the most slack time are preferred.

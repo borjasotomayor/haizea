@@ -1613,7 +1613,7 @@ class VMResourceReservation(ResourceReservation):
         if len(self.pre_rrs) == 0:
             return self.start
         else:
-            return [rr for rr in self.pre_rrs if not isinstance(rr, MemImageMigrationResourceReservation)][0].start
+            return [rr for rr in self.pre_rrs if isinstance(rr, ResumptionResourceReservation)][0].start
 
     def get_final_end(self):
         if len(self.post_rrs) == 0:
@@ -1622,7 +1622,7 @@ class VMResourceReservation(ResourceReservation):
             return self.post_rrs[-1].end
 
     def is_resuming(self):
-        return len(self.pre_rrs) > 0 and (isinstance(self.pre_rrs[0], ResumptionResourceReservation) or isinstance(self.pre_rrs[0], MemImageMigrationResourceReservation))
+        return len(self.pre_rrs) > 0 and reduce(operator.or_, [isinstance(rr, ResumptionResourceReservation) for rr in self.pre_rrs])
 
     def is_suspending(self):
         return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], SuspensionResourceReservation)

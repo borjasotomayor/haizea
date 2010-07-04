@@ -242,7 +242,7 @@ class PreemptabilityPolicy(object):
         between 0 and 1 that can be multiplied by the score, reducing
         the score based on the lease's "age".
         
-        Currently, this method uses a hard-coded horizon of 31 days
+        Currently, this method uses a hard-coded horizon of 7 days
         (any lease older than 7 days cannot be preempted, and leases
         less than 7 days are assigned a factor proportional to their age)
         
