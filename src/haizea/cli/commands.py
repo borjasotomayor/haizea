@@ -303,12 +303,24 @@ class haizea_convert_data(Command):
             print "Please specify at least one datafile to convert"
             exit(1)
         
-        datafile1 = unpickle(datafiles[0])
-        
-        counter_names = datafile1.counters.keys()
-        attr_names = datafile1.attrs.keys()
-        lease_stats_names = datafile1.lease_stats_names
-        stats_names = datafile1.stats_names
+        counter_names = set()
+        attr_names = set()
+        lease_stats_names = set()
+        stats_names = set()
+        for datafile in datafiles:
+            try:
+                data = unpickle(datafile)
+                counter_names.update(data.counters.keys())
+                attr_names.update(data.attrs.keys())
+                lease_stats_names.update(data.lease_stats_names)
+                stats_names.update(data.stats_names)
+            except:
+                print >> sys.stderr, "Error reading file %s" % (datafile)
+
+        counter_names = list(counter_names)
+        attr_names = list(attr_names)
+        lease_stats_names = list(lease_stats_names)
+        stats_names = list(stats_names)
 
         if self.opt.list_counters:
             for counter in counter_names:
@@ -321,11 +333,12 @@ class haizea_convert_data(Command):
             header_fields = attr_names + ["lease_id"] + lease_stats_names
         elif self.opt.type == "counter":
             counter = self.opt.counter
-            if not datafile1.counters.has_key(counter):
+            data = unpickle(datafiles[0])
+            if not data.counters.has_key(counter):
                 print "The specified datafile does not have a counter called '%s'" % counter
                 exit(1)
             header_fields = attr_names + ["time", "value"]
-            if datafile1.counter_avg_type[counter] != AccountingDataCollection.AVERAGE_NONE:
+            if data.counter_avg_type[counter] != AccountingDataCollection.AVERAGE_NONE:
                 header_fields.append("average")                
 
         header = ",".join(header_fields)
@@ -336,10 +349,10 @@ class haizea_convert_data(Command):
             try:
                 data = unpickle(datafile)
             
-                attrs = [data.attrs[attr_name] for attr_name in attr_names]
+                attrs = [data.attrs.get(attr_name, "") for attr_name in attr_names]
                             
                 if self.opt.type == "per-run":
-                    fields = attrs + [str(data.stats[stats_name]) for stats_name in stats_names]
+                    fields = attrs + [str(data.stats.get(stats_name,"")) for stats_name in stats_names]
                     print ",".join(fields)
                 elif self.opt.type == "per-lease":
                     leases = data.lease_stats
