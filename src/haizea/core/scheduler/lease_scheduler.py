@@ -690,13 +690,6 @@ class LeaseScheduler(object):
         lease.price = lease_price
         ## END NOT-FIT-FOR-PRODUCTION CODE
                                 
-        # If scheduling the lease involves preempting other leases,
-        # go ahead and preempt them.
-        if len(preemptions) > 0:
-            self.logger.info("Must preempt leases %s to make room for lease #%i" % ([l.id for l in preemptions], lease.id))
-            for l in preemptions:
-                self.__preempt_lease(l, preemption_time=vmrr.start)
-                
         # Schedule lease preparation
         is_ready = False
         preparation_rrs = []
@@ -718,7 +711,14 @@ class LeaseScheduler(object):
             is_ready = True
         elif lease_state in (Lease.STATE_PENDING, Lease.STATE_QUEUED):
             # The lease might require initial preparation
-            preparation_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, earliest)
+            preparation_rrs, is_ready = self.preparation_scheduler.schedule(lease, vmrr, earliest, nexttime)
+
+        # If scheduling the lease involves preempting other leases,
+        # go ahead and preempt them.
+        if len(preemptions) > 0:
+            self.logger.info("Must preempt leases %s to make room for lease #%i" % ([l.id for l in preemptions], lease.id))
+            for l in preemptions:
+                self.__preempt_lease(l, preemption_time=vmrr.start)
 
         # At this point, the lease is feasible.
         # Commit changes by adding RRs to lease and to slot table
