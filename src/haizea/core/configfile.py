@@ -1006,7 +1006,7 @@ class HaizeaMultiConfig(Config):
                         
                         attrs_str = ",".join(["%s=%s" % (k,v) for (k,v) in attrs.items()])
                         if profileconfig.has_option("accounting", "attributes"):
-                            attrs_str += ",%s" % profileconfig.get("general", "attributes")
+                            attrs_str += ",%s" % profileconfig.get("accounting", "attributes")
                         profileconfig.set("accounting", "attributes", attrs_str)
     
                         try:
