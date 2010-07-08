@@ -25,7 +25,7 @@ class UnmanagedPreparationScheduler(PreparationScheduler):
         PreparationScheduler.__init__(self, slottable, resourcepool, deployment_enact)
         self.handlers = {}
     
-    def schedule(self, lease, vmrr, nexttime):
+    def schedule(self, lease, vmrr, earliest, nexttime):
         # Nothing to do
         return [], True
     
