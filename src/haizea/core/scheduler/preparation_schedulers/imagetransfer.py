@@ -50,13 +50,13 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
                                 on_start = ImageTransferPreparationScheduler._handle_start_migrate,
                                 on_end   = ImageTransferPreparationScheduler._handle_end_migrate)
 
-    def schedule(self, lease, vmrr, earliest):
+    def schedule(self, lease, vmrr, earliest, nexttime):
         if type(lease.software) == UnmanagedSoftwareEnvironment:
             return [], True
         if lease.get_type() == Lease.ADVANCE_RESERVATION:
-            return self.__schedule_deadline(lease, vmrr, earliest)
+            return self.__schedule_deadline(lease, vmrr, earliest, nexttime)
         elif lease.get_type() in (Lease.BEST_EFFORT, Lease.IMMEDIATE):
-            return self.__schedule_asap(lease, vmrr, earliest)
+            return self.__schedule_asap(lease, vmrr, earliest, nexttime)
 
     def schedule_migration(self, lease, vmrr, nexttime):
         if type(lease.software) == UnmanagedSoftwareEnvironment:
@@ -203,7 +203,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         self.__remove_files(lease)
   
         
-    def __schedule_deadline(self, lease, vmrr, earliest):
+    def __schedule_deadline(self, lease, vmrr, earliest, nexttime):
         config = get_config()
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
@@ -234,7 +234,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             transfer_rrs = []
         else:
             try:
-                transfer_rrs = self.__schedule_imagetransfer_edf(lease, musttransfer, earliest)
+                transfer_rrs = self.__schedule_imagetransfer_edf(lease, musttransfer, earliest, nexttime)
             except NotSchedulableException, exc:
                 raise
  
@@ -248,7 +248,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         return transfer_rrs, is_ready
 
 
-    def __schedule_asap(self, lease, vmrr, earliest):
+    def __schedule_asap(self, lease, vmrr, earliest, nexttime):
         config = get_config()
         reusealg = config.get("diskimage-reuse")
         avoidredundant = config.get("avoid-redundant-transfers")
@@ -285,7 +285,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         return transfer_rrs, is_ready
 
 
-    def __schedule_imagetransfer_edf(self, lease, musttransfer, earliest):
+    def __schedule_imagetransfer_edf(self, lease, musttransfer, earliest, nexttime):
         # Estimate image transfer time 
         bandwidth = self.deployment_enact.get_bandwidth()
         config = get_config()
@@ -296,7 +296,9 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
 
         # Determine start time
         start = self.__get_last_transfer_slot(lease.start.requested, transfer_duration)
-
+        if start < nexttime:
+            raise NotSchedulableException("Could not schedule the file transfer to complete in time.")
+        
         res = {}
         resimgnode = Capacity([constants.RES_NETOUT])
         resimgnode.set_quantity(constants.RES_NETOUT, bandwidth)
@@ -392,10 +394,21 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
             return deadline - required_duration
         else:
             for i in xrange(len(self.transfers) - 1, 0, -1):
-                if self.transfers[i].start != self.transfers[i-1].end:
-                    hole_duration = self.transfers[i].start - self.transfers[i-1].end
-                    if hole_duration >= required_duration:
-                        return self.transfers[i].start - required_duration
+                hole_start =  self.transfers[i-1].end
+                hole_end = self.transfers[i].start
+                if deadline > hole_start and deadline <= hole_end:
+                    hole_duration = deadline - hole_start
+                else:
+                    hole_duration = hole_end - hole_start
+                if hole_duration < required_duration or hole_start >= deadline:
+                    # We're not interested in gaps after the deadline
+                    # or gaps insufficient to support the transfer
+                    pass
+                else:
+                    if deadline > hole_start and deadline <= hole_end:
+                        return deadline - required_duration
+                    else:
+                        return hole_end - required_duration                    
             return self.transfers[0].start - required_duration
 
     def __remove_transfers(self, lease):
