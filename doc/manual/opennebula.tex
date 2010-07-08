@@ -1,0 +1,308 @@
+OpenNebula (\url{http://www.opennebula.org/}) is a virtual infrastructure manager that enables the dynamic deployment and re-allocation of virtual machines on a pool of physical resources. Haizea can be used to extend OpenNebula's scheduling capabilities, allowing it to support advance reservation of resources and queueing of best effort requests. OpenNebula and Haizea complement each other, since OpenNebula provides all the enactment muscle (OpenNebula can manage Xen, KVM, and VMWare VMs on a cluster) and Haizea provides the scheduling brains. Using both of them together is simple, since Haizea acts as a drop-in replacement for OpenNebula's scheduling daemon. 
+
+This chapter explains how to use OpenNebula and Haizea together, and explains how to submit requests to OpenNebula to use Haizea's scheduling capabilities.
+
+\section{Installing OpenNebula and Haizea}
+
+If you have not already done so, you will need to install OpenNebula 1.4 and the latest version of Haizea. Start by installing OpenNebula, and then installing Haizea.
+
+Before proceeding, you may want to follow the OpenNebula quickstart guide (\url{http://www.opennebula.org/doku.php?id=documentation:rel1.4:qg}) to verify that your OpenNebula installation is working fine. The rest of this document assumes that OpenNebula is correctly installed, and that you know what a \emph{virtual machine template} is (``VM templates'' is how VMs are requested to OpenNebula, so we'll be working with them quite a bit). You may also want to follow the Haizea Quickstart Guide (see Chapter~\ref{chap:quickstart}, to verify that Haizea is correctly installed.
+
+\section{Configuring Haizea}
+
+Haizea must be configured to run in OpenNebula mode. Haizea includes a sample OpenNebula configuration file that you can use as a starting point. This file is installed, by default, in \texttt{/usr/share/haizea/etc/sample\_opennebula.conf} (there is also a \texttt{sample\_opennebula\_barebones.conf} file that has the same options, but without any documentation). In OpenNebula mode, Haizea will process requests coming from OpenNebula, and will send all enactment commands to OpenNebula. To activate this mode, the \texttt{mode} option of the \texttt{general} section in the Haizea configuration file must be set to \texttt{opennebula}:
+
+\begin{wideshellverbatim}
+[general]
+...
+mode: opennebula
+...
+\end{wideshellverbatim}
+
+Haizea interacts with OpenNebula through it's XML-RPC API, so you need to tell Haizea what host OpenNebula is on. This is done in the \texttt{opennebula} section:
+
+\begin{wideshellverbatim}
+[opennebula]
+# Typically, OpenNebula and Haizea will be installed
+# on the same host, so the following option should be
+# set to 'localhost'. If they're on different hosts,
+# make sure you modify this option accordingly.
+host: localhost
+\end{wideshellverbatim}
+
+Additionally, if OpenNebula is not listening on its default port (2633), you can use the \texttt{port} option in the \texttt{opennebula} section to specify a different port.
+
+There are also a couple options in the \texttt{scheduling} section that are relevant to OpenNebula mode, but which you do not need to concern yourself with yet (they are described at the end of this chapter).
+
+\section{Running OpenNebula and Haizea together}
+
+Now that Haizea is configured to run alongside OpenNebula, running them is as simple as starting the OpenNebula daemon:
+
+\begin{wideshellverbatim}
+oned
+\end{wideshellverbatim}
+
+Followed by Haizea:
+
+\begin{wideshellverbatim}
+haizea -c /usr/share/haizea/etc/sample_opennebula.conf
+\end{wideshellverbatim}
+
+The above assumes that you are running OpenNebula and Haizea in the same machine and with the same user. If this is not the case, you have to set the \texttt{ONE\_AUTH} environment variable (as described in the OpenNebula documentation) for the user and machine running Haizea. The variable must contain the username and password of the OpenNebula administrator user (typically called \texttt{oneadmin}) with the format \texttt{username:password}. 
+
+By default, Haizea runs as a daemon when running in OpenNebula mode. For this chapter, you may want to run it in the foreground so you can see the Haizea log messages in your console:
+
+\begin{wideshellverbatim}
+haizea --fg -c /usr/share/haizea/etc/sample_opennebula.conf
+\end{wideshellverbatim}
+
+When Haizea starts up, it will print out something like this:
+
+\begin{wideshellverbatim}
+[                      ] ENACT.ONE.INFO Fetched N nodes from OpenNebula
+[2009-07-30 18:36:54.07] RM      Starting resource manager
+[2009-07-30 18:36:54.07] RPCSERVER RPC server started on port 42493
+[2009-07-30 18:36:54.07] CLOCK   Starting clock
+\end{wideshellverbatim}
+
+This means that Haizea has correctly started up, contacted OpenNebula and detected that there are N physical nodes (the value of N will depend, of course, on how many nodes you have in your system).
+
+\begin{warning}
+Haizea is a drop-in replacement for OpenNebula's default scheduler (\texttt{mm\_sched}). Do not run Haizea and \texttt{mm\_sched} at the same time, or funny things will happen.
+\end{warning}
+
+\section{A quick test}
+
+At this point, OpenNebula and Haizea are both running together, and waiting for you to submit a VM request. From the user's perspective, you will still be submitting your requests to OpenNebula, and Haizea will do all the scheduling work backstage. However, you will be able to add an \texttt{HAIZEA} parameter to your OpenNebula request to access Haizea's features.
+
+So, to test that OpenNebula and Haizea are working correctly, start by taking a known-good OpenNebula template. Just to be on the safe side, you may want to try it with the default scheduler first, to make sure that the VM itself works correctly, etc. Then, just add the following parameter to the template:
+
+\begin{wideshellverbatim}
+HAIZEA = [
+  start        = "+00:00:30",
+  duration     = "00:01:00",
+  preemptible  = "no"
+]
+\end{wideshellverbatim}
+
+The exact meaning of these parameters is explained later on in this document. In a nutshell, the values specified above tell Haizea to schedule the VM to start exactly 30 seconds in the future, to run for one minute, and to not allow the allocated resources to be preempted by other requests. This corresponds to an Haizea \emph{advance reservation lease} (see Chapter~\ref{chap:leases}).
+
+Before you submit your request to OpenNebula, take a look at the Haizea log. You should see something like this repeating every minute:
+
+\begin{wideshellverbatim}
+[2009-07-30 18:38:44.00] CLOCK   Waking up to manage resources
+[2009-07-30 18:38:44.00] CLOCK   Wake-up time recorded as 2009-07-30 18:38:44.00
+[2009-07-30 18:38:44.01] CLOCK   Going back to sleep. 
+                                 Waking up at 2009-07-30 18:38:54.00 
+                                 to see if something interesting has happened by then.
+\end{wideshellverbatim}
+
+Haizea is configured, by default, to ask OpenNebula if there are any pending requests every minute. Since you haven't submitted anything, Haizea just wakes up every minute and goes right back to sleep. So, go ahead and submit your request (the one where you added the HAIZEA parameter). Assuming you named the template ar.one, run the following:
+
+\begin{wideshellverbatim}
+onevm submit ar.one
+\end{wideshellverbatim}
+
+If you run \texttt{onevm list} to see the VMs managed by OpenNebula, you'll see that the request is in a \texttt{pending} state:
+
+\begin{wideshellverbatim}
+  ID     USER     NAME STAT CPU     MEM        HOSTNAME        TIME
+-------------------------------------------------------------------
+  42    borja     test pend   0       0                 00 00:00:02
+\end{wideshellverbatim}
+
+Next time Haizea wakes up, you should see something like this:
+
+\begin{wideshellverbatim}
+[2009-07-30 18:41:49.16] CLOCK   Waking up to manage resources
+[2009-07-30 18:41:49.16] CLOCK   Wake-up time recorded as 2009-07-30 18:41:49.00
+[2009-07-30 18:41:49.19] LSCHED  Lease #1 has been requested.
+[2009-07-30 18:41:49.19] LSCHED  Lease #1 has been marked as pending.
+[2009-07-30 18:41:49.19] LSCHED  Scheduling AR lease #1, 1 nodes 
+                                     from 2009-07-30 18:42:15.00 
+                                       to 2009-07-30 18:43:15.00.
+[2009-07-30 18:41:49.19] LSCHED  AR lease #1 has been scheduled.
+
+[2009-07-30 18:41:49.19] CLOCK   Going back to sleep. 
+                                 Waking up at 2009-07-30 18:42:15.00 
+                                 to handle slot table event.
+\end{wideshellverbatim}
+
+Notice how Haizea detected that OpenNebula had an AR request, and then scheduled it to start 30 seconds in the future. In fact, Haizea takes care to wake up at that time so the VM can start at exactly that time.
+
+\begin{warning}
+If you run \texttt{onevm list}, the request will still be shown as \texttt{pending}. OpenNebula doesn't track Haizea's internal states, so it will consider the request "pending" until Haizea starts up the VM. You can check the state of Haizea leases using the \texttt{haizea-list-leases} command.
+\end{warning}
+
+\begin{warning}
+Currently, Haizea has to poll OpenNebula every minute to ask if there are any new requests. An upcoming version of Haizea will support an event-based model where OpenNebula can send Haizea a notification as soon as a new request is received (so the user doesn't have to wait until the next time Haizea wakes up to process the request).
+\end{warning}
+
+When the VM is scheduled to start, you will see the following in the Haizea logs:
+
+\begin{wideshellverbatim}
+[2009-07-30 18:42:15.02] CLOCK   Waking up to manage resources
+[2009-07-30 18:42:15.02] CLOCK   Wake-up time recorded as 2009-07-30 18:42:15.00
+[2009-07-30 18:42:15.04] VMSCHED Started VMs for lease 1 on nodes [2]
+[2009-07-30 18:42:15.09] CLOCK   Going back to sleep. 
+                                 Waking up at 2009-07-30 18:43:00.00 
+                                 to handle slot table event.
+\end{wideshellverbatim}
+
+Haizea has instructed OpenNebula to start the VM for the advance reservation. If you run \texttt{onevm list}, the VM will now show up as running:
+
+\begin{wideshellverbatim}
+  ID     USER     NAME STAT CPU     MEM        HOSTNAME        TIME
+-------------------------------------------------------------------
+  42    borja     test runn  10   65536       cluster05 00 00:00:52
+\end{wideshellverbatim}
+
+You should be able to access the VM (if you configured it with networking and SSH). However, since we requested the VM to run for just a minute, you will soon see the following in the Haizea logs:
+
+\begin{wideshellverbatim}
+[2009-07-30 18:43:00.04] CLOCK   Waking up to manage resources
+[2009-07-30 18:43:00.04] CLOCK   Wake-up time recorded as 2009-07-30 18:43:00.00
+[2009-07-30 18:43:00.05] VMSCHED Stopped VMs for lease 1 on nodes [2]
+[2009-07-30 18:43:05.07] CLOCK   Going back to sleep. 
+                                 Waking up at 2009-07-30 18:43:15.00 
+                                 to handle slot table event.
+
+[2009-07-30 18:43:15.00] CLOCK   Waking up to manage resources
+[2009-07-30 18:43:15.00] CLOCK   Wake-up time recorded as 2009-07-30 18:43:15.00
+[2009-07-30 18:43:15.00] VMSCHED Lease 1's VMs have shutdown.
+[2009-07-30 18:43:15.01] CLOCK   Going back to sleep. 
+                                 Waking up at 2009-07-30 18:44:15.00 
+                                 to see if something interesting has happened by then.
+\end{wideshellverbatim}
+
+\section{The \texttt{HAIZEA} parameter in OpenNebula}
+
+The previous section showed how you can add an \texttt{HAIZEA} parameter to your OpenNebula VM template to request a simple advance reservation. The three Haizea options (\texttt{start}, \texttt{duration}, and \texttt{preemptible}) can take other values:
+
+\begin{itemize}
+\item \texttt{start}: This option specifies when the VM will start. Valid values are:
+\begin{itemize}
+\item \texttt{best\_effort}: The VM will be scheduled as soon as resources are available. If resources are not available right now, the request is put on a queue and it remains there until there are sufficient resources (requests are scheduled on a first-come-first-serve basis).
+\item \texttt{now}: The VM will be scheduled right now. If resources are not available right now, the request is rejected.
+\item Exact ISO timestamp: i.e., \texttt{YYYY-MM-DD HH:MM:SS}. The VM must start at exactly that time. If enough resources are not available at that time, the resource is not requested.
+\item Relative ISO timestamp: For convenience's sake (and also for testing) this provides an easy way of specifying that a VM must start "at T time after the VM is submitted". The format would be \texttt{+HH:MM:SS} (the "\texttt{+}" is not ISO, but is used by Haizea to determine that it is a relative timestamp)
+\end{itemize}
+\item \texttt{duration}: The duration of the lease. Possible values are:
+\begin{itemize}
+\item \texttt{unlimited}: The lease will run forever, until explicitly stopped
+\item ISO-formatted time: i.e., \texttt{HH:MM:SS}
+\end{itemize}
+\item \texttt{preemptible}: This option can be either yes or no. %TODO: Refer to lease documentation
+\item \texttt{group}: This option can take on any string value, and allows you to schedule several VMs as a group (or, in Haizea terminology, as a single lease with multiple nodes). All OpenNebula VM templates with the same group name will be considered part of the same lease (i.e., all the VMs will be scheduled in a all-or-nothing fashion: all VMs must be able to start/stop at the same time). Future versions of OpenNebula will automatically manage this option, so users don't have to worry about manually setting this option in multiple VM templates (which can be error-prone). 
+\end{itemize}
+
+Usually, you will want to use these options to create one of Haizea's supported lease types:
+
+\subsection{Advance reservations}
+
+When you need your VM available at a specific time, this is called an advance reservation, or AR. The VM we used above is an example of an AR:
+
+\begin{wideshellverbatim}
+HAIZEA = [
+  start        = "+00:00:30",
+  duration     = "00:01:00",
+  preemptible  = "no"
+]
+\end{wideshellverbatim}
+
+Of course, instead of specifying that you want your VM to start after a certain amount of time has passed (30 seconds, in this case), you can also specify an exact start time:
+
+\begin{wideshellverbatim}
+HAIZEA = [
+  start        = "2008-11-04 11:00:00",
+  duration     = "03:00:00",
+  preemptible  = "no"
+]
+\end{wideshellverbatim}
+
+NOTE: Haizea currently only supports non-preemptible ARs.
+
+\subsection{Best-effort provisioning}
+
+When you instruct Haizea to determine the start time on a best-effort basis, your request will be allocated resources as soon as they become available. Take into account that your request may be placed on a queue, and you'll have to wait until your turn is up. You can use the \texttt{haizea-list-leases} and \texttt{haizea-show-queue} to check on the state of your lease.
+
+\begin{wideshellverbatim}
+HAIZEA = [
+  start        = "best_effort",
+  duration     = "01:00:00",
+  preemptible  = "yes"
+]
+\end{wideshellverbatim}
+
+A best-effort VM can be preemptible or non-preemptible. If you request a non-preemptible VM, you may still have to wait in the queue until you get your resources but, once you do, no one can take them from you.
+
+\subsection{Immediate provisioning}
+
+Sometimes, you need a VM right now or not at all. In that case, you can set the starting time to \texttt{now}.
+
+\begin{wideshellverbatim}
+HAIZEA = [
+  start        = "now",
+  duration     = "unlimited",
+  preemptible  = "no"
+]
+\end{wideshellverbatim}
+
+\section{Additional OpenNebula configuration options}
+
+When running Haizea with OpenNebula, you must specify at least the \texttt{host} option in the \texttt{[opennebula]} section of the configuration file. However, there are additional options in other sections that you can tweak:
+
+\subsection{Wakeup interval}
+
+This is the interval, in seconds, at which Haizea will wake up to process pending requests in OpenNebula. The default is 60 seconds.
+
+\begin{wideshellverbatim}
+[scheduling]
+...
+wakeup-interval: 60
+...
+\end{wideshellverbatim}
+
+\subsection{Suspend/resume rate interval}
+
+This option provides Haizea with an estimate of how long it takes for OpenNebula to suspend or resume a virtual machine. This is estimated in MB per second, and is largely dependent on the disk read/write transfer speeds on your system (so, if a VM has 1024 MB of memory, and the suspend rate is estimated to be 64MB/s, Haizea will estimate that suspension will take 16 seconds). If you do not specify a value, Haizea will conservatively assume a rate of 32MB/s. A good estimate will allow Haizea to more correctly schedule resources, but an incorrect estimate will not result in an error (although a warning will be noted in the logs).
+
+\begin{wideshellverbatim}
+[scheduling]
+...
+suspend-rate: 32
+resume-rate: 32
+...
+\end{wideshellverbatim}
+
+Additionally, since OpenNebula currently only supports suspending to a global filesystem (i.e., the RAM file created when suspending a VM is saved to a global filesystem, such as an NFS drive), you will need to specify that suspensions and resumptions must be globally exclusive (to make sure that no more than one RAM file is being saved to the global filesystem at any one time). You can control this using the \texttt{suspendresume-exclusion} option in the \texttt{[scheduling]} section:
+
+\begin{wideshellverbatim}
+[scheduling]
+...
+suspendresume-exclusion: global
+...
+\end{wideshellverbatim}
+
+This option is set to \texttt{global} in the sample OpenNebula configuration file, but defaults to \texttt{local} when not specified.
+
+\subsection{Non-schedulable interval}
+
+The minimum amount of time that must pass between when a request is scheduled to when it can actually start (i.e., this makes sure that the scheduling function doesn't make reservations with starting times that will be in the past by the time the scheduling function ends). The default (10 seconds) should be good for most configurations, but may need to be increased if you're dealing with exceptionally high loads.
+
+\begin{wideshellverbatim}
+[scheduling]
+...
+non-schedulable-interval: 10
+...
+\end{wideshellverbatim}
+
+\section{Known issues and limitations}
+
+The following are known issues and limitations when using Haizea with OpenNebula:
+
+\begin{itemize}
+\item As pointed out in this guide, Haizea has to poll OpenNebula every minute to ask if there are any new requests.  Although OpenNebula 1.4 added a ``hook mechanism'' that allows actions to be carried out when certain events happen (such as sending Haizea notifications of a VM that has died, a suspend operation that finished before expected, etc.), Haizea currently does not use this hook mechanism.
+\item Haizea currently cannot do any image deployment with OpenNebula, and VM images are assumed to be predeployed on the physical nodes, or available on a shared NFS filesystem. Although OpenNebula includes support for interfacing with a \emph{transfer manager} to handle various VM deployment scenarios, Haizea currently does not access this functionality.
+\item Haizea cannot enact cold migrations in OpenNebula (i.e., migrating a suspended VM to a different node if resources become available earlier on a different node than the one where the VM was suspended on). Haizea actually has all the scheduling code for this, and only the enactment "glue" is missing.
+\end{itemize}

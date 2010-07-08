@@ -1,0 +1,14 @@
+Universe   = vanilla
+Executable = /usr/bin/python2.5
+transfer_executable = false
+getenv = true
+Log        = haizea.log
+Output     = haizea.$(Process).out
+Error      = haizea.$(Process).error
+
+% for configname, configfile in configs:
+remote_initialdir=${etcdir}
+Arguments  = haizea -c ${configfile}
+Queue
+
+% endfor

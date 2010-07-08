@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+from haizea.cli import commands
+import sys
+	
+c = commands.haizea_lwf2xml(sys.argv)
+c.run()

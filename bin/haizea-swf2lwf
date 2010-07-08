@@ -1,0 +1,7 @@
+#!/usr/bin/python
+
+from haizea.cli import commands
+import sys
+	
+c = commands.haizea_swf2lwf(sys.argv)
+c.run()

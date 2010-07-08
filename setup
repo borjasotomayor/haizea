@@ -1,0 +1,3 @@
+
+
+sudo python setup.py install --home=/srv/cloud/haizea

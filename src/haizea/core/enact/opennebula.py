@@ -66,7 +66,7 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
         return 0
     def get_migration_bandwidth(self):
         # It should be get in ONE
-        return 0
+        return 5
     
     def __fetch_nodes(self):
         new_nodes = []
@@ -203,7 +203,7 @@ class OpenNebulaVMEnactment(VMEnactment):
             sleep(interval)
 
     def verify_suspend(self, action):
-        result = 0
+        result = True
         for vnode in action.vnodes:
             # Unpack action
             vid = action.vnodes[vnode].enactment_info
@@ -215,10 +215,10 @@ class OpenNebulaVMEnactment(VMEnactment):
                     self.logger.debug("Suspend of L%iV%i correct (ONE vid=%i)." % (action.lease_haizea_id, vnode, vid))
                 else:
                     self.logger.warning("ONE did not complete suspend of L%iV%i on time. State is %i. (ONE vid=%i)" % (action.lease_haizea_id, vnode, state, vid))
-                    result = 1
+                    result = False
             except Exception, msg:
                 raise OpenNebulaEnactmentError("vm.info", msg)
-
+        self.logger.vdebug(result)
         return result
         
     def verify_resume(self, action):

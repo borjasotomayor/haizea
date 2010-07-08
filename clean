@@ -1,0 +1,4 @@
+#rm /var/tmp/haizea/leases.dat
+haizea --stop
+rm /home/waldo/.haizea/leases.dat
+onevm list | grep 'ttylinux' | awk '{print "onevm delete " $1}' | /bin/bash
