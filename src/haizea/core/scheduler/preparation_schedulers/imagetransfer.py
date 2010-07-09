@@ -296,7 +296,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
 
         # Determine start time
         start = self.__get_last_transfer_slot(lease.start.requested, transfer_duration)
-        if start < nexttime:
+        if start == None or start < nexttime:
             raise NotSchedulableException("Could not schedule the file transfer to complete in time.")
         
         res = {}
@@ -408,8 +408,13 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
                     if deadline > hole_start and deadline <= hole_end:
                         return deadline - required_duration
                     else:
-                        return hole_end - required_duration                    
-            return self.transfers[0].start - required_duration
+                        return hole_end - required_duration   
+            latest = self.transfers[0].start - required_duration
+            if deadline <= self.transfers[0].start:
+                return deadline - required_duration
+            else:
+                return None
+
 
     def __remove_transfers(self, lease):
         toremove = []

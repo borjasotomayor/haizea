@@ -747,6 +747,9 @@ class Lease(object):
                 
             prev_vmrr = vmrr
             
+        if len(self.preparation_rrs) > 0 and len(self.vm_rrs) > 0:
+            assert self.preparation_rrs[-1].end <= self.vm_rrs[0].start
+            
             
     def __estimate_suspend_resume_time(self, rate):
         """ Estimate the time to suspend/resume an entire lease
