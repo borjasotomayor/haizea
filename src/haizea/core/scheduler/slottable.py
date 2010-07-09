@@ -501,8 +501,11 @@ class SlotTable(object):
         # time is after the existing start time *and* the requested start time is one of
         # the changepoints covered by the availability window.
         if self.awcache == None or start < self.awcache_time or (start >= self.awcache_time and not self.awcache.changepoints.has_key(start)):
-            # If the cached version doesn't work, recompute the availability window
-            self.__get_aw_cache_miss(start)
+            if start < self.awcache_time:
+                self.__get_aw_cache_miss(start, include = [self.awcache_time])
+            else:
+                self.__get_aw_cache_miss(start)                
+
         return self.awcache
     
     def get_availability(self, time, min_capacity=None):
@@ -966,7 +969,7 @@ class SlotTable(object):
             
         self.availabilitycache[time] = nodes
 
-    def __get_aw_cache_miss(self, time):
+    def __get_aw_cache_miss(self, time, include = []):
         """Computes availability window at a given time, and caches it.
         
         Called when get_availability_window can't use the cached availability window.
@@ -974,7 +977,7 @@ class SlotTable(object):
         @param time: Start of availability window.
         @type time: L{DateTime}
         """        
-        self.awcache = AvailabilityWindow(self, time)
+        self.awcache = AvailabilityWindow(self, time, include)
         self.awcache_time = time
         
     def __dirty(self):
@@ -1088,7 +1091,7 @@ class AvailabilityWindow(object):
     created through the SlotTable's get_availability_window method.
 
     """
-    def __init__(self, slottable, time):
+    def __init__(self, slottable, time, include):
         """Constructor
         
         An availability window starts at a specific time, provided to the constructor.
@@ -1103,7 +1106,8 @@ class AvailabilityWindow(object):
         self.time = time
         self.leases = set()
 
-        self.cp_list = [self.time] + self.slottable.get_changepoints_after(time)
+        self.cp_list = [self.time] + self.slottable.get_changepoints_after(time) + include
+        self.cp_list.sort()
         
         # The availability window is stored using a sparse data structure that
         # allows quick access to information related to a specific changepoint in
