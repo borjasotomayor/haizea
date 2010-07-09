@@ -501,7 +501,7 @@ class SlotTable(object):
         # time is after the existing start time *and* the requested start time is one of
         # the changepoints covered by the availability window.
         if self.awcache == None or start < self.awcache_time or (start >= self.awcache_time and not self.awcache.changepoints.has_key(start)):
-            if start < self.awcache_time:
+            if self.awcache != None and start < self.awcache_time:
                 self.__get_aw_cache_miss(start, include = [self.awcache_time])
             else:
                 self.__get_aw_cache_miss(start)                
