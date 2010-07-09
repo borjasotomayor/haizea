@@ -197,7 +197,7 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         for t in toremove:
             t.lease.remove_preparationrr(t)
             self.slottable.remove_reservation(t)
-        #self.__remove_files(lease)
+        self.__remove_files(lease)
         
     def cleanup(self, lease):                
         self.__remove_files(lease)
