@@ -1515,6 +1515,13 @@ class VMScheduler(object):
             rr.end = new_time
             self.slottable.add_reservation(rr)
             rr.print_contents()
+            # Check if there are more than one suspend after this one
+            if not rr.is_last():
+                sus_lend = rr.end
+                for i in rr.vmrr.get_reservations_starting_on_after(check_time):
+                    sus_lend=self.delay_start_vmrr_to(sus_lend)
+                    if i.is_last(): break
+
             # Actual checkpoint, for getting RR which are starting now, only get
             # VMResourceReservation and Resumes
                
@@ -1706,7 +1713,6 @@ class VMResourceReservation(ResourceReservation):
         for i,rr in enumerate(all_rr):
             if rr.start == time: break
         return all_rr[:i+1]
-
     def update_start(self, time):
         self.start = time
         # ONLY for simulation
