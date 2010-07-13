@@ -95,7 +95,7 @@ class LeaseScheduler(object):
         for (type, handler) in self.vm_scheduler.handlers.items():
             self.handlers[type] = handler
 
-        for (type, handler) in self.preparation_scheduler.handlers.items():
+        
             self.handlers[type] = handler
 
 
@@ -280,66 +280,6 @@ class LeaseScheduler(object):
                         get_persistence().persist_queue(self.queue)
                     else:
                         raise InconsistentLeaseStateError(lease, doing = "rescheduling best-effort lease")
-            # When a RR is not ending at the time spected
-            except DelaySuspendException, msg:
-
-
-                # Delay end of  suspend a while
-                check_time = nowtime
-                new_time = rr.end + (rr.end - rr.start)
-                rr.end = new_time
-                self.slottable.add_reservation(rr)
-                rr.print_contents()
-
-                # Actual checkpoint, for getting RR which are starting now, only get
-                # VMResourceReservation and Resumes
-                
-                while check_time < new_time:
-                    #Some debuging
-                    self.logger.vdebug('-------')
-                    self.logger.vdebug(check_time) 
-                    Lrr = self.slottable.get_reservations_starting_at(check_time)
-                    self.logger.vdebug('Which RR will be delayed: ------------------')
-                    for rs in Lrr:
-                        # Only working with Resums and VM
-                        if isinstance(rs,ResumptionResourceReservation) or isinstance(rs, VMResourceReservation):
-                            rs.print_contents()
-                            self.logger.vdebug('---------')
-                            if isinstance(rs,ResumptionResourceReservation): delay_vmrr = rs.vmrr
-                            else: delay_vmrr = rs
-                            # Checking if it has started already the VM
-                            if delay_vmrr.get_final_end() < check_time: continue
-                            # Setting starting of RR to the new_time
-                            starting_time = new_time                           
-                            list_to_delay = [rs]+delay_vmrr.get_reservations_starting_after(rs)
-                            #It is needed for knowing the delay between two RR in the same VM
-                            last_end = list_to_delay[0].start
-                            for drr in list_to_delay:
-                                drr.print_contents()
-                                difer = last_end - drr.start
-                                if isinstance(drr, VMResourceReservation):
-                                    # In Vm only delay the start of a VM
-                                    old_start,last_end = drr.start,drr.end
-                                    # Checking that it doesn't start after stop
-                                    will_start = starting_time + difer
-                                    if will_start >= drr.end: pass
-                                    drr.start = will_start
-                                    starting_time = drr.end
-                                    self.slottable.update_reservation(drr,old_start,drr.end)
-                                else:
-                                    old_start,old_end = drr.start,drr.end
-                                    drr.start,drr.end = starting_time+difer,starting_time+(old_end-old_start)+difer
-                                    last_end = old_end
-                                    starting_time = drr.end
-                                    self.slottable.update_reservation(drr,old_start,old_end)
-                            self.logger.vdebug('----- AFTER DELAY ------')
-                            for drr in list_to_delay: drr.print_contents()
-                    # Getting next checkpoint which will be affected for the delay
-                    check_time = self.slottable.get_next_changepoint(check_time)
-                    self.logger.vdebug('Next check point')
-                    self.logger.vdebug(check_time)
-                self.logger.vdebug('Finished delaying --------------') 
-
             # A NormalEndLeaseException indicates that the end of this reservations marks
             # the normal end of the lease.
             except NormalEndLeaseException, msg:

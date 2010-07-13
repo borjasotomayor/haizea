@@ -224,7 +224,7 @@ class VMScheduler(object):
         Arguments:
         vmrr -- VM RR to be cancelled
         """         
-        
+        self.logger.vdebug("Cancelling a VMRR")
         # If this VM RR is part of a lease that was scheduled in the future,
         # remove that lease from the set of future leases.
         if vmrr.lease in self.future_leases:
@@ -1300,6 +1300,74 @@ class VMScheduler(object):
             return threshold
 
 
+    def delay_rr_to(self, start_time, rr):
+        '''
+        Return -> End time
+        '''
+
+        old_start,old_end = rr.start,rr.end
+        rr.start,rr.end = starting_time,star_time+(old_end-old_start)
+        self.slottable.update_reservation(rr,old_start,old_end)
+        return rr.end
+
+
+    def delay_start_vmrr_to(self, start_time, vmrr, nowtime, percent_delay = 0, percent_action = 'CANCEL'):
+        '''
+        Delay the start of VMRR to the start_time. This can happend
+        when a RR is delayed in the shutdown or in the suspend, so the next
+        must be also delayed.
+
+        start_time: Time in which the machine should start
+        vmrr: VM to delay
+        nowtime: Actual checkpoint
+        percent_delay: If it is different to 0, will be how much time could a VM 
+        be delayed until the percente_action happend
+        percent_action, which action should do if the machine is delayed more than the percent give
+        by now, it is only possible, to cancel the VM.
+        
+        return -> endtime: time in which the machine will end
+        '''
+        if vmrr.get_first_start() < nowtime: return False
+        # Setting starting of RR to the new_time
+        list_to_delay = vmrr.get_reservations_starting_on_after(nowtime)
+        #It is needed for knowing the delay between two RR in the same VM
+        last_end = list_to_delay[0].start
+        for rr in list_to_delay:
+            rr.print_contents()
+            difer = rr.start-last_end
+
+            if isinstance(rr, VMResourceReservation):
+                # In Vm only delay the start of a VM
+                old_start = rr.start
+                # Checking that it doesn't start after stop
+                will_start = start_time + difer
+                # Cancel the machine if it would start after the scheduled end
+                if will_start >= rr.end: 
+                    self.cancel_vm(vmrr)
+                    return False
+                # Do something if the VM is delayed more than the percent given.
+                percent = (int(will_start-old_start)*100.0)/int(rr.end-old_start)
+                self.logger.vdebug("Percent delayed of the VM: "+str(percent))
+                if (percent > percent_delay) and percent_delay != 0: 
+                    self.cancel_vm(vmrr)
+                    return False
+
+                rr.start = will_start
+                self.slottable.update_reservation(rr,old_start,rr.end)
+                break
+
+            else: start_time,last_end = self.delay_rr_to(start_time+difer, rr),rr.end
+
+        
+        self.logger.vdebug('----- AFTER DELAY ------')
+        for drr in list_to_delay: drr.print_contents()
+        return rr.end
+
+                
+
+
+
+
     #-------------------------------------------------------------------#
     #                                                                   #
     #                  SLOT TABLE EVENT HANDLERS                        #
@@ -1440,23 +1508,53 @@ class VMScheduler(object):
         self.logger.debug("LEASE-%i Start of handleEndSuspend" % l.id)
         l.print_contents()
         # React to incomplete suspend
-        vueltas = self.resourcepool.verify_suspend(l, rr) 
-        self.logger.vdebug(vueltas)
-        if not vueltas: raise DelaySuspendException()
+        if not self.resourcepool.verify_suspend(l, rr):
+            # Delay end of the suspend
+            check_time = rr.end
+            new_time = rr.end + (rr.end - rr.start)
+            rr.end = new_time
+            self.slottable.add_reservation(rr)
+            rr.print_contents()
+            # Actual checkpoint, for getting RR which are starting now, only get
+            # VMResourceReservation and Resumes
+               
+            while check_time < new_time:
+                #Some debuging
+                self.logger.vdebug('-------')
+                self.logger.vdebug(check_time) 
+                Lrr = self.slottable.get_reservations_starting_at(check_time)
+                self.logger.vdebug('Which RR will be delayed: ------------------')
+                for rs in Lrr:
+                    # Only working with Resums and VM
+                    if isinstance(rs,ResumptionResourceReservation) or isinstance(rs, VMResourceReservation):
+                        rs.print_contents()
+                        self.logger.vdebug('---------')
+                        if isinstance(rs,ResumptionResourceReservation): delay_vmrr = rs.vmrr
+                        else: delay_vmrr = rs
+                        # Checking if it has started already the VM
+                        if delay_vmrr.get_final_end() < check_time: continue
 
-        rr.state = ResourceReservation.STATE_DONE
+                        # Doing the magic, delaying the RR
+                        self.delay_start_vmrr_to(new_time, delay_vmrr, check_time)
+                # Getting next checkpoint which will be affected for the delay
+                check_time = self.slottable.get_next_changepoint(check_time)
+                self.logger.vdebug('Next check point')
+                self.logger.vdebug(check_time)
+            self.logger.vdebug('Finished delaying --------------')
+        else:
+            rr.state = ResourceReservation.STATE_DONE
         
-        if rr.is_last():
-            if l.get_type() == Lease.DEADLINE:
-                l.set_state(Lease.STATE_SUSPENDED_PENDING)
-                l.set_state(Lease.STATE_SUSPENDED_SCHEDULED)
-            else:
-                l.set_state(Lease.STATE_SUSPENDED_PENDING)
-        l.print_contents()
-        self.logger.debug("LEASE-%i End of handleEndSuspend" % l.id)
-        self.logger.info("Lease %i suspended." % (l.id))
-        if l.get_state() == Lease.STATE_SUSPENDED_PENDING:
-            raise RescheduleLeaseException
+            if rr.is_last():
+                if l.get_type() == Lease.DEADLINE:
+                    l.set_state(Lease.STATE_SUSPENDED_PENDING)
+                    l.set_state(Lease.STATE_SUSPENDED_SCHEDULED)
+                else:
+                    l.set_state(Lease.STATE_SUSPENDED_PENDING)
+            l.print_contents()
+            self.logger.debug("LEASE-%i End of handleEndSuspend" % l.id)
+            self.logger.info("Lease %i suspended." % (l.id))
+            if l.get_state() == Lease.STATE_SUSPENDED_PENDING:
+                raise RescheduleLeaseException
 
 
     def _handle_start_resume(self, l, rr):
@@ -1603,17 +1701,11 @@ class VMResourceReservation(ResourceReservation):
         self.prematureend = None
         # Flag for knowing who is delayed for later use.
         self.delayed = None
-    def get_reservations_starting_after(self, rr):
-        '''
-        Getting all RR which are scheduled after a time, doesn't include VMRR
-        time_delay - L{ResourceReservation}
-        return list of rr
-        '''
-        inside = False
-        if rr == self: return self.post_rrs
-        elif rr in self.post_rrs: return [rs for i,rs in enumerate(self.post_rrs) if not rr in self.post_rrs[i:] ]
-        else: return [rs for i,rs in enumerate(self.pre_rrs) if not rr in self.pre_rrs[i:]]+[self]+self.post_rrs
-
+    def get_reservations_starting_on_after(self, time):
+        all_rr = self.pre_rrs+[self]+self.post_rrs
+        for i,rr in enumerate(all_rr):
+            if rr.start == time: break
+        return all_rr[:i+1]
 
     def update_start(self, time):
         self.start = time
