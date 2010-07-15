@@ -819,7 +819,8 @@ class LeaseStateMachine(StateMachine):
                                                      (Lease.STATE_CANCELLED,  "")],
                                                      
                    Lease.STATE_PREPARING:           [(Lease.STATE_READY,      ""),
-                                                     (Lease.STATE_PENDING,     ""),
+                                                     (Lease.STATE_QUEUED,     ""),
+                                                     (Lease.STATE_PENDING,    ""),
                                                      (Lease.STATE_CANCELLED,  ""),
                                                      (Lease.STATE_FAIL,       "")],
                                                      
