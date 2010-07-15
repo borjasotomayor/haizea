@@ -624,7 +624,7 @@ class Lease(object):
         All leases with a duration less than this
         parameter are rounded up to the bound.
         """          
-        time_on_dedicated = self.duration.original
+        time_on_dedicated = self.duration.actual
         time_on_loaded = self.end - self.submit_time
         bound = TimeDelta(seconds=bound)
         if time_on_dedicated < bound:
