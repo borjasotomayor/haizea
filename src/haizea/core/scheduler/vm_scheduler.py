@@ -1502,7 +1502,7 @@ class VMScheduler(object):
             l.set_state(Lease.STATE_RESUMED_READY)
             self.logger.info("Resumed lease %i" % (l.id))
         for vnode, pnode in rr.vmrr.nodes.items():
-            self.resourcepool.remove_ramfile(pnode, l.id, vnode)
+            self.resourcepool.remove_ramfile(pnode, l, vnode)
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleEndResume" % l.id)
 
@@ -1581,8 +1581,8 @@ class VMScheduler(object):
             dest = rr.transfers[vnode][1]
             
             # Update RAM files
-            self.resourcepool.remove_ramfile(origin, l.id, vnode)
-            self.resourcepool.add_ramfile(dest, l.id, vnode, l.requested_resources[vnode].get_quantity(constants.RES_MEM))
+            self.resourcepool.remove_ramfile(origin, l, vnode)
+            self.resourcepool.add_ramfile(dest, l, vnode, l.requested_resources[vnode].get_quantity(constants.RES_MEM))
         
         rr.state = ResourceReservation.STATE_DONE
         l.print_contents()

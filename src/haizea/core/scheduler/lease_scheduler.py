@@ -469,20 +469,22 @@ class LeaseScheduler(object):
         for l in future_best_effort:
             # We can only reschedule leases in the following four states
             # TODO: Leases in PREPARING state should be rescheduleable.
+            #if l.get_state() in (Lease.STATE_PREPARING, Lease.STATE_READY, Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED):
             if l.get_state() in (Lease.STATE_READY, Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED):
                 self.logger.debug("Rescheduling lease %i" % l.id)
-            #if l.get_state() in (Lease.STATE_PREPARING, Lease.STATE_READY, Lease.STATE_SCHEDULED, Lease.STATE_SUSPENDED_SCHEDULED):
                 # For each reschedulable lease already scheduled in the
                 # future, we cancel the lease's preparation and
                 # the last scheduled VM.
-                vmrr = l.get_last_vmrr()
-                self.preparation_scheduler.cancel_preparation(l)
-                self.vm_scheduler.cancel_vm(vmrr)
-                l.remove_vmrr(vmrr)
                 if l.get_state() in (Lease.STATE_READY, Lease.STATE_SCHEDULED, Lease.STATE_PREPARING):
+                    self.preparation_scheduler.cancel_preparation(l)
                     l.set_state(Lease.STATE_PENDING)
                 elif l.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
+                    self.preparation_scheduler.cancel_preparation(l, remove_files = False)
                     l.set_state(Lease.STATE_SUSPENDED_PENDING)
+
+                vmrr = l.get_last_vmrr()
+                self.vm_scheduler.cancel_vm(vmrr)
+                l.remove_vmrr(vmrr)
 
                 # At this point, the lease just looks like a regular
                 # pending lease that can be handed off directly to the
@@ -856,7 +858,6 @@ class LeaseScheduler(object):
         l.set_state(Lease.STATE_DONE)
         l.duration.actual = l.duration.accumulated
         l.end = round_datetime(get_clock().get_time())
-
         if get_config().get("sanity-check"):
             if l.duration.known != None and l.duration.known < l.duration.requested:
                 duration = l.duration.known

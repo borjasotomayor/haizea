@@ -43,7 +43,7 @@ class UnmanagedPreparationScheduler(PreparationScheduler):
     def schedule_migration(self, lease, vmrr, nexttime):
         return []
                 
-    def cancel_preparation(self, lease):
+    def cancel_preparation(self, lease, remove_files = True):
         self.cleanup(lease)
 
     def cleanup(self, lease):

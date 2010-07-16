@@ -510,7 +510,11 @@ class Lease(object):
                 
         """        
         vmrr = self.get_last_vmrr()
-        return vmrr.end
+        if vmrr == None:
+            # Nothing scheduled, no endtime
+            return None
+        else:
+            return vmrr.get_final_end()
     
     def get_accumulated_duration_at(self, time):
         """Returns the amount of time required to fulfil the entire
@@ -771,6 +775,10 @@ class Lease(object):
             # Overestimating when susp_exclusion == SUSPRES_EXCLUSION_LOCAL
             time += compute_suspend_resume_time(mem, rate) + enactment_overhead
         return time
+
+    def __repr__(self):
+        """Returns a string representation of the Lease"""
+        return "L%i" % self.id
         
     # ONLY for simulation
     def _update_prematureend(self):

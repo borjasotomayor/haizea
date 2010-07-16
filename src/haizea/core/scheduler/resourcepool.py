@@ -68,7 +68,7 @@ class ResourcePool(object):
             return True
         elif isinstance(lease.software, DiskImageSoftwareEnvironment):
             for (vnode, pnode) in rr.nodes.items():
-                img = self.get_node(pnode).get_diskimage(lease.id, vnode, lease.software.image_id)
+                img = self.get_node(pnode).get_diskimage(lease, vnode, lease.software.image_id)
                 if img == None:
                     return False
             return True
@@ -77,7 +77,7 @@ class ResourcePool(object):
         # Add memory image files
         for vnode in rr.vnodes:
             pnode = rr.vmrr.nodes[vnode]
-            self.add_ramfile(pnode, lease.id, vnode, lease.requested_resources[vnode].get_quantity(constants.RES_MEM))
+            self.add_ramfile(pnode, lease, vnode, lease.requested_resources[vnode].get_quantity(constants.RES_MEM))
 
         # Enact suspend
         suspend_action = actions.VMEnactmentSuspendAction()
@@ -97,7 +97,7 @@ class ResourcePool(object):
         # Remove memory image files
         for vnode in rr.vnodes:
             pnode = rr.vmrr.nodes[vnode]
-            self.remove_ramfile(pnode, lease.id, vnode)
+            self.remove_ramfile(pnode, lease, vnode)
 
         # Enact resume
         resume_action = actions.VMEnactmentResumeAction()
@@ -136,14 +136,14 @@ class ResourcePool(object):
     def get_node(self, node_id):
         return self.nodes[node_id]
         
-    def add_diskimage(self, pnode, diskimage_id, imagesize, lease_id, vnode):
-        self.logger.debug("Adding disk image for L%iV%i in pnode=%i" % (lease_id, vnode, pnode))
+    def add_diskimage(self, pnode, diskimage_id, imagesize, lease, vnode):
+        self.logger.debug("Adding disk image for L%iV%i in pnode=%i" % (lease.id, vnode, pnode))
         
         self.logger.vdebug("Files BEFORE:")
         self.get_node(pnode).print_files()
         
-        imagefile = self.deployment.resolve_to_file(lease_id, vnode, diskimage_id)
-        img = DiskImageFile(imagefile, imagesize, lease_id, vnode, diskimage_id)
+        imagefile = self.deployment.resolve_to_file(lease, vnode, diskimage_id)
+        img = DiskImageFile(imagefile, imagesize, lease, vnode, diskimage_id)
         self.get_node(pnode).add_file(img)
 
         self.logger.vdebug("Files AFTER:")
@@ -154,24 +154,24 @@ class ResourcePool(object):
     def remove_diskimage(self, pnode, lease, vnode):
         node = self.get_node(pnode)
         node.print_files()
-        self.logger.debug("Removing disk image for L%iV%i in node %i" % (lease, vnode, pnode))
+        self.logger.debug("Removing disk image for L%iV%i in node %i" % (lease.id, vnode, pnode))
         node.remove_diskimage(lease, vnode)
 
         node.print_files()
                 
-    def add_ramfile(self, pnode, lease_id, vnode, size):
+    def add_ramfile(self, pnode, lease, vnode, size):
         node = self.get_node(pnode)
-        self.logger.debug("Adding RAM file for L%iV%i in node %i" % (lease_id, vnode, pnode))
+        self.logger.debug("Adding RAM file for L%iV%i in node %i" % (lease.id, vnode, pnode))
         node.print_files()
-        f = RAMImageFile("RAM_L%iV%i" % (lease_id, vnode), size, lease_id, vnode)
+        f = RAMImageFile("RAM_L%iV%i" % (lease.id, vnode), size, lease, vnode)
         node.add_file(f)        
         node.print_files()
 
-    def remove_ramfile(self, pnode, lease_id, vnode):
+    def remove_ramfile(self, pnode, lease, vnode):
         node = self.get_node(pnode)
-        self.logger.debug("Removing RAM file for L%iV%i in node %i" % (lease_id, vnode, pnode))
+        self.logger.debug("Removing RAM file for L%iV%i in node %i" % (lease.id, vnode, pnode))
         node.print_files()
-        node.remove_ramfile(lease_id, vnode)
+        node.remove_ramfile(lease, vnode)
         node.print_files()
         
     def get_max_disk_usage(self):
@@ -194,29 +194,29 @@ class ResourcePoolNode(object):
     def add_file(self, f):
         self.files.append(f)
         
-    def get_diskimage(self, lease_id, vnode, diskimage_id):
+    def get_diskimage(self, lease, vnode, diskimage_id):
         image = [f for f in self.files if isinstance(f, DiskImageFile) and 
                  f.diskimage_id == diskimage_id and 
-                 f.lease_id == lease_id and
+                 f.lease == lease and
                  f.vnode == vnode]
         if len(image) == 0:
             return None
         elif len(image) == 1:
             return image[0]
         elif len(image) > 1:
-            self.logger.warning("More than one tainted image for L%iV%i on node %i" % (lease_id, vnode, self.id))
+            self.logger.warning("More than one tainted image for L%iV%i on node %i" % (lease.id, vnode, self.id))
             return image[0]
 
-    def remove_diskimage(self, lease_id, vnode):
+    def remove_diskimage(self, lease, vnode):
         image = [f for f in self.files if isinstance(f, DiskImageFile) and 
-                 f.lease_id == lease_id and
+                 f.lease == lease and
                  f.vnode == vnode]
         if len(image) > 0:
             image = image[0]
             self.files.remove(image)
             
-    def remove_ramfile(self, lease_id, vnode):
-        ramfile = [f for f in self.files if isinstance(f, RAMImageFile) and f.lease_id==lease_id and f.vnode==vnode]
+    def remove_ramfile(self, lease, vnode):
+        ramfile = [f for f in self.files if isinstance(f, RAMImageFile) and f.lease==lease and f.vnode==vnode]
         if len(ramfile) > 0:
             ramfile = ramfile[0]
             self.files.remove(ramfile)
@@ -253,24 +253,24 @@ class File(object):
         self.filesize = filesize
         
 class DiskImageFile(File):
-    def __init__(self, filename, filesize, lease_id, vnode, diskimage_id):
+    def __init__(self, filename, filesize, lease, vnode, diskimage_id):
         File.__init__(self, filename, filesize)
-        self.lease_id = lease_id
+        self.lease = lease
         self.vnode = vnode
         self.diskimage_id = diskimage_id
                 
     def __str__(self):
-        return "(DISK L%iv%i %s %s)" % (self.lease_id, self.vnode, self.diskimage_id, self.filename)
+        return "(DISK L%iv%i %s %s)" % (self.lease.id, self.vnode, self.diskimage_id, self.filename)
 
 
 class RAMImageFile(File):
-    def __init__(self, filename, filesize, lease_id, vnode):
+    def __init__(self, filename, filesize, lease, vnode):
         File.__init__(self, filename, filesize)
-        self.lease_id = lease_id
+        self.lease = lease
         self.vnode = vnode
                 
     def __str__(self):
-        return "(RAM L%iv%i %s)" % (self.lease_id, self.vnode, self.filename)
+        return "(RAM L%iv%i %s)" % (self.lease.id, self.vnode, self.filename)
     
 class ResourcePoolWithReusableImages(ResourcePool):
     def __init__(self, info_enact, vm_enact, deploy_enact):
@@ -286,8 +286,8 @@ class ResourcePoolWithReusableImages(ResourcePool):
         
         imagefile = "reusable-%s" % diskimage_id
         img = ReusableDiskImageFile(imagefile, imagesize, diskimage_id, timeout)
-        for (lease_id, vnode) in mappings:
-            img.add_mapping(lease_id, vnode)
+        for (lease, vnode) in mappings:
+            img.add_mapping(lease, vnode)
 
         self.get_node(pnode).add_reusable_image(img)
 
@@ -296,12 +296,12 @@ class ResourcePoolWithReusableImages(ResourcePool):
         
         return img
     
-    def add_mapping_to_existing_reusable_image(self, pnode_id, diskimage_id, lease_id, vnode, timeout):
-        self.get_node(pnode_id).add_mapping_to_existing_reusable_image(diskimage_id, lease_id, vnode, timeout)
+    def add_mapping_to_existing_reusable_image(self, pnode_id, diskimage_id, lease, vnode, timeout):
+        self.get_node(pnode_id).add_mapping_to_existing_reusable_image(diskimage_id, lease, vnode, timeout)
     
     def remove_diskimage(self, pnode_id, lease, vnode):
         ResourcePool.remove_diskimage(self, pnode_id, lease, vnode)
-        self.logger.debug("Removing cached images for L%iV%i in node %i" % (lease, vnode, pnode_id))
+        self.logger.debug("Removing cached images for L%iV%i in node %i" % (lease.id, vnode, pnode_id))
         for img in self.get_node(pnode_id).get_reusable_images():
             if (lease, vnode) in img.mappings:
                 img.mappings.remove((lease, vnode))
@@ -332,27 +332,27 @@ class ResourcePoolNodeWithReusableImages(ResourcePoolNode):
     def add_reusable_image(self, f):
         self.reusable_images.append(f)
 
-    def add_mapping_to_existing_reusable_image(self, diskimage_id, lease_id, vnode, timeout):
+    def add_mapping_to_existing_reusable_image(self, diskimage_id, lease, vnode, timeout):
         for f in self.reusable_images:
             if f.diskimage_id == diskimage_id:
-                f.add_mapping(lease_id, vnode)
+                f.add_mapping(lease, vnode)
                 f.update_timeout(timeout)
                 break  # Ugh
         self.print_files()
             
-    def get_reusable_image(self, diskimage_id, after = None, lease_id=None, vnode=None):
+    def get_reusable_image(self, diskimage_id, after = None, lease=None, vnode=None):
         images = [i for i in self.reusable_images if i.diskimage_id == diskimage_id]
         if after != None:
             images = [i for i in images if i.timeout >= after]
-        if lease_id != None and vnode != None:
-            images = [i for i in images if i.has_mapping(lease_id, vnode)]
+        if lease != None and vnode != None:
+            images = [i for i in images if i.has_mapping(lease, vnode)]
         if len(images)>0:
             return images[0]
         else:
             return None
         
-    def exists_reusable_image(self, imagefile, after = None, lease_id=None, vnode=None):
-        entry = self.get_reusable_image(imagefile, after = after, lease_id=lease_id, vnode=vnode)
+    def exists_reusable_image(self, imagefile, after = None, lease=None, vnode=None):
+        entry = self.get_reusable_image(imagefile, after = after, lease=lease, vnode=vnode)
         if entry == None:
             return False
         else:
@@ -404,11 +404,11 @@ class ReusableDiskImageFile(File):
         self.mappings = set([])
         self.timeout = timeout
         
-    def add_mapping(self, lease_id, vnode):
-        self.mappings.add((lease_id, vnode))
+    def add_mapping(self, lease, vnode):
+        self.mappings.add((lease, vnode))
         
-    def has_mapping(self, lease_id, vnode):
-        return (lease_id, vnode) in self.mappings
+    def has_mapping(self, lease, vnode):
+        return (lease, vnode) in self.mappings
     
     def has_mappings(self):
         return len(self.mappings) > 0
