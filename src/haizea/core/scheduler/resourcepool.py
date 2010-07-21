@@ -64,14 +64,18 @@ class ResourcePool(object):
             raise
 
     def verify_deploy(self, lease, rr):
+        deployed = False
         if isinstance(lease.software, UnmanagedSoftwareEnvironment):
-            return True
+            deployed = True
         elif isinstance(lease.software, DiskImageSoftwareEnvironment):
+            missing = False
             for (vnode, pnode) in rr.nodes.items():
                 img = self.get_node(pnode).get_diskimage(lease, vnode, lease.software.image_id)
                 if img == None:
-                    return False
-            return True
+                    self.logger.error("L%iV%i is not deployed in node %i" % (lease.id, vnode, pnode))
+                    missing = True
+            if not missing: deployed = True
+        return deployed
          
     def suspend_vms(self, lease, rr):
         # Add memory image files
@@ -173,7 +177,23 @@ class ResourcePool(object):
         node.print_files()
         node.remove_ramfile(lease, vnode)
         node.print_files()
-        
+      
+    def get_disk_image_mappings(self, lease):
+        vnode_map = {}
+        for n in self.nodes.values():
+            disk_images = [img for img in n.get_diskimages() if img.lease == lease]
+            for img in disk_images:
+                vnode_map[img.vnode] = n.id
+        return vnode_map
+    
+    def get_ram_image_mappings(self, lease):
+        vnode_map = {}
+        for n in self.nodes.values():
+            disk_images = [img for img in n.get_ramimages() if img.lease == lease]
+            for img in disk_images:
+                vnode_map[img.vnode] = n.id
+        return vnode_map    
+            
     def get_max_disk_usage(self):
         return max([n.get_disk_usage() for n in self.nodes.values()])
     
@@ -228,6 +248,9 @@ class ResourcePoolNode(object):
 
     def get_diskimages(self):
         return [f for f in self.files if isinstance(f, DiskImageFile)]
+
+    def get_ramimages(self):
+        return [f for f in self.files if isinstance(f, RAMImageFile)]
         
     def print_files(self):
         images = ""

@@ -64,8 +64,11 @@ class ImageTransferPreparationScheduler(PreparationScheduler):
         
         # This code is the same as the one in vm_scheduler
         # Should be factored out
+ 
         last_vmrr = lease.get_last_vmrr()
-        vnode_migrations = dict([(vnode, (last_vmrr.nodes[vnode], vmrr.nodes[vnode])) for vnode in vmrr.nodes])
+
+        vnode_mappings = self.resourcepool.get_disk_image_mappings(lease)
+        vnode_migrations = dict([(vnode, (vnode_mappings[vnode], vmrr.nodes[vnode])) for vnode in vmrr.nodes if vnode_mappings[vnode] != vmrr.nodes[vnode]])
         
         mustmigrate = False
         for vnode in vnode_migrations:

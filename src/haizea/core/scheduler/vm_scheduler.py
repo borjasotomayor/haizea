@@ -153,10 +153,11 @@ class VMScheduler(object):
         nexttime -- The next time at which the scheduler can allocate resources.
         """
         
-        # Determine what migrations have to be done. We do this by looking at
-        # the mapping in the previous VM RR and in the new VM RR
+        # Determine what migrations have to be done.
         last_vmrr = lease.get_last_vmrr()
-        vnode_migrations = dict([(vnode, (last_vmrr.nodes[vnode], vmrr.nodes[vnode])) for vnode in vmrr.nodes])
+        
+        vnode_mappings = self.resourcepool.get_ram_image_mappings(lease)
+        vnode_migrations = dict([(vnode, (vnode_mappings[vnode], vmrr.nodes[vnode])) for vnode in vmrr.nodes if vnode_mappings[vnode] != vmrr.nodes[vnode]])
         
         # Determine if we actually have to migrate
         mustmigrate = False
@@ -231,9 +232,9 @@ class VMScheduler(object):
             self.future_leases.remove(vmrr.lease)
             get_persistence().persist_future_leases(self.future_leases)
 
-        # If there are any pre-RRs that are scheduled, remove them
+        # If there are any pre-RRs that are scheduled or active, remove them
         for rr in vmrr.pre_rrs:
-            if rr.state == ResourceReservation.STATE_SCHEDULED:
+            if rr.state != ResourceReservation.STATE_DONE:
                 self.slottable.remove_reservation(rr)
 
         # If there are any post RRs, remove them
@@ -1320,7 +1321,7 @@ class VMScheduler(object):
 
         if get_config().get("lease-preparation") == "imagetransfer":
             if not self.resourcepool.verify_deploy(l, rr):
-                self.logger.error("Deployment was not complete.")
+                self.logger.error("Deployment of lease %i was not complete." % l.id)
                 raise # TODO raise something better
 
         # Kludge: Should be done by the preparations scheduler
