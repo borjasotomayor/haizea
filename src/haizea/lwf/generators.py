@@ -92,6 +92,7 @@ class FileGenerator(object):
         self.numnodes_dist = self._get_dist(FileGenerator.NODES_SEC)
         self.software_dist = self._get_dist(FileGenerator.SOFTWARE_SEC)
 
+        self.user_rates = {}
         
         
     def _get_start(self, type, lease = None):
@@ -426,7 +427,7 @@ class LWFAnnotationGenerator(FileGenerator):
             lease_workload = LeaseWorkload.from_xml_file(self.lwffile)
             leases = lease_workload.get_leases()
             for lease in leases:
-                annotations = self.__gen_annotation(lease)
+                annotation = self.__gen_annotation(lease)
                 annotations[lease.id] = annotation
             
         attributes = self._get_attributes()

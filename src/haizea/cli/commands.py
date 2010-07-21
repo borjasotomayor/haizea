@@ -21,7 +21,7 @@ from haizea.common.utils import generate_config_name, unpickle
 from haizea.core.configfile import HaizeaConfig, HaizeaMultiConfig
 from haizea.core.accounting import AccountingDataCollection
 from haizea.common.config import ConfigException
-from haizea.common.stats import percentile
+from haizea.common.stats import percentile, print_percentiles
 from haizea.cli.optionparser import Option
 from haizea.cli import Command
 from haizea.lwf.generators import LWFGenerator, LWFAnnotationGenerator
@@ -407,6 +407,10 @@ class haizea_lwf_stats(Command):
                                          help = """
                                          Annotation file
                                          """))
+        self.optparser.add_option(Option("-v", "--verbose", action="store_true", dest="verbose",
+                                         help = """
+                                         Verbose
+                                         """))
         self.optparser.add_option(Option("-l", "--utilization-length", action="store", type="string", dest="utilization_length",
                                          help = """
                                          Length of the utilization interval in format DD:HH:MM:SS. Default is until
@@ -422,7 +426,7 @@ class haizea_lwf_stats(Command):
         if utilization_length != None:
             utilization_length = Parser.DateTimeDeltaFromString(utilization_length)
 
-        analyser = LWFAnalyser(infile, utilization_length, annotationfile)
+        analyser = LWFAnalyser(infile, utilization_length, annotationfile, self.opt.verbose)
         
         analyser.analyse()
 
@@ -884,21 +888,15 @@ class haizea_swf2lwf(Command):
         outfile.close()
         
         slowdowns.sort()
-
         total_capacity = site_num_nodes * (to_time - from_time).seconds
+        print utilization, total_capacity
         utilization = float(utilization) / float(total_capacity)
         utilization_no_ramp = float(utilization_no_ramp) / float(total_capacity)
-
+        
         if len(slowdowns) > 0:
             print "SLOWDOWNS"
             print "---------"
-            print "min: %.2f" % slowdowns[0]
-            print "10p: %.2f" % percentile(slowdowns, 0.1)
-            print "25p: %.2f" % percentile(slowdowns, 0.25)
-            print "med: %.2f" % percentile(slowdowns, 0.5)
-            print "75p: %.2f" % percentile(slowdowns, 0.75)
-            print "90p: %.2f" % percentile(slowdowns, 0.9)
-            print "max: %.2f" % slowdowns[-1]
+            print_percentiles(slowdowns)
             print 
         print "USERS"
         print "-----"
