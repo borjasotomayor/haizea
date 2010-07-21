@@ -157,3 +157,22 @@ def percentile(values, percent):
     pos = int(len(values) * percent)
     return values[pos]
 
+def print_percentiles(values):
+    svalues = sorted(values)
+    print "min: %.2f" % svalues[0]
+    print "10p: %.2f" % percentile(svalues, 0.1)
+    print "25p: %.2f" % percentile(svalues, 0.25)
+    print "med: %.2f" % percentile(svalues, 0.5)
+    print "75p: %.2f" % percentile(svalues, 0.75)
+    print "90p: %.2f" % percentile(svalues, 0.9)
+    print "max: %.2f" % svalues[-1]    
+    
+def print_distribution(counts, N):
+    values = counts.keys()
+    values.sort()
+    
+    cumm = 0.0
+    for v in values:
+        cumm += counts[v]
+        print "%s: %i (%.2f%%, cumm %.2f%%)" % (v, counts[v], (float(counts[v])/N)*100, (cumm/N)*100)    
+
