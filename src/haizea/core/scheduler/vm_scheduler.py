@@ -553,7 +553,8 @@ class VMScheduler(object):
                                                                      requested_resources,
                                                                      changepoints, 
                                                                      duration, 
-                                                                     min_duration)
+                                                                     min_duration,
+                                                                     shutdown_time)
         
         if start == None and not allow_in_future:
             # We did not find a suitable starting time. This can happen
@@ -567,7 +568,8 @@ class VMScheduler(object):
                                                                          requested_resources,
                                                                          futurecp, 
                                                                          duration, 
-                                                                         min_duration
+                                                                         min_duration,
+                                                                         shutdown_time
                                                                          )
             # TODO: The following will also raise an exception if a lease
             # makes a request that could *never* be satisfied with the
@@ -894,7 +896,7 @@ class VMScheduler(object):
         
         
 
-    def __find_fit_at_points(self, lease, requested_resources, changepoints, duration, min_duration):
+    def __find_fit_at_points(self, lease, requested_resources, changepoints, duration, min_duration, shutdown_time):
         """ Tries to map a lease in a given list of points in time
         
         This method goes through a given list of points in time and tries
@@ -949,9 +951,12 @@ class VMScheduler(object):
                 if actualend < end:
                     actualduration = actualend - start
                     if actualduration >= min_duration:
-                        self.logger.debug("This lease can be scheduled from %s to %s (will require suspension)" % (start, actualend))
-                        found = True
-                        break
+                        if duration - shutdown_time >= actualduration:
+                            self.logger.debug("This lease can be scheduled from %s to %s (will require suspension)" % (start, actualend))
+                            found = True
+                            break
+                        else:
+                            self.logger.debug("This lease requires suspension, but doing so would involve 'suspending' the shutdown.")
                     else:
                         self.logger.debug("This starting time does not allow for the requested minimum duration (%s < %s)" % (actualduration, min_duration))
                 else:
