@@ -1159,11 +1159,13 @@ class VMScheduler(object):
             all_vnodes = []
             for (pnode,vnodes) in node_mappings.items():
                 num_vnodes = len(vnodes)
-                r = Capacity([constants.RES_MEM,constants.RES_DISK])
+                r = Capacity([constants.RES_CPU, constants.RES_MEM,constants.RES_DISK])
                 mem = 0
                 for vnode in vnodes:
                     mem += vmrr.lease.requested_resources[vnode].get_quantity(constants.RES_MEM)
-                #r.set_quantity(constants.RES_CPU, 100) # TODO: Need to get the same quantity as pnode
+                r.set_ninstances(constants.RES_CPU, num_vnodes)
+                for i in xrange(num_vnodes):
+                    r.set_quantity_instance(constants.RES_CPU, i +1, 100)
                 r.set_quantity(constants.RES_MEM, mem * num_vnodes)
                 r.set_quantity(constants.RES_DISK, mem * num_vnodes)
                 suspres[pnode] = self.slottable.create_resource_tuple_from_capacity(r)          
@@ -1220,11 +1222,13 @@ class VMScheduler(object):
             all_vnodes = []
             for (pnode,vnodes) in node_mappings.items():
                 num_vnodes = len(vnodes)
-                r = Capacity([constants.RES_MEM,constants.RES_DISK])
+                r = Capacity([constants.RES_CPU, constants.RES_MEM, constants.RES_DISK])
                 mem = 0
                 for vnode in vnodes:
                     mem += vmrr.lease.requested_resources[vnode].get_quantity(constants.RES_MEM)
-                #r.set_quantity(constants.RES_CPU, 100) # TODO: Need to get the same quantity as pnode                    
+                r.set_ninstances(constants.RES_CPU, num_vnodes)
+                for i in xrange(num_vnodes):
+                    r.set_quantity_instance(constants.RES_CPU, i +1, 100)
                 r.set_quantity(constants.RES_MEM, mem * num_vnodes)
                 r.set_quantity(constants.RES_DISK, mem * num_vnodes)
                 resmres[pnode] = self.slottable.create_resource_tuple_from_capacity(r)
