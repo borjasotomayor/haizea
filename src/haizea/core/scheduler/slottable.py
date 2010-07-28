@@ -612,7 +612,6 @@ class SlotTable(object):
         @param rr: Resource reservation
         @type rr: L{ResourceReservation}
         """        
-        #print rr.lease.id, rr.start, rr.end
         self.__remove_reservation(rr, rr.start, rr.end)
 
 
@@ -1106,7 +1105,7 @@ class AvailabilityWindow(object):
         self.time = time
         self.leases = set()
 
-        self.cp_list = [self.time] + self.slottable.get_changepoints_after(time) + include
+        self.cp_list = list(set([self.time] + self.slottable.get_changepoints_after(time) + include))
         self.cp_list.sort()
         
         # The availability window is stored using a sparse data structure that
