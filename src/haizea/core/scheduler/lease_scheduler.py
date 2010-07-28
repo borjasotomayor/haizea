@@ -804,7 +804,10 @@ class LeaseScheduler(object):
                     
         if must_cancel_and_requeue:
             self.logger.info("... lease #%i has been cancelled and requeued." % lease.id)
-            self.preparation_scheduler.cancel_preparation(lease)
+            if lease.get_state() == Lease.STATE_SUSPENDED_SCHEDULED:
+                self.preparation_scheduler.cancel_preparation(lease, remove_files = False)
+            else:
+                self.preparation_scheduler.cancel_preparation(lease)
             self.vm_scheduler.cancel_vm(vmrr)
             lease.remove_vmrr(vmrr)
             # TODO: Take into account other states
