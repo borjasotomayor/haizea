@@ -47,6 +47,8 @@ class TracefileFrontend(RequestFrontend):
             self.logger.info("Loading injection file %s" % injectfile)
             inj_lease_workload = LeaseWorkload.from_xml_file(injectfile, self.starttime)
             inj_leases = inj_lease_workload.get_leases()
+            for l in inj_leases:
+                l.id += 1000000
             self.requests += inj_leases
             self.requests.sort(key=operator.attrgetter("submit_time"))
 
