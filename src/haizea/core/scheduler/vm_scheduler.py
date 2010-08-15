@@ -92,6 +92,9 @@ class VMScheduler(object):
         self.max_in_future = max_in_future
         
         self.future_leases = set()
+        # Used for knowing how many resources have to been free if a VM have been delayed and in which nodes
+        self.delay_needResources = NeededResourcesPerNode()
+        self.have_to_delay = []
 
 
     def schedule(self, lease, duration, nexttime, earliest, override_state = None):
@@ -1299,26 +1302,202 @@ class VMScheduler(object):
             threshold = safe_duration + (min_duration * factor)
             return threshold
 
+    def _compute_delay_onv(self, start_time, end_time, needed_resources):
+        '''
+        Delay Only Needed VM's
+        We decide wich RR have to been delayed in the specific interval, [start_time,end_time)
+        that means, that it doesn't include the end_time, because it is not needed.
+        Arguments:
+        start_time -- Time
+        end_time -- Time
+        needed_resources -- Dictionary { node -> ResourceTuple}
+        
+        Return:
+        list contaning wich VM's have to been delayed
 
-    def delay_rr_to(self, start_time, rr):
+        '''
+        logger = logging.getLogger('CDO')
+        logger.vdebug(' ---------------------------  ')
+        logger.vdebug('Have been called with '+str(start_time)+' END: '+str(end_time)+' Needed Resources: '+str(needed_resources))
+        # Some things I will need
+        slottable = self.slottable
+        window = slottable.get_availability_window(start_time)
+        # For storing {vm => {node => ResourceTuple}}     
+        delay_vm_node = {}
+        for node in needed_resources:
+            onav = window.get_ongoing_availability(start_time,node)
+            check_point = start_time 
+            # We going one by one change point, checking in wich points we need to free space
+            # any time we see that we need it we take all the starting RRs and counting only the vm's
+            # wich are starting (Resuming or booting with any of his RR started alredy) 
+            while end_time > check_point or check_point == None:
+                entro = False
+                # -> I do this because it is the only way I found it works
+                # It happen if there are no more scheduled leases since this changepoint
+                try: 
+                    capacity_now = window.get_availability(check_point,node)
+                except:
+                    break
+                for dVM in delay_vm_node:
+                    if dVM.get_final_end > check_point and node in dVM.nodes.values():
+                        capacity_now.incr(delay_vm_node[dVM][node])
+                logger.vdebug('Available capacity in node %s: %s'%(node,capacity_now))
+                if needed_resources[node].fits_in(capacity_now):
+                    check_point = slottable.get_next_changepoint(check_point)
+                    entro = True
+                    continue
+                logger.vdebug('NEED SPACE CDP - node: '+str(node)+' - Change Point '+str(check_point)) 
+                start_rrs = slottable.get_reservations_starting_between(check_point,slottable.get_next_changepoint(check_point))
+                can_delay = []
+                for dRR in start_rrs:
+                    if dRR.start != check_point: continue
+                    if isinstance(dRR,VMResourceReservation): dVM = dRR
+                    else: dVM = dRR.vmrr
+                    # The VM should be in state which is in lease.DELAY_GOODSTATES, should no being added before, should be of this node and should
+                    # end after the end_time
+                    if dVM.lease.get_state() in dVM.lease.DELAY_GOODSTATES and dVM not in delay_vm_node and node in dVM.nodes.values() and dVM.get_final_end() >end_time:
+                        can_delay.append(dVM)
+                # Take as it add it out
+                # TODO Implement a policy for doing some sort and not do like this
+                logger.vdebug('All starting rrs that can be delayed:')
+                for sRR in can_delay:
+                    sRR.print_contents()
+                for dVM in can_delay:
+                    vnodes = []
+
+                    for vnode in dVM.nodes:
+                        if dVM.nodes[vnode] == node: vnodes.append(vnode)
+                    
+                    gain_resources = self._sum_all_requested_resources_of(vnodes,dVM)
+                    delay_vm_node[dVM] = gain_resources
+                    capacity_now.incr(gain_resources[node])
+                    logger.vdebug('GAIN RESOURCES')
+                    logger.vdebug(capacity_now)
+                    if needed_resources[node].fits_in(capacity_now):
+                        entro = True
+                        check_point = slottable.get_next_changepoint(check_point)
+                        break
+                if not entro: raise InconsistentScheduleError('HAVE NOT FIT, THIS SHOULD NOT HAPPEND')     
+        delay_vm = []
+        for dVM in delay_vm_node:
+            delay_vm.append(dVM)
+        if len(delay_vm)>0:logger.vdebug('Have decided to delay: ')
+        else: logger.vdebug('Nothing it is going to be delayed')
+        for vm in delay_vm:
+            vm.print_contents()
+        return delay_vm
+
+                    
+            
+
+
+    def free_space_delaying_VM(self):
+
+        # First of all, we are going to decide which VM have to been delayed
+        # or can be reschedule in an other Node but only the necesary VM, we divide
+        # this action in cicles, in each of them:
+        # 1º We decide which VMRR have to been delayed
+        # 2º We delay the VMRR
+        self.logger.vdebug('We have to free all this space {node => space}')
+        self.logger.vdebug(self.delay_needResources)
+        vm_to_delay = {}
+        # Seconds of separetion per endTime
+        to_add = TimeDelta(0,0,2)
+        while len(self.delay_needResources) > 0:
+            # DECIDE WICH LEASES HAVE TO BEEN DELAY
+            startTime,endTime = self.delay_needResources.get_sort_by_start()[0]
+            seconds_added = TimeDelta(0) 
+            delayvm = self._compute_delay_onv(startTime,endTime,self.delay_needResources.get_between(startTime,endTime))
+            # DELAY ALL VM's WICH HAVE BEEN MARK FOR IT
+            for vm in delayvm:
+                # TODO Correct some things for work also with VM which start after end
+                # If a VM have the end delayed, have to been 
+                # added to the neededcapacity
+                action, new_vm_end = self.delay_vm_to(endTime+seconds_added,vm,True)
+                vm_to_delay[vm] = endTime + seconds_added
+                seconds_added += to_add
+                if action == constants.DELAY_STARTVM and vm.get_final_end() != new_vm_end:
+                    vnodes = []
+                    for vnode in vm.nodes:
+                        vnodes.append(vnode)
+                    self.delay_needResources.incr(vm.get_final_end(),new_vm_end,self._sum_all_requested_resources_of(vnodes,vm))
+                  #  if this_times in self.delay_needResources:
+
+                  #      deSuma = self._sum_all_requested_resources_of(vnodes,vm)
+                  #      for node in deSuma:
+                  #          if node in self.delay_needResources[this_times]:
+                  #              self.delay_needResources[this_times][node] = deSuma[node]
+                  #          else:
+                  #              self.delay_needResources[this_times][node].incr(deSuma[node]) 
+                  #  else:
+                  #      self.delay_needResources[this_times] =  self._sum_all_requested_resources_of(vnodes,vm)
+                 
+            self.delay_needResources.delete(startTime,endTime)
+            
+        # Have to been delayed after delay the previous starting leases    
+        seconds_added_ =[]
+        for vm in vm_to_delay:
+            self.delay_vm_to(vm_to_delay[vm],vm)
+            
+            self.logger.vdebug('How looks the vm, after been delayed:')
+            vm.print_contents()
+        for hRR in self.have_to_delay:
+            self._delay_rr_end(hRR)
+        self.have_to_delay = []
+
+
+
+    def delay_vm_to(self,delayto,vmrr,simulate = False):
+        '''
+        delay Start Time of a lease
+        foo
+        '''
+
+        l = vmrr.lease
+
+        if not l.get_state() in l.DELAY_GOODSTATES:
+            raise InconsistentLeaseStateError('Not the state I want for the lease for been delayed')     
+        # First of all, we delay the VMRR and see what happend
+        old_start_vm = vmrr.end
+        action, delayedtime = self.delay_vmrr_to(delayto + (vmrr.start - vmrr.get_first_start()),vmrr,simulate)
+        if action == constants.DELAY_STARTVM:
+            if simulate:
+                return (action,vmrr.get_final_end()+delayedtime)
+            # First delay pre_rr
+            for rr in vmrr.pre_rrs:
+                self.delay_rr_to(delayto + (rr.start - vmrr.get_first_start()),rr)
+            # We have to delay the start and end of the VM
+            
+            if delayedtime > 0:
+                for rr in vmrr.post_rrs:
+                    self.delay_rr_to(vmrr.end + (rr.start - (old_start_vm)),rr)
+                
+            return action,(vmrr.get_final_end() - delayedtime)
+
+        elif action == constants.DELAY_RESCHEDULE:
+            pass 
+        elif action == constants.DELAY_CANCEL:
+            return (action,'')
+
+    def delay_rr_to(self, delayto, rr):
         '''
         Return -> End time
         '''
-
+        rr.print_contents()
         old_start,old_end = rr.start,rr.end
-        rr.start,rr.end = starting_time,star_time+(old_end-old_start)
+        rr.start,rr.end = delayto,delayto+(old_end-old_start)
         self.slottable.update_reservation(rr,old_start,old_end)
         return rr.end
 
 
-    def delay_start_vmrr_to(self, start_time, vmrr, nowtime, percent_delay = 0, percent_action = 'CANCEL'):
+    def delay_vmrr_to(self, delayto, vmrr,simulate = False):
         '''
         Delay the start of VMRR to the start_time. This can happend
         when a RR is delayed in the shutdown or in the suspend, so the next
         must be also delayed.
 
         start_time: Time in which the machine should start
-        vmrr: VM to delay
+        lease: lease to delay
         nowtime: Actual checkpoint
         percent_delay: If it is different to 0, will be how much time could a VM 
         be delayed until the percente_action happend
@@ -1327,46 +1506,214 @@ class VMScheduler(object):
         
         return -> endtime: time in which the machine will end
         '''
-        if vmrr.get_first_start() < nowtime: return False
+        # Actions to do in the percent cases
+        l  = vmrr.lease
+        # TODO: Check what to do with the preparation rr in the lease
+        # if vmrr.get_first_start() < nowtime or l.get_state() in goodStates : return False
         # Setting starting of RR to the new_time
-        list_to_delay = vmrr.get_reservations_starting_on_after(nowtime)
-        #It is needed for knowing the delay between two RR in the same VM
-        last_end = list_to_delay[0].start
-        for rr in list_to_delay:
-            rr.print_contents()
-            difer = rr.start-last_end
+        # list_to_delay = vmrr.pre_rrs + [vmrr] + vmrr.post_rrs
+        # It is needed for knowing the delay between two RR in the same VM
+        # Get configuration
 
-            if isinstance(rr, VMResourceReservation):
-                # In Vm only delay the start of a VM
-                old_start = rr.start
-                # Checking that it doesn't start after stop
-                will_start = start_time + difer
-                # Cancel the machine if it would start after the scheduled end
-                if will_start >= rr.end: 
-                    self.cancel_vm(vmrr)
-                    return False
-                # Do something if the VM is delayed more than the percent given.
-                percent = (int(will_start-old_start)*100.0)/int(rr.end-old_start)
-                self.logger.vdebug("Percent delayed of the VM: "+str(percent))
-                if (percent > percent_delay) and percent_delay != 0: 
-                    self.cancel_vm(vmrr)
-                    return False
-
-                rr.start = will_start
-                self.slottable.update_reservation(rr,old_start,rr.end)
-                break
-
-            else: start_time,last_end = self.delay_rr_to(start_time+difer, rr),rr.end
-
+        if simulate: self.logger.vdebug('Simulating a delay of a VMRR ----------------')
+        maxdelaystart = 10
+        maxdelay = 50
+        maxdelayaction = constants.DELAY_CANCEL 
         
-        self.logger.vdebug('----- AFTER DELAY ------')
-        for drr in list_to_delay: drr.print_contents()
-        return rr.end
+        old_end = vmrr.end
+        old_start = vmrr.start
+        
+        # Do something if the VM is delayed more than the percent given.
+        duration = (vmrr.end - vmrr.start)
+        now_percent = (int(delayto-old_start)*100.0)/int(vmrr.end-old_start)
 
+        percent = vmrr.percent_delayed + now_percent 
+        self.logger.vdebug("Percent of the VM's delay: "+str(percent))
+        if percent > maxdelay:
+            if simulate:
+                self.logger.vdebug('Have overpass the MAX pemited')
+                return (constants.DELAY_CANCEL,'')
+            if constants.DELAY_RESCHEDULE == maxdelayaction:
+                self.logger.vdebug('It should have been reschedule')
+                raise InconsistentScheduleError()
+            else:
+                #Default Action is cancel
+                self.logger.vdebug('The VM is been canceled')
+                self.cancel_vm(vmrr)
+                return (constants.DELAY_CANCEL,'')
+        else:
+            delayedend = 0
+            if maxdelaystart < percent:
+                self.logger.vdebug('END IS BEING DELAYED OF THE VMRR')
+                # Only delay the maxdelaystart, the rest is delayed in the end
+                if vmrr.percent_delayed >= maxdelaystart: PTD = now_percent
+                else: PTD = percent - maxdelaystart
+
+                delayedend = (PTD/100)*duration
+                self.logger.vdebug('Delaying end: %s'%delayedend)
+                if not simulate: vmrr.end = vmrr.end + delayedend
+                
+            if not simulate:
+                vmrr.start = delayto
+                vmrr.percent_delayed = percent
+                self.slottable.update_reservation(vmrr,old_start,old_end)
+        
+        return (constants.DELAY_STARTVM,delayedend)
                 
 
+    def _sum_all_requested_resources_of(self, vnodes, vmrr):
+        '''
+        Sum all the Capacity objects for the vnodes in the vmrr given and return a ResourceTuple
+
+        Arguments:
+        vnodes -- List containing the vnodes [int..]
+        vmrr -- VMResourceReservation 
+
+        Return:
+         ReourceTuple contaning all the asked reources
+        '''
+        vnodes = set(vnodes)
+        resources = {}
+        for vnode in vnodes:
+            if not vmrr.nodes[vnode] in resources:
+                resources[vmrr.nodes[vnode]]= self.slottable.create_empty_resource_tuple()
+            resources[vmrr.nodes[vnode]].incr(self.slottable.create_resource_tuple_from_capacity(vmrr.lease.requested_resources[vnode]))
+        self.logger.vdebug('Sumed all the resources for this vnodes %s'%vnodes)
+        self.logger.vdebug(resources)
+        return NodeResources.from_list(self.slottable,resources)
+           
+    def rr_end_delayed(self, rr):
+        '''
+        It is used for adding to the list of RR's wich had a problem
+        and the end of it have to been delayed
+
+        Arguments
+        rr -- Resources Reservation
+        '''
+        # Check if the vmrr has alredy been delayed
+        for drr in self.have_to_delay:
+            if drr.vmrr == vmrr:
+                raise InconsistentScheduleError('This should not happend as I know, two RR of the same VMRR suspending at the same time')
+        self.have_to_delay.append(rr)
+        vmrr = rr.vmrr
+        check_time = rr.end
+        # TODO This should goes in other place
+        new_RRend_time = rr.end + (rr.end - rr.start)
+
+        if rr in vmrr.pre_rrs:
+            # Simulate VMRR delay for knowing at wich time, the vmrr should end
+            # TODO IMPORTANT ------------------ Only a simulation for knowing when should end
+            action,vmrr_end = self.delay_vmrr_to(new_RRend_time + (vmrr.start - check_time),vmrr,True)
+            if action == constants.DELAY_STARTVM:
+                new_end = vmrr_end + vmrr.post_rrs[-1]
+            else:
+                self.logger.vdebug('This VMRR it is not going to be delayed, it is going to be:%s '%action)
+                vmrr.print_contents()
+        else:
+            new_end = (new_RRend_time + (vmrr.post_rrs[-1].end - check_time))
+        if vmrr.get_final_end == new_end:
+            # Hard final
+            return ''
+        vnodes = []
+        for dRR in vmrr.get_reservations_starting_on_after(rr.end)+[rr]:
+            for vnode in dRR.vnodes:
+                vnodes.append(vnode)
+        
+        self.delay_needResources.incr(vmrr.get_final_end(),new_end,self._sum_all_requested_resources_of(vnodes,vmrr))
+
+     #   deSuma =             for node in deSuma:
+     #           if node in self.delay_needResources:
+     #               self.delay_needResources[(][node] = deSuma[node]
+     #           else:
+     #               self.delay_needResources[(vmrr.get_final_end(),new_end)][node].incr(deSuma[node]) 
+     #   else:
+     #       self.delay_needResources[(vmrr.get_final_end(),new_end)] = self._sum_all_requested_resources_of(vnodes,vmrr)
+        
+
+       
+
+        
 
 
+        
+
+    def _delay_rr_end(self,rr):
+        # A VMRR it self can't delay, so why delay end???
+        if isinstance(rr,VMResourceReservation): 
+            return None
+        '''
+        This method is in charge of delayind the end of RR and for this RR,
+        delay all LEASES which have some conflicts with this RR.
+        Because of the lack of a handle_end_vm can not controll if the 
+        boot of a computer it is delayed
+
+        Arguments:
+        rr -- ResourceReservation wich have to be delayed
+
+        '''
+
+        # DELAY RR AND IT IS LEASE IF IT IS NEEDED
+
+        self.logger.vdebug("DELAYING END OF:")
+        rr.print_contents()
+         
+        old_vmrr_end = rr.vmrr.get_final_end()
+        # Delay end of the suspend
+        check_time = rr.end
+        # Time which is added for the finishing the ending
+        # TODO Specify when and what to do if a RR fail several times
+        new_time = rr.end + (rr.end - rr.start)
+        
+        rr.end = new_time
+        # TODO Must be an option in the config file
+        max_timesdelay = 10
+        # Adding RR again to the "slottable"
+        self.slottable.add_reservation(rr)
+        self.logger.vdebug("RR DELAYED:")
+        rr.print_contents()
+        rr.times_delayed += 1
+        if rr.times_delayed > max_timesdelay:
+            #TODO Cancel VM ... need to free that space althought have happend that
+            rr.print_contents()
+            raise InconsistentScheduleError('So many times the VM have beend delayed')
+        # Node affected for the delay
+        afNodes = []
+        DelayUntil = new_time
+
+        # Get affected node for the RR
+        for vnode in rr.vnodes:
+           afNodes.append(rr.vmrr.nodes[vnode])
+        # Init Capacity of object for storing the information of the VM's
+        # which are delayed
+        
+        if rr in rr.vmrr.pre_rrs:
+            # Have to delay start of all vnodes in the LEASE
+            # If a VM have alredy started, leave it started
+            lisRR = vmrr.get_reservations_starting_on_after(check_time,[],False)
+            action, vmrr_end_time = self.delay_vmrr_to(DelayUntil + (rr.vmrr.start - check_time),rr.vmrr)
+            if action != constants.DELAY_STARTVM:
+                return ''
+            for dRR in afRR:
+                if dRR in dRR.vmrr.pre_rrs: self.delay_rr_to(DelayUntil + (dRR.start - check_time),dRR )
+            for dRR in rr.post_rrs:
+                for vnode in dRR.vnodes:
+                    self.delay_rr_to(DelayUntil + (dRR.start - check_time),RR)           
+            vnodes = []
+        elif rr in rr.vmrr.post_rrs:
+            # TODO: At the same time ??
+            # Have to delay only end of vnodes in the same node
+            afRR = rr.vmrr.get_reservations_starting_on_after(check_time,[],False)
+            self.logger.vdebug(afRR)
+            for dRR in afRR:
+                self.delay_rr_to(DelayUntil + (dRR.start - check_time),dRR)
+         
+       
+        self.logger.vdebug('After delaying the VMRR look like this:')
+        rr.vmrr.print_contents()
+        
+
+
+                
 
     #-------------------------------------------------------------------#
     #                                                                   #
@@ -1509,6 +1856,9 @@ class VMScheduler(object):
         l.print_contents()
         # React to incomplete suspend
         if not self.resourcepool.verify_suspend(l, rr):
+            self.rr_end_delayed(rr)
+
+            '''
             # Delay end of the suspend
             check_time = rr.end
             new_time = rr.end + (rr.end - rr.start)
@@ -1517,15 +1867,20 @@ class VMScheduler(object):
             rr.print_contents()
             # Check if there are more than one suspend after this one
             if not rr.is_last():
-                sus_lend = rr.end
-                for i in rr.vmrr.get_reservations_starting_on_after(check_time):
-                    sus_lend=self.delay_start_vmrr_to(sus_lend)
-                    if i.is_last(): break
+                last_end = rr.end
+                start_time = rr.end
+                for num,i in enumerate(rr.vmrr.post_rrs): 
+                    if i == rr: break
+                for Srr in rr.vmrr.post_rrs[num+1:]: 
+                    difer = Srr.start - last_end
+                    if Srr.start >= rr.end:
+                        start_time=self.delay_rr_to(start_time+difer,Srr)
 
             # Actual checkpoint, for getting RR which are starting now, only get
             # VMResourceReservation and Resumes
                
             while check_time < new_time:
+               
                 #Some debuging
                 self.logger.vdebug('-------')
                 self.logger.vdebug(check_time) 
@@ -1548,6 +1903,7 @@ class VMScheduler(object):
                 self.logger.vdebug('Next check point')
                 self.logger.vdebug(check_time)
             self.logger.vdebug('Finished delaying --------------')
+            '''
         else:
             rr.state = ResourceReservation.STATE_DONE
         
@@ -1707,12 +2063,25 @@ class VMResourceReservation(ResourceReservation):
         self.post_rrs = []
         self.prematureend = None
         # Flag for knowing who is delayed for later use.
-        self.delayed = None
-    def get_reservations_starting_on_after(self, time):
-        all_rr = self.pre_rrs+[self]+self.post_rrs
-        for i,rr in enumerate(all_rr):
-            if rr.start == time: break
-        return all_rr[:i+1]
+        self.percent_delayed = 0
+    def get_reservations_starting_on_after(self, time, nodes=[] ,includeVMrr = True):
+        if includeVMrr: all_rr = self.pre_rrs+[self]+self.post_rrs
+        else: all_rr = self.pre_rrs + self.post_rrs
+        # Only the ones which are startin
+        ssoa = [rr for rr in all_rr if rr.start >= time]
+        re = ssoa
+        if len(nodes) > 0:
+            re = []
+            for rr in ssoa:
+                if isinstance(rr,VMResourceReservation):
+                    for vnode in rr.nodes: 
+                        if rr.nodes[vnode] in nodes:
+                            re.append(rr)
+                            continue
+                for vnode in rr.vnodes:
+                    if rr.vmrr.nodes[vnode] in nodes: re.append(rr)
+            
+        return re
     def update_start(self, time):
         self.start = time
         # ONLY for simulation
@@ -1734,7 +2103,7 @@ class VMResourceReservation(ResourceReservation):
             return self.end
         else:
             return self.post_rrs[-1].end
-
+   
     def is_resuming(self):
         return len(self.pre_rrs) > 0 and (isinstance(self.pre_rrs[0], ResumptionResourceReservation) or isinstance(self.pre_rrs[0], MemImageMigrationResourceReservation))
 
@@ -1743,7 +2112,7 @@ class VMResourceReservation(ResourceReservation):
 
     def is_shutting_down(self):
         return len(self.post_rrs) > 0 and isinstance(self.post_rrs[0], ShutdownResourceReservation)
-    
+        
     def clear_rrs(self):
         for rr in self.pre_rrs:
             rr.clear_rrs()
@@ -1834,3 +2203,141 @@ class MemImageMigrationResourceReservation(MigrationResourceReservation):
         logger.log(loglevel, "Type           : MEM IMAGE MIGRATION")
         logger.log(loglevel, "Transfers      : %s" % self.transfers)
         ResourceReservation.print_contents(self, loglevel)
+class NeededResourcesPerNode(object):
+    '''
+    It just for make the life easier
+
+    '''
+    def __init__(self):
+        '''
+        Create a empty object
+        '''
+        self._needed_resources = {}
+        self.logger = logging.getLogger('NRPN')
+    def _sort(self):
+        return sorted(self._needed_resources.iteritems(),key= itemgetter(1))
+    def get_sort_by_start(self):
+        return sorted(iter(self._needed_resources),key= itemgetter(1))
+    def delete(self,startTime,endTime):
+        del self._needed_resources[(startTime,endTime)]
+    def __len__(self):
+        return len(self._needed_resources)
+    def get_between(self,startTime,endTime):
+        return self._needed_resources[(startTime,endTime)]
+    def incr(self, startTime, endTime, node_resource):
+        '''
+        Arguments:
+        startTime: When start needing this resources
+        endTime: When finish needing this resources
+        node_resource : Dict containing {node => ResourceTuple}
+        '''
+        self.logger.vdebug('Incrising with %s:%s -> %s'%(startTime,endTime,node_resource))
+        self.logger.vdebug('BEFORE')
+        self.logger.vdebug(self)
+        if startTime == endTime:
+            raise Exception('Cant start at same time as end')
+        affected = []
+        ieT = False
+        list_resources = self._sort()
+        for pos in range(len(list_resources)):
+            (sT,eT),nR = list_resources[pos]
+            if sT <= startTime < eT:
+                affected.append((sT,eT))
+                if endTime <= eT:
+                    break
+            elif startTime <= sT and eT <= endTime:
+                affected.append((sT,eT))
+            elif sT < endTime <= eT:
+                affected.append((sT,eT))
+                break
+            elif endTime < sT:
+                break
+        self.logger.vdebug('Will affect to this VM: %s'%affected)
+        if len(affected) == 0:
+            self._needed_resources[(startTime,endTime)] = node_resource
+        else:
+            sTF,eTF = affected[0]
+            sTL,eTL = affected[-1]
+            if startTime < sTF:
+                self._needed_resources[(startTime,sTF)] = node_resource
+            elif sTF < startTime < eTF:
+                resource = self._needed_resources[(sTF,eTF)]
+                del self._needed_resources[(sTF,eTF)]
+                self._needed_resources[(sTF,startTime)] = resource
+                if endTime < eT:
+                    self._needed_resources[(startTime,endTime)] = resource + node_resource
+                    self._needed_resources[(endTime,eTF)] = resource
+                else:
+                    self._needed_resources[(sTF,startTime)] = resource 
+                    self._needed_resources[(startTime,eTF)] = resource + node_resource
+            
+            if eTL < endTime:
+                self._needed_resources[(eTL,endTime)] = node_resource
+            elif eTL != eTF and sTL < endTime < eTL:
+               resource = self._needed_resources[(sTL,eTL)]
+               del self._needed_resources[(sTL,eTL)]
+               self._needed_resources[(sTL,endTime)] = resource + node_resource
+               self._needed_resources[(endTime,eTL)] = resource
+
+            for pos,(sT,eT) in enumerate(affected):
+                if startTime <= sT and eT <= endTime:
+                    self._needed_resources[(sT,eT)]=self._needed_resources[(sT,eT)]+node_resource 
+                if len(affected)> pos+1:
+                    sTN,eTN = affected[pos + 1]
+                    if eT != sTN:
+                        self._needed_resources[(eT,sTN)] = node_resource
+        
+        self.logger.vdebug('AFTER')
+        self.logger.vdebug(self)
+
+    def decr(self,startTime,endTime,node_resource):
+        raise Exception('NOT IMPLEMENTED BY NOW')
+    def __str__(self):
+        string = ''
+        if len(self) == 0:
+            return 'Nothing to see'
+        for sT,eT in self._needed_resources:
+            string += str(sT)+':'+str(eT)+ ' => '+str(self._needed_resources[sT,eT])+'-'
+        return string
+        
+class NodeResources(object):
+    def __init__(self,slottable):
+        self._list_nr = {}
+        self.slottable = slottable
+        self.logger = logging.getLogger('NR')
+    def __getitem__(self,node):
+        return self._list_nr[node]
+    def __iter__(self):
+        return iter(self._list_nr)
+    def __add__(self, other):
+        if not isinstance(other,NodeResources):
+            raise Exception('Not implemented')
+        self.logger.vdebug('Adding some %s to: '%other)
+        self.logger.vdebug(self)
+        list_nr = {}
+        for node in other:
+            list_nr[node] = self.slottable.create_empty_resource_tuple()
+            list_nr[node].incr(other[node])
+        for node in self:
+            if node in other:
+                list_nr[node].incr(self[node])
+            else:
+                list_nr[node] = self.slottable.create_empty_resource_tuple()
+                list_nr[node].incr(other[node])
+        new = NodeResources.from_list(self.slottable,list_nr)
+
+        self.logger.vdebug('AFTER: %s'%new)
+        return new
+    @classmethod
+    def from_list(cls, slottable, list_nR):
+        new = cls(slottable)
+        new._list_nr = list_nR
+        return new
+    def __str__(self):
+        a = ''
+        for node in self:
+            a += 'N: '+str(node)+' R:'+str(self[node])+' | '
+        return a
+
+
+

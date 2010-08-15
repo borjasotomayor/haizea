@@ -342,6 +342,7 @@ class ResourceReservation(object):
     STATE_ACTIVE = 1
     STATE_DONE = 2
 
+
     # Mapping from state to a descriptive string
     state_str = {STATE_SCHEDULED : "Scheduled",
                  STATE_ACTIVE : "Active",
@@ -365,6 +366,7 @@ class ResourceReservation(object):
         self.state = None
         self.resources_in_pnode = res # pnode -> ResourceTuple
                         
+        self.times_delayed = 0
     def print_contents(self, loglevel=constants.LOGLEVEL_VDEBUG):
         """Prints the contents of the RR to the log
         
