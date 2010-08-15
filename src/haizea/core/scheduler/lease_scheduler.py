@@ -303,6 +303,8 @@ class LeaseScheduler(object):
             # Haizea crash and burn.
             
             get_persistence().persist_lease(lease)
+        # Procces 
+        self.vm_scheduler.free_space_delaying_VM() 
 
     def get_lease_by_id(self, lease_id):
         """Gets a lease with the given ID
