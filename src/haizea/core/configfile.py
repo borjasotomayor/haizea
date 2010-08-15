@@ -447,8 +447,44 @@ class HaizeaConfig(Config):
             this time can compound up to 32-64 seconds, which has to be
             taken into account when estimating when to start a suspend
             operation that must be completed before another lease starts).
+            """),
+     Option(name        = "max-delay-duration",
+            getter      = "max-delay-duration",
+            type        = OPTTYPE_INT,
+            required    = False,
+            default     = 10,
+            valid       = range(100),
+            doc         = """
+            Maximun percent of the duration of a VM that can be taken when
+            the end of a ResourceReservation, by now only Resume / Supend,
+            take longer than expect and the VM is starting after or the VM
+            wich is linked with any of this RR. As higher the value is less
+            posibilities of a VM end is delayed so less VM will be delayed.
+            """),
+     Option(name        = "max-delay-vm",
+            getter      = "max-delay-vm",
+            type        = OPTTYPE_INT,
+            required    = False,
+            default     = 50,
+            valid       = range(100),
+            doc         = """
+            Maximun percent of since the suposed start of a VM, that any VM
+            can be delayed. If it is deleyed more than the given percent, it
+            will do the action call max-delay-action. Lower the number is more
+            accurace you can give, but the scheduler will have to work harder.
+            """),
+     Option(name        = "max-delay-action",
+            getter      = "max-delay-action",
+            type        = OPTTYPE_STRING,
+            required    = False,
+            default     = constants.DELAY_CANCEL,
+            valid       = [constants.DELAY_CANCEL],
+            doc         = """
+            This are the actions that the scheduler can take, whenever a VM
+            is delayed more than the max-action-vm parameter. By now it is only
+            allow the CANCEL action, but in a future will more like RESCHEDULE
+            wich allow RESCHEDULE a VM in an other time.
             """)
-
     ]
     sections.append(scheduling)
     

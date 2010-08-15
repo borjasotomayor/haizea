@@ -69,8 +69,8 @@ CLOCK_SIMULATED = "simulated"
 CLOCK_REAL = "real"
 # Delay
 DELAY_STARTVM = "delayed-starting-time-of-vm"
-DELAY_RESCHEDULE = "reschedule-the-vm"
-DELAY_CANCEL = "VM-have-been-canceled"
+DELAY_RESCHEDULE = "reschedule"
+DELAY_CANCEL = "cancel"
 
 # Misc
 BETTER = -1

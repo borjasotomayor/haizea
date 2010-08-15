@@ -1529,9 +1529,10 @@ class VMScheduler(object):
         # Get configuration
 
         if simulate: self.logger.vdebug('Simulating a delay of a VMRR ----------------')
-        maxdelaystart = 10
-        maxdelay = 50
-        maxdelayaction = constants.DELAY_CANCEL 
+        config = get_config()
+        maxdelaystart =  config.get('max-delay-duration')
+        maxdelay = config.get('max-delay-vm')
+        maxdelayaction = config.get('max-delay-action') 
         
         old_end = vmrr.end
         old_start = vmrr.start
