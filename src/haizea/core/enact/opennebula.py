@@ -229,8 +229,9 @@ class OpenNebulaVMEnactment(VMEnactment):
             
             try:
                 vm = self.rpc.vm_info(vid)   
-                state = vm.state
-                if state == OpenNebulaVM.STATE_ACTIVE:
+                state = vm.lcm_state
+                self.logger.vdebug('----------------------> %s'%state)
+                if state == OpenNebulaVM.LCMSTATE_RUNNING:
                     self.logger.debug("Resume of L%iV%i correct (ONE vid=%i)." % (action.lease_haizea_id, vnode, vid))
                 else:
                     self.logger.warning("ONE did not complete resume of L%iV%i on time. State is %i. (ONE vid=%i)" % (action.lease_haizea_id, vnode, state, vid))

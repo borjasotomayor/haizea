@@ -111,7 +111,7 @@ class ResourcePool(object):
     def verify_resume(self, lease, rr):
         verify_resume_action = actions.VMEnactmentConfirmResumeAction()
         verify_resume_action.from_rr(rr)
-        self.vm.verify_resume(verify_resume_action)    
+        return self.vm.verify_resume(verify_resume_action)    
     
     def refresh_nodes(self):
         new_nodes = self.info.refresh()
