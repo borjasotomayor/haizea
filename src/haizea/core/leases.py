@@ -115,6 +115,10 @@ class Lease(object):
     DEADLINE = 4
     UNKNOWN = -1
     
+    # Delay Options
+    DELAY_GOODSTATES = [STATE_READY,STATE_SCHEDULED,STATE_SUSPENDED_SCHEDULED]
+
+
     # String representation of lease types    
     type_str = {BEST_EFFORT: "Best-effort",
                 ADVANCE_RESERVATION: "AR",
