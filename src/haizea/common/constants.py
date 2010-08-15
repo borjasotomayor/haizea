@@ -67,6 +67,10 @@ PREPARATION_TRANSFER = "imagetransfer"
 
 CLOCK_SIMULATED = "simulated"
 CLOCK_REAL = "real"
+# Delay
+DELAY_STARTVM = "delayed-starting-time-of-vm"
+DELAY_RESCHEDULE = "reschedule-the-vm"
+DELAY_CANCEL = "VM-have-been-canceled"
 
 # Misc
 BETTER = -1
