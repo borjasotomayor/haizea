@@ -66,7 +66,7 @@ from time import sleep
 from math import ceil
 from mx.DateTime import now, TimeDelta, Parser
 
-DAEMON_STDOUT = DAEMON_STDIN = "/var/tmp/haizea.stout"
+DAEMON_STDOUT = DAEMON_STDIN = "/dev/null"
 DAEMON_STDERR = "/var/tmp/haizea.err"
 DEFAULT_LOGFILE = "/var/tmp/haizea.log"
 
