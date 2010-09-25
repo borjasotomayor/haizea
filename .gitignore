@@ -1,0 +1,8 @@
+*.swp
+build/
+.svn
+all
+setup
+clean
+start
+PlayGround
