@@ -21,7 +21,7 @@ from haizea.core.leases import Lease, Capacity, Timestamp, Duration, UnmanagedSo
 from haizea.core.frontends import RequestFrontend
 from haizea.common.utils import UNIX2DateTime, round_datetime, get_config, OpenNebulaXMLRPCClientSingleton
 from haizea.common.opennebula_xmlrpc import OpenNebulaVM
-from mx.DateTime import DateTimeDelta, ISO
+from mx.DateTime import DateTimeDelta, Parser
 
 import operator
 import logging
@@ -65,9 +65,9 @@ class OpenNebulaHaizeaVM(object):
             self.start = Timestamp(Timestamp.UNSPECIFIED)
         elif self.start[0] == "+":
             # Relative time
-            self.start = Timestamp(round_datetime(self.submit_time + ISO.ParseTime(self.start[1:])))
+            self.start = Timestamp(round_datetime(self.submit_time + Parser.TimeDeltaFromString(self.start[1:])))
         else:
-            self.start = Timestamp(ISO.ParseDateTime(self.start))
+            self.start = Timestamp(Parser.TimeDeltaFromString(self.start))
             
         # Create Duration object
         if self.duration == OpenNebulaHaizeaVM.HAIZEA_DURATION_UNLIMITED:
@@ -75,7 +75,7 @@ class OpenNebulaHaizeaVM(object):
             # TODO: Integrate concept of unlimited duration in the lease datastruct
             self.duration = Duration(DateTimeDelta(36500))
         else:
-            self.duration = Duration(ISO.ParseTimeDelta(self.duration))
+            self.duration = Duration(Parser.TimeDeltaFromString(self.duration))
             
 
         self.preemptible = (self.preemptible == OpenNebulaHaizeaVM.HAIZEA_PREEMPTIBLE_YES)
@@ -162,6 +162,7 @@ class OpenNebulaFrontend(RequestFrontend):
         requested_resources = dict([(i+1,vm.capacity) for i, vm in enumerate(opennebula_vms)])
 
         lease = Lease.create_new(submit_time = submit_time, 
+                                 user_id = None, # TODO
                                  requested_resources = requested_resources, 
                                  start = start, 
                                  duration = duration, 
