@@ -1045,7 +1045,7 @@ class Capacity(object):
             
     def __repr__(self):
         """Returns a string representation of the Capacity"""
-        return "  |  ".join("%s: %i" % (res_type,q[0]) for res_type, q in self.quantity.items())
+        return "  |  ".join("%s: %s" % (res_type,q) for res_type, q in self.quantity.items())
             
 
 class Timestamp(object):
