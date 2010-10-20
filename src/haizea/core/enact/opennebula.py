@@ -44,15 +44,17 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
         self.max_nod_id = 0
         self.nodes = {}
 
-        self.resource_types = []
-        self.resource_types.append((constants.RES_CPU,1))
-        self.resource_types.append((constants.RES_MEM,1))
-        self.resource_types.append((constants.RES_DISK,1))
-                    
         self.logger.info("Fetching nodes from OpenNebula")            
         self.__fetch_nodes()
         self.logger.info("Fetched %i nodes from OpenNebula" % len(self.nodes))            
-        
+
+        cpu_instances = max([n.capacity.ninstances[constants.RES_CPU] for n in self.nodes.values()])
+
+        self.resource_types = []
+        self.resource_types.append((constants.RES_CPU,cpu_instances))
+        self.resource_types.append((constants.RES_MEM,1))
+        self.resource_types.append((constants.RES_DISK,1))
+                
     def refresh(self):
         return self.__fetch_nodes()
         
