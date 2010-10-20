@@ -263,7 +263,7 @@ class ResourcePoolNode(object):
         h = {}
         h["id"] = self.id
         h["hostname"] = self.hostname
-        h["cpu"] = self.capacity.get_quantity(constants.RES_CPU)
+        h["cpu"] = sum(self.capacity.quantity[constants.RES_CPU])
         h["mem"] = self.capacity.get_quantity(constants.RES_MEM)
                 
         return h
