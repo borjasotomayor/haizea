@@ -771,12 +771,6 @@ class SimulatedClock(Clock):
         
         # Main loop
         while not self.done:
-            # Check if there are any changes in the resource pool
-            new_nodes = self.manager.scheduler.vm_scheduler.resourcepool.refresh_nodes()      
-            for n in new_nodes:
-                rt = slottable.create_resource_tuple_from_capacity(n.capacity)
-                slottable.add_node(n.id, rt)   
-            
             # Check to see if there are any leases which are ending prematurely.
             # Note that this is unique to simulation.
             prematureends = self.manager.scheduler.slottable.get_prematurely_ending_res(self.time)
