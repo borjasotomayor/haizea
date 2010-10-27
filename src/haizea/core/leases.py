@@ -1785,7 +1785,11 @@ class Nodes(object):
                 res.set("type", res_type)
                 ninstances = capacity.get_ninstances(res_type)
                 if ninstances == 1:
-                    res.set("amount", str(capacity.get_quantity(res_type)))                
+                    res.set("amount", str(capacity.get_quantity(res_type)))
+                else:
+                    for instance in range(1,ninstances+1):
+                        inst_elem = ET.SubElement(res, "instance")               
+                        inst_elem.set("amount", str(capacity.get_quantity_instance(res_type, instance)))
             
         return nodes
     
