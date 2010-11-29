@@ -293,7 +293,9 @@ class HaizeaConfig(Config):
      Option(name        = "suspend-rate",
             getter      = "suspend-rate",
             type        = OPTTYPE_FLOAT,
-            required    = True,
+            required    = False,
+            required_if = [(("scheduling","suspension"),constants.SUSPENSION_SERIAL),
+                           (("scheduling","suspension"),constants.SUSPENSION_ALL)],
             doc         = """
             Rate at which VMs are assumed to suspend (in MB of
             memory per second)                
@@ -302,7 +304,9 @@ class HaizeaConfig(Config):
      Option(name        = "resume-rate",
             getter      = "resume-rate",
             type        = OPTTYPE_FLOAT,
-            required    = True,
+            required    = False,
+            required_if = [(("scheduling","suspension"),constants.SUSPENSION_SERIAL),
+                           (("scheduling","suspension"),constants.SUSPENSION_ALL)],
             doc         = """
             Rate at which VMs are assumed to resume (in MB of
             memory per second)                
