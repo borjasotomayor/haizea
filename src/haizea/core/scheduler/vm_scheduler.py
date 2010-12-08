@@ -1281,7 +1281,8 @@ class VMScheduler(object):
         if threshold != None:
             # If there is a hard-coded threshold, use that
             return threshold
-        else:
+        
+        if config.get("suspension") != constants.SUSPENSION_NONE:
             factor = config.get("scheduling-threshold-factor")
             
             # First, figure out the "safe duration" (the minimum duration
@@ -1293,21 +1294,23 @@ class VMScheduler(object):
             if lease.get_state() == Lease.STATE_SUSPENDED_QUEUED:
                 resm_overhead = lease.estimate_resume_time()
                 safe_duration += resm_overhead
+        else:
+            safe_duration = 0
             
-            # TODO: Incorporate other overheads into the minimum duration
-            min_duration = safe_duration
-            
-            # At the very least, we want to allocate enough time for the
-            # safe duration (otherwise, we'll end up with incorrect schedules,
-            # where a lease is scheduled to suspend, but isn't even allocated
-            # enough time to suspend). 
-            # The factor is assumed to be non-negative. i.e., a factor of 0
-            # means we only allocate enough time for potential suspend/resume
-            # operations, while a factor of 1 means the lease will get as much
-            # running time as spend on the runtime overheads involved in setting
-            # it up
-            threshold = safe_duration + (min_duration * factor)
-            return threshold
+        # TODO: Incorporate other overheads into the minimum duration
+        min_duration = safe_duration
+        
+        # At the very least, we want to allocate enough time for the
+        # safe duration (otherwise, we'll end up with incorrect schedules,
+        # where a lease is scheduled to suspend, but isn't even allocated
+        # enough time to suspend). 
+        # The factor is assumed to be non-negative. i.e., a factor of 0
+        # means we only allocate enough time for potential suspend/resume
+        # operations, while a factor of 1 means the lease will get as much
+        # running time as spend on the runtime overheads involved in setting
+        # it up
+        threshold = safe_duration + (min_duration * factor)
+        return threshold
 
 
     #-------------------------------------------------------------------#
