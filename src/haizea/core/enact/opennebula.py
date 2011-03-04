@@ -66,6 +66,7 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
 
     def get_bandwidth(self):
         return 0
+
     
     def __fetch_nodes(self):
         new_nodes = []
@@ -202,7 +203,9 @@ class OpenNebulaVMEnactment(VMEnactment):
             sleep(interval)
 
     def verify_suspend(self, action):
+
         result = 0
+
         for vnode in action.vnodes:
             # Unpack action
             vid = action.vnodes[vnode].enactment_info
@@ -214,10 +217,11 @@ class OpenNebulaVMEnactment(VMEnactment):
                     self.logger.debug("Suspend of L%iV%i correct (ONE vid=%i)." % (action.lease_haizea_id, vnode, vid))
                 else:
                     self.logger.warning("ONE did not complete suspend of L%iV%i on time. State is %i. (ONE vid=%i)" % (action.lease_haizea_id, vnode, state, vid))
+
                     result = 1
             except Exception, msg:
                 raise OpenNebulaEnactmentError("vm.info", msg)
-
+        self.logger.vdebug(result)
         return result
         
     def verify_resume(self, action):
@@ -229,7 +233,9 @@ class OpenNebulaVMEnactment(VMEnactment):
             try:
                 vm = self.rpc.vm_info(vid)   
                 state = vm.state
+                self.logger.vdebug('----------------------> %s'%state)
                 if state == OpenNebulaVM.STATE_ACTIVE:
+
                     self.logger.debug("Resume of L%iV%i correct (ONE vid=%i)." % (action.lease_haizea_id, vnode, vid))
                 else:
                     self.logger.warning("ONE did not complete resume of L%iV%i on time. State is %i. (ONE vid=%i)" % (action.lease_haizea_id, vnode, state, vid))
@@ -237,7 +243,8 @@ class OpenNebulaVMEnactment(VMEnactment):
             except Exception, msg:
                 raise OpenNebulaEnactmentError("vm.info", msg)
 
-        return result        
+        print 'Action',action
+        return result
 
 class OpenNebulaDummyDeploymentEnactment(DeploymentEnactment):    
     def __init__(self):
@@ -248,3 +255,4 @@ class OpenNebulaDummyDeploymentEnactment(DeploymentEnactment):
             
     def resolve_to_file(self, lease_id, vnode, diskimage_id):
         return "/var/haizea/images/%s-L%iV%i" % (diskimage_id, lease_id, vnode)
+

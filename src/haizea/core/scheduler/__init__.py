@@ -42,6 +42,12 @@ class NormalEndLeaseException(SchedException):
 class RescheduleLeaseException(SchedException):
     pass
 
+class DelaySuspendException(SchedException):
+    """
+    Simple exception for use when there is a delay in a suspend
+    """
+    pass
+
 
 class SchedulingError(Exception):
     """The base class for scheduling errors"""
@@ -103,5 +109,4 @@ class MigrationResourceReservation(ResourceReservation):
         
     def clear_rrs(self):
         self.vmrr = None
-        
         

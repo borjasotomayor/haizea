@@ -321,7 +321,6 @@ class haizea_convert_data(Command):
         attr_names = list(attr_names)
         lease_stats_names = list(lease_stats_names)
         stats_names = list(stats_names)
-
         if self.opt.list_counters:
             for counter in counter_names:
                 print counter
@@ -411,6 +410,7 @@ class haizea_lwf_stats(Command):
                                          help = """
                                          Verbose
                                          """))
+
         self.optparser.add_option(Option("-l", "--utilization-length", action="store", type="string", dest="utilization_length",
                                          help = """
                                          Length of the utilization interval in format DD:HH:MM:SS. Default is until
@@ -426,7 +426,9 @@ class haizea_lwf_stats(Command):
         if utilization_length != None:
             utilization_length = Parser.DateTimeDeltaFromString(utilization_length)
 
+
         analyser = LWFAnalyser(infile, utilization_length, annotationfile, self.opt.verbose)
+
         
         analyser.analyse()
 

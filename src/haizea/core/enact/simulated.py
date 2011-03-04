@@ -124,3 +124,4 @@ class SimulatedDeploymentEnactment(DeploymentEnactment):
         
     def resolve_to_file(self, lease, vnode, diskimage_id):
         return "/var/haizea/images/%s-L%iV%i" % (diskimage_id, lease.id, vnode)
+

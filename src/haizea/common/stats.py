@@ -157,6 +157,7 @@ def percentile(values, percent):
     pos = int(len(values) * percent)
     return values[pos]
 
+
 def print_percentiles(values):
     svalues = sorted(values)
     print "min: %.2f" % svalues[0]

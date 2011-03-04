@@ -115,6 +115,9 @@ class Lease(object):
     DEADLINE = 4
     UNKNOWN = -1
     
+    # Delay Options
+    DELAY_GOODSTATES = [STATE_READY,STATE_SCHEDULED,STATE_SUSPENDED_SCHEDULED]
+
     # String representation of lease types    
     type_str = {BEST_EFFORT: "Best-effort",
                 ADVANCE_RESERVATION: "AR",
@@ -515,6 +518,7 @@ class Lease(object):
             return None
         else:
             return vmrr.get_final_end()
+
     
     def get_accumulated_duration_at(self, time):
         """Returns the amount of time required to fulfil the entire
@@ -628,6 +632,7 @@ class Lease(object):
         All leases with a duration less than this
         parameter are rounded up to the bound.
         """          
+
         time_on_dedicated = self.duration.actual
         time_on_loaded = self.end - self.submit_time
         bound = TimeDelta(seconds=bound)
@@ -753,7 +758,7 @@ class Lease(object):
             
         if len(self.preparation_rrs) > 0 and len(self.vm_rrs) > 0:
             assert self.preparation_rrs[-1].end <= self.vm_rrs[0].start
-            
+
             
     def __estimate_suspend_resume_time(self, rate):
         """ Estimate the time to suspend/resume an entire lease
@@ -775,10 +780,10 @@ class Lease(object):
             # Overestimating when susp_exclusion == SUSPRES_EXCLUSION_LOCAL
             time += compute_suspend_resume_time(mem, rate) + enactment_overhead
         return time
-
     def __repr__(self):
         """Returns a string representation of the Lease"""
         return "L%i" % self.id
+
         
     # ONLY for simulation
     def _update_prematureend(self):
@@ -1046,6 +1051,7 @@ class Capacity(object):
     def __repr__(self):
         """Returns a string representation of the Capacity"""
         return "  |  ".join("%s: %s" % (res_type,q) for res_type, q in self.quantity.items())
+
             
 
 class Timestamp(object):
@@ -1468,6 +1474,15 @@ class LeaseAnnotations(object):
             for lease, annotation in zip(leases, self.annotations):
                 self.__apply_to_lease(lease, annotation)            
     
+    def delay_end_of(self, rr, time):
+        """
+        Delay the end of a suspension and all the RR, which are later if this is not the last one
+        @return List of VM which are delayed
+        """
+        pass
+    
+    def delay_start_of(self, rr, time):
+        pass
     @classmethod
     def from_xml_file(cls, xml_file):
         """...
@@ -1790,6 +1805,7 @@ class Nodes(object):
                     for instance in range(1,ninstances+1):
                         inst_elem = ET.SubElement(res, "instance")               
                         inst_elem.set("amount", str(capacity.get_quantity_instance(res_type, instance)))
+
             
         return nodes
     

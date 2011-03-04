@@ -68,6 +68,13 @@ PREPARATION_TRANSFER = "imagetransfer"
 CLOCK_SIMULATED = "simulated"
 CLOCK_REAL = "real"
 
+
+# Delay
+DELAY_STARTVM = "delayed-starting-time-of-vm"
+DELAY_RESCHEDULE = "reschedule"
+DELAY_CANCEL = "cancel"
+
+
 # Misc
 BETTER = -1
 EQUAL = 0
@@ -92,3 +99,4 @@ NO_MEMORY_OVERRIDE = -1
 ONFAILURE_CANCEL = "cancel"
 ONFAILURE_EXIT = "exit"
 ONFAILURE_EXIT_RAISE = "exit-raise"
+

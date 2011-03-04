@@ -23,6 +23,9 @@ from haizea.common.utils import UNIX2DateTime, round_datetime, get_config, OpenN
 from haizea.common.opennebula_xmlrpc import OpenNebulaVM
 from mx.DateTime import DateTimeDelta, Parser
 
+
+
+
 import operator
 import logging
 
@@ -68,6 +71,7 @@ class OpenNebulaHaizeaVM(object):
             self.start = Timestamp(round_datetime(self.submit_time + Parser.TimeDeltaFromString(self.start[1:])))
         else:
             self.start = Timestamp(Parser.TimeDeltaFromString(self.start))
+
             
         # Create Duration object
         if self.duration == OpenNebulaHaizeaVM.HAIZEA_DURATION_UNLIMITED:
@@ -76,6 +80,7 @@ class OpenNebulaHaizeaVM(object):
             self.duration = Duration(DateTimeDelta(36500))
         else:
             self.duration = Duration(Parser.TimeDeltaFromString(self.duration))
+
             
 
         self.preemptible = (self.preemptible == OpenNebulaHaizeaVM.HAIZEA_PREEMPTIBLE_YES)
@@ -169,6 +174,7 @@ class OpenNebulaFrontend(RequestFrontend):
                                  deadline = None,
                                  preemptible = preemptible, 
                                  software = UnmanagedSoftwareEnvironment())
+
      
         lease.enactment_info = group_id
         lease.vnode_enactment_info = dict([(i+1,vm.one_id) for i, vm in enumerate(opennebula_vms)])

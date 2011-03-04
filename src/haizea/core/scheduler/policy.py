@@ -45,7 +45,7 @@ class PolicyManager(object):
     access these modules.
     
     """    
-    def __init__(self, admission, preemption, host_selection, pricing):
+    def __init__(self, admission, preemption, host_selection, pricing, delay=''):
         """Constructor
         
         Expects fully-constructed policies (these are currently
@@ -62,7 +62,8 @@ class PolicyManager(object):
         self.preemption = preemption
         self.host_selection = host_selection
         self.pricing = pricing
-    
+        self.delay = delay
+
     def sort_leases(self, preemptor, preemptees, time):
         """Sorts a list of leases by their preemptability
         
@@ -150,7 +151,14 @@ class PolicyManager(object):
         lease -- Lease that is being scheduled.
         preempted_leases -- Leases that would have to be preempted to support this lease.
         """
-        return self.pricing.price_lease(lease, preempted_leases)  
+        return self.pricing.price_lease(lease, preempted_leases)
+
+    def get_vms_to_delay(self, startTime, endTime, neededResources):
+        """Get all the VM's wich have to been delayed.
+
+        See documentation in VMDelayingPolicy.get_vms_to_delay """
+        
+        return self.delay.get_vms_to_delay(startTime, endTime, neededResources)
 
 
 class LeaseAdmissionPolicy(object):
@@ -336,3 +344,28 @@ class PricingPolicy(object):
         lease -- Lease that has been accepted/rejected
         """
         pass    
+class VMDelayingPolicy(object):
+    '''Decides what to delay when a RR end failed'''
+    # TODO Add to config file, and make it excutable
+
+    def __init__(self,slottable):
+        """ Constructor
+        Argument
+        slottable -- A fully constructed SlotTable
+        """
+        self.slottable = slottable
+    def get_vms_to_delay(self, startTime, endTime, neededResources):
+        '''
+        It should compute, depending the neededResources all the needed
+        leases wich have to been delayed.
+        
+        Arguments:
+        startTime -- Time in wich will start the delay
+        endTime -- New scheduled time for the RR wich have delayed
+        neededResources -- { node => Capacity needed }
+
+        return
+        liste of VM wich have to been delayed
+
+        '''
+        abstract()

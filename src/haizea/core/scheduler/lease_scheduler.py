@@ -32,13 +32,14 @@ by the lease scheduler.
 import haizea.common.constants as constants
 from haizea.common.utils import round_datetime, get_config, get_clock, get_policy, get_persistence
 from haizea.core.leases import Lease
-from haizea.core.scheduler import RescheduleLeaseException, NormalEndLeaseException, InconsistentLeaseStateError, EnactmentError, UnrecoverableError, NotSchedulableException, EarliestStartingTime
-from haizea.core.scheduler.vm_scheduler import VMResourceReservation
+from haizea.core.scheduler import RescheduleLeaseException, NormalEndLeaseException, InconsistentLeaseStateError, EnactmentError, UnrecoverableError, NotSchedulableException, EarliestStartingTime, DelaySuspendException
+from haizea.core.scheduler.vm_scheduler import VMResourceReservation, ResumptionResourceReservation
 from haizea.core.scheduler.slottable import ResourceReservation
 from operator import attrgetter
 
 import logging
 from mx.DateTime import DateTimeDelta
+
 
 class LeaseScheduler(object):
     """The Haizea Lease Scheduler
@@ -280,7 +281,6 @@ class LeaseScheduler(object):
                         get_persistence().persist_queue(self.queue)
                     else:
                         raise InconsistentLeaseStateError(lease, doing = "rescheduling best-effort lease")
-                    
             # A NormalEndLeaseException indicates that the end of this reservations marks
             # the normal end of the lease.
             except NormalEndLeaseException, msg:
@@ -304,6 +304,8 @@ class LeaseScheduler(object):
             # Haizea crash and burn.
             
             get_persistence().persist_lease(lease)
+        # Procces 
+        self.vm_scheduler.free_space_delaying_VM() 
 
     def get_lease_by_id(self, lease_id):
         """Gets a lease with the given ID
@@ -955,4 +957,3 @@ class LeaseTable(object):
     def get_leases_by_state(self, state):
         return [e for e in self.entries.values() if e.get_state() == state]
  
-        

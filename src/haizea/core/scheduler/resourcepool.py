@@ -95,7 +95,7 @@ class ResourcePool(object):
     def verify_suspend(self, lease, rr):
         verify_suspend_action = actions.VMEnactmentConfirmSuspendAction()
         verify_suspend_action.from_rr(rr)
-        self.vm.verify_suspend(verify_suspend_action)
+        return self.vm.verify_suspend(verify_suspend_action)
     
     def resume_vms(self, lease, rr):
         # Remove memory image files
@@ -115,7 +115,7 @@ class ResourcePool(object):
     def verify_resume(self, lease, rr):
         verify_resume_action = actions.VMEnactmentConfirmResumeAction()
         verify_resume_action.from_rr(rr)
-        self.vm.verify_resume(verify_resume_action)    
+        return self.vm.verify_resume(verify_resume_action)    
     
     def refresh_nodes(self):
         new_nodes = self.info.refresh()

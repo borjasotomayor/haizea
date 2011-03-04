@@ -12,6 +12,7 @@ class OpenNebulaXMLRPCClient(object):
     
     DEFAULT_ONE_AUTH = "~/.one/one_auth"
     
+
     def __init__(self, host, port, user, password):
         uri = "http://%s:%i" % (host, port)
         self.rpc = xmlrpclib.ServerProxy(uri)
@@ -49,6 +50,7 @@ class OpenNebulaXMLRPCClient(object):
             return user, passw
         except:
             raise Exception("Authorization file is malformed")
+
         
     def hostpool_info(self):
         try:
@@ -275,4 +277,4 @@ def parse_template(template_element):
                     template[name][subsubelement.tag] = subsubelement.text
                     
     return template
-    
+
