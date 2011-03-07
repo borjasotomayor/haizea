@@ -67,7 +67,7 @@ def gen_config_file(config, filename, verbose):
                     elif opt.type == OPTTYPE_DATETIME:
                         valid_str = "An ISO timestamp: i.e., YYYY-MM-DD HH:MM:SS"
                     elif opt.type == OPTTYPE_TIMEDELTA:
-                        valid_str = "An integer representing a duration in seconds."                
+                        valid_str = "A duration in the format HH:MM:SS"                
                 
                 f.write("# Valid values: %s\n" % valid_str)
 

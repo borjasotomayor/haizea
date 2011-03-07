@@ -237,9 +237,7 @@ class HaizeaConfig(Config):
             getter      = "wakeup-interval",
             type        = OPTTYPE_TIMEDELTA,
             required    = False,
-<
             default     = TimeDelta(seconds=60),
-=
             doc         = """
             Interval at which Haizea will wake up
             to manage resources and process pending requests.
@@ -461,8 +459,6 @@ class HaizeaConfig(Config):
             getter      = "max-delay-duration",
             type        = OPTTYPE_INT,
             required    = False,
-            default     = 10,
-            valid       = range(100),
             doc         = """
             Maximun percent of the duration of a VM that can be taken when
             the end of a ResourceReservation, by now only Resume / Supend,
@@ -474,8 +470,6 @@ class HaizeaConfig(Config):
             getter      = "max-delay-vm",
             type        = OPTTYPE_INT,
             required    = False,
-            default     = 50,
-            valid       = range(100),
             doc         = """
             Maximun percent of since the suposed start of a VM, that any VM
             can be delayed. If it is deleyed more than the given percent, it
@@ -486,7 +480,6 @@ class HaizeaConfig(Config):
             getter      = "max-delay-action",
             type        = OPTTYPE_STRING,
             required    = False,
-            default     = constants.DELAY_CANCEL,
             valid       = [constants.DELAY_CANCEL],
             doc         = """
             This are the actions that the scheduler can take, whenever a VM
