@@ -539,9 +539,9 @@ class HaizeaConfig(Config):
             specifying a site with homogeneous resources. 
             The format is:
         
-            <numnodes> [ <resource_type>:<resource_quantity>]+
+            <numnodes> [ <resource_type>:<resource_quantity>],
         
-            For example, "4  CPU:100 Memory:1024" describes a site
+            For example, "4  CPU:100,Memory:1024" describes a site
             with four nodes, each with one CPU and 1024 MB of memory.
             """),
 

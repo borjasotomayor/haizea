@@ -31,7 +31,7 @@ class SimulatedResourcePoolInfo(ResourcePoolInfo):
         if not ("CPU" in site.resource_types and "Memory" in site.resource_types):
             # CPU and Memory must be specified
             # TODO: raise something more meaningful
-            raise
+            raise Exception("CPU or Memory is not initializated")
         
         # Disk and network should be specified but, if not, we can
         # just add arbitrarily large values.

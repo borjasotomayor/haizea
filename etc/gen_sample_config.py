@@ -104,7 +104,7 @@ sample_trace.set("general", "persistence-file", "none")
 sample_trace.add_section("simulation")
 sample_trace.set("simulation", "clock", "simulated")
 sample_trace.set("simulation", "starttime", "2006-11-25 13:00:00")
-sample_trace.set("simulation", "resources", "4  CPU:100 Memory:1024")
+sample_trace.set("simulation", "resources", "4  CPU:100,Memory:1024")
 sample_trace.set("simulation", "imagetransfer-bandwidth", "100")
 
 sample_trace.add_section("accounting")
