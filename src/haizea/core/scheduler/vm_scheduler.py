@@ -92,6 +92,75 @@ class VMScheduler(object):
         self.max_in_future = max_in_future
         
         self.future_leases = set()
+        # Used for knowing how many resources have to been free if a VM have been delayed and in which nodes
+        self.delay_needResources = NeededResourcesPerNode()
+        self.have_to_delay = []
+
+
+    def schedule(self, lease, duration, nexttime, earliest, override_state = None):
+        """ The scheduling function
+        
+        This particular function doesn't do much except call __schedule_asap
+        and __schedule_exact (which do all the work).
+        
+        Arguments:
+        lease -- Lease to schedule
+        nexttime -- The next time at which the scheduler can allocate resources.
+        earliest -- The earliest possible starting times on each physical node
+        """        
+        if lease.get_type() == Lease.BEST_EFFORT:
+            return self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = self.can_schedule_in_future())
+        elif lease.get_type() == Lease.ADVANCE_RESERVATION:
+            return self.__schedule_exact(lease, duration, nexttime, earliest)
+        elif lease.get_type() == Lease.IMMEDIATE:
+            return self.__schedule_asap(lease, duration, nexttime, earliest, allow_in_future = False)
+        elif lease.get_type() == Lease.DEADLINE:
+            return self.__schedule_deadline(lease, duration, nexttime, earliest, override_state)
+
+
+    def estimate_migration_time(self, lease):
+        """ Estimates the time required to migrate a lease's VMs
+
+        This function conservatively estimates that all the VMs are going to
+        be migrated to other nodes. Since all the transfers are intra-node,
+        the bottleneck is the transfer from whatever node has the most
+        memory to transfer.
+        
+        Note that this method only estimates the time to migrate the memory
+        state files for the VMs. Migrating the software environment (which may
+        or may not be a disk image) is the responsibility of the preparation
+        scheduler, which has it's own set of migration scheduling methods.
+
+        Arguments:
+        lease -- Lease that might be migrated
+        """                
+        migration = get_config().get("migration")
+        if migration == constants.MIGRATE_YES:
+            bandwidth = self.resourcepool.info.get_migration_bandwidth()            
+            vmrr = lease.get_last_vmrr()
+            #mem_in_pnode = dict([(pnode,0) for pnode in set(vmrr.nodes.values())])
+            transfer_time = 0
+            for pnode in vmrr.nodes.values():
+                mem = vmrr.resources_in_pnode[pnode].get_by_type(constants.RES_MEM)
+                transfer_time += estimate_transfer_time(mem, bandwidth)
+            return transfer_time
+        elif migration == constants.MIGRATE_YES_NOTRANSFER:
+            return TimeDelta(seconds=0)        
+
+    def schedule_migration(self, lease, vmrr, nexttime):
+        """ Schedules migrations for a lease
+
+        Arguments:
+        lease -- Lease being migrated
+        vmrr -- The VM reservation before which the migration will take place
+        nexttime -- The next time at which the scheduler can allocate resources.
+        """
+        
+        # Determine what migrations have to be done.
+        last_vmrr = lease.get_last_vmrr()
+        
+        vnode_mappings = self.resourcepool.get_ram_image_mappings(lease)
+        vnode_migrations = dict([(vnode, (vnode_mappings[vnode], vmrr.nodes[vnode])) for vnode in vmrr.nodes if vnode_mappings[vnode] != vmrr.nodes[vnode]])
         
         # Determine if we actually have to migrate
         mustmigrate = False
