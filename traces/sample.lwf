@@ -15,7 +15,6 @@ More files can be found in the tests directory.
 	<!-- The lease requests are initially commented out -->
 	
 	<!-- First lease request -->
-	<!--
 	<lease-request arrival="00:00:00">
 	<lease preemptible="true">
 		<nodes>
@@ -31,10 +30,8 @@ More files can be found in the tests directory.
         </software>
 	</lease>
 	</lease-request>
-	-->
 
 	<!-- Second lease request -->
-	<!--
 	<lease-request arrival="00:15:00">
 	<lease preemptible="false">
 		<nodes>
@@ -52,7 +49,6 @@ More files can be found in the tests directory.
         </software>
 	</lease>
 	</lease-request>
-	-->
 	
 	</lease-requests>
 </lease-workload>
