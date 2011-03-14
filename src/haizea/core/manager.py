@@ -289,7 +289,10 @@ class Manager(object):
         if self.daemon:
             handler = logging.FileHandler(self.config.get("logfile"))
         else:
-            handler = logging.StreamHandler()
+            if self.config.get("loglevel") == 'VDEBUG':
+                handler = logging.FileHandler(self.config.get("logfile"))
+            else: 
+                handler = logging.StreamHandler()
         if sys.version_info[1] <= 4:
             formatter = logging.Formatter('%(name)-7s %(message)s')
         else:
@@ -297,6 +300,7 @@ class Manager(object):
         handler.setFormatter(formatter)
         logger.addHandler(handler)
         level = logging.getLevelName(self.config.get("loglevel"))
+        
         logger.setLevel(level)
         logging.setLoggerClass(HaizeaLogger)
 
