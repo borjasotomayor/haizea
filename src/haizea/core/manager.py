@@ -289,10 +289,7 @@ class Manager(object):
         if self.daemon:
             handler = logging.FileHandler(self.config.get("logfile"))
         else:
-            if self.config.get("loglevel") == 'VDEBUG':
-                handler = logging.FileHandler(self.config.get("logfile"))
-            else: 
-                handler = logging.StreamHandler()
+            handler = logging.StreamHandler()
         if sys.version_info[1] <= 4:
             formatter = logging.Formatter('%(name)-7s %(message)s')
         else:

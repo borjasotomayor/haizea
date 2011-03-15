@@ -950,7 +950,7 @@ class VMScheduler(object):
 
             # We have a mapping; we still have to check if it satisfies
             # the minimum duration.
-            if mapping != None:
+            if mapping is not None:
                 if actualend < end:
                     actualduration = actualend - start
                     if actualduration >= min_duration:
@@ -1433,8 +1433,8 @@ class VMScheduler(object):
         # First of all, we are going to decide which VM have to been delayed
         # or can be reschedule in an other Node but only the necesary VM, we divide
         # this action in cicles, in each of them:
-        # 1º We decide which VMRR have to been delayed
-        # 2º We delay the VMRR
+        # 1 We decide which VMRR have to been delayed
+        # 2 We delay the VMRR
         self.logger.vdebug('We have to free all this space {node => space}')
         self.logger.vdebug(self.delay_needResources)
         vm_to_delay = {}
@@ -1955,7 +1955,7 @@ class VMScheduler(object):
         l.print_contents()
         #React to incomplete resume
 
-        if self.resourcepool.verify_resume(l, rr):
+        if not self.resourcepool.verify_resume(l, rr):
             self.rr_end_delayed(rr)
         else:
             rr.state = ResourceReservation.STATE_DONE
@@ -1963,7 +1963,7 @@ class VMScheduler(object):
                 l.set_state(Lease.STATE_RESUMED_READY)
                 self.logger.info("Resumed lease %i" % (l.id))
             for vnode, pnode in rr.vmrr.nodes.items():
-                self.resourcepool.remove_ramfile(pnode, l.id, vnode)
+                self.resourcepool.remove_ramfile(pnode, l, vnode)
         l.print_contents()
         self.logger.debug("LEASE-%i End of handleEndResume" % l.id)
 
