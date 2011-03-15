@@ -95,10 +95,10 @@ class SimulatedVMEnactment(VMEnactment):
                          % (action.lease_haizea_id, vnode))
 
     def verify_suspend(self, action):
-        return 0
+        return 1
     
     def verify_resume(self, action):
-        return 0
+        return 1
     
 class SimulatedDeploymentEnactment(DeploymentEnactment):    
     def __init__(self, bandwidth):
