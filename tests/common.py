@@ -90,7 +90,7 @@ def create_reservation_from_lease(lease, mapping, slottable):
     res = dict([(mapping[vnode],r) for vnode,r in lease.requested_resources.items()])
     rr = ResourceReservation(lease, start, end, res)
     slottable.add_reservation(rr)
-
+    return rr
 def create_tmp_slottable(slottable):
     tmp_slottable = SlotTable(slottable.resource_types)
     tmp_slottable.nodes = slottable.nodes

@@ -186,3 +186,21 @@ def sample_slottable_4():
 
 
     return slottable, [lease1, lease2, None]
+
+def sample_slottable_5():
+    slottable = SlotTable([(constants.RES_CPU,ResourceTuple.SINGLE_INSTANCE),(constants.RES_MEM,ResourceTuple.SINGLE_INSTANCE)])
+    FULL_NODE, HALF_NODE, QRTR_NODE, EMPT_NODE = create_capacities(slottable)
+
+    slottable.add_node(1, FULL_NODE)
+
+    lease1 = create_ar_lease(
+        lease_id= 1,
+        submit_time= T1200,
+        start= T1300,
+        end= T1330,
+        preemptible=False,
+        requested_resources={1:FULL_NODE}
+    )
+
+
+    return slottable, [lease1]
