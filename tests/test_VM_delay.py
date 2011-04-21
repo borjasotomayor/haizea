@@ -120,4 +120,15 @@ def test_VMRR_only_delay_end_percent_needed():
     assert delayTime == delay_end
     assert action == constants.DELAY_STARTVM
 
+def test_VMRR_delay_percent_should_be_after_been_delayed_before():
+    slottable,lease,scheduler,vmrr = setup_VMRR_delay()
+    old_start, old_end = vmrr.start, vmrr.end
+    vmrr.percent_delayed = 3
+    M3 = TimeDelta(0,3)
+    action, delayTime = scheduler._delay_vmrr_to(old_start + M3, vmrr, False, 6,50, constants.DELAY_CANCEL)
+    delay_end = M3 - (old_end-old_start)*0.03
+    delay_end = TimeDelta(delay_end.hour, delay_end.minute, int(delay_end.second))
+    assert vmrr.end == old_end + delay_end
+    assert delayTime == delay_end
+    assert action == constants.DELAY_STARTVM
 
