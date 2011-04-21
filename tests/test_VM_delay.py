@@ -82,8 +82,7 @@ def test_delay_VMRR_configurations():
     vmrr = create_VMreservation_from_lease_with_shutdown(lease,{1:1},slottable)
     one_minute = TimeDelta(0,1)
     old_start, old_end = vmrr.start, vmrr.end
-    def test_maxdelay_more_100P():
+    def maxdelaystart_bigger_than_maxdelay():
         with raises (Exception):
             scheduler._delay_vmrr_to(old_start + one_minute, vmrr, True, 90 , 80, constants.DELAY_CANCEL)
-            
-    test_maxdelay_more_100P()
+    maxdelaystart_bigger_than_maxdelay()

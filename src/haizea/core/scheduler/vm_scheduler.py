@@ -1565,6 +1565,9 @@ class VMScheduler(object):
         if maxdelay is None: maxdelay = get_config().get('max-delay-vm')
         if maxdelayaction is None: maxdelayaction = get_config().get('max-delay-action')
         if vmrr.percent_delayed == -1: raise InconsistentScheduleError('CAN NOT BE DELAYED A VMRR WICH HAVE BEEN CANCEL')
+
+        if maxdelaystart > maxdelay: raise Exception('max-delay-start bigger than max-delay not make sense')
+
         old_end = vmrr.end
         old_start = vmrr.start
         
