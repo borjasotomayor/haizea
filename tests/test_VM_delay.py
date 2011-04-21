@@ -85,4 +85,8 @@ def test_delay_VMRR_configurations():
     def maxdelaystart_bigger_than_maxdelay():
         with raises (Exception):
             scheduler._delay_vmrr_to(old_start + one_minute, vmrr, True, 90 , 80, constants.DELAY_CANCEL)
+    def maxdelay_bigger_than_100P():
+        with raises(Exception):
+            scheduler._delay_vmrr_to(old_end + one_minute,vmrr,True,80,101,constants.DELAY_CANCEL)
     maxdelaystart_bigger_than_maxdelay()
+    maxdelay_bigger_than_100P()
