@@ -4,13 +4,15 @@ from haizea.core.scheduler.vm_scheduler import *
 from mx.DateTime import TimeDelta
 
 
+
+
 def create_VMreservation_from_lease_with_shutdown(lease, mapping, slottable):
     start = lease.start.requested
     end = start + lease.duration.requested
     res = dict([(mapping[vnode],r) for vnode,r in lease.requested_resources.items()])
-    vmrr = VMResourceReservation(lease, start, end, res)
+    vmrr = VMResourceReservation(lease, start, end,{1:1}, res)
 
-    shutdown_time = vmrr.lease.estimate_shutdown_time()
+    shutdown_time = TimeDelta(0,0,30)
 
     start = vmrr.end - shutdown_time
     end = vmrr.end
@@ -27,8 +29,10 @@ def create_VMreservation_from_lease_with_shutdown(lease, mapping, slottable):
 
     vmrr.post_rrs.append(shutdown_rr)
     slottable.add_reservation(vmrr)
-    slottable.add_reservartion(shutdown_rr)
+    slottable.add_reservation(shutdown_rr)
 
+
+    return vmrr
 
 def test_delay_VM_Shutdown_end():
     slottable, lease = sample_slottable_5()
@@ -43,4 +47,15 @@ def test_delay_VM_Shutdown_end():
     assert len(slottable.get_reservations_ending_at(old_end + one_minute)) == 1
     assert len(slottable.get_reservations_ending_at(old_end)) == 0
 
-
+def test_delay_VMRR_not_delayed_before():
+    slottable, lease = sample_slottable_5()
+    lease = lease[0]
+    scheduler = VMScheduler(slottable, None, None, 0)
+    vmrr = create_VMreservation_from_lease_with_shutdown(lease,{1:1}, slottable)
+    one_minute = TimeDelta(0,1)
+    old_start,old_end = vmrr.start,vmrr.end
+    action, delayTime = scheduler.delay_vmrr_to(old_start + one_minute, vmrr, False,50,80,constants.DELAY_CANCEL)
+    assert action == constants.DELAY_STARTVM
+    assert vmrr.end == old_end
+    assert vmrr.start == old_start + one_minute
+    assert delayTime == 0

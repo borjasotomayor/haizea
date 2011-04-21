@@ -1528,14 +1528,14 @@ class VMScheduler(object):
         '''
         Return -> End time
         '''
-        rr.print_contents()
+        # rr.print_contents()
         old_start,old_end = rr.start,rr.end
         rr.start,rr.end = delayto,delayto+(old_end-old_start)
         self.slottable.update_reservation(rr,old_start,old_end)
         return rr.end
 
 
-    def delay_vmrr_to(self, delayto, vmrr,simulate = False):
+    def delay_vmrr_to(self, delayto, vmrr,simulate = False, maxdelaystart = None,maxdelay = None, maxdelayaction = None):
         '''
         Delay the start of VMRR to the start_time. This can happend
         when a RR is delayed in the shutdown or in the suspend, so the next
@@ -1560,11 +1560,10 @@ class VMScheduler(object):
         # It is needed for knowing the delay between two RR in the same VM
         # Get configuration
 
-        if simulate: self.logger.vdebug('Simulating a delay of a VMRR ----------------')
-        config = get_config()
-        maxdelaystart =  config.get('max-delay-duration')
-        maxdelay = config.get('max-delay-vm')
-        maxdelayaction = config.get('max-delay-action') 
+        if simulate: self.logger.debug('Simulating a delay of a VMRR ----------------')
+        if maxdelaystart is None: maxdelaystart =  get_config().get('max-delay-duration')
+        if maxdelay is None: maxdelay = get_config().get('max-delay-vm')
+        if maxdelayaction is None: maxdelayaction = get_config().get('max-delay-action')
         if vmrr.percent_delayed == -1: raise InconsistentScheduleError('CAN NOT BE DELAYED A VMRR WICH HAVE BEEN CANCEL')
         old_end = vmrr.end
         old_start = vmrr.start
@@ -1574,31 +1573,31 @@ class VMScheduler(object):
         now_percent = (int(delayto-old_start)*100.0)/int(vmrr.end-old_start)
         
         percent = vmrr.percent_delayed + now_percent 
-        self.logger.vdebug("Percent of the VM's delay: "+str(percent))
+        self.logger.debug("Percent of the VM's delay: "+str(percent))
         if percent > maxdelay:
             if simulate:
-                self.logger.vdebug('Have overpass the MAX pemited')
-                return (constants.DELAY_CANCEL,'')
+                self.logger.debug('Have overpass the MAX pemited')
+                return constants.DELAY_CANCEL,''
             if constants.DELAY_RESCHEDULE == maxdelayaction:
-                self.logger.vdebug('It should have been reschedule')
+                self.logger.debug('It should have been reschedule')
                 raise InconsistentScheduleError()
             else:
                 #Default Action is cancel
-                self.logger.vdebug('The VM is been canceled')
+                self.logger.debug('The VM is been canceled')
                 self.cancel_vm(vmrr)
                 vmrr.percent_delayed = -1
-                return (constants.DELAY_CANCEL,'')
+                return constants.DELAY_CANCEL,''
         else:
             delayedend = 0
             if maxdelaystart < percent:
-                self.logger.vdebug('END IS BEING DELAYED OF THE VMRR')
+                self.logger.debug('END IS BEING DELAYED OF THE VMRR')
                 # Only delay the maxdelaystart, the rest is delayed in the end
                 if vmrr.percent_delayed >= maxdelaystart: PTD = now_percent
                 else: PTD = percent - maxdelaystart
 
                 delayedend = (PTD/100)*duration
                 delayedend = TimeDelta(delayedend.hour,delayedend.minute,int(delayedend.second))
-                self.logger.vdebug('Delaying end: %s'%delayedend)
+                self.logger.debug('Delaying end: %s'%delayedend)
                 if not simulate: vmrr.end = vmrr.end + delayedend
                 
             if not simulate:
@@ -1606,7 +1605,7 @@ class VMScheduler(object):
                 vmrr.percent_delayed = percent
                 self.slottable.update_reservation(vmrr,old_start,old_end)
         
-        return (constants.DELAY_STARTVM,delayedend)
+        return constants.DELAY_STARTVM,delayedend
                 
 
     def _sum_all_requested_resources_of(self, vnodes, vmrr):
