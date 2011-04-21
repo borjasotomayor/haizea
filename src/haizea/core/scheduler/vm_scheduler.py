@@ -259,7 +259,7 @@ class VMScheduler(object):
         if t < vmrr.start:
             return False # t could be during a resume
         by_t = min(vmrr.end, t) # t could be during a suspend
-        if nexttime == None:
+        if nexttime is None:
             time_until_suspend = t - vmrr.start
         else:
             time_until_suspend = min( (t - vmrr.start, t - nexttime))
@@ -380,7 +380,7 @@ class VMScheduler(object):
                                                           allow_preemption = True)
 
         # If no mapping was found, tell the lease scheduler about it
-        if mapping == None:
+        if mapping is None:
             raise NotSchedulableException, "Not enough resources in specified interval"
         
         # Create VM resource reservations
@@ -1451,7 +1451,7 @@ class VMScheduler(object):
                 # If a VM have the end delayed, have to been 
                 # added to the neededcapacity
                 time_to_start = endTime + seconds_added
-                action, new_vm_end = self.delay_vm_to(time_to_start,vm,True)
+                action, new_vm_end = self._delay_vm_to(time_to_start,vm,True)
                 
                 # Because a VM which have to delay the end, can't be delayed until
                 # it have enough space after, we have to add it to a list, and delay
@@ -1459,7 +1459,7 @@ class VMScheduler(object):
                 vm_final_end = vm.get_final_end()
                 if vm in vm_to_delay:
                     # Check the time at would have finished
-                    w_action,w_vm_end = self.delay_vm_to(vm_to_delay[vm],vm,True)
+                    w_action,w_vm_end = self._delay_vm_to(vm_to_delay[vm],vm,True)
                     # If the new action it is not delay end, it should decrement the
                     # space that was supossed to free.
                     if action != constants.DELAY_STARTVM:
@@ -1472,14 +1472,14 @@ class VMScheduler(object):
                     vm_to_delay[vm] = time_to_start
                     self.delay_needResources.incr(vm_final_end,new_vm_end,self._sum_all_requested_resources_of(vm.nodes.keys(),vm))
                 else:
-                    self.delay_vm_to(time_to_start,vm)
+                    self._delay_vm_to(time_to_start,vm)
 
             self.delay_needResources.delete(startTime,endTime)
             
         # Have to been delayed after delay the previous starting leases    
         seconds_added_ =[]
         for vm in vm_to_delay:
-            self.delay_vm_to(vm_to_delay[vm],vm)
+            self._delay_vm_to(vm_to_delay[vm],vm)
             
             self.logger.vdebug('How looks the vm, after been delayed:')
             vm.print_contents()
@@ -1491,7 +1491,7 @@ class VMScheduler(object):
 
 
 
-    def delay_vm_to(self,delayto,vmrr,simulate = False):
+    def _delay_vm_to(self,delayto,vmrr,simulate = False):
         '''
         delay Start Time of a lease
         foo
@@ -1504,27 +1504,27 @@ class VMScheduler(object):
             raise InconsistentLeaseStateError('Not the state I want for the lease for been delayed')     
         # First of all, we delay the VMRR and see what happend
         old_start_vm = vmrr.end
-        action, delayedtime = self.delay_vmrr_to(delayto + (vmrr.start - vmrr.get_first_start()),vmrr,simulate)
+        action, delayedtime = self._delay_vmrr_to(delayto + (vmrr.start - vmrr.get_first_start()),vmrr,simulate)
         if action == constants.DELAY_STARTVM:
             if simulate:
-                return (action,vmrr.get_final_end()+delayedtime)
+                return action,vmrr.get_final_end()+delayedtime
             # First delay pre_rr
             for rr in vmrr.pre_rrs:
-                self.delay_rr_to(delayto + (rr.start - vmrr.get_first_start()),rr)
+                self._delay_rr_to(delayto + (rr.start - vmrr.get_first_start()),rr)
             # We have to delay the start and end of the VM
             
             if delayedtime > 0:
                 for rr in vmrr.post_rrs:
-                    self.delay_rr_to(vmrr.end + (rr.start - (old_start_vm)),rr)
+                    self._delay_rr_to(vmrr.end + (rr.start - old_start_vm),rr)
                 
             return action,(vmrr.get_final_end() - delayedtime)
 
         elif action == constants.DELAY_RESCHEDULE:
             pass 
         elif action == constants.DELAY_CANCEL:
-            return (action,'')
+            return action,''
 
-    def delay_rr_to(self, delayto, rr):
+    def _delay_rr_to(self, delayto, rr):
         '''
         Return -> End time
         '''
@@ -1535,7 +1535,7 @@ class VMScheduler(object):
         return rr.end
 
 
-    def delay_vmrr_to(self, delayto, vmrr,simulate = False, maxdelaystart = None,maxdelay = None, maxdelayaction = None):
+    def _delay_vmrr_to(self, delayto, vmrr,simulate = False, maxdelaystart = None,maxdelay = None, maxdelayaction = None):
         '''
         Delay the start of VMRR to the start_time. This can happend
         when a RR is delayed in the shutdown or in the suspend, so the next
@@ -1650,7 +1650,7 @@ class VMScheduler(object):
 
         if rr in vmrr.pre_rrs:
             # Simulate VMRR delay for knowing at wich time, the vmrr should end
-            action,vmrr_end = self.delay_vmrr_to(new_RRend_time + (vmrr.start - check_time),vmrr,True)
+            action,vmrr_end = self._delay_vmrr_to(new_RRend_time + (vmrr.start - check_time),vmrr,True)
             if action == constants.DELAY_STARTVM:
                 new_end = vmrr.get_final_end() + vmrr_end
             else:
@@ -1676,9 +1676,6 @@ class VMScheduler(object):
         
 
     def _delay_rr_end(self,rr):
-        # A VMRR it self can't delay, so why delay end???
-        if isinstance(rr,VMResourceReservation): 
-            return None
         '''
         This method is in charge of delayind the end of RR and for this RR,
         delay all LEASES which have some conflicts with this RR.
@@ -1689,7 +1686,10 @@ class VMScheduler(object):
         rr -- ResourceReservation wich have to be delayed
 
         '''
+        # A VMRR it self can't delay, so why delay end???
 
+        if isinstance(rr,VMResourceReservation):
+            return None
         # DELAY RR AND IT IS LEASE IF IT IS NEEDED
 
         self.logger.vdebug("DELAYING END OF:")
@@ -1729,21 +1729,21 @@ class VMScheduler(object):
             # If a VM have alredy started, leave it started
             lisRR = rr.vmrr.get_reservations_starting_on_after(check_time,[],False)
             old_end = rr.vmrr.end
-            action, vmrr_end_delay = self.delay_vmrr_to(DelayUntil + (rr.vmrr.start - check_time),rr.vmrr)
+            action, vmrr_end_delay = self._delay_vmrr_to(DelayUntil + (rr.vmrr.start - check_time),rr.vmrr)
             if action != constants.DELAY_STARTVM:
                 raise InconsistentScheduleError('This is not well implemented by now')
             for dRR in lisRR:
-                if dRR in dRR.vmrr.pre_rrs: self.delay_rr_to(DelayUntil + (dRR.start - check_time),dRR )
+                if dRR in dRR.vmrr.pre_rrs: self._delay_vmrr_to(DelayUntil + (dRR.start - check_time),dRR )
             if old_end != rr.vmrr.end:
                 for dRR in rr.vmrr.post_rrs:
-                    self.delay_rr_to(rr.vmrr.end + (dRR.start - old_end),dRR)           
+                    self._delay_rr_to(rr.vmrr.end + (dRR.start - old_end),dRR)
         elif rr in rr.vmrr.post_rrs:
             # TODO: At the same time ??
             # Have to delay only end of vnodes in the same node
             afRR = rr.vmrr.get_reservations_starting_on_after(check_time,[],False)
             self.logger.vdebug(afRR)
             for dRR in afRR:
-                self.delay_rr_to(DelayUntil + (dRR.start - check_time),dRR)
+                self._delay_rr_to(DelayUntil + (dRR.start - check_time),dRR)
          
        
         self.logger.vdebug('After delaying the VMRR look like this:')
@@ -1878,7 +1878,7 @@ class VMScheduler(object):
         if rr.is_first():
             l.set_state(Lease.STATE_SUSPENDING)
             l.print_contents()
-            self.logger.info("Suspending lease %i..." % (l.id))
+            self.logger.info("Suspending lease %i..." % l.id)
         self.logger.debug("LEASE-%i End of handleStartSuspend" % l.id)
 
 
