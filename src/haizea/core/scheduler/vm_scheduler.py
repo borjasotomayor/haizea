@@ -1438,14 +1438,14 @@ class VMScheduler(object):
         self.logger.vdebug('We have to free all this space {node => space}')
         self.logger.vdebug(self.delay_needResources)
         vm_to_delay = {}
-        # Seconds of separetion per endTime
+        # Seconds of separation per endTime
         to_add = TimeDelta(0,0,2)
         while len(self.delay_needResources) > 0:
-            # DECIDE WICH LEASES HAVE TO BEEN DELAY
+            # DECIDE WHICH LEASES HAVE TO BEEN DELAY
             startTime,endTime = self.delay_needResources.get_sort_by_start()[0]
             seconds_added = TimeDelta(0)
             delayvm = self._compute_delay_onv(startTime,endTime,self.delay_needResources.get_between(startTime,endTime),vm_to_delay)
-            # DELAY ALL VM's WICH HAVE BEEN MARK FOR IT
+            # DELAY ALL VM's WHICH HAVE BEEN MARK FOR IT
             for vm in delayvm:
                 # TODO Correct some things for work also with VM which start after end_time
                 # If a VM have the end delayed, have to been
@@ -1461,7 +1461,7 @@ class VMScheduler(object):
                     # Check the time at would have finished
                     w_action,w_vm_end = self._delay_vm_to(vm_to_delay[vm],vm,True)
                     # If the new action it is not delay end, it should decrement the
-                    # space that was supossed to free.
+                    # space that was supposed to free.
                     if action != constants.DELAY_STARTVM:
                         self.delay_needResources.decr(vm.get_final_end(),w_vm_end,self._sum_all_requested_resources_of(vm.nodes.keys(),vm))
                     else:
@@ -1557,7 +1557,7 @@ class VMScheduler(object):
         # It is needed for knowing the delay between two RR in the same VM
         # Get configuration
 
-        if simulate: self.logger.debug('Simulating a delay of a VMRR ----------------')
+        if simulate: self.logger.vdebug('Simulating a delay of a VMRR ----------------')
         if maxdelaystart is None: maxdelaystart =  get_config().get('max-delay-duration')
         if maxdelay is None: maxdelay = get_config().get('max-delay-vm')
         if maxdelayaction is None: maxdelayaction = get_config().get('max-delay-action')
@@ -1631,8 +1631,8 @@ class VMScheduler(object):
 
     def rr_end_delayed(self, rr):
         '''
-        It is used for adding to the list of RR's wich had a problem
-        and the end of it have to been delayed
+        It is used for adding to the list of RR's which had a problem
+        saving all the resource that will need for been delayed
 
         Arguments
         rr -- Resources Reservation
