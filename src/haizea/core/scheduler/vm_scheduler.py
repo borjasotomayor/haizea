@@ -1432,7 +1432,7 @@ class VMScheduler(object):
 
         # First of all, we are going to decide which VM have to been delayed
         # or can be reschedule in an other Node but only the necesary VM, we divide
-        # this action in cicles, in each of them:
+        # this action in circles, in each of them:
         # 1 We decide which VMRR have to been delayed
         # 2 We delay the VMRR
         self.logger.vdebug('We have to free all this space {node => space}')
@@ -1489,7 +1489,7 @@ class VMScheduler(object):
         self.have_to_delay = []
         self.logger.vdebug("FINISH DELAYING END's ")
 
-    def _delay_vm_to(self,delayto,vmrr,simulate = False):
+    def _delay_vm_to(self,delay_to,vmrr,simulate = False, maxdelaystart = None,maxdelay = None, maxdelayaction = None):
         '''
         delay Start Time of a lease
         foo
@@ -1499,40 +1499,40 @@ class VMScheduler(object):
         l = vmrr.lease
 
         if not l.get_state() in l.DELAY_GOODSTATES:
-            raise InconsistentLeaseStateError('Not the state I want for the lease for been delayed')
+            raise InconsistentLeaseStateError(l,'Not the state I want for the lease for been delayed')
         # First of all, we delay the VMRR and see what happend
         old_start_vm = vmrr.end
-        action, delayedtime = self._delay_vmrr_to(delayto + (vmrr.start - vmrr.get_first_start()),vmrr,simulate)
+        action, delayed_time = self._delay_vmrr_to(delay_to + (vmrr.start - vmrr.get_first_start()),vmrr,simulate,maxdelaystart,maxdelay,maxdelayaction)
         if action == constants.DELAY_STARTVM:
             if simulate:
-                return action,vmrr.get_final_end()+delayedtime
+                return action,vmrr.get_final_end()+delayed_time.start
             # First delay pre_rr
             for rr in vmrr.pre_rrs:
-                self._delay_rr_to(delayto + (rr.start - vmrr.get_first_start()),rr)
+                self._delay_rr_to(delay_to + (rr.start - vmrr.get_first_start()),rr)
             # We have to delay the start and end of the VM
 
-            if delayedtime > 0:
+            if int(delayed_time.start) > 0:
                 for rr in vmrr.post_rrs:
                     self._delay_rr_to(vmrr.end + (rr.start - old_start_vm),rr)
 
-            return action,(vmrr.get_final_end() - delayedtime)
+            return action,(vmrr.get_final_end() - delayed_time.start)
 
         elif action == constants.DELAY_RESCHEDULE:
             pass
         elif action == constants.DELAY_CANCEL:
             return action,''
 
-    def _delay_rr_to(self, delayto, rr):
+    def _delay_rr_to(self, delay_to, rr):
         '''
         Return -> End time
         '''
         # rr.print_contents()
         old_start,old_end = rr.start,rr.end
-        rr.start,rr.end = delayto,delayto+(old_end-old_start)
+        rr.start,rr.end = delay_to,delay_to+(old_end-old_start)
         self.slottable.update_reservation(rr,old_start,old_end)
         return rr.end
 
-    def _delay_vmrr_to(self, delayto, vmrr,simulate = False, maxdelaystart = None,maxdelay = None, maxdelayaction = None):
+    def _delay_vmrr_to(self, delay_to, vmrr,simulate = False, maxdelaystart = None,maxdelay = None, maxdelayaction = None):
         '''
         Delay the start of VMRR to the start_time. This can happend
         when a RR is delayed in the shutdown or in the suspend, so the next
@@ -1561,7 +1561,6 @@ class VMScheduler(object):
         if maxdelaystart is None: maxdelaystart =  get_config().get('max-delay-duration')
         if maxdelay is None: maxdelay = get_config().get('max-delay-vm')
         if maxdelayaction is None: maxdelayaction = get_config().get('max-delay-action')
-        if vmrr.percent_delayed == -1: raise InconsistentScheduleError('CAN NOT BE DELAYED A VMRR WICH HAVE BEEN CANCEL')
 
         if maxdelaystart > maxdelay: raise Exception('max-delay-start bigger than max-delay not make sense')
         if maxdelay > 100: raise Exception('Could not delay more than 100 Percent')
@@ -1570,12 +1569,14 @@ class VMScheduler(object):
         old_start = vmrr.start
 
         # Do something if the VM is delayed more than the percent given.
-        duration = (vmrr.end - vmrr.start)
-        now_percent = (int(delayto-old_start)*100.0)/int(vmrr.end-old_start)
+        duration = (vmrr.end - vmrr.start + vmrr.time_delayed.duration)
+        total_time_to_delay = TimeDelayed(delay_to - vmrr.start)
+        total_time_delayed = TimeDelayed(vmrr.time_delayed.start + total_time_to_delay.start)
+        max_delay_start = duration * maxdelaystart/100.0
+        max_delay = duration * maxdelay/100.0
 
-        percent = vmrr.percent_delayed + now_percent
-        self.logger.debug("Percent of the VM's delay: "+str(percent))
-        if percent > maxdelay:
+        self.logger.debug("Time of the VM's delay start: "+str(total_time_delayed.start))
+        if total_time_delayed.start > max_delay:
             if simulate:
                 self.logger.debug('Have overpass the MAX pemited')
                 return constants.DELAY_CANCEL,''
@@ -1586,27 +1587,26 @@ class VMScheduler(object):
                 #Default Action is cancel
                 self.logger.debug('The VM is been canceled')
                 self.cancel_vm(vmrr)
-                vmrr.percent_delayed = -1
                 return constants.DELAY_CANCEL,''
         else:
-            delayedend = 0
-            if maxdelaystart < percent:
+            if max_delay_start < total_time_delayed.start:
                 self.logger.debug('END IS BEING DELAYED OF THE VMRR')
                 # Only delay the maxdelaystart, the rest is delayed in the end
-                if vmrr.percent_delayed >= maxdelaystart: PTD = now_percent
-                else: PTD = percent - maxdelaystart
+                if total_time_delayed.start - total_time_to_delay.start >= max_delay_start:
+                    TD = total_time_to_delay.start
+                else:
+                    TD = total_time_delayed.start - max_delay_start
 
-                delayedend = (PTD/100)*duration
-                delayedend = TimeDelta(delayedend.hour,delayedend.minute,int(delayedend.second))
-                self.logger.debug('Delaying end: %s'%delayedend)
-                if not simulate: vmrr.end = vmrr.end + delayedend
-
+                self.logger.debug('Delaying end: %s'%TD)
+                if not simulate:
+                    vmrr.end = vmrr.end + TD
+                total_time_to_delay.end = TD
             if not simulate:
-                vmrr.start = delayto
-                vmrr.percent_delayed = percent
+                vmrr.start = delay_to
                 self.slottable.update_reservation(vmrr,old_start,old_end)
+                vmrr.time_delayed = vmrr.time_delayed + total_time_to_delay
 
-        return constants.DELAY_STARTVM,delayedend
+        return constants.DELAY_STARTVM, total_time_to_delay
 
     def _sum_all_requested_resources_of(self, vnodes, vmrr):
         '''
@@ -2062,7 +2062,7 @@ class VMResourceReservation(ResourceReservation):
         self.prematureend = None
 
         # Flag for knowing who is delayed for later use.
-        self.percent_delayed = 0
+        self.time_delayed = TimeDelayed()
     def get_reservations_starting_on_after(self, time, nodes=[] ,includeVMrr = True):
         if includeVMrr: all_rr = self.pre_rrs+[self]+self.post_rrs
         else: all_rr = self.pre_rrs + self.post_rrs
@@ -2363,4 +2363,25 @@ class NodeResources(object):
         for node in self:
             a += 'N: '+str(node)+' R:'+str(self[node])+' | '
         return a
+
+class TimeDelayed(object):
+    """
+    Justa a wrapper for knowing how much time, the start have been delayed and
+    how much time end have been delayed of a VMRR.
+    """
+    def __init__(self,start=TimeDelta() ,end= TimeDelta()):
+        self.start = start
+        self.end = end
+
+    def get_duration(self):
+        return self.start - self.end
+
+    def set_duration(self,value):
+        # Because start is always delayed the same time, just change end
+        self.end = self.start - value
+    def __add__(self, other):
+        end = self.end + other.end
+        start = self.start + other.start
+        return TimeDelayed(start,end)
+    duration = property(get_duration,set_duration)
 
