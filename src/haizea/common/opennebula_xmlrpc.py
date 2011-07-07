@@ -37,19 +37,19 @@ class OpenNebulaXMLRPCClient(object):
             one_auth = OpenNebulaXMLRPCClient.DEFAULT_ONE_AUTH
         else:
             one_auth = os.environ["ONE_AUTH"]
-            
+
         one_auth = os.path.expanduser(one_auth)
         
         if not os.path.exists(one_auth):
             raise Exception("Authorization file %s does not exists" % one_auth) 
-        
-        f = open(one_auth, "r")
-        try:
-            line = f.readline().strip()
-            user, passw = line.split(":")
-            return user, passw
-        except:
-            raise Exception("Authorization file is malformed")
+
+        with open(one_auth, "r") as auth:
+            try:
+                line = auth.readline().strip()
+                user, passw = line.split(":")
+                return user, passw
+            except:
+                raise Exception("Authorization file is malformed")
 
         
     def hostpool_info(self):
