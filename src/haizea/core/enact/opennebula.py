@@ -204,7 +204,7 @@ class OpenNebulaVMEnactment(VMEnactment):
 
     def verify_suspend(self, action):
 
-        result = 0
+        result = 1
 
         for vnode in action.vnodes:
             # Unpack action
@@ -218,14 +218,14 @@ class OpenNebulaVMEnactment(VMEnactment):
                 else:
                     self.logger.warning("ONE did not complete suspend of L%iV%i on time. State is %i. (ONE vid=%i)" % (action.lease_haizea_id, vnode, state, vid))
 
-                    result = 1
+                    result = 0
             except Exception, msg:
                 raise OpenNebulaEnactmentError("vm.info", msg)
         self.logger.vdebug(result)
         return result
         
     def verify_resume(self, action):
-        result = 0
+        result = 1
         for vnode in action.vnodes:
             # Unpack action
             vid = action.vnodes[vnode].enactment_info
@@ -239,7 +239,7 @@ class OpenNebulaVMEnactment(VMEnactment):
                     self.logger.debug("Resume of L%iV%i correct (ONE vid=%i)." % (action.lease_haizea_id, vnode, vid))
                 else:
                     self.logger.warning("ONE did not complete resume of L%iV%i on time. State is %i. (ONE vid=%i)" % (action.lease_haizea_id, vnode, state, vid))
-                    result = 1
+                    result = 0
             except Exception, msg:
                 raise OpenNebulaEnactmentError("vm.info", msg)
 
