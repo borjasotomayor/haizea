@@ -18,7 +18,7 @@
 
 import ConfigParser
 from mx.DateTime import ISO
-from mx.DateTime import TimeDelta
+from mx.DateTime.Parser import DateTimeDeltaFromString
 import textwrap
         
 OPTTYPE_INT = 0
@@ -129,8 +129,8 @@ class Config(object):
                 value = self.config.get(secname, optname)
                 value = ISO.ParseDateTime(value)
             elif opt.type == OPTTYPE_TIMEDELTA:
-                value = self.config.getint(secname, optname)
-                value = TimeDelta(seconds=value)
+                value = self.config.get(secname, optname)
+                value = DateTimeDeltaFromString(value)
                 
             if opt.valid != None:
                 if not value in opt.valid:
