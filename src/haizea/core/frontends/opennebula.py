@@ -89,19 +89,16 @@ class OpenNebulaHaizeaVM(object):
         self.capacity = Capacity([constants.RES_CPU, constants.RES_MEM, constants.RES_DISK])
         
         # CPU
-        # CPUs in VMs are not reported the same as in hosts.
-        # THere are two template values: CPU and VCPU.
-        # CPU reports the percentage of the CPU needed by the VM.
-        # VCPU, which is optional, reports how many CPUs are needed.
-        cpu = int(float(opennebula_vm.template["CPU"]) * 100)
-        if opennebula_vm.template.has_key("VCPU"):
-            ncpu = int(opennebula_vm.template["VCPU"])
-        else:
-            ncpu = 1
-        self.capacity.set_ninstances(constants.RES_CPU, ncpu)
-        for i in range(ncpu):
-            self.capacity.set_quantity_instance(constants.RES_CPU, i+1, cpu)            
-        
+        # Percentage of CPU divided by 100 required for the Virtual Machine. Half a processor is written 0.5
+        # VCPU
+        # Number of virtual cpus.
+        number_cpu = float(opennebula_vm.template["CPU"])
+        rest = number_cpu - int(number_cpu)
+        if rest > 0: number_cpu = int(number_cpu)+1
+        self.capacity.set_ninstances(constants.RES_CPU, int(number_cpu))
+        for i in range(int(number_cpu)):
+            self.capacity.set_quantity_instance(constants.RES_CPU, i+1, 100)
+        if rest > 0: self.capacity.set_quantity_instance(constants.RES_CPU, number_cpu, rest*100)
         # Memory. Unlike hosts, memory is reported directly in MBs
         self.capacity.set_quantity(constants.RES_MEM, int(opennebula_vm.template["MEMORY"]))
 
