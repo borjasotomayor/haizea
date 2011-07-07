@@ -67,6 +67,8 @@ class OpenNebulaResourcePoolInfo(ResourcePoolInfo):
     def get_bandwidth(self):
         return 0
 
+    def get_migration_bandwidth(self):
+        return 2
     
     def __fetch_nodes(self):
         new_nodes = []
